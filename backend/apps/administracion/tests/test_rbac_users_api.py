@@ -1665,6 +1665,11 @@ USER_IMPORT_HEADERS = [
     "Correo",
     "No. Expediente SERMED",
     "Rol",
+    "Tipo de Personal",
+    "Cédula",
+    "Escuela",
+    "Fecha de Nacimiento",
+    "Sexo",
     "Estado",
 ]
 
@@ -1758,9 +1763,12 @@ class RbacUsersImportApiTests(APITestCase):
             [
                 (
                     "import_valid", "Juan", "Perez", "", "juan.import@example.com",
-                    "111", self.role_medico.rol, "Activo",
+                    "111", self.role_medico.rol, "", "", "", "", "", "Activo",
                 ),
-                ("", "Sin", "Usuario", "", "", "", self.role_medico.rol, "Activo"),
+                (
+                    "", "Sin", "Usuario", "", "", "", self.role_medico.rol,
+                    "", "", "", "", "", "Activo",
+                ),
             ]
         )
 
@@ -1780,7 +1788,7 @@ class RbacUsersImportApiTests(APITestCase):
             [
                 (
                     "import_bad", "Ana", "Lopez", "", "not-an-email",
-                    "", "ROL_QUE_NO_EXISTE", "Activo",
+                    "", "ROL_QUE_NO_EXISTE", "", "", "", "", "", "Activo",
                 ),
             ]
         )
@@ -1799,9 +1807,12 @@ class RbacUsersImportApiTests(APITestCase):
             [
                 (
                     "bulk_one", "Uno", "Bulk", "", "bulk.one@example.com",
-                    "111", self.role_medico.rol, "Activo",
+                    "111", self.role_medico.rol, "", "", "", "", "", "Activo",
                 ),
-                ("bulk_two", "Dos", "Bulk", "", "", "222", self.role_medico.rol, "Dado de baja"),
+                (
+                    "bulk_two", "Dos", "Bulk", "", "", "222", self.role_medico.rol,
+                    "", "", "", "", "", "Dado de baja",
+                ),
             ]
         )
 
@@ -1837,7 +1848,7 @@ class RbacUsersImportApiTests(APITestCase):
             [
                 (
                     "bulk_one", "Uno", "Bulk", "", "bulk.one@example.com",
-                    "111", self.role_medico.rol, "Activo",
+                    "111", self.role_medico.rol, "", "", "", "", "", "Activo",
                 ),
             ]
         )
@@ -1857,8 +1868,14 @@ class RbacUsersImportApiTests(APITestCase):
         before = SyUsuario.objects.count()
         file = _users_xlsx_upload(
             [
-                ("bulk_ok", "Ok", "Bulk", "", "", "", self.role_medico.rol, "Activo"),
-                ("bulk_ok", "Duplicado", "Bulk", "", "", "", self.role_medico.rol, "Activo"),
+                (
+                    "bulk_ok", "Ok", "Bulk", "", "", "", self.role_medico.rol,
+                    "", "", "", "", "", "Activo",
+                ),
+                (
+                    "bulk_ok", "Duplicado", "Bulk", "", "", "", self.role_medico.rol,
+                    "", "", "", "", "", "Activo",
+                ),
             ]
         )
 

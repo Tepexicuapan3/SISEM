@@ -17,6 +17,7 @@ llaman a este modulo para escribir -- ver `import_users.py`).
 import io
 import re
 import unicodedata
+from datetime import date, datetime
 from typing import Optional
 
 import openpyxl
@@ -24,7 +25,7 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from apps.authentication.models import SyUsuario
-from apps.catalogos.models import CatTipoPersonal, Roles
+from apps.catalogos.models import CatTipoPersonal, Escuelas, Roles
 
 HEADERS = [
     "Usuario",
@@ -35,6 +36,10 @@ HEADERS = [
     "No. Expediente SERMED",
     "Rol",
     "Tipo de Personal",
+    "Cédula",
+    "Escuela",
+    "Fecha de Nacimiento",
+    "Sexo",
     "Estado",
 ]
 
@@ -42,13 +47,29 @@ ESTADO_ACTIVO = "Activo"
 ESTADO_BAJA = "Dado de baja"
 ESTADOS_VALIDOS = {ESTADO_ACTIVO, ESTADO_BAJA}
 
+# Mismos códigos que `DetUsuario.sexo` (`apps/authentication/models.py`): CharField
+# de 1 caracter con choices [("M","Masculino"),("F","Femenino")].
+SEXO_M = "M"
+SEXO_F = "F"
+_SEXO_LOOKUP = {
+    "m": SEXO_M,
+    "masculino": SEXO_M,
+    "f": SEXO_F,
+    "femenino": SEXO_F,
+}
+
+# Formatos aceptados para "Fecha de Nacimiento": Excel puede entregar la celda
+# ya como texto (dd/mm/aaaa, el formato de captura mas comun en MX) o, si la
+# celda tenia formato de fecha, pandas la vuelve string con hora en 00:00:00.
+_FECHA_NAC_FORMATS = ("%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y")
+
 MAX_ROWS = 5000
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _SAMPLE_ROWS = (
-    ("jperez", "Juan", "Pérez", "López", "juan.perez@example.com", "12345", "Médico", "Médico", "Activo"),
-    ("mgomez", "María", "Gómez", "", "", "", "Recepción", "", "Activo"),
+    ("jperez", "Juan", "Pérez", "López", "juan.perez@example.com", "12345", "Médico", "Médico", "1234567", "UNAM", "15/05/1990", "M", "Activo"),
+    ("mgomez", "María", "Gómez", "", "", "", "Recepción", "", "", "", "", "F", "Activo"),
 )
 
 
@@ -106,6 +127,19 @@ def _clean_text(value) -> str:
 def _strip_accents(text: str) -> str:
     normalized = unicodedata.normalize("NFKD", text)
     return "".join(c for c in normalized if not unicodedata.combining(c))
+
+
+def _parse_fecha_nacimiento(text: str) -> Optional[date]:
+    """Devuelve la fecha parseada o ``None`` si `text` esta vacio. Lanza
+    ``ValueError`` si no matchea ninguno de `_FECHA_NAC_FORMATS`."""
+    if not text:
+        return None
+    for fmt in _FECHA_NAC_FORMATS:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(text)
 
 
 def _read_dataframe(file) -> pd.DataFrame:
@@ -181,6 +215,10 @@ def parse_and_validate(file) -> dict:
                 "noExp": _clean_text(df.iloc[row_idx]["No. Expediente SERMED"]),
                 "roleName": _clean_text(df.iloc[row_idx]["Rol"]),
                 "tipoPersonalName": _clean_text(df.iloc[row_idx]["Tipo de Personal"]),
+                "cedula": _clean_text(df.iloc[row_idx]["Cédula"]),
+                "escuelaName": _clean_text(df.iloc[row_idx]["Escuela"]),
+                "fechaNacimientoRaw": _clean_text(df.iloc[row_idx]["Fecha de Nacimiento"]),
+                "sexoRaw": _clean_text(df.iloc[row_idx]["Sexo"]),
                 "estado": _clean_text(df.iloc[row_idx]["Estado"]),
             }
         )
@@ -216,6 +254,11 @@ def parse_and_validate(file) -> dict:
         for tipo in CatTipoPersonal.objects.filter(
             name__in=tipo_personal_names, is_active=True
         )
+    }
+    escuela_names = {p["escuelaName"] for p in raw_rows if p["escuelaName"]}
+    escuela_by_name = {
+        escuela.name: escuela
+        for escuela in Escuelas.objects.filter(name__in=escuela_names, is_active=True)
     }
 
     result_rows = []
@@ -262,6 +305,36 @@ def parse_and_validate(file) -> dict:
                     f"Tipo de Personal '{parsed['tipoPersonalName']}' no encontrado."
                 )
 
+        if len(parsed["cedula"]) > 30:
+            errors.append("Cédula demasiado larga (máx. 30 caracteres).")
+
+        escuela = None
+        if parsed["escuelaName"]:
+            escuela = escuela_by_name.get(parsed["escuelaName"])
+            if escuela is None:
+                errors.append(
+                    f"Escuela '{parsed['escuelaName']}' no existe o no está activa."
+                )
+
+        fecha_nacimiento = None
+        if parsed["fechaNacimientoRaw"]:
+            try:
+                fecha_nacimiento = _parse_fecha_nacimiento(parsed["fechaNacimientoRaw"])
+            except ValueError:
+                errors.append(
+                    "Fecha de Nacimiento con formato inválido (use dd/mm/aaaa)."
+                )
+            else:
+                if fecha_nacimiento > date.today():
+                    errors.append("Fecha de Nacimiento no puede ser futura.")
+                    fecha_nacimiento = None
+
+        sexo = None
+        if parsed["sexoRaw"]:
+            sexo = _SEXO_LOOKUP.get(_strip_accents(parsed["sexoRaw"]).lower())
+            if sexo is None:
+                errors.append("Sexo debe ser 'Masculino' o 'Femenino'.")
+
         estado_normalized = parsed["estado"] or ESTADO_ACTIVO
         estado_lookup = {
             _strip_accents(v).lower(): v for v in ESTADOS_VALIDOS
@@ -285,6 +358,11 @@ def parse_and_validate(file) -> dict:
             "roleId": role.id_rol if role else None,
             "tipoPersonalName": parsed["tipoPersonalName"],
             "tipoPersonalId": tipo_personal.id if tipo_personal else None,
+            "cedula": parsed["cedula"] or None,
+            "escuelaName": parsed["escuelaName"],
+            "escuelaId": escuela.id if escuela else None,
+            "fechaNacimiento": fecha_nacimiento,
+            "sexo": sexo,
             "estado": estado_resolved,
             "isActive": estado_resolved == ESTADO_ACTIVO,
         }

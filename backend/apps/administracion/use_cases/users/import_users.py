@@ -14,9 +14,15 @@ from apps.administracion.services.user_import_service import (
     parse_and_validate,
 )
 from apps.authentication.services.email_service import send_user_credentials_email_batch
-from apps.catalogos.models import CatTipoPersonal, Roles
+from apps.catalogos.models import CatTipoPersonal, Escuelas, Roles
 
-from .create_user import CreateUserData, CreateUserUseCase
+from .create_user import CedulaInput, CreateUserData, CreateUserUseCase
+
+# Tipo asignado a la cedula capturada en el import masivo -- la plantilla solo
+# trae un numero de cedula (columna "Cédula"), sin columna de tipo, a
+# diferencia del alta individual en `rbac_views.py` donde el tipo lo captura
+# el usuario en el formulario. Se marca como principal por ser la unica.
+IMPORTED_CEDULA_TIPO = "Cédula Profesional"
 
 
 class RoleVanishedDuringImport(Exception):
@@ -116,6 +122,22 @@ class ConfirmUsersImportUseCase:
                     id=data["tipoPersonalId"], is_active=True
                 ).first()
 
+            escuela = None
+            if data["escuelaId"]:
+                escuela = Escuelas.objects.filter(
+                    id=data["escuelaId"], is_active=True
+                ).first()
+
+            cedulas = []
+            if data["cedula"]:
+                cedulas = [
+                    CedulaInput(
+                        numero=data["cedula"],
+                        tipo=IMPORTED_CEDULA_TIPO,
+                        es_principal=True,
+                    )
+                ]
+
             create_result = CreateUserUseCase.execute(
                 CreateUserData(
                     username=data["username"],
@@ -126,6 +148,10 @@ class ConfirmUsersImportUseCase:
                     role=role,
                     actor=actor,
                     no_exp=data["noExp"],
+                    sexo=data["sexo"],
+                    fecha_nac=data["fechaNacimiento"],
+                    escuela=escuela,
+                    cedulas=cedulas,
                     est_activo=data["isActive"],
                     tipo_personal=tipo_personal,
                     send_credentials_email=False,
