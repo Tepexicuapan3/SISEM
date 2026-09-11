@@ -291,6 +291,10 @@ class VisitDiagnosisSaveView(APIView):
                 actor_id,
                 permissions,
                 serializer.validated_data.get("cieCode"),
+                serializer.validated_data.get("subjective"),
+                serializer.validated_data.get("objective"),
+                serializer.validated_data.get("assessment"),
+                serializer.validated_data.get("plan"),
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
@@ -1209,6 +1213,10 @@ class VisitConsultationCloseView(APIView):
                 actor_id,
                 permissions,
                 validated_data.get("cieCode"),
+                validated_data.get("subjective"),
+                validated_data.get("objective"),
+                validated_data.get("assessment"),
+                validated_data.get("plan"),
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)

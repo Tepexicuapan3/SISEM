@@ -26,6 +26,10 @@ class SaveDiagnosisSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    subjective = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    objective = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    assessment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    plan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate_primaryDiagnosis(self, value):
         normalized = value.strip()

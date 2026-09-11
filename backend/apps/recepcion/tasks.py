@@ -117,8 +117,11 @@ def generar_slots_todos_medicos(self):
 
     for medico in medicos:
         try:
+            # generar_slots_medico filtra/crea HorarioDisponible.medico_id
+            # (espacio médico, FK a CatMedico) -- se pasa medico.id (PK
+            # surrogate), no medico.id_usuario_id (R1).
             creados = citas_repo.generar_slots_medico(
-                medico_id=medico.id_usuario_id,
+                medico_id=medico.id,
                 dias_adelante=30,
             )
             total_slots += creados

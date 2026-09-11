@@ -26,6 +26,10 @@ class ConsultationRepository:
         primary_diagnosis,
         cie_code,
         final_note,
+        subjective=None,
+        objective=None,
+        assessment=None,
+        plan=None,
         created_by_id=None,
         updated_by_id=None,
     ):
@@ -34,6 +38,10 @@ class ConsultationRepository:
             existing.primary_diagnosis != primary_diagnosis
             or existing.cie_id != cie_code
             or existing.final_note != final_note
+            or existing.subjective != subjective
+            or existing.objective != objective
+            or existing.assessment != assessment
+            or existing.plan != plan
         ):
             # Versionado real (NOM-024): se guarda un snapshot del valor
             # anterior ANTES de pisarlo -- nunca se sobrescribe sin dejar
@@ -44,6 +52,10 @@ class ConsultationRepository:
                 previous_primary_diagnosis=existing.primary_diagnosis,
                 previous_cie_id=existing.cie_id,
                 previous_final_note=existing.final_note,
+                previous_subjective=existing.subjective,
+                previous_objective=existing.objective,
+                previous_assessment=existing.assessment,
+                previous_plan=existing.plan,
                 changed_by_id=updated_by_id,
             )
 
@@ -54,6 +66,10 @@ class ConsultationRepository:
                 "primary_diagnosis": primary_diagnosis,
                 "cie_id": cie_code,
                 "final_note": final_note,
+                "subjective": subjective,
+                "objective": objective,
+                "assessment": assessment,
+                "plan": plan,
                 "is_active": True,
                 "deleted_at": None,
                 "deleted_by_id": None,
@@ -72,6 +88,10 @@ class ConsultationRepository:
             "primaryDiagnosis": consultation.primary_diagnosis,
             "cieCode": consultation.cie_id,
             "finalNote": consultation.final_note,
+            "subjective": consultation.subjective,
+            "objective": consultation.objective,
+            "assessment": consultation.assessment,
+            "plan": consultation.plan,
             "isActive": consultation.is_active,
             "createdAt": consultation.created_at,
             "updatedAt": consultation.updated_at,

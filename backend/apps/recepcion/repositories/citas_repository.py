@@ -129,7 +129,10 @@ class CitasRepository:
         # abrir la transacción porque es una consulta más costosa.
         from apps.medicos.models import CatMedico
         from apps.medicos.disponibilidad import get_disponibilidad_medico
-        medico = CatMedico.objects.filter(id_usuario_id=medico_id).first()
+        # medico_id acá es la PK de CatMedico (espacio médico) -- CitaMedica.medico
+        # es FK a CatMedico. Antes de este fix se buscaba por id_usuario_id,
+        # que coincidía con la PK solo por casualidad numérica (R1).
+        medico = CatMedico.objects.filter(pk=medico_id).first()
         if medico:
             disp = get_disponibilidad_medico(medico, fecha_hora.date())
             if not disp["disponible"]:

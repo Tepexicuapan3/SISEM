@@ -65,15 +65,30 @@ MOTIVO_COBERTURA = [
 # ─── CATÁLOGO MÉDICOS ────────────────────────────────────────────────────────
 
 class CatMedico(models.Model):
-    """Perfil médico especializado. Solo datos que usuarios no almacena."""
+    """
+    Perfil médico especializado. Solo datos que usuarios no almacena.
+
+    PK propia (`id`), independiente de `id_usuario` desde el cambio
+    `medico-pk-independiente` (ver Engram, topic_key
+    sdd/medico-pk-independiente/design). `id_usuario` bajó a FK nullable
+    (`SET_NULL`): un médico puede existir sin cuenta de usuario del sistema
+    (médico externo/invitado). Esquema físico realizado en
+    `medicos/migrations/0004_expand_surrogate_pk.py` .. `0007_switch_surrogate_pk.py`.
+    """
 
     id_usuario = models.OneToOneField(
         "authentication.SyUsuario",
         db_column="id_usuario",
-        on_delete=models.CASCADE,
-        primary_key=True,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="medico",
     )
+    # Nombre a mostrar cuando id_usuario es NULL (médico sin usuario) y no
+    # hay DetUsuario del que tomar nombre_completo. Ver
+    # apps.medicos.identity.display_name() para la cadena de fallback
+    # completa (cierre de R5, propuesta obs #467).
+    nombre_display  = models.CharField(max_length=200, null=True, blank=True)
     tipo_medico     = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
     servicio        = models.CharField(max_length=100, null=True, blank=True)
     observaciones   = models.TextField(null=True, blank=True)
@@ -89,7 +104,7 @@ class CatMedico(models.Model):
         verbose_name_plural = "Médicos"
 
     def __str__(self):
-        return f"Médico #{self.id_usuario_id}"
+        return f"Médico #{self.id}"
 
 
 # ─── ESPECIALIDADES ──────────────────────────────────────────────────────────

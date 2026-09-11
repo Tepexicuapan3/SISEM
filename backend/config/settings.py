@@ -193,6 +193,19 @@ if "test" in sys.argv:
         }
     }
 
+# ── Feature flags ────────────────────────────────────────────────────────────
+
+# D8 (sdd/medico-pk-independiente/design): habilita el alta de médicos SIN
+# usuario del sistema (medicos.CatMedico.id_usuario = NULL). Se mantiene
+# apagado hasta Fase 5 del cambio: mientras la respuesta de la API siga
+# exponiendo "id" como id_usuario_id (contrato dual, D7), un médico sin
+# usuario serializaría "id": null y rompería el frontend legacy. Mantenerlo
+# apagado también garantiza que el rollback de la migración de switch
+# (medicos/0007_switch_surrogate_pk.py) siga siendo posible sin pérdida de
+# datos (restaurar PRIMARY KEY sobre id_usuario falla si existe algún
+# médico con id_usuario NULL).
+MEDICOS_ALLOW_SIN_USUARIO = config("MEDICOS_ALLOW_SIN_USUARIO", default=False, cast=bool)
+
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL      = config("CELERY_BROKER_URL",     default="redis://127.0.0.1:6379/1")
 CELERY_RESULT_BACKEND  = config("CELERY_RESULT_BACKEND",  default="redis://127.0.0.1:6379/1")

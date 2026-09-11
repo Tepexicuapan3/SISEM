@@ -24,6 +24,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
+from apps.medicos.identity import usuario_id_for_medico
 from apps.portal_citas.services.comprobante_service import verificar_payload_qr
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
@@ -350,7 +351,14 @@ def checkin_por_folio(folio: str, verificado_por_id: int | None) -> dict:
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             service_type=cita.servicio_tipo,
             appointment_id=cita.folio,
-            doctor_id=cita.medico_id,
+            # cita.medico_id es espacio médico (FK a CatMedico) -- Visit.doctor
+            # es FK a SyUsuario (espacio usuario). Antes de este fix se pasaba
+            # cita.medico_id directo como doctor_id (R1: conflación de ids,
+            # metía una PK de CatMedico en una FK a SyUsuario). Visit.doctor
+            # es null=True/on_delete=SET_NULL (verificado, recepcion/models.py),
+            # así que None es seguro si el médico no tiene usuario asociado.
+            doctor_id=usuario_id_for_medico(cita.medico_id),
+            medico_id=cita.medico_id,
             consultorio_id=cita.consultorio_id,
             notes=cita.motivo,
             created_by_id=verificado_por_id,

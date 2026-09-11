@@ -2,6 +2,12 @@
 # VisitConsultation.doctor_id era un entero suelto que siempre referencio a
 # authentication.SyUsuario (0 huerfanos verificados; consultation_repository
 # y los tests ya lo tratan como id de usuario, no como id de medicos.CatMedico).
+#
+# F5-06 (medico-pk-independiente, obs #473): igual que recepcion.Visit.doctor,
+# este campo sigue apuntando a SyUsuario a proposito -- fuera de alcance
+# reapuntarlo a medicos.CatMedico (ver propuesta obs #467). La PK de
+# CatMedico es propia (`id`) desde medicos/0007_switch_surrogate_pk.py; la
+# traduccion entre espacios de id vive en `apps.medicos.identity`.
 import django.db.models.deletion
 from django.db import migrations, models
 

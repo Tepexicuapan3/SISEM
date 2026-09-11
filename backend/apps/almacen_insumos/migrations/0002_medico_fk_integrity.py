@@ -8,6 +8,16 @@
 # 0 filas reales verificadas en esta tabla -- igual se backfillea por
 # nombre completo (case-insensitive) por las dudas de produccion, y se
 # frena con el detalle si algo no matchea en vez de perder el dato.
+#
+# F4-12 (medico-pk-independiente, D9/R2): este RunPython usaba `medico.pk`
+# asumiendo implicitamente que `pk == id_usuario` (cierto SOLO mientras
+# `id_usuario` sea la PK de CatMedico). Desde `medicos/0007_switch_surrogate_pk.py`
+# la PK pasa a ser `id` (surrogate), lo que cambiaria en silencio el valor
+# que este backfill asigna a `ConsumoConsulta.medico_id` si esta migracion
+# llegara a correr DESPUES del switch en un plan desde cero. Se blinda
+# usando `medico.id_usuario_id` explicitamente (funciona en ambos mundos,
+# antes y despues del switch, porque el modelo historico expone el campo
+# por nombre) -- defensa en profundidad ademas de `run_before` en 0007.
 import django.db.models.deletion
 from django.db import migrations, models
 
@@ -20,7 +30,9 @@ def backfill_medico_fk(apps, schema_editor):
     for medico in CatMedico.objects.select_related("id_usuario__detalle"):
         detalle = getattr(medico.id_usuario, "detalle", None)
         if detalle and detalle.nombre_completo:
-            catalogo_por_nombre.setdefault(detalle.nombre_completo.strip().upper(), []).append(medico.pk)
+            catalogo_por_nombre.setdefault(
+                detalle.nombre_completo.strip().upper(), []
+            ).append(medico.id_usuario_id)
 
     sin_match = []
     for consumo in ConsumoConsulta.objects.exclude(medico_legacy=""):

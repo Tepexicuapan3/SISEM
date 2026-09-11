@@ -27,6 +27,10 @@ class VisitConsultation(models.Model):
         related_name="consultas",
     )
     final_note = models.TextField(db_column="nota_final")
+    subjective = models.TextField(db_column="subjetivo", null=True, blank=True)
+    objective = models.TextField(db_column="objetivo", null=True, blank=True)
+    assessment = models.TextField(db_column="analisis", null=True, blank=True)
+    plan = models.TextField(db_column="plan", null=True, blank=True)
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
@@ -70,6 +74,16 @@ class VisitConsultationRevision(models.Model):
         related_name="+",
     )
     previous_final_note = models.TextField(db_column="nota_final_anterior")
+    previous_subjective = models.TextField(
+        db_column="subjetivo_anterior", null=True, blank=True
+    )
+    previous_objective = models.TextField(
+        db_column="objetivo_anterior", null=True, blank=True
+    )
+    previous_assessment = models.TextField(
+        db_column="analisis_anterior", null=True, blank=True
+    )
+    previous_plan = models.TextField(db_column="plan_anterior", null=True, blank=True)
     changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
     changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
 

@@ -1,7 +1,10 @@
 from django.db import transaction
 
+import logging
+
 from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
 from apps.authentication.services.authorization_service import has_capability
+from apps.medicos.identity import medico_id_for_usuario
 from apps.recepcion.models import HorarioDisponible, Visit
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
@@ -9,6 +12,8 @@ from apps.recepcion.uses_case.visit_state_machine_usecase import (
     ROLE_RECEPCION,
     transition_visit_state,
 )
+
+logger = logging.getLogger(__name__)
 
 _ACTIVE_VISIT_STATUSES = (
     "en_espera", "en_somatometria", "lista_para_doctor", "en_consulta",
@@ -120,31 +125,40 @@ def lookup_patient(no_exp: str, historico: bool = False) -> dict:
 
 # ── Visitas ───────────────────────────────────────────────────────────────────
 
-def _check_and_reserve_slot(doctor_id: int, hora_consulta, fecha_consulta=None) -> None:
+def _check_and_reserve_slot(doctor_id: int, medico_id: int | None, hora_consulta, fecha_consulta=None) -> None:
     """
     Verifica que el médico no tenga ya una ficha activa en ese horario/fecha
     y marca el slot de HorarioDisponible como ocupado.
     Usa SELECT FOR UPDATE para prevenir race conditions.
     fecha_consulta: date object o None (usa today como fallback).
+
+    ``doctor_id`` (espacio usuario, FK a SyUsuario -- filtra/crea ``Visit``)
+    y ``medico_id`` (espacio médico, FK a CatMedico -- filtra/crea
+    ``HorarioDisponible``) son DOS ids distintos desde el cambio
+    medico-pk-independiente (R1). ``medico_id`` puede ser None si el
+    ``doctor_id`` no tiene perfil de médico en el catálogo -- en ese caso no
+    hay agenda (HorarioDisponible) que reservar, se salta ese bloque.
     """
     from django.utils import timezone
 
     fecha = fecha_consulta or timezone.localtime(timezone.now()).date()
 
     with transaction.atomic():
-        slot = (
-            HorarioDisponible.objects
-            .select_for_update()
-            .filter(medico_id=doctor_id, fecha=fecha, hora=hora_consulta)
-            .first()
-        )
-
-        if slot and not slot.disponible:
-            raise VisitDomainError(
-                "VISIT_SLOT_CONFLICT",
-                "El horario seleccionado ya está ocupado.",
-                409,
+        slot = None
+        if medico_id is not None:
+            slot = (
+                HorarioDisponible.objects
+                .select_for_update()
+                .filter(medico_id=medico_id, fecha=fecha, hora=hora_consulta)
+                .first()
             )
+
+            if slot and not slot.disponible:
+                raise VisitDomainError(
+                    "VISIT_SLOT_CONFLICT",
+                    "El horario seleccionado ya está ocupado.",
+                    409,
+                )
 
         if Visit.objects.filter(
             doctor_id=doctor_id,
@@ -159,12 +173,19 @@ def _check_and_reserve_slot(doctor_id: int, hora_consulta, fecha_consulta=None) 
                 409,
             )
 
+        if medico_id is None:
+            # Sin perfil de médico en el catálogo: no hay agenda que
+            # reservar (HorarioDisponible es del espacio médico). El
+            # chequeo de conflicto sobre Visit.doctor_id de arriba ya cubre
+            # la prevención de doble-ficha para este usuario.
+            return
+
         if slot:
             slot.disponible = False
             slot.save(update_fields=["disponible"])
         else:
             HorarioDisponible.objects.create(
-                medico_id=doctor_id,
+                medico_id=medico_id,
                 fecha=fecha,
                 hora=hora_consulta,
                 disponible=False,
@@ -179,6 +200,7 @@ def create_visit(
     service_type: str = Visit.ServiceType.MEDICINA_GENERAL,
     appointment_id: str | None = None,
     doctor_id: int | None = None,
+    medico_id: int | None = None,
     consultorio_id: int | None = None,
     tipo_cita_id: int | None = None,
     notes: str | None = None,
@@ -186,6 +208,14 @@ def create_visit(
     fecha_consulta=None,
     created_by_id: int | None = None,
 ) -> dict:
+    """
+    ``doctor_id``: id de usuario (espacio SyUsuario) -- FK real de
+    ``Visit.doctor``. ``medico_id``: PK surrogate de CatMedico (espacio
+    médico) -- usado para reservar el slot de ``HorarioDisponible``. Si el
+    caller ya conoce ambos (p.ej. ``qr_checkin_usecase``, que parte de una
+    ``CitaMedica`` con ``medico_id`` real), debe pasar los dos explícitos.
+    Si solo llega ``doctor_id`` (check-in manual walk-in), se traduce acá.
+    """
     if VisitRepository.exists_open_visit_for_patient(no_exp, pk_num):
         raise VisitDomainError(
             "VISIT_DUPLICATE_SUBMIT",
@@ -193,9 +223,12 @@ def create_visit(
             409,
         )
 
+    if medico_id is None:
+        medico_id = medico_id_for_usuario(doctor_id)
+
     # Validar conflicto solo cuando se envió hora explícita
     if doctor_id and hora_consulta:
-        _check_and_reserve_slot(doctor_id, hora_consulta, fecha_consulta=fecha_consulta)
+        _check_and_reserve_slot(doctor_id, medico_id, hora_consulta, fecha_consulta=fecha_consulta)
 
     # Calcular número de ficha y turno al momento del registro
     num_ficha, turno_nombre = _calcular_num_ficha()
@@ -261,8 +294,16 @@ def _calcular_num_ficha() -> tuple[int, str]:
     return count + 1, turno.nombre
 
 
-def _resolver_hora_medico(doctor_id: int):
-    """Obtiene la hora_inicio del horario activo del médico para hoy."""
+def _resolver_hora_medico(medico_id: int):
+    """
+    Obtiene la hora_inicio del horario activo del médico para hoy.
+
+    NOTA: sin caller activo en el código actual (verificado, F4-19) -- se
+    corrige igual el nombre del parámetro (espacio médico, FK real de
+    RelMedicoConsultorio.medico) y se deja de tragar errores en silencio,
+    para que si algún día se vuelve a usar, quede resuelto correctamente
+    desde el día uno en vez de reintroducir la conflación doctor_id/medico_id (R1).
+    """
     from datetime import date
     from django.db.models import Q
     try:
@@ -274,7 +315,7 @@ def _resolver_hora_medico(doctor_id: int):
         rmc = (
             RelMedicoConsultorio.objects
             .prefetch_related("horarios")
-            .filter(medico_id=doctor_id, is_active=True, fecha_inicio__lte=hoy)
+            .filter(medico_id=medico_id, is_active=True, fecha_inicio__lte=hoy)
             .filter(Q(fecha_fin__isnull=True) | Q(fecha_fin__gte=hoy))
             .first()
         )
@@ -283,6 +324,9 @@ def _resolver_hora_medico(doctor_id: int):
         horario = rmc.horarios.filter(dia_semana=dia).first()
         return horario.hora_inicio if horario else None
     except Exception:
+        logger.warning(
+            "Error resolviendo hora de consultorio para medico_id=%s", medico_id, exc_info=True
+        )
         return None
 
 
@@ -394,14 +438,27 @@ def change_visit_status(
         # dentro de la misma transacción que el cambio de estatus.
         if next_state in ("cancelada", "no_show") and visit.doctor_id and visit.hora_consulta:
             from django.utils import timezone
-            fecha_slot = visit.fecha_consulta or timezone.localtime(timezone.now()).date()
-            HorarioDisponible.objects.filter(
-                medico_id=visit.doctor_id,
-                fecha=fecha_slot,
-                hora=visit.hora_consulta,
-                disponible=False,
-                cita__isnull=True,  # solo libera slots de fichas, no de CitaMedica formal
-            ).update(disponible=True)
+            medico_id = medico_id_for_usuario(visit.doctor_id)
+            if medico_id is None:
+                # El usuario que atendió no tiene (o ya no tiene) perfil de
+                # médico en el catálogo -- no hay HorarioDisponible que
+                # liberar en ese espacio. Antes de este fix se liberaba con
+                # `medico_id=visit.doctor_id` directo (R1: conflación de
+                # ids), lo que podía liberar el slot de OTRO médico.
+                logger.warning(
+                    "No se pudo traducir doctor_id=%s a medico_id -- no se libera slot "
+                    "(visit_id=%s).",
+                    visit.doctor_id, visit_id,
+                )
+            else:
+                fecha_slot = visit.fecha_consulta or timezone.localtime(timezone.now()).date()
+                HorarioDisponible.objects.filter(
+                    medico_id=medico_id,
+                    fecha=fecha_slot,
+                    hora=visit.hora_consulta,
+                    disponible=False,
+                    cita__isnull=True,  # solo libera slots de fichas, no de CitaMedica formal
+                ).update(disponible=True)
 
     return VisitRepository.to_contract(visit)
 

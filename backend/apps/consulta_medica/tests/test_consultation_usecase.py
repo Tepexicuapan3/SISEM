@@ -276,6 +276,98 @@ class ConsultationUseCaseTests(TestCase):
             0,
         )
 
+    def test_save_diagnosis_without_soap_fields_leaves_them_null(self):
+        visit = self._visit("en_consulta")
+
+        payload = save_diagnosis(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Faringitis aguda",
+            final_note="Paciente estable.",
+            doctor_id=self.doctor_id,
+        )
+
+        self.assertIsNone(payload["subjective"])
+        self.assertIsNone(payload["objective"])
+        self.assertIsNone(payload["assessment"])
+        self.assertIsNone(payload["plan"])
+        self.assertEqual(payload["finalNote"], "Paciente estable.")
+
+        consultation = VisitConsultation.objects.get(id_visit=visit)
+        self.assertIsNone(consultation.subjective)
+        self.assertIsNone(consultation.objective)
+        self.assertIsNone(consultation.assessment)
+        self.assertIsNone(consultation.plan)
+        self.assertEqual(consultation.final_note, "Paciente estable.")
+
+    def test_save_diagnosis_with_soap_fields_persists_them(self):
+        visit = self._visit("en_consulta")
+
+        payload = save_diagnosis(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Faringitis aguda",
+            final_note="Paciente estable.",
+            doctor_id=self.doctor_id,
+            subjective="Refiere dolor de garganta de 3 dias.",
+            objective="Faringe eritematosa, sin exudado.",
+            assessment="Faringitis aguda viral.",
+            plan="Manejo sintomatico, abundantes liquidos.",
+        )
+
+        self.assertEqual(payload["subjective"], "Refiere dolor de garganta de 3 dias.")
+        self.assertEqual(payload["objective"], "Faringe eritematosa, sin exudado.")
+        self.assertEqual(payload["assessment"], "Faringitis aguda viral.")
+        self.assertEqual(payload["plan"], "Manejo sintomatico, abundantes liquidos.")
+        self.assertEqual(payload["finalNote"], "Paciente estable.")
+
+        consultation = VisitConsultation.objects.get(id_visit=visit)
+        self.assertEqual(consultation.subjective, "Refiere dolor de garganta de 3 dias.")
+        self.assertEqual(consultation.objective, "Faringe eritematosa, sin exudado.")
+        self.assertEqual(consultation.assessment, "Faringitis aguda viral.")
+        self.assertEqual(consultation.plan, "Manejo sintomatico, abundantes liquidos.")
+        self.assertEqual(consultation.final_note, "Paciente estable.")
+
+    def test_save_diagnosis_editing_soap_fields_creates_revision_with_snapshot(self):
+        visit = self._visit("en_consulta")
+
+        save_diagnosis(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Dx borrador",
+            final_note="Nota borrador",
+            doctor_id=self.doctor_id,
+            subjective="Subjetivo inicial",
+            objective="Objetivo inicial",
+            assessment="Analisis inicial",
+            plan="Plan inicial",
+        )
+
+        save_diagnosis(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Dx borrador",
+            final_note="Nota borrador",
+            doctor_id=self.doctor_id,
+            subjective="Subjetivo corregido",
+            objective="Objetivo inicial",
+            assessment="Analisis inicial",
+            plan="Plan inicial",
+        )
+
+        consultation = VisitConsultation.objects.get(id_visit=visit)
+        self.assertEqual(consultation.subjective, "Subjetivo corregido")
+        self.assertEqual(consultation.final_note, "Nota borrador")
+
+        revisions = VisitConsultationRevision.objects.filter(consultation=consultation)
+        self.assertEqual(revisions.count(), 1)
+        revision = revisions.first()
+        self.assertEqual(revision.previous_subjective, "Subjetivo inicial")
+        self.assertEqual(revision.previous_objective, "Objetivo inicial")
+        self.assertEqual(revision.previous_assessment, "Analisis inicial")
+        self.assertEqual(revision.previous_plan, "Plan inicial")
+        self.assertEqual(revision.previous_final_note, "Nota borrador")
+
     def test_save_diagnosis_invalid_cie_code_raises_validation_error(self):
         visit = self._visit("en_consulta")
 

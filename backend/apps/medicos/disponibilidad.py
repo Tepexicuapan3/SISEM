@@ -155,7 +155,11 @@ def get_medicos_disponibles(centro_id: int, fecha: date) -> list:
     from apps.medicos.models import CatMedico, RelMedicoCentro
     from django.db.models import Q
 
-    # Médicos adscritos activos en el centro
+    # Médicos adscritos activos en el centro. medico_id acá YA es la PK de
+    # CatMedico (RelMedicoCentro.medico es FK a CatMedico -- espacio
+    # médico), así que se filtra por `pk__in`, no por `id_usuario_id__in`
+    # (R1: antes de este fix mezclaba espacios de ids -- por casualidad
+    # coincidían numéricamente mientras id_usuario era la PK).
     medico_ids = RelMedicoCentro.objects.filter(
         centro_id=centro_id,
         is_active=True,
@@ -167,10 +171,11 @@ def get_medicos_disponibles(centro_id: int, fecha: date) -> list:
     medicos = (
         CatMedico.objects
         .select_related("id_usuario__detalle")
-        .filter(id_usuario_id__in=medico_ids, estatus_medico="ACTIVO")
+        .filter(pk__in=medico_ids, estatus_medico="ACTIVO")
     )
 
     import logging
+    from apps.medicos.identity import display_name
     _log = logging.getLogger(__name__)
 
     resultado = []
@@ -178,13 +183,13 @@ def get_medicos_disponibles(centro_id: int, fecha: date) -> list:
         try:
             disp = get_disponibilidad_medico(medico, fecha)
         except Exception:
-            _log.exception("Error calculando disponibilidad para médico %s", medico.id_usuario_id)
+            _log.exception("Error calculando disponibilidad para médico %s", medico.id)
             continue
         if disp["disponible"]:
-            det = getattr(medico.id_usuario, "detalle", None)
             resultado.append({
-                "medicoId":       medico.id_usuario_id,
-                "nombreCompleto": det.nombre_completo if det else medico.id_usuario.usuario,
+                "medicoId":       medico.id,
+                "usuarioId":      medico.id_usuario_id,
+                "nombreCompleto": display_name(medico),
                 "servicio":       medico.servicio,
                 "tipoMedico":     medico.tipo_medico,
                 **disp,

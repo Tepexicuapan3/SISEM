@@ -17,6 +17,7 @@ from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.authorization_service import has_capability
 from apps.catalogos.models import MotivoCita
+from apps.medicos.views.medico_views import resolve_medico
 from apps.recepcion.models import CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
 from apps.recepcion.services.errors import VisitDomainError
@@ -105,6 +106,27 @@ def _check_cap(user, capability):
 def _domain_error(request, exc):
     return error_response(exc.code, exc.message, exc.status_code,
                           request_id=get_request_id(request))
+
+
+def _resolve_medico_or_404(medico_id_raw, request):
+    """
+    Gap 10.3 (design, topic sdd/medico-pk-independiente/design): `medicoId`
+    llega crudo del frontend, que todavía manda el `id` legacy (id_usuario)
+    porque no fue migrado. Se resuelve contra CatMedico con el mismo patrón
+    que `medicos/views/medico_views.py::resolve_medico` (PK surrogate
+    primero, fallback a id_usuario con WARN) en vez de pasar el valor sin
+    traducir a CitasRepository -- evita agendar/buscar horarios de la
+    PERSONA EQUIVOCADA (R1).
+
+    Devuelve `(medico, None)` o `(None, error_response)`.
+    """
+    medico = resolve_medico(medico_id_raw, request=request)
+    if not medico:
+        return None, error_response(
+            "MEDICO_NOT_FOUND", "Médico no encontrado.",
+            status.HTTP_404_NOT_FOUND, request_id=get_request_id(request),
+        )
+    return medico, None
 
 
 # ── Serializers ───────────────────────────────────────────────────────────────
@@ -198,10 +220,22 @@ class CitasListCreateView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
 
+        # Gap 10.3: `medicoId` es un filtro opcional que llega crudo del
+        # frontend (id legacy). Se resuelve contra CatMedico; si no matchea
+        # ningún médico, se usa un sentinel imposible (-1) para que el
+        # filtro devuelva 0 resultados en vez de ignorarse silenciosamente
+        # (list_paginated hace `if medico_id:` -- None se interpretaría
+        # como "sin filtro" y devolvería TODAS las citas).
+        medico_id_filtro = None
+        medico_id_raw = s.validated_data.get("medicoId")
+        if medico_id_raw is not None:
+            medico_filtro = resolve_medico(medico_id_raw, request=request)
+            medico_id_filtro = medico_filtro.id if medico_filtro else -1
+
         items, total, total_pages = CitasRepository.list_paginated(
             page=s.validated_data["page"],
             page_size=s.validated_data["pageSize"],
-            medico_id=s.validated_data.get("medicoId"),
+            medico_id=medico_id_filtro,
             consultorio_id=s.validated_data.get("consultorioId"),
             centro_id=s.validated_data.get("centroId"),
             no_exp=s.validated_data.get("noExp"),
@@ -249,12 +283,20 @@ class CitasListCreateView(APIView):
             except VisitDomainError as exc:
                 return _domain_error(request, exc)
 
+        # Gap 10.3: `medicoId` llega crudo del frontend (id legacy) -- se
+        # resuelve a la PK surrogate de CatMedico ANTES de pasarlo a
+        # CitasRepository.create, mismo patrón que resolve_medico en
+        # medico_views.py.
+        medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
+        if err:
+            return err
+
         auth_user = UserRepository.build_auth_user(user)
         try:
             cita = CitasRepository.create(
                 no_exp=s.validated_data["noExp"],
                 pk_num=s.validated_data.get("pkNum", 0),
-                medico_id=s.validated_data["medicoId"],
+                medico_id=medico.id,
                 consultorio_id=s.validated_data.get("consultorioId"),
                 fecha_hora=s.validated_data["fechaHora"],
                 duracion_min=s.validated_data.get("duracionMin", 20),
@@ -369,7 +411,11 @@ class SlotsDisponiblesView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
 
-        medico_id = s.validated_data["medicoId"]
+        # Gap 10.3: `medicoId` llega crudo del frontend (id legacy).
+        medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
+        if err:
+            return err
+        medico_id = medico.id
         fecha     = s.validated_data["fecha"]
 
         slots = CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha)

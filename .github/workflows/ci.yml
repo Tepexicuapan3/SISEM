@@ -153,6 +153,60 @@ jobs:
       - name: Run Django tests
         run: python manage.py test
 
+  backend-migrate-empty-db:
+    name: backend-migrate-empty-db
+    runs-on: ubuntu-latest
+    # D3 (sdd/medico-pk-independiente/design): gate bloqueante -- antes de
+    # este job, el CI nunca corria `migrate` contra una base de datos real,
+    # asi que el orden del plan de migraciones (R2) era indetectable. Sin
+    # este job no se puede avanzar de Fase 1 a Fase 2 del cambio.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sires_ci
+          POSTGRES_USER: sires_ci
+          POSTGRES_PASSWORD: sires_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sires_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_NAME: sires_ci
+      POSTGRES_USER: sires_ci
+      POSTGRES_PASSWORD: sires_ci
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config
+
+      - name: Build CI requirements (without MySQL native driver)
+        run: grep -Ev '^mysqlclient==' requirements.txt > /tmp/requirements-ci.txt
+
+      - name: Install Python dependencies
+        run: pip install -r /tmp/requirements-ci.txt
+
+      - name: Migrate from empty database
+        run: python manage.py migrate
+
+      - name: Check for missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
   auth-contract-governance:
     name: auth-contract-governance
     runs-on: ubuntu-latest

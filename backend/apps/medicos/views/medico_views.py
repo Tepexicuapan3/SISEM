@@ -3,8 +3,10 @@ CRUD del catálogo de médicos.
 Usa el mismo patrón de autorización que rbac_views.py.
 """
 
+import logging
 from datetime import date
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.response import Response
@@ -18,6 +20,7 @@ from apps.administracion.views.rbac_views import (
     _request_id,
 )
 from apps.authentication.models import SyUsuario
+from apps.medicos import identity
 from apps.medicos.models import (
     CatMedico,
     RelMedicoEspecialidad,
@@ -33,12 +36,47 @@ from apps.medicos.disponibilidad import get_medicos_disponibles, get_disponibili
 
 CANALES_VALIDOS = {c[0] for c in CANAL_ATENCION}
 
+logger = logging.getLogger(__name__)
+
 
 # ─── HELPERS ────────────────────────────────────────────────────────────────
 
+def resolve_medico(value, *, request=None, select_related=None, prefetch_related=None):
+    """
+    D7 (contrato dual, ventana de compatibilidad): resuelve el parámetro de
+    ruta `/medicos/{value}/...` o un payload `medicoId`/`medicoSuplenteId`/
+    `medicoTitularId` a un `CatMedico`. Intenta primero por la PK surrogate
+    (`CatMedico.pk`); si no hay match, cae a `id_usuario` (comportamiento
+    legacy previo al cambio medico-pk-independiente) y loguea el fallback
+    -- el contador de ese WARN en logs es la métrica que habilita Fase 5
+    (remover el fallback, ver design sección 5).
+    """
+    if value in (None, ""):
+        return None
+
+    qs = CatMedico.objects.all()
+    if select_related:
+        qs = qs.select_related(*select_related)
+    if prefetch_related:
+        qs = qs.prefetch_related(*prefetch_related)
+
+    medico = qs.filter(pk=value).first()
+    if medico is not None:
+        return medico
+
+    medico = qs.filter(id_usuario_id=value).first()
+    if medico is not None:
+        logger.warning(
+            "MEDICO_ID_LEGACY_FALLBACK",
+            extra={"value": value, "path": getattr(request, "path", None)},
+        )
+    return medico
+
+
 def _serialize_medico(medico: CatMedico) -> dict:
-    det = getattr(medico.id_usuario, "detalle", None)
-    cedulas = list(medico.id_usuario.cedulas.all().order_by("orden"))
+    usuario = medico.id_usuario
+    det = getattr(usuario, "detalle", None) if usuario is not None else None
+    cedulas = list(usuario.cedulas.all().order_by("orden")) if usuario is not None else []
     especialidades = list(medico.especialidades.select_related("especialidad").all())
     centros = list(medico.centros.select_related("centro").filter(is_active=True))
     consultorios_activos = list(
@@ -48,18 +86,23 @@ def _serialize_medico(medico: CatMedico) -> dict:
     escuela = getattr(det, "id_escuela", None) if det else None
 
     return {
+        # "id" se mantiene como id_usuario (legacy) durante toda la ventana
+        # de compatibilidad -- D7. "medicoId"/"usuarioId" son los campos
+        # nuevos que reemplazan a "id" en Fase 5 (contract).
         "id": medico.id_usuario_id,
-        "username": medico.id_usuario.usuario,
-        "nombreCompleto": det.nombre_completo if det else medico.id_usuario.usuario,
+        "medicoId": medico.id,
+        "usuarioId": medico.id_usuario_id,
+        "username": usuario.usuario if usuario is not None else None,
+        "nombreCompleto": identity.display_name(medico),
         "nombre": det.nombre if det else "",
         "paterno": det.paterno if det else "",
         "materno": det.materno if det else "",
-        "email": medico.id_usuario.correo,
+        "email": usuario.correo if usuario is not None else None,
         "telefono": det.telefono if det else None,
         "direccion": det.direccion if det else None,
         "sexo": det.sexo if det else None,
         "fechaNac": str(det.fecha_nac) if det and det.fecha_nac else None,
-        "isActive": medico.id_usuario.est_activo,
+        "isActive": usuario.est_activo if usuario is not None else False,
         "tipoMedico": medico.tipo_medico,
         "servicio": medico.servicio,
         "observaciones": medico.observaciones,
@@ -181,9 +224,32 @@ class MedicosListCreateView(APIView):
             return auth_error
 
         usuario_id = request.data.get("usuarioId")
+
         if not usuario_id:
-            return error_response("VALIDATION_ERROR", "usuarioId es requerido.",
-                                  status.HTTP_400_BAD_REQUEST, request_id=_request_id(request))
+            # D8/F4-27: alta de médico SIN usuario queda detrás del feature
+            # flag -- mientras "id" siga siendo id_usuario_id (D7), un
+            # médico sin usuario serializaría "id": null y rompería el
+            # frontend legacy. Se habilita recién en Fase 5 (contract).
+            if not getattr(settings, "MEDICOS_ALLOW_SIN_USUARIO", False):
+                return error_response("VALIDATION_ERROR", "usuarioId es requerido.",
+                                      status.HTTP_400_BAD_REQUEST, request_id=_request_id(request))
+
+            nombre_display = request.data.get("nombreDisplay") or None
+            if not nombre_display:
+                return error_response(
+                    "VALIDATION_ERROR", "nombreDisplay es requerido cuando no se envía usuarioId.",
+                    status.HTTP_400_BAD_REQUEST, request_id=_request_id(request),
+                )
+
+            medico = CatMedico.objects.create(
+                id_usuario=None,
+                nombre_display=nombre_display,
+                tipo_medico=request.data.get("tipoMedico", "CLINICA"),
+                servicio=request.data.get("servicio") or None,
+                observaciones=request.data.get("observaciones") or None,
+                created_by_id=actor.id_usuario,
+            )
+            return Response(_serialize_medico(medico), status=status.HTTP_201_CREATED)
 
         usuario = SyUsuario.objects.select_related("detalle").filter(id_usuario=usuario_id).first()
         if not usuario:
@@ -217,22 +283,25 @@ class MedicoDetailView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def _get_medico(self, user_id):
-        return CatMedico.objects.select_related(
-            "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela"
-        ).prefetch_related(
-            "id_usuario__cedulas",
-            "especialidades__especialidad",
-            "centros__centro",
-            "consultorios__consultorio__id_center",
-        ).filter(id_usuario_id=user_id).first()
+    def _get_medico(self, user_id, request=None):
+        return resolve_medico(
+            user_id,
+            request=request,
+            select_related=["id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela"],
+            prefetch_related=[
+                "id_usuario__cedulas",
+                "especialidades__especialidad",
+                "centros__centro",
+                "consultorios__consultorio__id_center",
+            ],
+        )
 
     def get(self, request, user_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:read")
         if auth_error:
             return auth_error
 
-        medico = self._get_medico(user_id)
+        medico = self._get_medico(user_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -253,7 +322,7 @@ class MedicoDetailView(APIView):
         if auth_error:
             return auth_error
 
-        medico = self._get_medico(user_id)
+        medico = self._get_medico(user_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -284,7 +353,7 @@ class MedicoEspecialidadesView(APIView):
         if auth_error:
             return auth_error
 
-        medico = CatMedico.objects.filter(id_usuario_id=user_id).first()
+        medico = resolve_medico(user_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -320,8 +389,13 @@ class MedicoEspecialidadesView(APIView):
         if auth_error:
             return auth_error
 
+        medico = resolve_medico(user_id, request=request)
+        if not medico:
+            return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
+                                  status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
+
         RelMedicoEspecialidad.objects.filter(
-            medico__id_usuario_id=user_id, especialidad_id=especialidad_id
+            medico_id=medico.id, especialidad_id=especialidad_id
         ).delete()
         return Response({"success": True})
 
@@ -338,7 +412,7 @@ class MedicoCentrosView(APIView):
         if auth_error:
             return auth_error
 
-        medico = CatMedico.objects.filter(id_usuario_id=user_id).first()
+        medico = resolve_medico(user_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -368,7 +442,12 @@ class MedicoCentrosView(APIView):
         if auth_error:
             return auth_error
 
-        RelMedicoCentro.objects.filter(id=rel_id, medico__id_usuario_id=user_id).update(
+        medico = resolve_medico(user_id, request=request)
+        if not medico:
+            return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
+                                  status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
+
+        RelMedicoCentro.objects.filter(id=rel_id, medico_id=medico.id).update(
             is_active=False, fecha_fin=date.today()
         )
         return Response({"success": True})
@@ -385,8 +464,9 @@ class MedicoConsultoriosView(APIView):
         if auth_error:
             return auth_error
 
+        medico = resolve_medico(user_id, request=request)
         rmc = RelMedicoConsultorio.objects.select_related("consultorio").filter(
-            id=rmc_id, medico__id_usuario_id=user_id
+            id=rmc_id, medico_id=getattr(medico, "id", None)
         ).first()
         if not rmc:
             return error_response("NOT_FOUND", "Asignación no encontrada.",
@@ -413,7 +493,8 @@ class MedicoConsultoriosView(APIView):
         if auth_error:
             return auth_error
 
-        RelMedicoConsultorio.objects.filter(id=rmc_id, medico__id_usuario_id=user_id).update(
+        medico = resolve_medico(user_id, request=request)
+        RelMedicoConsultorio.objects.filter(id=rmc_id, medico_id=getattr(medico, "id", None)).update(
             is_active=False, fecha_fin=date.today()
         )
         return Response({"success": True})
@@ -424,7 +505,7 @@ class MedicoConsultoriosView(APIView):
         if auth_error:
             return auth_error
 
-        medico = CatMedico.objects.filter(id_usuario_id=user_id).first()
+        medico = resolve_medico(user_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -476,7 +557,8 @@ class MedicoConsultorioHorarioView(APIView):
         if auth_error:
             return auth_error
 
-        rmc = RelMedicoConsultorio.objects.filter(id=rmc_id, medico__id_usuario_id=user_id).first()
+        medico = resolve_medico(user_id, request=request)
+        rmc = RelMedicoConsultorio.objects.filter(id=rmc_id, medico_id=getattr(medico, "id", None)).first()
         if not rmc:
             return error_response("NOT_FOUND", "Asignación no encontrada.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -528,8 +610,9 @@ class MedicoExcepcionesView(APIView):
         if auth_error:
             return auth_error
 
+        medico = resolve_medico(user_id, request=request)
         excepciones = RelMedicoExcepcion.objects.filter(
-            medico__id_usuario_id=user_id, is_active=True
+            medico_id=getattr(medico, "id", None), is_active=True
         ).order_by("fecha_inicio")
 
         return Response({"items": [
@@ -549,7 +632,7 @@ class MedicoExcepcionesView(APIView):
         if auth_error:
             return auth_error
 
-        medico = CatMedico.objects.filter(id_usuario_id=user_id).first()
+        medico = resolve_medico(user_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -581,7 +664,8 @@ class MedicoExcepcionesView(APIView):
         if auth_error:
             return auth_error
 
-        RelMedicoExcepcion.objects.filter(id=exc_id, medico__id_usuario_id=user_id).update(is_active=False)
+        medico = resolve_medico(user_id, request=request)
+        RelMedicoExcepcion.objects.filter(id=exc_id, medico_id=getattr(medico, "id", None)).update(is_active=False)
         return Response({"success": True})
 
 
@@ -597,8 +681,8 @@ class MedicoCoberturasView(APIView):
         if auth_error:
             return auth_error
 
-        suplente = CatMedico.objects.filter(id_usuario_id=request.data.get("medicoSuplenteId")).first()
-        titular  = CatMedico.objects.filter(id_usuario_id=request.data.get("medicoTitularId")).first()
+        suplente = resolve_medico(request.data.get("medicoSuplenteId"), request=request)
+        titular  = resolve_medico(request.data.get("medicoTitularId"), request=request)
         if not suplente or not titular:
             return error_response("MEDICO_NOT_FOUND", "Médico suplente o titular no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -670,7 +754,7 @@ class MedicoDisponibilidadView(APIView):
         if auth_error:
             return auth_error
 
-        medico = CatMedico.objects.select_related("id_usuario").filter(id_usuario_id=user_id).first()
+        medico = resolve_medico(user_id, request=request, select_related=["id_usuario"])
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -683,7 +767,10 @@ class MedicoDisponibilidadView(APIView):
                                   status.HTTP_400_BAD_REQUEST, request_id=_request_id(request))
 
         disp = get_disponibilidad_medico(medico, fecha)
-        return Response({"medicoId": user_id, "fecha": str(fecha), **disp})
+        return Response({
+            "medicoId": medico.id, "usuarioId": medico.id_usuario_id,
+            "fecha": str(fecha), **disp,
+        })
 
 
 
@@ -699,8 +786,17 @@ class GenerarSlotsView(APIView):
             return auth_error
 
         from apps.recepcion.repositories.citas_repository import CitasRepository
+
+        # generar_slots_medico filtra/crea HorarioDisponible.medico_id
+        # (espacio médico) -- se resuelve el {user_id} de la ruta a
+        # CatMedico.pk (D7) en vez de pasarlo directo (R1).
+        medico = resolve_medico(user_id, request=request)
+        if not medico:
+            return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
+                                  status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
+
         dias = int(request.data.get("diasAdelante", 30))
         dias = max(1, min(dias, 90))  # entre 1 y 90 días
 
-        creados = CitasRepository.generar_slots_medico(medico_id=user_id, dias_adelante=dias)
-        return Response({"medicoId": user_id, "slotsCreados": creados, "diasAdelante": dias})
+        creados = CitasRepository.generar_slots_medico(medico_id=medico.id, dias_adelante=dias)
+        return Response({"medicoId": medico.id, "slotsCreados": creados, "diasAdelante": dias})

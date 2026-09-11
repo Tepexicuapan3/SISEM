@@ -2,6 +2,15 @@
 # authentication.SyUsuario (la aplicacion siempre lo trato como un id de
 # usuario, nunca como texto, via visit_repository.py / ficha_service.py).
 #
+# F5-06 (medico-pk-independiente, obs #473): Visit.doctor sigue apuntando a
+# SyUsuario a proposito -- NO se reapunta a medicos.CatMedico (fuera de
+# alcance de ese cambio, ver propuesta obs #467 seccion 2 "Fuera del
+# alcance"). Es "que usuario atendio", no "que medico del catalogo". El
+# codigo que traduce entre `Visit.doctor_id` (espacio usuario) y
+# `medico_id` (espacio CatMedico, PK propia desde medicos/0007_switch_surrogate_pk.py)
+# vive en `apps.medicos.identity` -- ver esa migracion y
+# `apps/recepcion/uses_case/qr_checkin_usecase.py`.
+#
 # La verificacion de "0 huerfanos" original corrio contra datos de
 # desarrollo, no contra produccion -- en produccion SI hay filas de
 # rcp_visits con doctor_id apuntando a un SyUsuario que ya no existe

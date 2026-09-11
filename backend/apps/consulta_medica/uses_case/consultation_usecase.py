@@ -111,6 +111,11 @@ def start_consultation(visit_id, roles, permissions=None, doctor_id=None):
     return VisitRepository.to_contract(visit)
 
 
+def _normalize_soap_field(value):
+    normalized = (value or "").strip()
+    return normalized or None
+
+
 def save_diagnosis(
     visit_id,
     roles,
@@ -119,6 +124,10 @@ def save_diagnosis(
     doctor_id,
     permissions=None,
     cie_code=None,
+    subjective=None,
+    objective=None,
+    assessment=None,
+    plan=None,
 ):
     ensure_doctor_role(roles, permissions)
 
@@ -128,6 +137,10 @@ def save_diagnosis(
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
     normalized_final_note = (final_note or "").strip()
     normalized_cie_code = _resolve_cie_code_or_error(cie_code)
+    normalized_subjective = _normalize_soap_field(subjective)
+    normalized_objective = _normalize_soap_field(objective)
+    normalized_assessment = _normalize_soap_field(assessment)
+    normalized_plan = _normalize_soap_field(plan)
     if not normalized_primary_diagnosis or not normalized_final_note:
         raise VisitDomainError(
             "VISIT_STATE_INVALID",
@@ -142,6 +155,10 @@ def save_diagnosis(
             primary_diagnosis=normalized_primary_diagnosis,
             cie_code=normalized_cie_code,
             final_note=normalized_final_note,
+            subjective=normalized_subjective,
+            objective=normalized_objective,
+            assessment=normalized_assessment,
+            plan=normalized_plan,
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
         )
@@ -152,6 +169,10 @@ def save_diagnosis(
         "primaryDiagnosis": consultation.primary_diagnosis,
         "cieCode": consultation.cie_id,
         "finalNote": consultation.final_note,
+        "subjective": consultation.subjective,
+        "objective": consultation.objective,
+        "assessment": consultation.assessment,
+        "plan": consultation.plan,
     }
 
 
@@ -199,11 +220,19 @@ def close_consultation(
     doctor_id,
     permissions=None,
     cie_code=None,
+    subjective=None,
+    objective=None,
+    assessment=None,
+    plan=None,
 ):
     ensure_doctor_role(roles, permissions)
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
     normalized_final_note = (final_note or "").strip()
     normalized_cie_code = _resolve_cie_code_or_error(cie_code)
+    normalized_subjective = _normalize_soap_field(subjective)
+    normalized_objective = _normalize_soap_field(objective)
+    normalized_assessment = _normalize_soap_field(assessment)
+    normalized_plan = _normalize_soap_field(plan)
     if not normalized_cie_code:
         raise VisitDomainError(
             "VALIDATION_ERROR",
@@ -221,6 +250,10 @@ def close_consultation(
             and existing_consultation.primary_diagnosis == normalized_primary_diagnosis
             and existing_consultation.cie_id == normalized_cie_code
             and existing_consultation.final_note == normalized_final_note
+            and existing_consultation.subjective == normalized_subjective
+            and existing_consultation.objective == normalized_objective
+            and existing_consultation.assessment == normalized_assessment
+            and existing_consultation.plan == normalized_plan
         ):
             return {
                 "visit": VisitRepository.to_contract(visit),
@@ -241,6 +274,10 @@ def close_consultation(
                 primary_diagnosis=normalized_primary_diagnosis,
                 cie_code=normalized_cie_code,
                 final_note=normalized_final_note,
+                subjective=normalized_subjective,
+                objective=normalized_objective,
+                assessment=normalized_assessment,
+                plan=normalized_plan,
                 created_by_id=doctor_id,
                 updated_by_id=doctor_id,
             )
@@ -266,6 +303,10 @@ def close_consultation(
             primary_diagnosis=normalized_primary_diagnosis,
             cie_code=normalized_cie_code,
             final_note=normalized_final_note,
+            subjective=normalized_subjective,
+            objective=normalized_objective,
+            assessment=normalized_assessment,
+            plan=normalized_plan,
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
         )
