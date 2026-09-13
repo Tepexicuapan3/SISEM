@@ -17,7 +17,7 @@ from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.authorization_service import has_capability
 from apps.catalogos.models import MotivoCita
-from apps.medicos.views.medico_views import resolve_medico
+from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.models import CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
 from apps.recepcion.services.errors import VisitDomainError
@@ -113,14 +113,14 @@ def _resolve_medico_or_404(medico_id_raw, request):
     Gap 10.3 (design, topic sdd/medico-pk-independiente/design): `medicoId`
     llega crudo del frontend, que todavía manda el `id` legacy (id_usuario)
     porque no fue migrado. Se resuelve contra CatMedico con el mismo patrón
-    que `medicos/views/medico_views.py::resolve_medico` (PK surrogate
+    que `medicos/repositories/medico_repository.py::MedicoRepository.resolve` (PK surrogate
     primero, fallback a id_usuario con WARN) en vez de pasar el valor sin
     traducir a CitasRepository -- evita agendar/buscar horarios de la
     PERSONA EQUIVOCADA (R1).
 
     Devuelve `(medico, None)` o `(None, error_response)`.
     """
-    medico = resolve_medico(medico_id_raw, request=request)
+    medico = MedicoRepository.resolve(medico_id_raw, request=request)
     if not medico:
         return None, error_response(
             "MEDICO_NOT_FOUND", "Médico no encontrado.",
@@ -229,7 +229,7 @@ class CitasListCreateView(APIView):
         medico_id_filtro = None
         medico_id_raw = s.validated_data.get("medicoId")
         if medico_id_raw is not None:
-            medico_filtro = resolve_medico(medico_id_raw, request=request)
+            medico_filtro = MedicoRepository.resolve(medico_id_raw, request=request)
             medico_id_filtro = medico_filtro.id if medico_filtro else -1
 
         items, total, total_pages = CitasRepository.list_paginated(
@@ -285,8 +285,8 @@ class CitasListCreateView(APIView):
 
         # Gap 10.3: `medicoId` llega crudo del frontend (id legacy) -- se
         # resuelve a la PK surrogate de CatMedico ANTES de pasarlo a
-        # CitasRepository.create, mismo patrón que resolve_medico en
-        # medico_views.py.
+        # CitasRepository.create, mismo patrón que
+        # MedicoRepository.resolve.
         medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
         if err:
             return err

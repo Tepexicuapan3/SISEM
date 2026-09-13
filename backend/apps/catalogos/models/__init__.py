@@ -9,6 +9,7 @@ from .centros_atencion import CatCentroAtencion
 from .centro_atencion_horario import CatCentroAtencionHorario
 from .centro_atencion_excepcion import CatCentroAtencionExcepcion
 from .cies import CatCies
+from .cie9_mc import CatCie9Mc
 from .consultorios import Consultorios
 from .discapacidades import Discapacidades
 from .edo_civil import EdoCivil
@@ -58,6 +59,7 @@ __all__ = [
     "CatCentroAtencionHorario",
     "CatCentroAtencionExcepcion",
     "CatCies",
+    "CatCie9Mc",
     "Consultorios",
     "Discapacidades",
     "EdoCivil",

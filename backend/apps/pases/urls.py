@@ -3,6 +3,7 @@ from django.urls import path
 from apps.pases.views import (
     PatientReferralsHistoryView,
     ReferralCancelView,
+    ReferralReportView,
     VisitReferralCreateView,
 )
 
@@ -21,5 +22,10 @@ urlpatterns = [
         "patients/<str:no_exp>/referrals",
         PatientReferralsHistoryView.as_view(),
         name="patient-referrals-history",
+    ),
+    path(
+        "reportes/pases",
+        ReferralReportView.as_view(),
+        name="reportes-pases",
     ),
 ]

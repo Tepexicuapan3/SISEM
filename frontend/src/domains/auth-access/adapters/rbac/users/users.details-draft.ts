@@ -1,12 +1,19 @@
 import type {
   CedulaItem,
   Permission,
+  PerfilAdministrativo,
+  PerfilEnfermeria,
+  PerfilMedico,
   RoleListItem,
   UserOverride,
   UserRole,
 } from "@api/types";
+import type { UpdateUserRequest } from "@api/types";
 import type {
   CedulaFormItem,
+  PerfilAdministrativoFormValues,
+  PerfilEnfermeriaFormValues,
+  PerfilMedicoFormValues,
   UserDetailsFormValues,
 } from "@/domains/auth-access/types/rbac/users.schemas";
 
@@ -26,6 +33,9 @@ interface UserDetailFormSource {
   escuela?: { id: number } | null;
   tipoPersonal?: { id: number } | null;
   cedulas?: CedulaItem[];
+  perfilMedico?: PerfilMedico | null;
+  perfilEnfermeria?: PerfilEnfermeria | null;
+  perfilAdministrativo?: PerfilAdministrativo | null;
 }
 
 interface DraftAssigner {
@@ -86,6 +96,24 @@ export const mapUserDetailToFormValues = (
       esPrincipal: c.esPrincipal,
     }),
   ),
+  perfilMedico: {
+    enabled: detail?.perfilMedico != null,
+    cedulaProfesional: detail?.perfilMedico?.cedulaProfesional ?? null,
+    cedulaEspecialidad: detail?.perfilMedico?.cedulaEspecialidad ?? null,
+    especialidadId: detail?.perfilMedico?.especialidad?.id ?? null,
+    tipoAdscripcion: detail?.perfilMedico?.tipoAdscripcion ?? null,
+  },
+  perfilEnfermeria: {
+    enabled: detail?.perfilEnfermeria != null,
+    cedulaEnfermeria: detail?.perfilEnfermeria?.cedulaEnfermeria ?? null,
+    nivel: detail?.perfilEnfermeria?.nivel ?? null,
+    areaClinicaId: detail?.perfilEnfermeria?.areaClinica?.id ?? null,
+  },
+  perfilAdministrativo: {
+    enabled: detail?.perfilAdministrativo != null,
+    puesto: detail?.perfilAdministrativo?.puesto ?? null,
+    areaAdministrativa: detail?.perfilAdministrativo?.areaAdministrativa ?? null,
+  },
 });
 
 const normalizeDraftText = (value: string | null | undefined) =>
@@ -103,11 +131,44 @@ const normalizeCedulas = (cedulas: CedulaFormItem[]) =>
     })),
   );
 
+const normalizePerfilMedico = (value: PerfilMedicoFormValues) =>
+  JSON.stringify(
+    value.enabled
+      ? {
+          cedulaProfesional: normalizeDraftText(value.cedulaProfesional) || null,
+          cedulaEspecialidad: normalizeDraftText(value.cedulaEspecialidad) || null,
+          especialidadId: value.especialidadId ?? null,
+          tipoAdscripcion: value.tipoAdscripcion,
+        }
+      : null,
+  );
+
+const normalizePerfilEnfermeria = (value: PerfilEnfermeriaFormValues) =>
+  JSON.stringify(
+    value.enabled
+      ? {
+          cedulaEnfermeria: normalizeDraftText(value.cedulaEnfermeria) || null,
+          nivel: value.nivel,
+          areaClinicaId: value.areaClinicaId ?? null,
+        }
+      : null,
+  );
+
+const normalizePerfilAdministrativo = (value: PerfilAdministrativoFormValues) =>
+  JSON.stringify(
+    value.enabled
+      ? {
+          puesto: normalizeDraftText(value.puesto) || null,
+          areaAdministrativa: normalizeDraftText(value.areaAdministrativa) || null,
+        }
+      : null,
+  );
+
 export const buildUserProfilePayload = (
   baseline: UserDetailsFormValues,
   draft: UserDetailsFormValues,
-): Partial<UserDetailsFormValues> => {
-  const payload: Partial<UserDetailsFormValues> = {};
+): Partial<UpdateUserRequest> => {
+  const payload: Partial<UpdateUserRequest> = {};
 
   if (
     normalizeDraftText(draft.firstName) !==
@@ -191,6 +252,45 @@ export const buildUserProfilePayload = (
 
   if (normalizeCedulas(draft.cedulas) !== normalizeCedulas(baseline.cedulas)) {
     payload.cedulas = draft.cedulas;
+  }
+
+  if (
+    normalizePerfilMedico(draft.perfilMedico) !==
+    normalizePerfilMedico(baseline.perfilMedico)
+  ) {
+    payload.perfilMedico = draft.perfilMedico.enabled
+      ? {
+          cedulaProfesional: draft.perfilMedico.cedulaProfesional?.trim() || null,
+          cedulaEspecialidad: draft.perfilMedico.cedulaEspecialidad?.trim() || null,
+          idEspecialidad: draft.perfilMedico.especialidadId,
+          tipoAdscripcion: draft.perfilMedico.tipoAdscripcion,
+        }
+      : null;
+  }
+
+  if (
+    normalizePerfilEnfermeria(draft.perfilEnfermeria) !==
+    normalizePerfilEnfermeria(baseline.perfilEnfermeria)
+  ) {
+    payload.perfilEnfermeria = draft.perfilEnfermeria.enabled
+      ? {
+          cedulaEnfermeria: draft.perfilEnfermeria.cedulaEnfermeria?.trim() || null,
+          nivel: draft.perfilEnfermeria.nivel,
+          idAreaClinica: draft.perfilEnfermeria.areaClinicaId,
+        }
+      : null;
+  }
+
+  if (
+    normalizePerfilAdministrativo(draft.perfilAdministrativo) !==
+    normalizePerfilAdministrativo(baseline.perfilAdministrativo)
+  ) {
+    payload.perfilAdministrativo = draft.perfilAdministrativo.enabled
+      ? {
+          puesto: draft.perfilAdministrativo.puesto?.trim() || null,
+          areaAdministrativa: draft.perfilAdministrativo.areaAdministrativa?.trim() || null,
+        }
+      : null;
   }
 
   return payload;

@@ -70,6 +70,35 @@ const cedulaSchema = z.object({
 
 export type CedulaFormItem = z.infer<typeof cedulaSchema>;
 
+// Los 3 perfiles se modelan siempre como objeto (nunca null) en el form --
+// `enabled` decide si el usuario tiene ese perfil o no. La conversion a
+// `null` (para borrar el perfil en el PATCH) pasa en users.details-draft.ts,
+// no aca -- evita nullable() anidado en react-hook-form.
+const perfilMedicoSchema = z.object({
+  enabled: z.boolean().default(false),
+  cedulaProfesional: z.string().trim().max(30).nullable().default(null),
+  cedulaEspecialidad: z.string().trim().max(30).nullable().default(null),
+  especialidadId: optionalNumber,
+  tipoAdscripcion: z.enum(["CLINICA", "HOSPITAL"]).nullable().default(null),
+});
+
+const perfilEnfermeriaSchema = z.object({
+  enabled: z.boolean().default(false),
+  cedulaEnfermeria: z.string().trim().max(30).nullable().default(null),
+  nivel: z.enum(["GENERAL", "ESPECIALISTA", "JEFE_PISO"]).nullable().default(null),
+  areaClinicaId: optionalNumber,
+});
+
+const perfilAdministrativoSchema = z.object({
+  enabled: z.boolean().default(false),
+  puesto: z.string().trim().max(100).nullable().default(null),
+  areaAdministrativa: z.string().trim().max(100).nullable().default(null),
+});
+
+export type PerfilMedicoFormValues = z.infer<typeof perfilMedicoSchema>;
+export type PerfilEnfermeriaFormValues = z.infer<typeof perfilEnfermeriaSchema>;
+export type PerfilAdministrativoFormValues = z.infer<typeof perfilAdministrativoSchema>;
+
 export const userDetailsSchema = z
   .object({
     firstName: requiredText("Nombre"),
@@ -90,6 +119,9 @@ export const userDetailsSchema = z
       .array(cedulaSchema)
       .max(3, { message: "Solo se permiten hasta 3 cédulas" })
       .default([]),
+    perfilMedico: perfilMedicoSchema.default({ enabled: false, cedulaProfesional: null, cedulaEspecialidad: null, especialidadId: null, tipoAdscripcion: null }),
+    perfilEnfermeria: perfilEnfermeriaSchema.default({ enabled: false, cedulaEnfermeria: null, nivel: null, areaClinicaId: null }),
+    perfilAdministrativo: perfilAdministrativoSchema.default({ enabled: false, puesto: null, areaAdministrativa: null }),
   })
   .refine(
     (data) => data.cedulas.filter((c) => c.esPrincipal).length <= 1,

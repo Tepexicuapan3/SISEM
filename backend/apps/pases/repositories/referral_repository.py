@@ -75,6 +75,59 @@ class ReferralRepository:
         )
 
     @staticmethod
+    def list_report(fecha_inicio, fecha_fin, *, referral_type=None, status=None, no_exp=None):
+        """
+        Pases emitidos en un rango de fechas -- equivalente moderno de
+        body-repases.jsp/body-repingresados.jsp/body-rephospital.jsp del
+        legado. Ver docs/architecture/legacy-reports-inventory.md.
+        """
+        queryset = (
+            Referral.objects.filter(
+                is_active=True,
+                created_at__date__gte=fecha_inicio,
+                created_at__date__lte=fecha_fin,
+            )
+            .select_related(
+                "destination_center",
+                "specialty",
+                "consultation",
+                "consultation__id_visit",
+                "consultation__doctor",
+                "consultation__doctor__detalle",
+            )
+            .order_by("created_at")
+        )
+        if referral_type is not None:
+            queryset = queryset.filter(referral_type=referral_type)
+        if status is not None:
+            queryset = queryset.filter(status=status)
+        if no_exp is not None:
+            queryset = queryset.filter(no_exp=no_exp)
+        return queryset
+
+    @staticmethod
+    def to_report_row(referral):
+        visit = referral.consultation.id_visit
+        doctor = referral.consultation.doctor
+        doctor_detalle = getattr(doctor, "detalle", None)
+        return {
+            "id": referral.id_referral,
+            "date": referral.created_at,
+            "folio": referral.folio,
+            "referralType": referral.referral_type,
+            "noExp": referral.no_exp,
+            "pkNum": referral.pk_num,
+            "patientName": visit.nombre_paciente if visit else None,
+            "doctorName": doctor_detalle.nombre_completo if doctor_detalle else None,
+            "destinationCenterName": (
+                referral.destination_center.name if referral.destination_center_id else None
+            ),
+            "specialtyName": referral.specialty.name if referral.specialty_id else None,
+            "visitType": referral.visit_type,
+            "status": referral.status,
+        }
+
+    @staticmethod
     def to_contract(referral):
         studies = []
         if referral.referral_type in _STUDY_TYPES:

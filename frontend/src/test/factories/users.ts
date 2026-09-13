@@ -142,6 +142,9 @@ export const createMockUserDetail = (
     },
     updatedAt: null,
     updatedBy: null,
+    perfilMedico: null,
+    perfilEnfermeria: null,
+    perfilAdministrativo: null,
     ...overrides,
   };
 };

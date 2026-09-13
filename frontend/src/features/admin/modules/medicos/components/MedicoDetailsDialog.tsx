@@ -1,5 +1,5 @@
 import {
-  Building2, CalendarX2, ClipboardList, Stethoscope, UserRound,
+  Building2, CalendarX2, ClipboardList, Stethoscope, UserRound, Users,
 } from "lucide-react";
 import { Badge }    from "@shared/ui/badge";
 import { Button }   from "@shared/ui/button";
@@ -18,6 +18,8 @@ import { MedicoConsultoriosTab }
   from "@features/admin/modules/medicos/components/tabs/MedicoConsultoriosTab";
 import { MedicoExcepcionesTab }
   from "@features/admin/modules/medicos/components/tabs/MedicoExcepcionesTab";
+import { MedicoCoberturasTab }
+  from "@features/admin/modules/medicos/components/tabs/MedicoCoberturasTab";
 import type { EstatusMedico, TipoMedico } from "@api/types/medicos.types";
 import type { MedicoListItem } from "@api/types/medicos.types";
 
@@ -167,6 +169,14 @@ export function MedicoDetailsDialog({ open, onOpenChange, medicoSummary, canEdit
       icon:    <CalendarX2  className="size-3.5" />,
       content: medico
         ? <MedicoExcepcionesTab medicoId={medico.id} isEditable={canEdit} />
+        : null,
+    },
+    {
+      id:      "coberturas",
+      label:   "Coberturas",
+      icon:    <Users className="size-3.5" />,
+      content: medico
+        ? <MedicoCoberturasTab medico={medico} isEditable={canEdit} />
         : null,
     },
   ];

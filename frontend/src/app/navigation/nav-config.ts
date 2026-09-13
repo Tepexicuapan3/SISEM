@@ -269,10 +269,19 @@ export const NAV_CONFIG: NavSection[] = [
       },
       {
         title: "Reportes y Analitica Operativa",
-        url: "/admin/reportes",
         icon: FileText,
-        permissions: ["admin:reportes:read"],
-        badge: PLACEHOLDER_BADGE,
+        items: [
+          {
+            title: "Informe Diario de Consulta Médica",
+            url: "/admin/reportes/consultas-diario",
+            permissions: ["clinico:reportes:read"],
+          },
+          {
+            title: "Informe de Pases",
+            url: "/admin/reportes/pases",
+            permissions: ["clinico:pases:read"],
+          },
+        ],
       },
       {
         title: "Estadisticas",

@@ -36,6 +36,11 @@ NAVIGATION_PERMISSIONS_SEED: list[tuple[str, str]] = [
     ("admin:catalogos:vacunas:read", "Ver catalogo administrativo de vacunas"),
     ("admin:gestion:expedientes:read", "Ver expedientes clinicos"),
     ("admin:gestion:medicos:read", "Ver catalogo de medicos"),
+    ("admin:gestion:medicos:create", "Crear perfiles de medico"),
+    ("admin:gestion:medicos:update", "Editar perfiles de medico"),
+    ("admin:gestion:medicos:horarios", "Gestionar consultorios y horarios de medicos"),
+    ("admin:gestion:medicos:excepciones", "Gestionar excepciones (vacaciones, incapacidad, etc.) de medicos"),
+    ("admin:gestion:medicos:coberturas", "Gestionar coberturas entre medicos"),
     ("admin:gestion:modulos:read", "Ver modulos del menu de navegacion"),
     ("admin:gestion:modulos:create", "Crear modulos del menu de navegacion"),
     ("admin:gestion:modulos:update", "Editar modulos del menu de navegacion"),
@@ -114,4 +119,12 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:pases:read", "Ver pases y referencias medicas"),
     ("clinico:pases:create", "Emitir y cancelar pases y referencias medicas"),
+]
+
+# Quinta tanda (2026-09-13): permiso del reporte diario de consulta medica
+# (equivalente moderno de body-repconsulta.jsp del legado). Permiso propio de
+# solo lectura -- no reusa clinico:consultas:read a proposito, mismo criterio
+# que la tanda anterior de Pases.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:reportes:read", "Ver reportes clinicos (ej. informe diario de consulta medica)"),
 ]

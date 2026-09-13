@@ -19,6 +19,7 @@ class DntFotosCredenciales(models.Model):
     class Meta:
         app_label = 'administracion'
         db_table   = 'dnt_fotos_credenciales'
+        managed    = False  # Tabla creada por backend/storage/expedientes-ddl, no por Django.
         # Llave primaria compuesta simulada con unique_together
         unique_together = [('id_empleado', 'id_clave_foto')]
         # Django no soporta PKs compuestas nativamente; usamos el id auto por defecto

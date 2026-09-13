@@ -96,4 +96,9 @@ CATALOGOS_CRUD_PERMISSIONS_SEED: list[tuple[str, str]] = [
     ("admin:catalogos:tipo_residencia:create", "Crear en catalogo de tipos de residencia"),
     ("admin:catalogos:tipo_residencia:update", "Editar catalogo de tipos de residencia"),
     ("admin:catalogos:tipo_residencia:delete", "Eliminar en catalogo de tipos de residencia"),
+
+    ("admin:catalogos:cie9_mc:read", "Ver catalogo CIE-9-MC (procedimientos, NOM-024)"),
+    ("admin:catalogos:cie9_mc:create", "Crear en catalogo CIE-9-MC"),
+    ("admin:catalogos:cie9_mc:update", "Editar catalogo CIE-9-MC"),
+    ("admin:catalogos:cie9_mc:delete", "Eliminar en catalogo CIE-9-MC"),
 ]

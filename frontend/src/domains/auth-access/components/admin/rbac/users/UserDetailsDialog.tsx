@@ -93,6 +93,7 @@ interface UserDetailsDialogProps {
   escolaridadOptions?: CatalogOption[];
   escuelaOptions?: CatalogOption[];
   tipoPersonalOptions?: CatalogOption[];
+  especialidadOptions?: CatalogOption[];
   isClinicsCatalogLoading?: boolean;
   canEdit: boolean;
   canReadRolesCatalog?: boolean;
@@ -116,6 +117,9 @@ const DEFAULT_FORM_VALUES: UserDetailsFormValues = {
   escuelaId: null,
   tipoPersonalId: null,
   cedulas: [],
+  perfilMedico: { enabled: false, cedulaProfesional: null, cedulaEspecialidad: null, especialidadId: null, tipoAdscripcion: null },
+  perfilEnfermeria: { enabled: false, cedulaEnfermeria: null, nivel: null, areaClinicaId: null },
+  perfilAdministrativo: { enabled: false, puesto: null, areaAdministrativa: null },
 };
 
 const DRAFT_ASSIGNER = {
@@ -136,6 +140,7 @@ export function UserDetailsDialog({
   escolaridadOptions = [],
   escuelaOptions = [],
   tipoPersonalOptions = [],
+  especialidadOptions = [],
   isClinicsCatalogLoading = false,
   canEdit,
   canReadRolesCatalog = true,
@@ -204,6 +209,9 @@ export function UserDetailsDialog({
     draftEscuelaId,
     draftTipoPersonalId,
     draftCedulas,
+    draftPerfilMedico,
+    draftPerfilEnfermeria,
+    draftPerfilAdministrativo,
   ] = form.watch([
     "firstName",
     "paternalName",
@@ -220,6 +228,9 @@ export function UserDetailsDialog({
     "escuelaId",
     "tipoPersonalId",
     "cedulas",
+    "perfilMedico",
+    "perfilEnfermeria",
+    "perfilAdministrativo",
   ]);
 
   const watchedFormValues: UserDetailsFormValues = {
@@ -238,6 +249,9 @@ export function UserDetailsDialog({
     escuelaId: draftEscuelaId ?? null,
     tipoPersonalId: draftTipoPersonalId ?? null,
     cedulas: draftCedulas ?? [],
+    perfilMedico: draftPerfilMedico ?? DEFAULT_FORM_VALUES.perfilMedico,
+    perfilEnfermeria: draftPerfilEnfermeria ?? DEFAULT_FORM_VALUES.perfilEnfermeria,
+    perfilAdministrativo: draftPerfilAdministrativo ?? DEFAULT_FORM_VALUES.perfilAdministrativo,
   };
   const baselineFormValues = userDetail
     ? mapUserDetailToFormValues(userDetail)
@@ -654,6 +668,7 @@ export function UserDetailsDialog({
                 escolaridadOptions={escolaridadOptions}
                 escuelaOptions={escuelaOptions}
                 tipoPersonalOptions={tipoPersonalOptions}
+                especialidadOptions={especialidadOptions}
                 isClinicsCatalogLoading={isClinicsCatalogLoading}
                 userDetail={userDetail}
                 accountIsActive={workingAccountIsActive}

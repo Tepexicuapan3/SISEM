@@ -1,4 +1,4 @@
-import type { UserDetailsFormValues } from "@/domains/auth-access/types/rbac/users.schemas";
+import type { UpdateUserRequest } from "@api/types";
 import type {
   UserOverrideUpsertPayload,
   UserOverridesDiff,
@@ -6,7 +6,7 @@ import type {
 } from "@/domains/auth-access/adapters/rbac/users/users.access-draft";
 
 interface UserDetailsSavePlan {
-  profilePayload: Partial<UserDetailsFormValues>;
+  profilePayload: Partial<UpdateUserRequest>;
   hasStatusChanges: boolean;
   nextIsActive: boolean;
   rolesDiff: UserRolesDiff;
@@ -14,7 +14,7 @@ interface UserDetailsSavePlan {
 }
 
 interface UserDetailsSaveExecutors {
-  updateProfile: (payload: Partial<UserDetailsFormValues>) => Promise<unknown>;
+  updateProfile: (payload: Partial<UpdateUserRequest>) => Promise<unknown>;
   activateUser: () => Promise<unknown>;
   deactivateUser: () => Promise<unknown>;
   assignRoles: (roleIds: number[]) => Promise<unknown>;

@@ -22,6 +22,7 @@ import type { CentroAtencionListItem, UserDetail } from "@api/types";
 import type { UserDetailsFormValues } from "@/domains/auth-access/types/rbac/users.schemas";
 import { CatalogCombobox, type CatalogOption } from "@/domains/auth-access/components/admin/rbac/users/CatalogCombobox";
 import { CedulasSection } from "@/domains/auth-access/components/admin/rbac/users/CedulasSection";
+import { PerfilesSection } from "@/domains/auth-access/components/admin/rbac/users/PerfilesSection";
 import { useAreaClinicasByClinic } from "@/domains/auth-access/hooks/rbac/users/useAreaClinicasByClinic";
 
 interface AreaClinicaOption {
@@ -37,6 +38,7 @@ interface UserDetailsGeneralTabProps {
   escolaridadOptions?: CatalogOption[];
   escuelaOptions?: CatalogOption[];
   tipoPersonalOptions?: CatalogOption[];
+  especialidadOptions?: CatalogOption[];
   isClinicsCatalogLoading?: boolean;
   userDetail: UserDetail;
   accountIsActive: boolean;
@@ -68,6 +70,7 @@ export function UserDetailsGeneralTab({
   escolaridadOptions = [],
   escuelaOptions = [],
   tipoPersonalOptions = [],
+  especialidadOptions = [],
   isClinicsCatalogLoading = false,
   userDetail,
   accountIsActive,
@@ -504,6 +507,14 @@ export function UserDetailsGeneralTab({
 
         {/* Cédulas profesionales */}
         <CedulasSection form={form} isEditable={isEditable} />
+
+        {/* Perfiles por tipo de personal (médico/enfermería/administrativo) */}
+        <PerfilesSection
+          form={form}
+          especialidadOptions={especialidadOptions}
+          areaClinicaOptions={allAreaOptions}
+          isEditable={isEditable}
+        />
       </form>
     </Form>
   );

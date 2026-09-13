@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.consulta_medica.views import (
+    DailyConsultationReportView,
     PatientClinicalHistoryView,
     PatientConsultationsHistoryView,
     PatientMedicalLeavesHistoryView,
@@ -117,5 +118,10 @@ urlpatterns = [
         "visits/<int:visit_id>/close",
         VisitConsultationCloseView.as_view(),
         name="visit-close",
+    ),
+    path(
+        "reportes/consultas/diario",
+        DailyConsultationReportView.as_view(),
+        name="reportes-consultas-diario",
     ),
 ]

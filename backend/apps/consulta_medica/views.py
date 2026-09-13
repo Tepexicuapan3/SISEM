@@ -1,6 +1,9 @@
 import logging
 
+from django.http import HttpResponse
+from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -35,6 +38,8 @@ from .serializers import (
     StartConsultationSerializer,
     StomatologyHistoryUpdateSerializer,
 )
+from .services.report_export_service import build_daily_report_workbook
+from .uses_case.daily_report_usecase import get_daily_consultation_report
 from .uses_case.clinical_history_usecase import (
     get_clinical_history,
     upsert_clinical_history,
@@ -1240,5 +1245,66 @@ class VisitConsultationCloseView(APIView):
             request,
             visit_id=visit_payload.get("id"),
         )
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class DailyConsultationReportView(APIView):
+    """
+    Informe de consultas cerradas en un rango de fechas (default: hoy).
+    Equivalente moderno de body-repconsulta.jsp ("Informe Diario de
+    Consulta Medica") del legado -- ver docs/architecture/legacy-reports-inventory.md.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        today = timezone.localdate()
+        raw_start = request.query_params.get("fechaInicio")
+        raw_end = request.query_params.get("fechaFin")
+
+        fecha_inicio = parse_date(raw_start) if raw_start else today
+        fecha_fin = parse_date(raw_end) if raw_end else today
+
+        if (raw_start and fecha_inicio is None) or (raw_end and fecha_fin is None):
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"fecha": ["Formato esperado: YYYY-MM-DD."]},
+                request_id=get_request_id(request),
+            )
+
+        doctor_id = request.query_params.get("doctorId") or None
+        consultorio_id = request.query_params.get("consultorioId") or None
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = get_daily_consultation_report(
+                fecha_inicio,
+                fecha_fin,
+                roles,
+                permissions,
+                doctor_id=doctor_id,
+                consultorio_id=consultorio_id,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        if request.query_params.get("export") == "xlsx":
+            content = build_daily_report_workbook(payload["items"])
+            response = HttpResponse(
+                content,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            filename = f"informe_diario_consulta_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.xlsx"
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
 
         return Response(payload, status=status.HTTP_200_OK)

@@ -99,6 +99,12 @@ export type {
   EscolaridadRef,
   EscuelaRef,
   TipoPersonalRef,
+  // Perfiles por tipo de personal
+  TipoAdscripcionMedico,
+  NivelEnfermeria,
+  PerfilMedico,
+  PerfilEnfermeria,
+  PerfilAdministrativo,
 } from "@api/types/users.types";
 
 // =============================================================================
@@ -412,6 +418,24 @@ export type {
   CreateReferralRequest,
   CancelReferralRequest,
 } from "@api/types/referral.types";
+
+// =============================================================================
+// REPORTES - CONSULTA MEDICA DIARIA
+// =============================================================================
+export type {
+  DailyConsultationReportParams,
+  DailyConsultationReportItem,
+  DailyConsultationReportResponse,
+} from "@api/types/reportes-consultas-diario.types";
+
+// =============================================================================
+// REPORTES - PASES
+// =============================================================================
+export type {
+  ReferralReportParams,
+  ReferralReportItem,
+  ReferralReportResponse,
+} from "@api/types/reportes-pases.types";
 
 // =============================================================================
 // DIAGNOSTICOS SECUNDARIOS (VisitDiagnosis)

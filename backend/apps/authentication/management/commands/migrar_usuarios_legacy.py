@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-import os
-
-import pymysql
-import pymysql.cursors
 from django.contrib.auth.hashers import make_password
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils.crypto import get_random_string
 
+from apps.authentication.management.commands._legacy_mysql_base import LegacyMysqlCommandMixin
 from apps.authentication.models import SyUsuario
 
 PLACEHOLDER_DOMAIN = "pendiente.sires.local"
 
 
-class Command(BaseCommand):
+class Command(LegacyMysqlCommandMixin, BaseCommand):
     help = (
         "Migra usuarios desde cat_usuarios (MySQL, sistema anterior) a sy_usuarios. "
         "Genera correo placeholder y clave aleatoria; deja la cuenta bloqueada "
@@ -22,11 +19,7 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
-        parser.add_argument("--host", default=os.getenv("LEGACY_MYSQL_HOST"))
-        parser.add_argument("--port", type=int, default=int(os.getenv("LEGACY_MYSQL_PORT", "3306")))
-        parser.add_argument("--user", default=os.getenv("LEGACY_MYSQL_USER"))
-        parser.add_argument("--password", default=os.getenv("LEGACY_MYSQL_PASSWORD"))
-        parser.add_argument("--database", default=os.getenv("LEGACY_MYSQL_DATABASE"))
+        self.add_legacy_mysql_arguments(parser)
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -34,20 +27,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        for required in ("host", "user", "password", "database"):
-            if not options[required]:
-                raise CommandError(
-                    f"Falta --{required} (o la variable de entorno LEGACY_MYSQL_{required.upper()})."
-                )
-
-        conn = pymysql.connect(
-            host=options["host"],
-            port=options["port"],
-            user=options["user"],
-            password=options["password"],
-            database=options["database"],
-            cursorclass=pymysql.cursors.DictCursor,
-        )
+        conn = self.conectar_legado(options)
 
         try:
             with conn.cursor() as cursor:

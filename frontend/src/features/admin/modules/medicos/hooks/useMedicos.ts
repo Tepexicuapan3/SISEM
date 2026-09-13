@@ -18,6 +18,7 @@ const keys = {
   list:         (params?: object) => ["medicos", "list", params] as const,
   detail:       (id: number)      => ["medicos", "detail", id] as const,
   excepciones:  (id: number)      => ["medicos", id, "excepciones"] as const,
+  coberturas:   (id: number)      => ["medicos", id, "coberturas"] as const,
   disponibles:  (centroId: number, fecha?: string) =>
                   ["medicos", "disponibles", centroId, fecha] as const,
 };
@@ -168,11 +169,30 @@ export const useDeleteExcepcion = (userId: number) => {
 
 // ─── Coberturas ───────────────────────────────────────────────────────────────
 
-export const useCreateCobertura = () => {
+export const useMedicoCoberturas = (userId: number, enabled = true) =>
+  useQuery({
+    queryKey: keys.coberturas(userId),
+    queryFn: () => medicosAPI.getCoberturas(userId),
+    staleTime: 30_000,
+    enabled,
+  });
+
+export const useCreateCobertura = (userId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateCoberturaRequest) => medicosAPI.createCobertura(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.coberturas(userId) });
+      qc.invalidateQueries({ queryKey: keys.all });
+    },
+  });
+};
+
+export const useDeleteCobertura = (userId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (coberturaId: number) => medicosAPI.deleteCobertura(coberturaId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.coberturas(userId) }),
   });
 };
 

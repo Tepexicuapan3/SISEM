@@ -19,6 +19,34 @@ class ConsultationRepository:
         )
 
     @staticmethod
+    def list_daily_report(fecha_inicio, fecha_fin, *, doctor_id=None, consultorio_id=None):
+        """
+        Consultas cerradas en un rango de fechas -- equivalente al "Informe
+        Diario de Consulta Medica" del legado (body-repconsulta.jsp), pero
+        sobre datos reales de SISEM en vez de SQL embebido en JSP.
+        """
+        queryset = (
+            VisitConsultation.objects.filter(
+                is_active=True,
+                id_visit__fecha_consulta__gte=fecha_inicio,
+                id_visit__fecha_consulta__lte=fecha_fin,
+            )
+            .select_related(
+                "id_visit",
+                "id_visit__consultorio",
+                "doctor",
+                "doctor__detalle",
+                "cie",
+            )
+            .order_by("id_visit__fecha_consulta", "id_visit__hora_consulta")
+        )
+        if doctor_id is not None:
+            queryset = queryset.filter(doctor_id=doctor_id)
+        if consultorio_id is not None:
+            queryset = queryset.filter(id_visit__consultorio_id=consultorio_id)
+        return queryset
+
+    @staticmethod
     def upsert_for_visit(
         visit,
         *,

@@ -18,7 +18,7 @@ from apps.authentication.services.response_service import error_response, get_re
 from apps.authentication.services.session_service import authenticate_request
 from apps.authentication.services.authorization_service import has_capability
 from apps.authentication.repositories.user_repository import UserRepository
-from apps.medicos.views.medico_views import resolve_medico
+from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.models import HorarioDisponible
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -74,10 +74,10 @@ class AgendaSemanalView(APIView):
         # Gap 10.3 (design, topic sdd/medico-pk-independiente/design):
         # `medicoId` llega crudo del frontend (id legacy id_usuario, ya que
         # el frontend no fue migrado). Se resuelve contra CatMedico con el
-        # mismo patrón que `resolve_medico` en medico_views.py (PK surrogate
-        # primero, fallback a id_usuario con WARN) en vez de pasarlo sin
-        # traducir a HorarioDisponible.medico_id / CitasRepository (R1).
-        medico = resolve_medico(s.validated_data["medicoId"], request=request)
+        # mismo patrón que `MedicoRepository.resolve` (PK surrogate primero,
+        # fallback a id_usuario con WARN) en vez de pasarlo sin traducir a
+        # HorarioDisponible.medico_id / CitasRepository (R1).
+        medico = MedicoRepository.resolve(s.validated_data["medicoId"], request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND,

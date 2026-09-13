@@ -14,6 +14,7 @@ import type {
   CreateCoberturaRequest,
   MedicoExcepcionesResponse,
   MedicoCoberturaItem,
+  MedicoCoberturasResponse,
   MedicosDisponiblesResponse,
   MedicoDisponible,
 } from "@api/types/medicos.types";
@@ -112,6 +113,18 @@ export const medicosAPI = {
 
   createCobertura: async (data: CreateCoberturaRequest): Promise<MedicoCoberturaItem> => {
     const r = await apiClient.post<MedicoCoberturaItem>("/coberturas", data);
+    return r.data;
+  },
+
+  getCoberturas: async (medicoId: number): Promise<MedicoCoberturasResponse> => {
+    const r = await apiClient.get<MedicoCoberturasResponse>("/coberturas", {
+      params: { medicoId },
+    });
+    return r.data;
+  },
+
+  deleteCobertura: async (coberturaId: number) => {
+    const r = await apiClient.delete(`/coberturas/${coberturaId}`);
     return r.data;
   },
 

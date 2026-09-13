@@ -33,6 +33,7 @@ import { useAreasClinicasList } from "@features/admin/modules/catalogos/areas-cl
 import { useEscolaridadList } from "@features/admin/modules/catalogos/escolaridad/queries/useEscolaridadList";
 import { useEscuelasList } from "@features/admin/modules/catalogos/escuelas/queries/useEscuelasList";
 import { useTipoPersonalList } from "@features/admin/modules/catalogos/tipo-personal/queries/useTipoPersonalList";
+import { useEspecialidadesList } from "@features/admin/modules/catalogos/especialidades/queries/useEspecialidadesList";
 import { useTableDetailsDialog } from "@features/admin/shared/hooks/useTableDetailsDialog";
 import { UserDetailsDialog } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsDialog";
 import { UserCreateDialog } from "@/domains/auth-access/components/admin/rbac/users/UserCreateDialog";
@@ -217,6 +218,10 @@ export function UsersPage() {
     { page: 1, pageSize: 100, isActive: true },
     { enabled: canReadUser || canCreateUser || canUpdateUser },
   );
+  const { data: especialidadesData } = useEspecialidadesList(
+    { page: 1, pageSize: 100, isActive: true },
+    { enabled: canReadUser || canCreateUser || canUpdateUser },
+  );
   const roleOptions = rolesData?.items ?? [];
   const clinicOptions = clinicsData?.items ?? [];
   const areaClinicaOptions = (areasClinicasData?.items ?? []).map((a) => ({
@@ -238,6 +243,11 @@ export function UsersPage() {
     id: t.id,
     name: t.name,
     isActive: t.isActive,
+  }));
+  const especialidadOptions = (especialidadesData?.items ?? []).map((e) => ({
+    id: e.id,
+    name: e.name,
+    isActive: e.isActive,
   }));
 
   const canManageUsersFully = resolveCapability("admin.users.editFull", {
@@ -587,6 +597,7 @@ export function UsersPage() {
         escolaridadOptions={escolaridadOptions}
         escuelaOptions={escuelaOptions}
         tipoPersonalOptions={tipoPersonalOptions}
+        especialidadOptions={especialidadOptions}
         isClinicsCatalogLoading={
           isLoadingClinicsCatalog || isFetchingClinicsCatalog
         }

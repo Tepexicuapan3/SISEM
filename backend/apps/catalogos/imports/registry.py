@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-from apps.catalogos.models import Discapacidades, Escuelas, Especialidades
+from apps.catalogos.models import CatCie9Mc, Discapacidades, Escuelas, Especialidades
 
 ColumnKind = Literal["int_id", "text", "bool_si_no"]
 
@@ -81,8 +81,29 @@ _SCHOOLS = CatalogImportSpec(
     ),
 )
 
+# NOM-024-SSA3: catalogo de procedimientos CIE-9-MC (complementa CIE-10/CatCies, que
+# solo cubre diagnosticos). No se cargan codigos reales aqui: el archivo oficial
+# (DGIS/CENETEC) debe subirse por este mismo endpoint de import una vez disponible.
+_CIE9_MC = CatalogImportSpec(
+    slug="cie9-mc",
+    permission_catalog="cie9_mc",
+    model=CatCie9Mc,
+    pk_db_column="id_cie9_mc",
+    columns=(
+        ImportColumn(header="ID", field="id", kind="int_id", required=True, unique_in_file=True),
+        ImportColumn(header="Clave", field="code", kind="text", required=True, max_length=10),
+        ImportColumn(header="Descripcion", field="name", kind="text", required=True, max_length=400),
+        ImportColumn(header="Activo", field="is_active", kind="bool_si_no", required=False),
+    ),
+    sample_rows=(
+        (1, "99.99", "Ejemplo de procedimiento CIE-9-MC", "Si"),
+        (2, "89.03", "Ejemplo de consulta y evaluacion", "Si"),
+    ),
+)
+
 CATALOG_IMPORT_REGISTRY = {
     _DISABILITIES.slug: _DISABILITIES,
     _SPECIALTIES.slug: _SPECIALTIES,
     _SCHOOLS.slug: _SCHOOLS,
+    _CIE9_MC.slug: _CIE9_MC,
 }

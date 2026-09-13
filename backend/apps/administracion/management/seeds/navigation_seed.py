@@ -569,6 +569,48 @@ NAV_SEED = [
         "permisos": ["admin:catalogos:tipo_residencia:read"],
     },
     {
+        # Agregado 2026-09-13: "Reportes y Analitica Operativa" existe en
+        # nav-config.ts (linea ~271) desde antes como item plano con
+        # PLACEHOLDER_BADGE, pero nunca se transcribio a este seed -- por
+        # eso el sidebar nunca mostraba nada aqui. Se transcribe ahora como
+        # seccion con hijos reales (los placeholders en nav-config.ts/router
+        # se reemplazan por las paginas construidas).
+        "clave": "administracion.reportes",
+        "titulo": "Reportes y Analitica Operativa",
+        "icono": "file-text",
+        "url": None,
+        "badge": None,
+        "orden": 2,
+        "es_seccion": True,
+        "grupo": "primary",
+        "parent_clave": "administracion",
+        "permisos": [],
+    },
+    {
+        "clave": "administracion.reportes.consultas_diario",
+        "titulo": "Informe Diario de Consulta Médica",
+        "icono": None,
+        "url": "/admin/reportes/consultas-diario",
+        "badge": None,
+        "orden": 0,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.reportes",
+        "permisos": ["clinico:reportes:read"],
+    },
+    {
+        "clave": "administracion.reportes.pases",
+        "titulo": "Informe de Pases",
+        "icono": None,
+        "url": "/admin/reportes/pases",
+        "badge": None,
+        "orden": 1,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.reportes",
+        "permisos": ["clinico:pases:read"],
+    },
+    {
         "clave": "administracion.panel.menus",
         "titulo": "Menús y Submenús",
         "icono": None,

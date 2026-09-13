@@ -15,6 +15,7 @@ from apps.catalogos.models import (
     CatCentroAtencionExcepcion,
     CentroAreaClinica,
     Consultorios,
+    CatCie9Mc,
     Discapacidades,
     EdoCivil,
     Enfermedades,
@@ -398,6 +399,21 @@ class DiscapacidadesWriteSerializer(CatalogWriteSerializer):
     code = serializers.CharField()
     class Meta(CatalogWriteSerializer.Meta):
         model = Discapacidades
+        fields = ("name", "code", "isActive")
+
+
+class Cie9McListSerializer(CatalogListWithCodeSerializer):
+    class Meta(CatalogListWithCodeSerializer.Meta):
+        model = CatCie9Mc
+
+class Cie9McDetailSerializer(CatalogDetailWithCodeSerializer):
+    class Meta(CatalogDetailWithCodeSerializer.Meta):
+        model = CatCie9Mc
+
+class Cie9McWriteSerializer(CatalogWriteSerializer):
+    code = serializers.CharField()
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatCie9Mc
         fields = ("name", "code", "isActive")
 
 

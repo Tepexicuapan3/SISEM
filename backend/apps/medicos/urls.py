@@ -9,6 +9,7 @@ from apps.medicos.views.medico_views import (
     MedicoConsultorioHorarioView,
     MedicoExcepcionesView,
     MedicoCoberturasView,
+    MedicoCoberturaDetailView,
     MedicosDisponiblesView,
     MedicoDisponibilidadView,
     GenerarSlotsView,
@@ -34,5 +35,6 @@ urlpatterns = [
     path("medicos/<int:user_id>/excepciones",                 MedicoExcepcionesView.as_view(),        name="medico-excepciones"),
     path("medicos/<int:user_id>/excepciones/<int:exc_id>",    MedicoExcepcionesView.as_view(),        name="medico-excepcion-delete"),
     path("coberturas",                                        MedicoCoberturasView.as_view(),         name="medico-coberturas"),
+    path("coberturas/<int:cobertura_id>",                     MedicoCoberturaDetailView.as_view(),    name="medico-cobertura-detail"),
     path("medicos/<int:user_id>/slots/generar",               GenerarSlotsView.as_view(),             name="medico-generar-slots"),
 ]

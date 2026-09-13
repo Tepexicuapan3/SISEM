@@ -44,6 +44,42 @@ def ensure_pases_write(roles, permissions=None):
     _ensure_permission(roles, permissions, PASES_WRITE_REQUIREMENT)
 
 
+def get_referral_report(
+    fecha_inicio,
+    fecha_fin,
+    roles,
+    permissions=None,
+    *,
+    referral_type=None,
+    status=None,
+    no_exp=None,
+):
+    ensure_pases_read(roles, permissions)
+
+    if fecha_inicio > fecha_fin:
+        raise VisitDomainError(
+            "VALIDATION_ERROR",
+            "fechaInicio no puede ser posterior a fechaFin.",
+            422,
+        )
+
+    referrals = ReferralRepository.list_report(
+        fecha_inicio,
+        fecha_fin,
+        referral_type=referral_type,
+        status=status,
+        no_exp=no_exp,
+    )
+    items = [ReferralRepository.to_report_row(r) for r in referrals]
+
+    return {
+        "items": items,
+        "total": len(items),
+        "fechaInicio": fecha_inicio,
+        "fechaFin": fecha_fin,
+    }
+
+
 def _get_visit_or_error(visit_id):
     visit = VisitRepository.get_by_id(visit_id)
     if not visit:

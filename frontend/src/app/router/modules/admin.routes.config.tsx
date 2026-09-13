@@ -4,6 +4,8 @@ import UsersPage from "@/domains/auth-access/pages/admin/users/UsersPage";
 import RolesPage from "@/domains/auth-access/pages/admin/roles/RolesPage";
 import SessionsPage from "@/domains/auth-access/pages/admin/sessions/SessionsPage";
 import CatalogosHubPage from "@features/admin/modules/catalogos/pages/CatalogosHubPage";
+import { ReporteConsultasDiarioPage } from "@features/admin/modules/reportes/pages/ReporteConsultasDiarioPage";
+import { ReportePasesPage } from "@features/admin/modules/reportes/pages/ReportePasesPage";
 import AreasPage from "@features/admin/modules/catalogos/areas/pages/AreasPage";
 import CentrosAtencionPage from "@features/admin/modules/catalogos/centros-atencion/pages/CentrosAtencionPage";
 import CiesPage from "@features/admin/modules/catalogos/cies/pages/CiesPage";
@@ -424,15 +426,36 @@ export const adminRoutes: RouteObject[] = [
   },
   {
     path: "reportes",
-    element: (
-      <ProtectedRoute requiredPermission="admin:reportes:read">
-        <PlaceholderPage
-          title="Reportes y Analitica Operativa"
-          description="Indicadores operativos y reportes de gestion"
-          moduleName="Administracion"
-        />
-      </ProtectedRoute>
-    ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="consultas-diario" replace />,
+      },
+      {
+        path: "consultas-diario",
+        element: (
+          <ProtectedRoute
+            requiredCapability="clinico.reportes.read"
+            fallbackRequirement={{ allOf: ["clinico:reportes:read"] }}
+            dependencyAware
+          >
+            <ReporteConsultasDiarioPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "pases",
+        element: (
+          <ProtectedRoute
+            requiredCapability="clinico.pases.read"
+            fallbackRequirement={{ allOf: ["clinico:pases:read"] }}
+            dependencyAware
+          >
+            <ReportePasesPage />
+          </ProtectedRoute>
+        ),
+      },
+    ],
   },
   {
     path: "estadisticas",

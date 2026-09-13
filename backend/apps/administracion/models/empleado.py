@@ -19,6 +19,7 @@ class CatEmpleado(models.Model):
     fec_vig             = models.DateField(null=True, blank=True, db_column='fec_vig')
     no_edad             = models.IntegerField(null=True, blank=True, db_column='no_edad')
     cd_clinica          = models.CharField(max_length=10,  null=True, blank=True, db_column='cd_clinica')
+    curp                = models.CharField(max_length=18,  null=True, blank=True, db_column='curp')
     fec_ult_actualizacion = models.DateTimeField(null=True, blank=True, db_column='fec_ult_actualizacion')
 
     class Meta:

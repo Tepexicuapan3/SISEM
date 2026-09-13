@@ -19,6 +19,11 @@ from apps.administracion.models import (
 )
 from django.db import connections
 from apps.authentication.models import DetUsuario, DetUsuarioCedula, SyUsuario
+from apps.personal.models import (
+    DetUsuarioAdministrativo,
+    DetUsuarioEnfermeria,
+    DetUsuarioMedico,
+)
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.auth_revision import (
     touch_user_auth_revision,
@@ -436,6 +441,136 @@ def _serialize_cedula(cedula):
     }
 
 
+def _serialize_perfil_medico(user):
+    perfil = getattr(user, "perfil_medico", None)
+    if not perfil:
+        return None
+    especialidad = perfil.id_especialidad
+    return {
+        "cedulaProfesional": perfil.cedula_profesional,
+        "cedulaEspecialidad": perfil.cedula_especialidad,
+        "especialidad": {"id": especialidad.id, "name": especialidad.name} if especialidad else None,
+        "tipoAdscripcion": perfil.tipo_adscripcion,
+    }
+
+
+def _serialize_perfil_enfermeria(user):
+    perfil = getattr(user, "perfil_enfermeria", None)
+    if not perfil:
+        return None
+    area = perfil.id_area_clinica
+    return {
+        "cedulaEnfermeria": perfil.cedula_enfermeria,
+        "nivel": perfil.nivel,
+        "areaClinica": {"id": area.id, "name": area.name} if area else None,
+    }
+
+
+def _serialize_perfil_administrativo(user):
+    perfil = getattr(user, "perfil_administrativo", None)
+    if not perfil:
+        return None
+    return {
+        "puesto": perfil.puesto,
+        "areaAdministrativa": perfil.area_administrativa,
+    }
+
+
+def _apply_perfil_medico(user, data, actor):
+    if data is None:
+        DetUsuarioMedico.objects.filter(id_usuario=user).delete()
+        return None
+
+    perfil, _ = DetUsuarioMedico.objects.get_or_create(
+        id_usuario=user, defaults={"created_by_id": actor.id_usuario}
+    )
+
+    if "cedulaProfesional" in data:
+        perfil.cedula_profesional = data.get("cedulaProfesional") or None
+    if "cedulaEspecialidad" in data:
+        perfil.cedula_especialidad = data.get("cedulaEspecialidad") or None
+    if "idEspecialidad" in data:
+        especialidad_id = data.get("idEspecialidad")
+        if especialidad_id is None:
+            perfil.id_especialidad = None
+        else:
+            from apps.catalogos.models import Especialidades
+            especialidad = Especialidades.objects.filter(id=especialidad_id).first()
+            if not especialidad:
+                return ("ESPECIALIDAD_NOT_FOUND", "Especialidad no encontrada")
+            perfil.id_especialidad = especialidad
+    if "tipoAdscripcion" in data:
+        tipo = data.get("tipoAdscripcion") or None
+        valid_choices = dict(DetUsuarioMedico._meta.get_field("tipo_adscripcion").choices)
+        if tipo is not None and tipo not in valid_choices:
+            return (
+                "VALIDATION_ERROR",
+                f"tipoAdscripcion debe ser uno de: {', '.join(valid_choices)}",
+            )
+        perfil.tipo_adscripcion = tipo
+
+    perfil.updated_at = timezone.now()
+    perfil.updated_by_id = actor.id_usuario
+    perfil.save()
+    return None
+
+
+def _apply_perfil_enfermeria(user, data, actor):
+    if data is None:
+        DetUsuarioEnfermeria.objects.filter(id_usuario=user).delete()
+        return None
+
+    perfil, _ = DetUsuarioEnfermeria.objects.get_or_create(
+        id_usuario=user, defaults={"created_by_id": actor.id_usuario}
+    )
+
+    if "cedulaEnfermeria" in data:
+        perfil.cedula_enfermeria = data.get("cedulaEnfermeria") or None
+    if "nivel" in data:
+        nivel = data.get("nivel") or None
+        valid_choices = dict(DetUsuarioEnfermeria._meta.get_field("nivel").choices)
+        if nivel is not None and nivel not in valid_choices:
+            return (
+                "VALIDATION_ERROR",
+                f"nivel debe ser uno de: {', '.join(valid_choices)}",
+            )
+        perfil.nivel = nivel
+    if "idAreaClinica" in data:
+        area_id = data.get("idAreaClinica")
+        if area_id is None:
+            perfil.id_area_clinica = None
+        else:
+            area = CatAreaClinica.objects.filter(id=area_id, is_active=True).first()
+            if not area:
+                return ("AREA_CLINICA_NOT_FOUND", "Área clínica no encontrada")
+            perfil.id_area_clinica = area
+
+    perfil.updated_at = timezone.now()
+    perfil.updated_by_id = actor.id_usuario
+    perfil.save()
+    return None
+
+
+def _apply_perfil_administrativo(user, data, actor):
+    if data is None:
+        DetUsuarioAdministrativo.objects.filter(id_usuario=user).delete()
+        return None
+
+    perfil, _ = DetUsuarioAdministrativo.objects.get_or_create(
+        id_usuario=user, defaults={"created_by_id": actor.id_usuario}
+    )
+
+    if "puesto" in data:
+        perfil.puesto = data.get("puesto") or None
+    if "areaAdministrativa" in data:
+        perfil.area_administrativa = data.get("areaAdministrativa") or None
+
+    perfil.updated_at = timezone.now()
+    perfil.updated_by_id = actor.id_usuario
+    perfil.save()
+    return None
+
+
 def _serialize_user_detail(user):
     detail = getattr(user, "detalle", None)
     # base ya serializa cedulas y roles usando el prefetch cache.
@@ -447,6 +582,9 @@ def _serialize_user_detail(user):
 
     return {
         **base,
+        "perfilMedico": _serialize_perfil_medico(user),
+        "perfilEnfermeria": _serialize_perfil_enfermeria(user),
+        "perfilAdministrativo": _serialize_perfil_administrativo(user),
         "firstName": detail.nombre if detail else "",
         "paternalName": detail.paterno if detail else "",
         "maternalName": detail.materno if detail and detail.materno else "",
@@ -1592,6 +1730,11 @@ class UserDetailView(APIView):
                 "detalle__id_escolaridad",
                 "detalle__id_escuela",
                 "detalle__id_tipo_personal",
+                "perfil_medico",
+                "perfil_medico__id_especialidad",
+                "perfil_enfermeria",
+                "perfil_enfermeria__id_area_clinica",
+                "perfil_administrativo",
             )
             .prefetch_related("cedulas", _ROLES_PREFETCH)
             .filter(id_usuario=user_id)
@@ -1887,9 +2030,38 @@ class UserDetailView(APIView):
                     orden=idx + 1,
                 )
 
+        for field_name, apply_fn in (
+            ("perfilMedico", _apply_perfil_medico),
+            ("perfilEnfermeria", _apply_perfil_enfermeria),
+            ("perfilAdministrativo", _apply_perfil_administrativo),
+        ):
+            if field_name in request.data:
+                perfil_error = apply_fn(user, request.data.get(field_name), actor)
+                if perfil_error:
+                    error_code, error_message = perfil_error
+                    _audit(
+                        request,
+                        "RBAC_USER_UPDATE",
+                        "user",
+                        resource_id=user.id_usuario,
+                        result="FAIL",
+                        error_code=error_code,
+                        target_user=user,
+                    )
+                    return error_response(
+                        error_code,
+                        error_message,
+                        status.HTTP_400_BAD_REQUEST,
+                        request_id=_request_id(request),
+                    )
+
         user.fch_modf = timezone.now()
         user.usr_modf = actor
         user.save(update_fields=["correo", "fch_modf", "usr_modf"])
+
+        # Recargar para que la respuesta refleje perfiles recien creados/editados
+        # (get_or_create arriba no actualiza los related_name cacheados en `user`).
+        user = self._get_user(user.id_usuario)
 
         payload = {"user": _serialize_user_detail(user)}
         _audit(

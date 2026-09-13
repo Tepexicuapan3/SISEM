@@ -114,15 +114,29 @@ export interface MedicoExcepcionItem {
 
 // ─── COBERTURAS ──────────────────────────────────────────────────────────────
 
+export interface MedicoCoberturaHorarioItem {
+  id: number;
+  diaSemana: DiaSemana;
+  horaInicio: string;
+  horaFin: string;
+}
+
 export interface MedicoCoberturaItem {
   id: number;
   medicoSuplenteId: number;
+  medicoSuplenteNombre: string;
   medicoTitularId: number;
-  consultorioId: number;
-  centroId: number;
+  medicoTitularNombre: string;
+  consultorioId: number | null;
+  consultorioNombre: string | null;
+  centroId: number | null;
+  centroNombre: string | null;
   fechaInicio: string;
-  fechaFin: string;
+  fechaFin: string | null;
   motivo: MotivoCobertura;
+  isActive: boolean;
+  horarios: MedicoCoberturaHorarioItem[];
+  createdAt: string | null;
 }
 
 // ─── DISPONIBILIDAD ──────────────────────────────────────────────────────────
@@ -236,4 +250,8 @@ export interface MedicoDetailResponse {
 
 export interface MedicoExcepcionesResponse {
   items: MedicoExcepcionItem[];
+}
+
+export interface MedicoCoberturasResponse {
+  items: MedicoCoberturaItem[];
 }

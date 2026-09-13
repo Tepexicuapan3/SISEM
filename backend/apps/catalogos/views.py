@@ -21,7 +21,7 @@ from apps.catalogos.uses_case.upload_cies_use_case import PreviewCiesUseCase
 
 from .models import (
     Areas, Autorizadores, Bajas, CalidadLaboral, CatAreaClinica, CatCentroAtencion,
-    CatCentroAtencionHorario, CatCentroAtencionExcepcion, CentroAreaClinica, Consultorios,
+    CatCentroAtencionHorario, CatCentroAtencionExcepcion, CatCie9Mc, CentroAreaClinica, Consultorios,
     Discapacidades, EdoCivil, Enfermedades, Escolaridad, Escuelas, Especialidades, EstudiosMed,
     GruposDeMedicamentos, Licencias, Medicamentos, MotivoCita, Ocupaciones, OrigenCons, Parentesco, Pases, Permisos,
     Religion, Roles, CatSucursal, TipoDeCitas, TipoConsulta, TipoResidencia, TiposAreas, TiposSanguineo,
@@ -43,6 +43,7 @@ from .serializers import (
     CatCentroAtencionExcepcionWriteSerializer,
     CodigoPostalResultSerializer, ConsultoriosDetailSerializer,
     ConsultoriosListSerializer, ConsultoriosWriteSerializer,
+    Cie9McDetailSerializer, Cie9McListSerializer, Cie9McWriteSerializer,
     DiscapacidadesDetailSerializer, DiscapacidadesListSerializer, DiscapacidadesWriteSerializer,
     EdoCivilDetailSerializer, EdoCivilListSerializer, EdoCivilWriteSerializer,
     EnfermedadesDetailSerializer, EnfermedadesListSerializer, EnfermedadesWriteSerializer,
@@ -837,6 +838,22 @@ class DiscapacidadesDetailView(CatalogBaseDetailView):
     write_serializer = DiscapacidadesWriteSerializer
     wrapper_key = "disability"
     error_codes = MappingProxyType({"not_found": "DISABILITY_NOT_FOUND", "exists": "DISABILITY_EXISTS"})
+
+
+class Cie9McListCreateView(CatalogBaseListCreateView):
+    catalog = "cie9_mc"
+    model = CatCie9Mc
+    list_serializer = Cie9McListSerializer
+    write_serializer = Cie9McWriteSerializer
+    error_codes = MappingProxyType({"exists": "CIE9_MC_EXISTS"})
+
+class Cie9McDetailView(CatalogBaseDetailView):
+    catalog = "cie9_mc"
+    model = CatCie9Mc
+    detail_serializer = Cie9McDetailSerializer
+    write_serializer = Cie9McWriteSerializer
+    wrapper_key = "cie9Mc"
+    error_codes = MappingProxyType({"not_found": "CIE9_MC_NOT_FOUND", "exists": "CIE9_MC_EXISTS"})
 
 
 class EdoCivilListCreateView(CatalogBaseListCreateView):

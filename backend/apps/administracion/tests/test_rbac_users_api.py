@@ -594,6 +594,166 @@ class RbacUsersApiTests(APITestCase):
             ).exists()
         )
 
+    def test_patch_user_creates_perfil_medico(self):
+        from apps.catalogos.models import Especialidades
+        from apps.personal.models import DetUsuarioMedico
+
+        especialidad = Especialidades.objects.create(name="Cardiología")
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {
+                "perfilMedico": {
+                    "cedulaProfesional": "12345678",
+                    "idEspecialidad": especialidad.id,
+                    "tipoAdscripcion": "CLINICA",
+                },
+            },
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        perfil = response.data["user"]["perfilMedico"]
+        self.assertEqual(perfil["cedulaProfesional"], "12345678")
+        self.assertEqual(perfil["especialidad"]["id"], especialidad.id)
+        self.assertEqual(perfil["tipoAdscripcion"], "CLINICA")
+        self.assertTrue(
+            DetUsuarioMedico.objects.filter(id_usuario=self.target_user).exists()
+        )
+
+    def test_patch_user_perfil_medico_invalid_tipo_adscripcion(self):
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {"perfilMedico": {"tipoAdscripcion": "NO_EXISTE"}},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "VALIDATION_ERROR")
+
+    def test_patch_user_perfil_medico_especialidad_not_found(self):
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {"perfilMedico": {"idEspecialidad": 999999}},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "ESPECIALIDAD_NOT_FOUND")
+
+    def test_patch_user_updates_existing_perfil_medico(self):
+        from apps.personal.models import DetUsuarioMedico
+
+        DetUsuarioMedico.objects.create(
+            id_usuario=self.target_user,
+            cedula_profesional="00000000",
+            created_by_id=self.admin.id_usuario,
+        )
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {"perfilMedico": {"cedulaProfesional": "99999999"}},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["user"]["perfilMedico"]["cedulaProfesional"], "99999999"
+        )
+        self.assertEqual(
+            DetUsuarioMedico.objects.filter(id_usuario=self.target_user).count(), 1
+        )
+
+    def test_patch_user_removes_perfil_medico_with_null(self):
+        from apps.personal.models import DetUsuarioMedico
+
+        DetUsuarioMedico.objects.create(
+            id_usuario=self.target_user,
+            cedula_profesional="00000000",
+            created_by_id=self.admin.id_usuario,
+        )
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {"perfilMedico": None},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["user"]["perfilMedico"])
+        self.assertFalse(
+            DetUsuarioMedico.objects.filter(id_usuario=self.target_user).exists()
+        )
+
+    def test_patch_user_creates_perfil_enfermeria(self):
+        from apps.catalogos.models import CatAreaClinica
+        from apps.personal.models import DetUsuarioEnfermeria
+
+        area = CatAreaClinica.objects.create(name="Urgencias")
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {
+                "perfilEnfermeria": {
+                    "cedulaEnfermeria": "87654321",
+                    "nivel": "GENERAL",
+                    "idAreaClinica": area.id,
+                },
+            },
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        perfil = response.data["user"]["perfilEnfermeria"]
+        self.assertEqual(perfil["cedulaEnfermeria"], "87654321")
+        self.assertEqual(perfil["nivel"], "GENERAL")
+        self.assertEqual(perfil["areaClinica"]["id"], area.id)
+        self.assertTrue(
+            DetUsuarioEnfermeria.objects.filter(id_usuario=self.target_user).exists()
+        )
+
+    def test_patch_user_perfil_enfermeria_invalid_nivel(self):
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {"perfilEnfermeria": {"nivel": "NO_EXISTE"}},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "VALIDATION_ERROR")
+
+    def test_patch_user_creates_perfil_administrativo(self):
+        from apps.personal.models import DetUsuarioAdministrativo
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}",
+            {
+                "perfilAdministrativo": {
+                    "puesto": "Jefe de piso",
+                    "areaAdministrativa": "Recursos Humanos",
+                },
+            },
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        perfil = response.data["user"]["perfilAdministrativo"]
+        self.assertEqual(perfil["puesto"], "Jefe de piso")
+        self.assertEqual(perfil["areaAdministrativa"], "Recursos Humanos")
+        self.assertTrue(
+            DetUsuarioAdministrativo.objects.filter(
+                id_usuario=self.target_user
+            ).exists()
+        )
+
     def test_activate_and_deactivate_user(self):
         deactivate_response = self.client.patch(
             f"/api/v1/users/{self.target_user.id_usuario}/deactivate",

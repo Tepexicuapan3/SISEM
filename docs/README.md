@@ -161,6 +161,7 @@ Indice canonico de documentacion para operar SISEM con el modelo actual: monolit
 - `docs/architecture/dependency-rules.md` - reglas de dependencias y anti-acoplamiento.
 - `docs/architecture/db-ownership-migration-policy.md` - politica de ownership DB y migracion.
 - `docs/architecture/repo-navigation-map.md` - donde tocar segun tipo de cambio.
+- `docs/architecture/legacy-reports-inventory.md` - inventario de documentos imprimibles y reportes gerenciales del legado (java-main), con mapeo preliminar a estado actual y priorizacion sugerida.
 
 ## Guides
 
@@ -176,6 +177,7 @@ Indice canonico de documentacion para operar SISEM con el modelo actual: monolit
 ## Governance
 
 - `docs/governance/repo-hygiene-policy.md` - politica de higiene de repo (trackeado vs efimero vs excepciones condicionadas).
+- `docs/governance/nom024-retention-policy.md` - retencion minima de expediente/auditoria (NOM-024/NOM-004/LGS) y reglas para migracion/decomision del legado.
 
 ## API
 
