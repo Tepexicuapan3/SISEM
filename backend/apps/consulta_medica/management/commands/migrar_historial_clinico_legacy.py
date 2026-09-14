@@ -2,11 +2,11 @@
 Migra el historial clinico general desde el legado (MySQL, tabla
 `his_clinica`) a `consulta_medica.ClinicalHistory`.
 
-Mapeo de columnas reconstruido leyendo el JOIN real usado por el legado en
-`usuarios/clinicam/his-clinico.jsp` (java-main) -- no hay dump con
-`CREATE TABLE` de `his_clinica` disponible, así que este es el mapeo mejor
-disponible hasta poder correr `inspeccionar_legado_mysql --tabla his_clinica`
-contra el servidor real y confirmarlo columna por columna.
+Mapeo de columnas confirmado contra el DDL real de `his_clinica` (dump
+`Dump20260903.sql`, 2026-09-14) y contra el JOIN usado por el legado en
+`usuarios/clinicam/his-clinico.jsp` (java-main). `no_exp` es `int unsigned`
+en el legado (no varchar) -- se castea a `str` explícitamente porque
+`ClinicalHistory.no_exp` en SIRES es `CharField`.
 
 IMPORTANTE -- resolución de catálogos por NOMBRE, no por id crudo:
 los ids de cat_ocupacion/cat_escolaridad/cat_edocivil/cat_religion/
@@ -21,10 +21,16 @@ extra). Lo que no matchea se reporta y se deja NULL -- nunca se adivina.
 
 from __future__ import annotations
 
+import datetime
+import re
+import unicodedata
+
 from apps.authentication.management.commands._legacy_mysql_base import LegacyMysqlCommandMixin
 from apps.catalogos.models import EdoCivil, Escolaridad, Ocupaciones, Religion, TipoResidencia
 from apps.consulta_medica.models import ClinicalHistory
 from django.core.management.base import BaseCommand
+from django.db import DatabaseError, transaction
+from django.utils import timezone
 
 # (columna FK en ClinicalHistory, columna de descripcion resuelta por el JOIN
 # legado, modelo de catalogo en SISEM)
@@ -53,8 +59,20 @@ _QUERY = """
 """
 
 
+def _sin_acentos(text: str) -> str:
+    descompuesto = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in descompuesto if not unicodedata.combining(c))
+
+
 def _norm(value) -> str:
-    return (value or "").strip().casefold()
+    text = (value or "").strip().casefold()
+    text = re.sub(r"\s*/\s*", "/", text)  # "a / b" -> "a/b"
+    text = re.sub(r"\s*\(a\)\s*$", "", text)  # "soltero (a)" -> "soltero"
+    text = re.sub(r"\s+", " ", text).strip()
+    # el legado a veces omite acentos ("UNION LIBRE", "JEHOVA") -- se
+    # comparan sin acentos para no depender de que el legado los haya
+    # capturado bien, sin alterar el texto que se guarda en SISEM.
+    return _sin_acentos(text)
 
 
 class Command(LegacyMysqlCommandMixin, BaseCommand):
@@ -97,7 +115,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
         errores: list[str] = []
 
         for row in rows:
-            no_exp = (row.get("no_exp") or "").strip()
+            no_exp = str(row.get("no_exp") or "").strip()
             if not no_exp:
                 errores.append("Fila sin no_exp, omitida.")
                 continue
@@ -142,15 +160,28 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                     creados += 1
                 continue
 
-            _, created = ClinicalHistory.objects.update_or_create(
-                no_exp=no_exp, pk_num=pk_num, defaults=defaults,
-            )
+            try:
+                with transaction.atomic():
+                    _, created = ClinicalHistory.objects.update_or_create(
+                        no_exp=no_exp, pk_num=pk_num, defaults=defaults,
+                    )
+            except DatabaseError as exc:
+                errores.append(f"no_exp={no_exp}: error de base de datos al guardar ({exc}), omitida.")
+                continue
+
             if created:
                 creados += 1
                 fe_hisclin = row.get("fe_hisclin")
                 if fe_hisclin:
                     # auto_now_add ya puso "ahora" -- se corrige aparte para
-                    # preservar la fecha real del historial legado.
+                    # preservar la fecha real del historial legado. Se hace
+                    # aware explicitamente (TIME_ZONE del proyecto) para no
+                    # depender de la conversion implicita de Django, que
+                    # emite RuntimeWarning con un datetime naive.
+                    if isinstance(fe_hisclin, datetime.date) and not isinstance(fe_hisclin, datetime.datetime):
+                        fe_hisclin = datetime.datetime.combine(fe_hisclin, datetime.time.min)
+                    if timezone.is_naive(fe_hisclin):
+                        fe_hisclin = timezone.make_aware(fe_hisclin)
                     ClinicalHistory.objects.filter(
                         no_exp=no_exp, pk_num=pk_num,
                     ).update(created_at=fe_hisclin)

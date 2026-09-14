@@ -5,12 +5,14 @@ from apps.consulta_medica.views import (
     MedicalLeaveReportView,
     PatientClinicalHistoryView,
     PatientConsultationsHistoryView,
+    PatientLegacyConsultationsHistoryView,
     PatientMedicalLeavesHistoryView,
     PatientOdontogramToothView,
     PatientOdontogramView,
     PatientStomatologyHistoryView,
     PatientStudyResultsHistoryView,
     VisitCieSearchView,
+    VisitConsultationAddendumView,
     VisitConsultationCloseView,
     VisitConsultationStartView,
     VisitDiagnosisSaveView,
@@ -54,6 +56,11 @@ urlpatterns = [
         "patients/<str:no_exp>/consultations",
         PatientConsultationsHistoryView.as_view(),
         name="patient-consultations-history",
+    ),
+    path(
+        "patients/<str:no_exp>/legacy-consultations",
+        PatientLegacyConsultationsHistoryView.as_view(),
+        name="patient-legacy-consultations-history",
     ),
     path(
         "visits/<int:visit_id>/medical-leave",
@@ -114,6 +121,11 @@ urlpatterns = [
         "visits/<int:visit_id>/consultation/close",
         VisitConsultationCloseView.as_view(),
         name="visit-consultation-close",
+    ),
+    path(
+        "visits/<int:visit_id>/consultation/addenda",
+        VisitConsultationAddendumView.as_view(),
+        name="visit-consultation-addenda",
     ),
     path(
         "visits/<int:visit_id>/close",

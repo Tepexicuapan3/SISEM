@@ -2,6 +2,8 @@ import { lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "@routes/guards/ProtectedRoute";
 import { GuestRoute } from "@routes/guards/GuestRoute";
+import { PortalGuestRoute } from "@features/portal-citas/guards/PortalGuestRoute";
+import { PortalProtectedRoute } from "@features/portal-citas/guards/PortalProtectedRoute";
 import { MainLayout } from "@shared/layouts/MainLayout";
 import { RootLayout } from "@shared/layouts/RootLayout";
 import { SuspenseWrapper } from "@shared/components/SuspenseWrapper";
@@ -16,6 +18,19 @@ const OnboardingPage = lazy(() =>
   import("@/domains/auth-access/pages/OnboardingPage").then((m) => ({
     default: m.OnboardingPage,
   })),
+);
+
+// Portal de Citas (autoservicio del paciente) -- SIN relacion con el login
+// de staff de arriba: sesion propia (Bearer token, ver portalSessionStore),
+// rutas publicas montadas al mismo nivel que /login.
+const PortalLoginPage = lazy(
+  () => import("@features/portal-citas/pages/PortalLoginPage"),
+);
+const PortalMisCitasPage = lazy(
+  () => import("@features/portal-citas/pages/PortalMisCitasPage"),
+);
+const PortalReservarCitaPage = lazy(
+  () => import("@features/portal-citas/pages/PortalReservarCitaPage"),
 );
 
 /**
@@ -71,6 +86,36 @@ export const router = createBrowserRouter([
               <OnboardingPage />
             </SuspenseWrapper>
           </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/portal/login",
+        element: (
+          <PortalGuestRoute>
+            <SuspenseWrapper fullScreen>
+              <PortalLoginPage />
+            </SuspenseWrapper>
+          </PortalGuestRoute>
+        ),
+      },
+      {
+        path: "/portal/mis-citas",
+        element: (
+          <PortalProtectedRoute>
+            <SuspenseWrapper fullScreen>
+              <PortalMisCitasPage />
+            </SuspenseWrapper>
+          </PortalProtectedRoute>
+        ),
+      },
+      {
+        path: "/portal/reservar",
+        element: (
+          <PortalProtectedRoute>
+            <SuspenseWrapper fullScreen>
+              <PortalReservarCitaPage />
+            </SuspenseWrapper>
+          </PortalProtectedRoute>
         ),
       },
       {

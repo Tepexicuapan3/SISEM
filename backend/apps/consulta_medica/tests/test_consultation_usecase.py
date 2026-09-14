@@ -2,9 +2,15 @@ from django.test import TestCase
 
 from apps.authentication.models import SyUsuario
 from apps.catalogos.models import CatCies
-from apps.consulta_medica.models import VisitConsultation, VisitConsultationRevision
+from apps.consulta_medica.models import (
+    ConsultationAddendum,
+    VisitConsultation,
+    VisitConsultationRevision,
+)
 from apps.consulta_medica.uses_case.consultation_usecase import (
+    add_consultation_addendum,
     close_consultation,
+    get_consultation_addenda,
     save_diagnosis,
     save_prescriptions,
     search_cies,
@@ -455,3 +461,94 @@ class ConsultationUseCaseTests(TestCase):
             second_payload["consultation"]["primaryDiagnosis"],
             "Dx estable",
         )
+
+    def _closed_visit(self):
+        visit = self._visit("en_consulta")
+        close_consultation(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Dx original",
+            final_note="Nota original",
+            doctor_id=self.doctor_id,
+            cie_code=self.cie_code,
+        )
+        return visit
+
+    def test_add_addendum_to_closed_consultation(self):
+        visit = self._closed_visit()
+
+        payload = add_consultation_addendum(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            text="Se aclara: la via de administracion correcta es oral, no IV.",
+            doctor_id=self.doctor_id,
+        )
+
+        self.assertEqual(payload["text"], "Se aclara: la via de administracion correcta es oral, no IV.")
+        self.assertEqual(payload["createdById"], self.doctor_id)
+
+        consultation = VisitConsultation.objects.get(id_visit=visit)
+        self.assertEqual(ConsultationAddendum.objects.filter(consultation=consultation).count(), 1)
+
+    def test_addenda_never_overwrite_previous_ones(self):
+        """
+        El punto central del fix: a diferencia de sw_complemento del
+        legado (que se sobrescribia perdiendo la adenda anterior), acá
+        cada adenda nueva se ACUMULA.
+        """
+        visit = self._closed_visit()
+
+        add_consultation_addendum(
+            visit_id=visit.id_visit, roles=["DOCTOR"],
+            text="Primera aclaracion.", doctor_id=self.doctor_id,
+        )
+        add_consultation_addendum(
+            visit_id=visit.id_visit, roles=["DOCTOR"],
+            text="Segunda aclaracion, distinta de la primera.", doctor_id=self.doctor_id,
+        )
+
+        result = get_consultation_addenda(visit.id_visit, roles=["DOCTOR"])
+
+        self.assertEqual(result["total"], 2)
+        textos = [item["text"] for item in result["items"]]
+        self.assertIn("Primera aclaracion.", textos)
+        self.assertIn("Segunda aclaracion, distinta de la primera.", textos)
+
+    def test_add_addendum_to_open_consultation_fails(self):
+        visit = self._visit("en_consulta")
+        save_diagnosis(
+            visit_id=visit.id_visit, roles=["DOCTOR"],
+            primary_diagnosis="Dx borrador", final_note="Nota borrador",
+            doctor_id=self.doctor_id,
+        )
+
+        with self.assertRaises(VisitDomainError) as raised:
+            add_consultation_addendum(
+                visit_id=visit.id_visit, roles=["DOCTOR"],
+                text="No deberia poder agregarse.", doctor_id=self.doctor_id,
+            )
+
+        self.assertEqual(raised.exception.code, "VISIT_STATE_INVALID")
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_add_addendum_with_blank_text_fails(self):
+        visit = self._closed_visit()
+
+        with self.assertRaises(VisitDomainError) as raised:
+            add_consultation_addendum(
+                visit_id=visit.id_visit, roles=["DOCTOR"],
+                text="   ", doctor_id=self.doctor_id,
+            )
+
+        self.assertEqual(raised.exception.code, "VALIDATION_ERROR")
+
+    def test_add_addendum_role_not_allowed(self):
+        visit = self._closed_visit()
+
+        with self.assertRaises(VisitDomainError) as raised:
+            add_consultation_addendum(
+                visit_id=visit.id_visit, roles=["RECEPCION"],
+                text="Intento no autorizado.", doctor_id=self.doctor_id,
+            )
+
+        self.assertEqual(raised.exception.code, "ROLE_NOT_ALLOWED")

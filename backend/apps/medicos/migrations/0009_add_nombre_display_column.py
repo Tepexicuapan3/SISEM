@@ -12,9 +12,41 @@
 # campo que el estado ya tiene desde `0007`. `makemigrations --check
 # --dry-run` se verificó limpio con este archivo en el árbol (ver reporte).
 #
-# `IF NOT EXISTS`/`IF EXISTS` para que sea segura de re-correr incluso si
-# la columna ya existiera parcialmente (p.ej. alguien la agregó a mano).
+# Originalmente `IF NOT EXISTS`/`IF EXISTS` (sintaxis Postgres) para que
+# fuera segura de re-correr incluso si la columna ya existiera
+# parcialmente (p.ej. alguien la agrego a mano).
+#
+# SQLite (usado por `manage.py test`, ver `if "test" in sys.argv` en
+# settings.py) no soporta `ADD COLUMN IF NOT EXISTS` -- rompe con "near
+# EXISTS: syntax error" al crear la base de test desde cero. Y un simple
+# `ADD COLUMN` sin condicion tampoco sirve: en SQLite, tras aplicar
+# `0007_switch_surrogate_pk`, la columna YA existe (a diferencia de las
+# bases Postgres viejas con drift que motivaron este archivo) -- rompe con
+# "duplicate column name". La unica forma correcta en ambos motores es
+# verificar de verdad si la columna existe antes de tocar nada, via
+# introspeccion generica de Django (no SQL crudo especifico de un vendor).
 from django.db import migrations
+
+_TABLE = "cat_medicos"
+_COLUMN = "nombre_display"
+
+
+def _column_exists(schema_editor) -> bool:
+    with schema_editor.connection.cursor() as cursor:
+        columns = schema_editor.connection.introspection.get_table_description(cursor, _TABLE)
+    return any(col.name == _COLUMN for col in columns)
+
+
+def add_nombre_display_column(apps, schema_editor):
+    if _column_exists(schema_editor):
+        return
+    schema_editor.execute(f"ALTER TABLE {_TABLE} ADD COLUMN {_COLUMN} varchar(200) NULL;")
+
+
+def remove_nombre_display_column(apps, schema_editor):
+    if not _column_exists(schema_editor):
+        return
+    schema_editor.execute(f"ALTER TABLE {_TABLE} DROP COLUMN {_COLUMN};")
 
 
 class Migration(migrations.Migration):
@@ -24,8 +56,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql="ALTER TABLE cat_medicos ADD COLUMN IF NOT EXISTS nombre_display varchar(200) NULL;",
-            reverse_sql="ALTER TABLE cat_medicos DROP COLUMN IF EXISTS nombre_display;",
-        ),
+        migrations.RunPython(add_nombre_display_column, remove_nombre_display_column),
     ]

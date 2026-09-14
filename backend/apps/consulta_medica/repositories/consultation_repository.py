@@ -1,4 +1,8 @@
-from apps.consulta_medica.models import VisitConsultation, VisitConsultationRevision
+from apps.consulta_medica.models import (
+    ConsultationAddendum,
+    VisitConsultation,
+    VisitConsultationRevision,
+)
 
 
 class ConsultationRepository:
@@ -106,6 +110,28 @@ class ConsultationRepository:
             },
         )
         return consultation, created
+
+    @staticmethod
+    def add_addendum(consultation, *, text, created_by_id=None):
+        return ConsultationAddendum.objects.create(
+            consultation=consultation,
+            text=text,
+            created_by_id=created_by_id,
+        )
+
+    @staticmethod
+    def list_addenda(consultation):
+        return ConsultationAddendum.objects.filter(consultation=consultation)
+
+    @staticmethod
+    def addendum_to_contract(addendum):
+        return {
+            "id": addendum.id_addendum,
+            "consultationId": addendum.consultation_id,
+            "text": addendum.text,
+            "createdById": addendum.created_by_id,
+            "createdAt": addendum.created_at,
+        }
 
     @staticmethod
     def to_contract(consultation):

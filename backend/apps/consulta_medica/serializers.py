@@ -192,6 +192,16 @@ class CreateStudyResultSerializer(serializers.Serializer):
         return value
 
 
+class AddConsultationAddendumSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=4000, allow_blank=False)
+
+    def validate_text(self, value):
+        normalized = value.strip()
+        if not normalized:
+            raise serializers.ValidationError("El texto de la aclaracion es obligatorio.")
+        return normalized
+
+
 class AddSecondaryDiagnosisSerializer(serializers.Serializer):
     cieCode = serializers.CharField(max_length=8, allow_blank=False)
     notes = serializers.CharField(

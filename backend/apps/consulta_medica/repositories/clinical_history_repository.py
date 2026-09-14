@@ -1,4 +1,28 @@
-from apps.consulta_medica.models import ClinicalHistory
+from apps.consulta_medica.models import ClinicalHistory, ClinicalHistoryRevision
+
+# Campos editables via upsert_clinical_history -- mismo set que
+# CLINICAL_HISTORY_FIELD_MAP en clinical_history_usecase.py. Se usa para
+# saber que "previous_<campo>" snapshotear en ClinicalHistoryRevision.
+_VERSIONED_FIELDS = (
+    "occupation_id",
+    "education_level_id",
+    "marital_status_id",
+    "religion_id",
+    "residence_type_id",
+    "phone",
+    "family_history",
+    "current_illness",
+    "systems_review",
+    "head_exam",
+    "neck_exam",
+    "chest_exam",
+    "abdomen_exam",
+    "genitals_exam",
+    "limbs_exam",
+    "diagnostic_management",
+    "therapeutic_management",
+    "allergies",
+)
 
 
 class ClinicalHistoryRepository:
@@ -12,6 +36,29 @@ class ClinicalHistoryRepository:
 
     @staticmethod
     def update(history, *, fields, updated_by_id=None):
+        # ClinicalHistory se captura de forma incremental (ver docstring del
+        # modelo): rellenar un campo vacio por primera vez no es una
+        # alteracion de un dato clinico, es captura normal -- solo versiona
+        # cuando YA habia un valor concreto y se sobreescribe con otro.
+        changed = any(
+            field_name in fields
+            and getattr(history, field_name) not in (None, "")
+            and getattr(history, field_name) != value
+            for field_name, value in fields.items()
+        )
+        if changed:
+            # Versionado real (NOM-024): se guarda un snapshot del valor
+            # anterior ANTES de pisarlo -- nunca se sobrescribe sin dejar
+            # rastro, mismo patron que VisitConsultation/VisitConsultationRevision.
+            ClinicalHistoryRevision.objects.create(
+                history=history,
+                changed_by_id=updated_by_id,
+                **{
+                    f"previous_{field_name}": getattr(history, field_name)
+                    for field_name in _VERSIONED_FIELDS
+                },
+            )
+
         for field_name, value in fields.items():
             setattr(history, field_name, value)
         history.updated_by_id = updated_by_id

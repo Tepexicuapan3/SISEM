@@ -95,6 +95,40 @@ class VisitConsultationRevision(models.Model):
         return f"Consulta {self.consultation_id} — revision {self.changed_at}"
 
 
+class ConsultationAddendum(models.Model):
+    """
+    Nota de aclaracion sobre una consulta YA CERRADA -- reemplaza el
+    anti-patron del legado (``his_notas.sw_complemento``, un solo campo
+    que se SOBRESCRIBE con cada adenda, perdiendo la anterior). Requisito
+    real de NOM-004/024: un registro clinico firmado no se modifica, se
+    aclara con una anotacion nueva, fechada y con autor, que queda junto a
+    la original -- nunca la reemplaza ni la borra.
+
+    Por diseno es append-only: no tiene ``update``/``delete`` en el
+    repository, ni ``deleted_at``/``is_active`` -- una vez creada, una
+    adenda es un hecho historico inmutable (si el medico se equivoco en la
+    adenda misma, la correccion es OTRA adenda nueva, no editar esta).
+    """
+
+    id_addendum = models.BigAutoField(primary_key=True, db_column="id_adenda")
+    consultation = models.ForeignKey(
+        VisitConsultation,
+        db_column="id_consulta",
+        on_delete=models.PROTECT,
+        related_name="addenda",
+    )
+    text = models.TextField(db_column="texto")
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_consultation_addendum"
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"Consulta {self.consultation_id} — adenda {self.created_at}"
+
+
 class VisitDiagnosis(models.Model):
     """
     Diagnostico secundario/comorbilidad de una consulta -- complementa a
@@ -468,9 +502,16 @@ class OdontogramTooth(models.Model):
 class ClinicalHistory(models.Model):
     """
     Historia Clinica General: un solo registro por paciente/familiar
-    (no_exp + pk_num), no versionado por consulta -- a diferencia de
-    VisitConsultation. Se captura de forma incremental a lo largo de
-    varias visitas, por eso todos los campos son nullable.
+    (no_exp + pk_num) -- no hay una fila nueva por cada consulta, a
+    diferencia de VisitConsultation. Se captura de forma incremental a lo
+    largo de varias visitas, por eso todos los campos son nullable.
+
+    Las EDICIONES si quedan versionadas (ver ClinicalHistoryRevision mas
+    abajo): cada vez que se sobrescribe un campo se guarda antes un
+    snapshot del valor anterior, mismo patron que
+    VisitConsultation/VisitConsultationRevision -- requerido por
+    NOM-024-SSA3 (integridad del dato clinico sin riesgo de alteracion
+    silenciosa).
     """
 
     id_clinical_history = models.BigAutoField(primary_key=True, db_column="id_historia")
@@ -497,7 +538,10 @@ class ClinicalHistory(models.Model):
         "catalogos.TipoResidencia", db_column="id_residencia",
         on_delete=models.PROTECT, null=True, blank=True, related_name="+",
     )
-    phone = models.CharField(max_length=15, db_column="telefono", null=True, blank=True)
+    # max_length=50 para alojar el formato compuesto real del legado
+    # ("cel XX-XXXX-XXXX tel XXXX-XXXX ext XXXXX", hasta 40 chars, con
+    # margen) -- confirmado contra his_clinica.ds_telefono (varchar(50)).
+    phone = models.CharField(max_length=50, db_column="telefono", null=True, blank=True)
 
     family_history = models.TextField(db_column="antecedentes", null=True, blank=True)
     current_illness = models.TextField(db_column="padecimiento_actual", null=True, blank=True)
@@ -528,3 +572,145 @@ class ClinicalHistory(models.Model):
         indexes = [
             models.Index(fields=["is_active"], name="cns_clinhist_active_idx"),
         ]
+
+
+class ClinicalHistoryRevision(models.Model):
+    """
+    Snapshot del valor de ``ClinicalHistory`` justo ANTES de que se
+    sobrescriba (ver ``ClinicalHistoryRepository.update``). Mismo patron
+    que ``VisitConsultationRevision`` -- versionado real requerido por
+    NOM-024-SSA3, reemplaza el anti-patron del legado de pisar el campo
+    in-place sin dejar rastro del valor anterior.
+    """
+
+    history = models.ForeignKey(
+        ClinicalHistory,
+        db_column="id_historia",
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    previous_occupation = models.ForeignKey(
+        "catalogos.Ocupaciones", db_column="id_ocupacion_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_education_level = models.ForeignKey(
+        "catalogos.Escolaridad", db_column="id_escolaridad_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_marital_status = models.ForeignKey(
+        "catalogos.EdoCivil", db_column="id_edocivil_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_religion = models.ForeignKey(
+        "catalogos.Religion", db_column="id_religion_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_residence_type = models.ForeignKey(
+        "catalogos.TipoResidencia", db_column="id_residencia_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_phone = models.CharField(
+        max_length=50, db_column="telefono_anterior", null=True, blank=True
+    )
+    previous_family_history = models.TextField(db_column="antecedentes_anterior", null=True, blank=True)
+    previous_current_illness = models.TextField(db_column="padecimiento_actual_anterior", null=True, blank=True)
+    previous_systems_review = models.TextField(db_column="organos_aparatos_sistemas_anterior", null=True, blank=True)
+    previous_head_exam = models.TextField(db_column="exploracion_cabeza_anterior", null=True, blank=True)
+    previous_neck_exam = models.TextField(db_column="exploracion_cuello_anterior", null=True, blank=True)
+    previous_chest_exam = models.TextField(db_column="exploracion_torax_anterior", null=True, blank=True)
+    previous_abdomen_exam = models.TextField(db_column="exploracion_abdomen_anterior", null=True, blank=True)
+    previous_genitals_exam = models.TextField(db_column="exploracion_genitales_anterior", null=True, blank=True)
+    previous_limbs_exam = models.TextField(db_column="exploracion_miembros_anterior", null=True, blank=True)
+    previous_diagnostic_management = models.TextField(db_column="manejo_diagnostico_anterior", null=True, blank=True)
+    previous_therapeutic_management = models.TextField(db_column="manejo_terapeutico_anterior", null=True, blank=True)
+    previous_allergies = models.TextField(db_column="alergias_anterior", null=True, blank=True)
+    changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+    changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_clinical_history_revision"
+        ordering = ["changed_at"]
+
+    def __str__(self) -> str:
+        return f"Historia {self.history_id} — revision {self.changed_at}"
+
+
+class LegacyConsultationRecord(models.Model):
+    """
+    Archivo de SOLO LECTURA de las consultas del legado (`his_notas`,
+    migradas desde MySQL -- ver
+    `management/commands/migrar_notas_clinicas_legacy.py`). NO participa
+    del flujo operativo vivo: a diferencia de `VisitConsultation`, no esta
+    enlazada a `recepcion.Visit` a proposito, para no contaminar reportes/
+    colas/turnos de hoy con 600k+ filas historicas sinteticas. Es
+    consultable desde el expediente del paciente (seccion "Historial
+    previo a SIRES") pero nunca se edita ni se borra -- es un volcado
+    historico inmutable, igual espiritu que `ConsultationAddendum`.
+
+    Los vitales de la nota (peso/talla/TA/pulso/temp/IMC/glucosa) se
+    guardan tal cual vienen del legado (texto, sin normalizar) en vez de
+    volcarse a `somatometria.VisitVitalSigns`: son un snapshot historico
+    de ESA nota puntual, no signos vitales vigentes del paciente.
+
+    `addendum_legacy` preserva `his_notas.sw_complemento` tal cual --
+    ADVERTENCIA: el legado sobreescribia este campo sin versionar (mismo
+    antipatron que motivo `ConsultationAddendum`), asi que si una nota
+    tuvo mas de una adenda en el legado, solo sobrevive la ultima; la
+    perdida ya ocurrio en el propio legado, no se puede recuperar en la
+    migracion.
+    """
+
+    id_legacy_record = models.BigAutoField(primary_key=True, db_column="id_registro")
+    legacy_folio = models.CharField(
+        max_length=20, unique=True, db_column="folio_legado",
+    )
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0)
+
+    consultation_date = models.DateField(db_column="fecha_consulta")
+    consultation_time = models.CharField(
+        max_length=10, db_column="hora_consulta", null=True, blank=True,
+    )
+    doctor_code_legacy = models.CharField(
+        max_length=10, db_column="clave_medico_legado", null=True, blank=True,
+    )
+    clinic_code_legacy = models.IntegerField(
+        db_column="clave_clinica_legado", null=True, blank=True,
+    )
+
+    subjective = models.TextField(db_column="subjetivo", null=True, blank=True)
+    objective = models.TextField(db_column="objetivo", null=True, blank=True)
+    assessment = models.TextField(db_column="analisis", null=True, blank=True)
+    plan = models.TextField(db_column="plan", null=True, blank=True)
+    diagnostic_impression = models.TextField(
+        db_column="impresion_diagnostica", null=True, blank=True,
+    )
+    primary_cie_code_legacy = models.IntegerField(
+        db_column="clave_cie_principal_legado", null=True, blank=True,
+    )
+    addendum_legacy = models.TextField(db_column="adenda_legado", null=True, blank=True)
+
+    weight_legacy = models.CharField(max_length=8, db_column="peso_legado", null=True, blank=True)
+    height_legacy = models.CharField(max_length=8, db_column="talla_legado", null=True, blank=True)
+    blood_pressure_legacy = models.CharField(max_length=7, db_column="ta_legado", null=True, blank=True)
+    pulse_legacy = models.CharField(max_length=20, db_column="pulso_legado", null=True, blank=True)
+    temperature_legacy = models.CharField(max_length=10, db_column="temperatura_legado", null=True, blank=True)
+    respiration_legacy = models.CharField(max_length=20, db_column="respiracion_legado", null=True, blank=True)
+    bmi_legacy = models.CharField(max_length=8, db_column="imc_legado", null=True, blank=True)
+    glucose_legacy = models.CharField(max_length=10, db_column="glucosa_legado", null=True, blank=True)
+
+    is_first_visit_legacy = models.BooleanField(db_column="es_primera_vez_legado", null=True, blank=True)
+    status_legacy = models.CharField(max_length=1, db_column="estatus_legado", null=True, blank=True)
+
+    migrated_at = models.DateTimeField(db_column="fch_migracion", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_legacy_consultation_record"
+        indexes = [
+            models.Index(fields=["no_exp", "pk_num"], name="cns_legacy_cons_noexp_pk_idx"),
+            models.Index(fields=["consultation_date"], name="cns_legacy_cons_date_idx"),
+        ]
+        ordering = ["-consultation_date"]
+
+    def __str__(self) -> str:
+        return f"[Legado] {self.legacy_folio} — {self.no_exp}/{self.pk_num} ({self.consultation_date})"

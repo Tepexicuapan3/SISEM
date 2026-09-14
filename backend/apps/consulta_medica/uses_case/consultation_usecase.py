@@ -324,6 +324,59 @@ def close_consultation(
     }
 
 
+def add_consultation_addendum(
+    visit_id,
+    roles,
+    *,
+    text,
+    doctor_id,
+    permissions=None,
+):
+    """
+    Nota de aclaracion sobre una consulta YA CERRADA (ver docstring de
+    ConsultationAddendum). Si la visita sigue "en_consulta", el medico debe
+    corregir directo con save_diagnosis -- una adenda es para cuando ya no
+    se puede sobreescribir el registro original.
+    """
+    ensure_doctor_role(roles, permissions)
+
+    visit = _get_visit_or_error(visit_id)
+    if visit.status != "cerrada":
+        raise VisitDomainError(
+            "VISIT_STATE_INVALID",
+            "Solo se puede agregar una nota de aclaracion a una consulta ya cerrada. "
+            "Si la consulta sigue en curso, corregi el diagnostico directamente.",
+            409,
+        )
+
+    consultation = _get_consultation_or_error(visit)
+
+    normalized_text = (text or "").strip()
+    if not normalized_text:
+        raise VisitDomainError(
+            "VALIDATION_ERROR",
+            "Hay errores en el formulario",
+            422,
+            details={"text": ["El texto de la aclaracion es obligatorio."]},
+        )
+
+    addendum = ConsultationRepository.add_addendum(
+        consultation, text=normalized_text, created_by_id=doctor_id,
+    )
+    return ConsultationRepository.addendum_to_contract(addendum)
+
+
+def get_consultation_addenda(visit_id, roles, permissions=None):
+    ensure_doctor_role(roles, permissions)
+
+    visit = _get_visit_or_error(visit_id)
+    consultation = _get_consultation_or_error(visit)
+
+    addenda = ConsultationRepository.list_addenda(consultation)
+    items = [ConsultationRepository.addendum_to_contract(a) for a in addenda]
+    return {"items": items, "total": len(items)}
+
+
 def _get_consultation_or_error(visit):
     consultation = ConsultationRepository.get_by_visit(visit)
     if consultation is None:

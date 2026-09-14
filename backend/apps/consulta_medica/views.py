@@ -25,6 +25,7 @@ from apps.realtime.events import (
 from apps.recepcion.services.errors import VisitDomainError
 
 from .serializers import (
+    AddConsultationAddendumSerializer,
     AddPrescriptionItemSerializer,
     AddSecondaryDiagnosisSerializer,
     ClinicalHistoryUpdateSerializer,
@@ -47,9 +48,11 @@ from .uses_case.clinical_history_usecase import (
     upsert_clinical_history,
 )
 from .uses_case.consultation_usecase import (
+    add_consultation_addendum,
     add_secondary_diagnosis,
     cancel_secondary_diagnosis,
     close_consultation,
+    get_consultation_addenda,
     get_secondary_diagnoses,
     save_diagnosis,
     save_prescriptions,
@@ -60,7 +63,10 @@ from .uses_case.medical_leave_usecase import (
     create_medical_leave,
     get_patient_medical_leaves,
 )
-from .uses_case.patient_history_usecase import get_patient_consultations_history
+from .uses_case.patient_history_usecase import (
+    get_patient_consultations_history,
+    get_patient_legacy_consultations_history,
+)
 from .uses_case.prescription_item_usecase import (
     add_prescription_item,
     cancel_prescription_item,
@@ -558,6 +564,42 @@ class PatientConsultationsHistoryView(APIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
+class PatientLegacyConsultationsHistoryView(APIView):
+    """
+    Historial de notas del legado (previas a SIRES) de un paciente/familiar
+    -- archivo de solo lectura, ver docstring de LegacyConsultationRecord.
+    Complementa a PatientConsultationsHistoryView (consultas reales de
+    SIRES, vía Visit/VisitConsultation).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, no_exp):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        pk_num = _parse_pk_num(request)
+        if pk_num is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"pkNum": ["pkNum debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class PatientOdontogramView(APIView):
     """
@@ -914,6 +956,80 @@ class VisitSecondaryDiagnosesView(APIView):
         log_event(
             request,
             "SecondaryDiagnosisAdded",
+            "SUCCESS",
+            actor_user=user,
+            meta={
+                "module": "consulta_medica",
+                "endpoint": request.path,
+                "visitId": visit_id,
+                "actorId": actor_id,
+            },
+        )
+
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class VisitConsultationAddendumView(APIView):
+    """
+    Notas de aclaracion sobre una consulta YA CERRADA (NOM-004/024:
+    registro firmado no se modifica, se aclara con una anotacion nueva
+    fechada y con autor). Append-only -- no hay PUT/DELETE, ver docstring
+    de ConsultationAddendum.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = get_consultation_addenda(visit_id, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def post(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        serializer = AddConsultationAddendumSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details=serializer.errors,
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        try:
+            payload = add_consultation_addendum(
+                visit_id,
+                roles,
+                text=serializer.validated_data["text"],
+                doctor_id=actor_id,
+                permissions=permissions,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        log_event(
+            request,
+            "ConsultationAddendumAdded",
             "SUCCESS",
             actor_user=user,
             meta={
