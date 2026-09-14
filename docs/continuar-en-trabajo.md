@@ -3,15 +3,16 @@
 > TL;DR: esta sesión (en la PC de casa) construyó **Cirugías y Ambulancias
 > completos** (backend + frontend + catálogos), cerró el pendiente de la
 > página CIE-9-MC, y corrigió un bug real de cross-database FK que rompía
-> `migrate`. Nada de esto llega a otra PC solo por existir aquí — **hace
-> falta commit + push** de la rama `SISEM-15-07-2026` (81 archivos nuevos/
-> modificados) para poder hacer `git pull` en el trabajo (ver sección final).
-> Este documento es el mapa de continuación, no reemplaza revisar el código.
+> `migrate`. **Ya está subido** (commit `bfc72fc` en `SISEM-15-07-2026`,
+> `git push` hecho) y `migrate` ya corrió sin errores en esta PC —
+> solo falta `git pull` en la del trabajo. Este documento es el mapa de
+> continuación, no reemplaza revisar el código.
 
 ## Cómo usar este documento
 
-1. En la PC del trabajo, después de `git pull`, corre `python manage.py
-   migrate` (ver "Antes de nada" abajo) y revisa que no truene.
+1. En la PC del trabajo: `git fetch && git checkout SISEM-15-07-2026 &&
+   git pull`, luego `python manage.py migrate` (debería aplicar limpio,
+   ver "Nota técnica" abajo si algo truena).
 2. Lee "Bloqueado — necesita algo de la red del trabajo" primero: son las
    cosas que precisamente AHÍ sí se pueden avanzar (acceso a Oracle/MySQL
    legado que desde casa no había).
@@ -19,30 +20,23 @@
 4. "Pendiente de decisión" necesita que el usuario (no el asistente) defina
    algo antes de tocar código.
 
-## Antes de nada: correr `migrate`
+## Nota técnica ya resuelta (por si acaso)
 
-Cirugías/Ambulancias son apps nuevas, nunca aplicadas en ninguna base de
-datos real todavía. En la PC de casa el primer intento de `migrate` falló:
-
-```
-psycopg2.errors.UndefinedTable: no existe la relación «cat_clinicas»
-```
-
-Causa: usé un `ForeignKey` real de Django hacia `CatClinica`, pero esa
-tabla vive en la base de datos **`expedientes`** (ver
-`routers.ExpedientesRouter`), físicamente distinta de `default` (donde
-viven `cirugias`/`ambulancias`/`catalogos`). Postgres no soporta FK entre
-bases de datos distintas. **Ya corregido** en esta misma sesión: la
-clínica ahora se guarda como campo plano (`cd_clinica`/
-`cd_clinica_origen`, sin FK), igual que el resto del código ya trataba a
-`CatClinica`/`CatEmpleado`/`CatFamiliar` (ver `apps/pases/models.py` –
-`Referral.no_exp`/`pk_num` — y `apps/contratos_oxigeno/derechohabiente_service.py`).
-Las migraciones `cirugias/migrations/0001_initial.py` y
-`ambulancias/migrations/0001_initial.py` ya están regeneradas sin ese FK.
-
-Si `migrate` había fallado ahí en la PC de casa, no dejó nada a medias
-(Postgres hace rollback de la transacción de la migración que truena) —
-correr `migrate` de nuevo después del `git pull` debería aplicar limpio.
+Cirugías/Ambulancias son apps nuevas. El primer intento de `migrate` en
+esta PC falló con `psycopg2.errors.UndefinedTable: no existe la relación
+«cat_clinicas»` — un `ForeignKey` real de Django hacia `CatClinica`, que
+vive en la base de datos **`expedientes`** (ver `routers.ExpedientesRouter`),
+físicamente distinta de `default` (donde viven `cirugias`/`ambulancias`/
+`catalogos`); Postgres no soporta FK entre bases de datos distintas.
+**Ya corregido y ya subido**: la clínica se guarda como campo plano
+(`cd_clinica`/`cd_clinica_origen`, sin FK), igual que el resto del código
+ya trataba a `CatClinica`/`CatEmpleado`/`CatFamiliar` (ver
+`apps/pases/models.py` — `Referral.no_exp`/`pk_num` — y
+`apps/contratos_oxigeno/derechohabiente_service.py`). Confirmado con
+`manage.py showmigrations`: `cirugias.0001_initial`,
+`ambulancias.0001_initial` y `catalogos.0027_...` ya aplicadas `[X]` en
+esta PC. En la del trabajo debería aplicar igual de limpio al hacer
+`git pull` + `migrate`.
 
 ## Completado en esta sesión
 
@@ -127,19 +121,14 @@ de hoy es exclusivamente lo de arriba).
   próximo deploy (siembra los 28 permisos de los 7 catálogos nuevos; no
   está en el auto-seed de `AdministracionConfig.ready()`).
 
-## IMPORTANTE — esto no viaja solo a la otra PC
+## Estado del repo — ya viaja a la otra PC
 
-Todo el trabajo de esta sesión está **sin commitear** en la rama
-`SISEM-15-07-2026` (81 archivos entre nuevos y modificados). Este
-documento por sí solo no sirve de nada en la PC del trabajo si el código
-no viaja con él. Antes de irte de esta PC:
+Confirmado antes de cerrar: `git status` limpio (0 pendientes), commit
+`bfc72fc` en `SISEM-15-07-2026` ya incluye todo lo de hoy (cirugías,
+ambulancias, 7 catálogos, el fix de `CatClinica`, este mismo documento) y
+ya está en el remoto (`git push` hecho). En la PC del trabajo basta con:
 
 ```
-git status   # confirmar qué se va a incluir
-git add ...  # o revisar archivo por archivo si hay algo sensible
-git commit -m "..."
-git push
+git fetch && git checkout SISEM-15-07-2026 && git pull
+python manage.py migrate
 ```
-
-Y en la PC del trabajo: `git fetch && git checkout SISEM-15-07-2026 && git pull`,
-después `python manage.py migrate` (ver "Antes de nada" arriba).
