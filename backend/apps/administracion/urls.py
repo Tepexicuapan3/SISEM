@@ -29,6 +29,7 @@ from .views.user_import_views import (
     UserImportTemplateView,
 )
 from .views.navigation_menu_views import ModuleCatalogView, NavigationMenuView
+from .views.clinicas_views import ClinicasListView
 from .views.navigation_module_mutation_views import (
     CreateModuleView,
     ModuleVisibilityView,
@@ -56,6 +57,7 @@ def _modules_collection_view(request, *args, **kwargs):
 
 urlpatterns = [
     path("navigation-menu", NavigationMenuView.as_view(), name="navigation-menu"),
+    path("clinicas", ClinicasListView.as_view(), name="clinicas-list"),
     path("modules", _modules_collection_view, name="module-catalog"),
     path("modules/reorder", ReorderModulesView.as_view(), name="module-reorder"),
     path("modules/<str:clave>", UpdateModuleView.as_view(), name="module-update"),

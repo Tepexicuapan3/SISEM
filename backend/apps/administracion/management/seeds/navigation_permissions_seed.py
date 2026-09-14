@@ -121,6 +121,19 @@ NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:pases:create", "Emitir y cancelar pases y referencias medicas"),
 ]
 
+# Quinta tanda (2026-09-13): permisos de los modulos nuevos Cirugias
+# (agenda quirurgica) y Ambulancias (traslados internos entre unidades).
+# Ambulancias separa `authorize` de `write` a proposito: quien solicita un
+# traslado no necesariamente puede autorizarlo (reemplaza la contrasena de
+# `det_clinicas.pw_autoriza` del legado).
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:cirugias:read", "Ver agenda quirurgica"),
+    ("clinico:cirugias:write", "Agendar y cancelar cirugias"),
+    ("clinico:ambulancias:read", "Ver solicitudes de traslado en ambulancia"),
+    ("clinico:ambulancias:write", "Registrar y cancelar solicitudes de traslado"),
+    ("clinico:ambulancias:authorize", "Autorizar o rechazar solicitudes de traslado"),
+]
+
 # Quinta tanda (2026-09-13): permiso del reporte diario de consulta medica
 # (equivalente moderno de body-repconsulta.jsp del legado). Permiso propio de
 # solo lectura -- no reusa clinico:consultas:read a proposito, mismo criterio

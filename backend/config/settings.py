@@ -57,6 +57,8 @@ INSTALLED_APPS = [
     "apps.somatometria",
     "apps.consulta_medica",
     "apps.pases",
+    "apps.cirugias",
+    "apps.ambulancias",
     "apps.catalogos",
     "apps.administracion",
     "apps.personal",

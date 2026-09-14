@@ -6,9 +6,20 @@ import SessionsPage from "@/domains/auth-access/pages/admin/sessions/SessionsPag
 import CatalogosHubPage from "@features/admin/modules/catalogos/pages/CatalogosHubPage";
 import { ReporteConsultasDiarioPage } from "@features/admin/modules/reportes/pages/ReporteConsultasDiarioPage";
 import { ReportePasesPage } from "@features/admin/modules/reportes/pages/ReportePasesPage";
+import { ReporteIncapacidadesPage } from "@features/admin/modules/reportes/pages/ReporteIncapacidadesPage";
+import { ReporteCirugiasPage } from "@features/admin/modules/reportes/pages/ReporteCirugiasPage";
+import { ReporteAmbulanciasPage } from "@features/admin/modules/reportes/pages/ReporteAmbulanciasPage";
 import AreasPage from "@features/admin/modules/catalogos/areas/pages/AreasPage";
 import CentrosAtencionPage from "@features/admin/modules/catalogos/centros-atencion/pages/CentrosAtencionPage";
 import CiesPage from "@features/admin/modules/catalogos/cies/pages/CiesPage";
+import Cie9McPage from "@features/admin/modules/catalogos/cie9-mc/pages/Cie9McPage";
+import TipoCirugiaPage from "@features/admin/modules/catalogos/tipos-cirugia/pages/TipoCirugiaPage";
+import ClasificacionCirugiaPage from "@features/admin/modules/catalogos/clasificaciones-cirugia/pages/ClasificacionCirugiaPage";
+import MotivoCancelacionCirugiaPage from "@features/admin/modules/catalogos/motivos-cancelacion-cirugia/pages/MotivoCancelacionCirugiaPage";
+import MotivoTrasladoPage from "@features/admin/modules/catalogos/motivos-traslado/pages/MotivoTrasladoPage";
+import TipoTrasladoPage from "@features/admin/modules/catalogos/tipos-traslado/pages/TipoTrasladoPage";
+import TipoServicioAmbulanciaPage from "@features/admin/modules/catalogos/tipos-servicio-ambulancia/pages/TipoServicioAmbulanciaPage";
+import DestinoAmbulanciaPage from "@features/admin/modules/catalogos/destinos-ambulancia/pages/DestinoAmbulanciaPage";
 import AutorizadoresPage from "@features/admin/modules/catalogos/autorizadores/pages/AutorizadoresPage";
 import BajasPage from "@features/admin/modules/catalogos/bajas/pages/BajasPage";
 import CalidadLaboralPage from "@features/admin/modules/catalogos/calidad-laboral/pages/CalidadLaboralPage";
@@ -412,6 +423,102 @@ export const adminRoutes: RouteObject[] = [
           </ProtectedRoute>
         ),
       },
+      {
+        path: "cie9-mc",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.cie9mc.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:cie9_mc:read"] }}
+            dependencyAware
+          >
+            <Cie9McPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "tipos-cirugia",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.tiposcirugia.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:tipos_cirugia:read"] }}
+            dependencyAware
+          >
+            <TipoCirugiaPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "clasificaciones-cirugia",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.clasificacionescirugia.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:clasificaciones_cirugia:read"] }}
+            dependencyAware
+          >
+            <ClasificacionCirugiaPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "motivos-cancelacion-cirugia",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.motivoscancelacioncirugia.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:motivos_cancelacion_cirugia:read"] }}
+            dependencyAware
+          >
+            <MotivoCancelacionCirugiaPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "motivos-traslado",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.motivostraslado.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:motivos_traslado:read"] }}
+            dependencyAware
+          >
+            <MotivoTrasladoPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "tipos-traslado",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.tipostraslado.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:tipos_traslado:read"] }}
+            dependencyAware
+          >
+            <TipoTrasladoPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "tipos-servicio-ambulancia",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.tiposservicioambulancia.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:tipos_servicio_ambulancia:read"] }}
+            dependencyAware
+          >
+            <TipoServicioAmbulanciaPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "destinos-ambulancia",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.destinosambulancia.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:destinos_ambulancia:read"] }}
+            dependencyAware
+          >
+            <DestinoAmbulanciaPage />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
   {
@@ -452,6 +559,42 @@ export const adminRoutes: RouteObject[] = [
             dependencyAware
           >
             <ReportePasesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "incapacidades",
+        element: (
+          <ProtectedRoute
+            requiredCapability="clinico.reportes.read"
+            fallbackRequirement={{ allOf: ["clinico:reportes:read"] }}
+            dependencyAware
+          >
+            <ReporteIncapacidadesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "cirugias",
+        element: (
+          <ProtectedRoute
+            requiredCapability="clinico.reportes.cirugias.read"
+            fallbackRequirement={{ allOf: ["clinico:cirugias:read"] }}
+            dependencyAware
+          >
+            <ReporteCirugiasPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "ambulancias",
+        element: (
+          <ProtectedRoute
+            requiredCapability="clinico.reportes.ambulancias.read"
+            fallbackRequirement={{ allOf: ["clinico:ambulancias:read"] }}
+            dependencyAware
+          >
+            <ReporteAmbulanciasPage />
           </ProtectedRoute>
         ),
       },

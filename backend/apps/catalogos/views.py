@@ -21,7 +21,10 @@ from apps.catalogos.uses_case.upload_cies_use_case import PreviewCiesUseCase
 
 from .models import (
     Areas, Autorizadores, Bajas, CalidadLaboral, CatAreaClinica, CatCentroAtencion,
-    CatCentroAtencionHorario, CatCentroAtencionExcepcion, CatCie9Mc, CentroAreaClinica, Consultorios,
+    CatCentroAtencionHorario, CatCentroAtencionExcepcion, CatCie9Mc,
+    CatTipoCirugia, CatClasificacionCirugia, CatMotivoCancelacionCirugia,
+    CatMotivoTraslado, CatTipoTraslado, CatTipoServicioAmbulancia, CatDestinoAmbulancia,
+    CentroAreaClinica, Consultorios,
     Discapacidades, EdoCivil, Enfermedades, Escolaridad, Escuelas, Especialidades, EstudiosMed,
     GruposDeMedicamentos, Licencias, Medicamentos, MotivoCita, Ocupaciones, OrigenCons, Parentesco, Pases, Permisos,
     Religion, Roles, CatSucursal, TipoDeCitas, TipoConsulta, TipoResidencia, TiposAreas, TiposSanguineo,
@@ -44,6 +47,13 @@ from .serializers import (
     CodigoPostalResultSerializer, ConsultoriosDetailSerializer,
     ConsultoriosListSerializer, ConsultoriosWriteSerializer,
     Cie9McDetailSerializer, Cie9McListSerializer, Cie9McWriteSerializer,
+    TipoCirugiaDetailSerializer, TipoCirugiaListSerializer, TipoCirugiaWriteSerializer,
+    ClasificacionCirugiaDetailSerializer, ClasificacionCirugiaListSerializer, ClasificacionCirugiaWriteSerializer,
+    MotivoCancelacionCirugiaDetailSerializer, MotivoCancelacionCirugiaListSerializer, MotivoCancelacionCirugiaWriteSerializer,
+    MotivoTrasladoDetailSerializer, MotivoTrasladoListSerializer, MotivoTrasladoWriteSerializer,
+    TipoTrasladoDetailSerializer, TipoTrasladoListSerializer, TipoTrasladoWriteSerializer,
+    TipoServicioAmbulanciaDetailSerializer, TipoServicioAmbulanciaListSerializer, TipoServicioAmbulanciaWriteSerializer,
+    DestinoAmbulanciaDetailSerializer, DestinoAmbulanciaListSerializer, DestinoAmbulanciaWriteSerializer,
     DiscapacidadesDetailSerializer, DiscapacidadesListSerializer, DiscapacidadesWriteSerializer,
     EdoCivilDetailSerializer, EdoCivilListSerializer, EdoCivilWriteSerializer,
     EnfermedadesDetailSerializer, EnfermedadesListSerializer, EnfermedadesWriteSerializer,
@@ -854,6 +864,118 @@ class Cie9McDetailView(CatalogBaseDetailView):
     write_serializer = Cie9McWriteSerializer
     wrapper_key = "cie9Mc"
     error_codes = MappingProxyType({"not_found": "CIE9_MC_NOT_FOUND", "exists": "CIE9_MC_EXISTS"})
+
+
+class TipoCirugiaListCreateView(CatalogBaseListCreateView):
+    catalog = "tipos_cirugia"
+    model = CatTipoCirugia
+    list_serializer = TipoCirugiaListSerializer
+    write_serializer = TipoCirugiaWriteSerializer
+    error_codes = MappingProxyType({"exists": "SURGERY_TYPE_EXISTS"})
+
+class TipoCirugiaDetailView(CatalogBaseDetailView):
+    catalog = "tipos_cirugia"
+    model = CatTipoCirugia
+    detail_serializer = TipoCirugiaDetailSerializer
+    write_serializer = TipoCirugiaWriteSerializer
+    wrapper_key = "tipoCirugia"
+    error_codes = MappingProxyType({"not_found": "SURGERY_TYPE_NOT_FOUND", "exists": "SURGERY_TYPE_EXISTS"})
+
+
+class ClasificacionCirugiaListCreateView(CatalogBaseListCreateView):
+    catalog = "clasificaciones_cirugia"
+    model = CatClasificacionCirugia
+    list_serializer = ClasificacionCirugiaListSerializer
+    write_serializer = ClasificacionCirugiaWriteSerializer
+    error_codes = MappingProxyType({"exists": "SURGERY_CLASSIFICATION_EXISTS"})
+
+class ClasificacionCirugiaDetailView(CatalogBaseDetailView):
+    catalog = "clasificaciones_cirugia"
+    model = CatClasificacionCirugia
+    detail_serializer = ClasificacionCirugiaDetailSerializer
+    write_serializer = ClasificacionCirugiaWriteSerializer
+    wrapper_key = "clasificacionCirugia"
+    error_codes = MappingProxyType({"not_found": "SURGERY_CLASSIFICATION_NOT_FOUND", "exists": "SURGERY_CLASSIFICATION_EXISTS"})
+
+
+class MotivoCancelacionCirugiaListCreateView(CatalogBaseListCreateView):
+    catalog = "motivos_cancelacion_cirugia"
+    model = CatMotivoCancelacionCirugia
+    list_serializer = MotivoCancelacionCirugiaListSerializer
+    write_serializer = MotivoCancelacionCirugiaWriteSerializer
+    error_codes = MappingProxyType({"exists": "SURGERY_CANCELLATION_REASON_EXISTS"})
+
+class MotivoCancelacionCirugiaDetailView(CatalogBaseDetailView):
+    catalog = "motivos_cancelacion_cirugia"
+    model = CatMotivoCancelacionCirugia
+    detail_serializer = MotivoCancelacionCirugiaDetailSerializer
+    write_serializer = MotivoCancelacionCirugiaWriteSerializer
+    wrapper_key = "motivoCancelacionCirugia"
+    error_codes = MappingProxyType({"not_found": "SURGERY_CANCELLATION_REASON_NOT_FOUND", "exists": "SURGERY_CANCELLATION_REASON_EXISTS"})
+
+
+class MotivoTrasladoListCreateView(CatalogBaseListCreateView):
+    catalog = "motivos_traslado"
+    model = CatMotivoTraslado
+    list_serializer = MotivoTrasladoListSerializer
+    write_serializer = MotivoTrasladoWriteSerializer
+    error_codes = MappingProxyType({"exists": "TRANSFER_REASON_EXISTS"})
+
+class MotivoTrasladoDetailView(CatalogBaseDetailView):
+    catalog = "motivos_traslado"
+    model = CatMotivoTraslado
+    detail_serializer = MotivoTrasladoDetailSerializer
+    write_serializer = MotivoTrasladoWriteSerializer
+    wrapper_key = "motivoTraslado"
+    error_codes = MappingProxyType({"not_found": "TRANSFER_REASON_NOT_FOUND", "exists": "TRANSFER_REASON_EXISTS"})
+
+
+class TipoTrasladoListCreateView(CatalogBaseListCreateView):
+    catalog = "tipos_traslado"
+    model = CatTipoTraslado
+    list_serializer = TipoTrasladoListSerializer
+    write_serializer = TipoTrasladoWriteSerializer
+    error_codes = MappingProxyType({"exists": "TRANSFER_TYPE_EXISTS"})
+
+class TipoTrasladoDetailView(CatalogBaseDetailView):
+    catalog = "tipos_traslado"
+    model = CatTipoTraslado
+    detail_serializer = TipoTrasladoDetailSerializer
+    write_serializer = TipoTrasladoWriteSerializer
+    wrapper_key = "tipoTraslado"
+    error_codes = MappingProxyType({"not_found": "TRANSFER_TYPE_NOT_FOUND", "exists": "TRANSFER_TYPE_EXISTS"})
+
+
+class TipoServicioAmbulanciaListCreateView(CatalogBaseListCreateView):
+    catalog = "tipos_servicio_ambulancia"
+    model = CatTipoServicioAmbulancia
+    list_serializer = TipoServicioAmbulanciaListSerializer
+    write_serializer = TipoServicioAmbulanciaWriteSerializer
+    error_codes = MappingProxyType({"exists": "AMBULANCE_SERVICE_TYPE_EXISTS"})
+
+class TipoServicioAmbulanciaDetailView(CatalogBaseDetailView):
+    catalog = "tipos_servicio_ambulancia"
+    model = CatTipoServicioAmbulancia
+    detail_serializer = TipoServicioAmbulanciaDetailSerializer
+    write_serializer = TipoServicioAmbulanciaWriteSerializer
+    wrapper_key = "tipoServicioAmbulancia"
+    error_codes = MappingProxyType({"not_found": "AMBULANCE_SERVICE_TYPE_NOT_FOUND", "exists": "AMBULANCE_SERVICE_TYPE_EXISTS"})
+
+
+class DestinoAmbulanciaListCreateView(CatalogBaseListCreateView):
+    catalog = "destinos_ambulancia"
+    model = CatDestinoAmbulancia
+    list_serializer = DestinoAmbulanciaListSerializer
+    write_serializer = DestinoAmbulanciaWriteSerializer
+    error_codes = MappingProxyType({"exists": "AMBULANCE_DESTINATION_EXISTS"})
+
+class DestinoAmbulanciaDetailView(CatalogBaseDetailView):
+    catalog = "destinos_ambulancia"
+    model = CatDestinoAmbulancia
+    detail_serializer = DestinoAmbulanciaDetailSerializer
+    write_serializer = DestinoAmbulanciaWriteSerializer
+    wrapper_key = "destinoAmbulancia"
+    error_codes = MappingProxyType({"not_found": "AMBULANCE_DESTINATION_NOT_FOUND", "exists": "AMBULANCE_DESTINATION_EXISTS"})
 
 
 class EdoCivilListCreateView(CatalogBaseListCreateView):

@@ -10,6 +10,13 @@ from .centro_atencion_horario import CatCentroAtencionHorario
 from .centro_atencion_excepcion import CatCentroAtencionExcepcion
 from .cies import CatCies
 from .cie9_mc import CatCie9Mc
+from .cirugias_tipo import CatTipoCirugia
+from .cirugias_clasificacion import CatClasificacionCirugia
+from .cirugias_motivo_cancelacion import CatMotivoCancelacionCirugia
+from .ambulancias_motivo_traslado import CatMotivoTraslado
+from .ambulancias_tipo_traslado import CatTipoTraslado
+from .ambulancias_tipo_servicio import CatTipoServicioAmbulancia
+from .ambulancias_destino import CatDestinoAmbulancia
 from .consultorios import Consultorios
 from .discapacidades import Discapacidades
 from .edo_civil import EdoCivil
@@ -60,6 +67,13 @@ __all__ = [
     "CatCentroAtencionExcepcion",
     "CatCies",
     "CatCie9Mc",
+    "CatTipoCirugia",
+    "CatClasificacionCirugia",
+    "CatMotivoCancelacionCirugia",
+    "CatMotivoTraslado",
+    "CatTipoTraslado",
+    "CatTipoServicioAmbulancia",
+    "CatDestinoAmbulancia",
     "Consultorios",
     "Discapacidades",
     "EdoCivil",

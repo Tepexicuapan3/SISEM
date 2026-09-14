@@ -39,7 +39,9 @@ from .serializers import (
     StomatologyHistoryUpdateSerializer,
 )
 from .services.report_export_service import build_daily_report_workbook
+from .services.report_export_service_medical_leave import build_medical_leave_report_workbook
 from .uses_case.daily_report_usecase import get_daily_consultation_report
+from .uses_case.medical_leave_report_usecase import get_medical_leave_report
 from .uses_case.clinical_history_usecase import (
     get_clinical_history,
     upsert_clinical_history,
@@ -1304,6 +1306,67 @@ class DailyConsultationReportView(APIView):
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
             filename = f"informe_diario_consulta_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.xlsx"
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class MedicalLeaveReportView(APIView):
+    """
+    Informe de incapacidades/licencias con fecha de inicio en un rango
+    (default: hoy). Equivalente moderno de body-repincap.jsp del legado --
+    ver docs/architecture/legacy-reports-inventory.md.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        today = timezone.localdate()
+        raw_start = request.query_params.get("fechaInicio")
+        raw_end = request.query_params.get("fechaFin")
+
+        fecha_inicio = parse_date(raw_start) if raw_start else today
+        fecha_fin = parse_date(raw_end) if raw_end else today
+
+        if (raw_start and fecha_inicio is None) or (raw_end and fecha_fin is None):
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"fecha": ["Formato esperado: YYYY-MM-DD."]},
+                request_id=get_request_id(request),
+            )
+
+        leave_type_id = request.query_params.get("leaveTypeId") or None
+        no_exp = request.query_params.get("noExp") or None
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = get_medical_leave_report(
+                fecha_inicio,
+                fecha_fin,
+                roles,
+                permissions,
+                leave_type_id=leave_type_id,
+                no_exp=no_exp,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        if request.query_params.get("export") == "xlsx":
+            content = build_medical_leave_report_workbook(payload["items"])
+            response = HttpResponse(
+                content,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            filename = f"informe_incapacidades_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.xlsx"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
             return response
 

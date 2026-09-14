@@ -8,6 +8,8 @@ import ExpedientesListPage from "@features/expedientes/pages/ExpedientesListPage
 import ExpedienteDetailPage from "@features/expedientes/pages/ExpedienteDetailPage";
 import DoctorConsultationPage from "@features/consulta-medica/modules/atencion/pages/DoctorConsultationPage";
 import SomatometriaCapturePage from "@features/somatometria/modules/captura/pages/SomatometriaCapturePage";
+import CirugiasPage from "@features/cirugias/pages/CirugiasPage";
+import AmbulanciasPage from "@features/ambulancias/pages/AmbulanciasPage";
 import PlaceholderPage from "@shared/components/PlaceholderPage";
 
 // Clinico
@@ -99,6 +101,22 @@ export const clinicoRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute requiredPermission="clinico:somatometria:read">
         <SomatometriaCapturePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "cirugias",
+    element: (
+      <ProtectedRoute requiredPermission="clinico:cirugias:read">
+        <CirugiasPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "ambulancias",
+    element: (
+      <ProtectedRoute requiredPermission="clinico:ambulancias:read">
+        <AmbulanciasPage />
       </ProtectedRoute>
     ),
   },

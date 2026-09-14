@@ -57,6 +57,18 @@ export const ESPECIALIDADES_IMPORT_CONFIG: CatalogImportConfig = {
   ],
 };
 
+export const CIE9_MC_IMPORT_CONFIG: CatalogImportConfig = {
+  slug: "cie9-mc",
+  catalogLabel: "CIE-9-MC",
+  templateFilename: "plantilla_cie9_mc.xlsx",
+  columns: [
+    { key: "ID", header: "ID", align: "center", className: "w-[100px]" },
+    { key: "Clave", header: "Clave", className: "w-[140px]" },
+    { key: "Descripcion", header: "Descripción" },
+    { key: "Activo", header: "Activo", align: "center", className: "w-[120px]" },
+  ],
+};
+
 export const ESCUELAS_IMPORT_CONFIG: CatalogImportConfig = {
   slug: "schools",
   catalogLabel: "Escuelas",

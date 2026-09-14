@@ -438,6 +438,15 @@ export type {
 } from "@api/types/reportes-pases.types";
 
 // =============================================================================
+// REPORTES - INCAPACIDADES
+// =============================================================================
+export type {
+  MedicalLeaveReportParams,
+  MedicalLeaveReportItem,
+  MedicalLeaveReportResponse,
+} from "@api/types/reportes-incapacidades.types";
+
+// =============================================================================
 // DIAGNOSTICOS SECUNDARIOS (VisitDiagnosis)
 // =============================================================================
 export type {
@@ -785,6 +794,164 @@ export type {
   // Detalle
   DiscapacidadDetailResponse,
 } from "@api/types/catalogos/discapacidades.types";
+
+// =============================================================================
+// CIE-9-MC TYPES (CRUD) -- NOM-024, catalogo de procedimientos
+// =============================================================================
+export type {
+  // Entidades
+  Cie9McListItem,
+  Cie9McDetail,
+  // CRUD Requests
+  CreateCie9McRequest,
+  UpdateCie9McRequest,
+  // CRUD Responses
+  CreateCie9McResponse,
+  UpdateCie9McResponse,
+  DeleteCie9McResponse,
+  // Listados
+  Cie9McListParams,
+  Cie9McListResponse,
+  // Detalle
+  Cie9McDetailResponse,
+} from "@api/types/catalogos/cie9-mc.types";
+
+// =============================================================================
+// CIRUGIAS/AMBULANCIAS: CATALOGOS DE SOPORTE (CRUD)
+// =============================================================================
+export type {
+  TipoCirugiaListItem,
+  TipoCirugiaDetail,
+  CreateTipoCirugiaRequest,
+  UpdateTipoCirugiaRequest,
+  CreateTipoCirugiaResponse,
+  UpdateTipoCirugiaResponse,
+  DeleteTipoCirugiaResponse,
+  TipoCirugiaListParams,
+  TipoCirugiaListResponse,
+  TipoCirugiaDetailResponse,
+} from "@api/types/catalogos/tipos-cirugia.types";
+
+export type {
+  ClasificacionCirugiaListItem,
+  ClasificacionCirugiaDetail,
+  CreateClasificacionCirugiaRequest,
+  UpdateClasificacionCirugiaRequest,
+  CreateClasificacionCirugiaResponse,
+  UpdateClasificacionCirugiaResponse,
+  DeleteClasificacionCirugiaResponse,
+  ClasificacionCirugiaListParams,
+  ClasificacionCirugiaListResponse,
+  ClasificacionCirugiaDetailResponse,
+} from "@api/types/catalogos/clasificaciones-cirugia.types";
+
+export type {
+  MotivoCancelacionCirugiaListItem,
+  MotivoCancelacionCirugiaDetail,
+  CreateMotivoCancelacionCirugiaRequest,
+  UpdateMotivoCancelacionCirugiaRequest,
+  CreateMotivoCancelacionCirugiaResponse,
+  UpdateMotivoCancelacionCirugiaResponse,
+  DeleteMotivoCancelacionCirugiaResponse,
+  MotivoCancelacionCirugiaListParams,
+  MotivoCancelacionCirugiaListResponse,
+  MotivoCancelacionCirugiaDetailResponse,
+} from "@api/types/catalogos/motivos-cancelacion-cirugia.types";
+
+export type {
+  MotivoTrasladoListItem,
+  MotivoTrasladoDetail,
+  CreateMotivoTrasladoRequest,
+  UpdateMotivoTrasladoRequest,
+  CreateMotivoTrasladoResponse,
+  UpdateMotivoTrasladoResponse,
+  DeleteMotivoTrasladoResponse,
+  MotivoTrasladoListParams,
+  MotivoTrasladoListResponse,
+  MotivoTrasladoDetailResponse,
+} from "@api/types/catalogos/motivos-traslado.types";
+
+export type {
+  TipoTrasladoListItem,
+  TipoTrasladoDetail,
+  CreateTipoTrasladoRequest,
+  UpdateTipoTrasladoRequest,
+  CreateTipoTrasladoResponse,
+  UpdateTipoTrasladoResponse,
+  DeleteTipoTrasladoResponse,
+  TipoTrasladoListParams,
+  TipoTrasladoListResponse,
+  TipoTrasladoDetailResponse,
+} from "@api/types/catalogos/tipos-traslado.types";
+
+export type {
+  TipoServicioAmbulanciaListItem,
+  TipoServicioAmbulanciaDetail,
+  CreateTipoServicioAmbulanciaRequest,
+  UpdateTipoServicioAmbulanciaRequest,
+  CreateTipoServicioAmbulanciaResponse,
+  UpdateTipoServicioAmbulanciaResponse,
+  DeleteTipoServicioAmbulanciaResponse,
+  TipoServicioAmbulanciaListParams,
+  TipoServicioAmbulanciaListResponse,
+  TipoServicioAmbulanciaDetailResponse,
+} from "@api/types/catalogos/tipos-servicio-ambulancia.types";
+
+export type {
+  DestinoAmbulanciaListItem,
+  DestinoAmbulanciaDetail,
+  CreateDestinoAmbulanciaRequest,
+  UpdateDestinoAmbulanciaRequest,
+  CreateDestinoAmbulanciaResponse,
+  UpdateDestinoAmbulanciaResponse,
+  DeleteDestinoAmbulanciaResponse,
+  DestinoAmbulanciaListParams,
+  DestinoAmbulanciaListResponse,
+  DestinoAmbulanciaDetailResponse,
+} from "@api/types/catalogos/destinos-ambulancia.types";
+
+// =============================================================================
+// CIRUGIAS (agenda quirurgica, operativo)
+// =============================================================================
+export type {
+  SurgeryDiagnosisItem,
+  SurgeryItem,
+  SurgeryListParams,
+  SurgeryListResponse,
+  ScheduleSurgeryRequest,
+  CancelSurgeryRequest,
+} from "@api/types/cirugias.types";
+
+export type {
+  SurgeryReportParams,
+  SurgeryReportItem,
+  SurgeryReportResponse,
+} from "@api/types/reportes-cirugias.types";
+
+// =============================================================================
+// AMBULANCIAS (traslados internos, operativo)
+// =============================================================================
+export type {
+  AmbulanceRequestScheduleItem,
+  AmbulanceRequestItem,
+  AmbulanceRequestListParams,
+  AmbulanceRequestListResponse,
+  CreateAmbulanceRequestScheduleItem,
+  CreateAmbulanceRequestRequest,
+  AuthorizeAmbulanceRequestRequest,
+  RejectAmbulanceRequestRequest,
+} from "@api/types/ambulancias.types";
+
+export type {
+  AmbulanceReportParams,
+  AmbulanceReportItem,
+  AmbulanceReportResponse,
+} from "@api/types/reportes-ambulancias.types";
+
+// =============================================================================
+// CLINICAS (referencia de solo lectura, para poblar selects)
+// =============================================================================
+export type { ClinicaRefItem, ClinicasListResponse } from "@api/types/clinicas.types";
 
 // =============================================================================
 // ESCUELAS TYPES (CRUD)

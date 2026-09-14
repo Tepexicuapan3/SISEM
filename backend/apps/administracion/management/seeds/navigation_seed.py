@@ -569,6 +569,108 @@ NAV_SEED = [
         "permisos": ["admin:catalogos:tipo_residencia:read"],
     },
     {
+        # Agregado 2026-09-13 (NOM-024): catalogo de procedimientos CIE-9-MC,
+        # complementa a CIES (CIE-10, que solo cubre diagnosticos). Pagina de
+        # frontend ya construida (Cie9McPage) -- a diferencia del primer
+        # intento de agregar esta entrada, ya no queda un link roto.
+        "clave": "administracion.catalogos.cie9_mc",
+        "titulo": "Catálogo CIE-9-MC",
+        "icono": None,
+        "url": "/admin/catalogos/cie9-mc",
+        "badge": None,
+        "orden": 33,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:cie9_mc:read"],
+    },
+    {
+        # Agregado 2026-09-13: catalogos de soporte para los modulos nuevos
+        # Cirugias y Ambulancias (ver clinico.cirugias/clinico.ambulancias).
+        "clave": "administracion.catalogos.tipos_cirugia",
+        "titulo": "Tipos de Cirugia",
+        "icono": None,
+        "url": "/admin/catalogos/tipos-cirugia",
+        "badge": None,
+        "orden": 34,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:tipos_cirugia:read"],
+    },
+    {
+        "clave": "administracion.catalogos.clasificaciones_cirugia",
+        "titulo": "Clasificaciones de Cirugia",
+        "icono": None,
+        "url": "/admin/catalogos/clasificaciones-cirugia",
+        "badge": None,
+        "orden": 35,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:clasificaciones_cirugia:read"],
+    },
+    {
+        "clave": "administracion.catalogos.motivos_cancelacion_cirugia",
+        "titulo": "Motivos de Cancelacion de Cirugia",
+        "icono": None,
+        "url": "/admin/catalogos/motivos-cancelacion-cirugia",
+        "badge": None,
+        "orden": 36,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:motivos_cancelacion_cirugia:read"],
+    },
+    {
+        "clave": "administracion.catalogos.motivos_traslado",
+        "titulo": "Motivos de Traslado",
+        "icono": None,
+        "url": "/admin/catalogos/motivos-traslado",
+        "badge": None,
+        "orden": 37,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:motivos_traslado:read"],
+    },
+    {
+        "clave": "administracion.catalogos.tipos_traslado",
+        "titulo": "Tipos de Traslado",
+        "icono": None,
+        "url": "/admin/catalogos/tipos-traslado",
+        "badge": None,
+        "orden": 38,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:tipos_traslado:read"],
+    },
+    {
+        "clave": "administracion.catalogos.tipos_servicio_ambulancia",
+        "titulo": "Tipos de Servicio de Ambulancia",
+        "icono": None,
+        "url": "/admin/catalogos/tipos-servicio-ambulancia",
+        "badge": None,
+        "orden": 39,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:tipos_servicio_ambulancia:read"],
+    },
+    {
+        "clave": "administracion.catalogos.destinos_ambulancia",
+        "titulo": "Destinos de Ambulancia",
+        "icono": None,
+        "url": "/admin/catalogos/destinos-ambulancia",
+        "badge": None,
+        "orden": 40,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:destinos_ambulancia:read"],
+    },
+    {
         # Agregado 2026-09-13: "Reportes y Analitica Operativa" existe en
         # nav-config.ts (linea ~271) desde antes como item plano con
         # PLACEHOLDER_BADGE, pero nunca se transcribio a este seed -- por
@@ -609,6 +711,48 @@ NAV_SEED = [
         "grupo": "primary",
         "parent_clave": "administracion.reportes",
         "permisos": ["clinico:pases:read"],
+    },
+    {
+        # Agregado 2026-09-13: tercer reporte de la seccion, mismo patron
+        # (rango de fechas + tabla + export Excel). Reusa clinico:reportes:read.
+        "clave": "administracion.reportes.incapacidades",
+        "titulo": "Informe de Incapacidades",
+        "icono": None,
+        "url": "/admin/reportes/incapacidades",
+        "badge": None,
+        "orden": 2,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.reportes",
+        "permisos": ["clinico:reportes:read"],
+    },
+    {
+        # Agregado 2026-09-13: informes de los modulos nuevos Cirugias y
+        # Ambulancias. Reusan sus propios permisos de lectura (no
+        # clinico:reportes:read) porque son datos operativos del mismo
+        # modulo, no un reporte administrativo aparte.
+        "clave": "administracion.reportes.cirugias",
+        "titulo": "Informe de Cirugias",
+        "icono": None,
+        "url": "/admin/reportes/cirugias",
+        "badge": None,
+        "orden": 3,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.reportes",
+        "permisos": ["clinico:cirugias:read"],
+    },
+    {
+        "clave": "administracion.reportes.ambulancias",
+        "titulo": "Informe de Ambulancias",
+        "icono": None,
+        "url": "/admin/reportes/ambulancias",
+        "badge": None,
+        "orden": 4,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.reportes",
+        "permisos": ["clinico:ambulancias:read"],
     },
     {
         "clave": "administracion.panel.menus",
@@ -682,6 +826,34 @@ NAV_SEED = [
         "grupo": "primary",
         "parent_clave": "clinico",
         "permisos": ["clinico:somatometria:read"],
+    },
+    {
+        # Agregado 2026-09-13: agenda quirurgica -- modulo nuevo, no existia
+        # equivalente en SISEM (ver body-agendacir.jsp del legado).
+        "clave": "clinico.cirugias",
+        "titulo": "Cirugias",
+        "icono": "scissors",
+        "url": "/clinico/cirugias",
+        "badge": None,
+        "orden": 3,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "clinico",
+        "permisos": ["clinico:cirugias:read"],
+    },
+    {
+        # Agregado 2026-09-13: solicitudes de traslado interno en ambulancia
+        # -- modulo nuevo (ver body-ambulancia.jsp del legado).
+        "clave": "clinico.ambulancias",
+        "titulo": "Ambulancias",
+        "icono": "ambulance",
+        "url": "/clinico/ambulancias",
+        "badge": None,
+        "orden": 4,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "clinico",
+        "permisos": ["clinico:ambulancias:read"],
     },
     # ── Recepcion ────────────────────────────────────────────────────────
     {

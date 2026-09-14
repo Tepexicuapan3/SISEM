@@ -16,6 +16,13 @@ from apps.catalogos.models import (
     CentroAreaClinica,
     Consultorios,
     CatCie9Mc,
+    CatTipoCirugia,
+    CatClasificacionCirugia,
+    CatMotivoCancelacionCirugia,
+    CatMotivoTraslado,
+    CatTipoTraslado,
+    CatTipoServicioAmbulancia,
+    CatDestinoAmbulancia,
     Discapacidades,
     EdoCivil,
     Enfermedades,
@@ -415,6 +422,121 @@ class Cie9McWriteSerializer(CatalogWriteSerializer):
     class Meta(CatalogWriteSerializer.Meta):
         model = CatCie9Mc
         fields = ("name", "code", "isActive")
+
+
+class TipoCirugiaListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = CatTipoCirugia
+
+class TipoCirugiaDetailSerializer(CatalogDetailSerializer):
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatTipoCirugia
+
+class TipoCirugiaWriteSerializer(CatalogWriteSerializer):
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatTipoCirugia
+
+
+class ClasificacionCirugiaListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = CatClasificacionCirugia
+
+class ClasificacionCirugiaDetailSerializer(CatalogDetailSerializer):
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatClasificacionCirugia
+
+class ClasificacionCirugiaWriteSerializer(CatalogWriteSerializer):
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatClasificacionCirugia
+
+
+class MotivoCancelacionCirugiaListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = CatMotivoCancelacionCirugia
+
+class MotivoCancelacionCirugiaDetailSerializer(CatalogDetailSerializer):
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatMotivoCancelacionCirugia
+
+class MotivoCancelacionCirugiaWriteSerializer(CatalogWriteSerializer):
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatMotivoCancelacionCirugia
+
+
+class MotivoTrasladoListSerializer(CatalogListSerializer):
+    requiresNotes = serializers.BooleanField(source="requires_notes")
+    class Meta(CatalogListSerializer.Meta):
+        model = CatMotivoTraslado
+        fields = CatalogListSerializer.Meta.fields + ("requiresNotes",)
+
+class MotivoTrasladoDetailSerializer(CatalogDetailSerializer):
+    requiresNotes = serializers.BooleanField(source="requires_notes")
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatMotivoTraslado
+        fields = CatalogDetailSerializer.Meta.fields + ("requiresNotes",)
+
+class MotivoTrasladoWriteSerializer(CatalogWriteSerializer):
+    requiresNotes = serializers.BooleanField(source="requires_notes", required=False)
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatMotivoTraslado
+        fields = CatalogWriteSerializer.Meta.fields + ("requiresNotes",)
+
+
+class TipoTrasladoListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = CatTipoTraslado
+
+class TipoTrasladoDetailSerializer(CatalogDetailSerializer):
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatTipoTraslado
+
+class TipoTrasladoWriteSerializer(CatalogWriteSerializer):
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatTipoTraslado
+
+
+class TipoServicioAmbulanciaListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = CatTipoServicioAmbulancia
+
+class TipoServicioAmbulanciaDetailSerializer(CatalogDetailSerializer):
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatTipoServicioAmbulancia
+
+class TipoServicioAmbulanciaWriteSerializer(CatalogWriteSerializer):
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatTipoServicioAmbulancia
+
+
+_DESTINO_AMBULANCIA_ADDRESS_FIELDS = (
+    "street", "zipCode", "neighborhood", "borough", "phone", "reference",
+)
+
+class DestinoAmbulanciaListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = CatDestinoAmbulancia
+
+class DestinoAmbulanciaDetailSerializer(CatalogDetailSerializer):
+    street = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    zipCode = serializers.CharField(source="zip_code", required=False, allow_null=True, allow_blank=True)
+    neighborhood = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    borough = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    reference = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    class Meta(CatalogDetailSerializer.Meta):
+        model = CatDestinoAmbulancia
+        fields = CatalogDetailSerializer.Meta.fields + _DESTINO_AMBULANCIA_ADDRESS_FIELDS
+
+class DestinoAmbulanciaWriteSerializer(CatalogWriteSerializer):
+    street = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    zipCode = serializers.CharField(source="zip_code", required=False, allow_null=True, allow_blank=True)
+    neighborhood = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    borough = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    reference = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    class Meta(CatalogWriteSerializer.Meta):
+        model = CatDestinoAmbulancia
+        fields = CatalogWriteSerializer.Meta.fields + _DESTINO_AMBULANCIA_ADDRESS_FIELDS
 
 
 class EdoCivilListSerializer(CatalogListSerializer):

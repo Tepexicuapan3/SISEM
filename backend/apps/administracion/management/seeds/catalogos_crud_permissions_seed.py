@@ -101,4 +101,39 @@ CATALOGOS_CRUD_PERMISSIONS_SEED: list[tuple[str, str]] = [
     ("admin:catalogos:cie9_mc:create", "Crear en catalogo CIE-9-MC"),
     ("admin:catalogos:cie9_mc:update", "Editar catalogo CIE-9-MC"),
     ("admin:catalogos:cie9_mc:delete", "Eliminar en catalogo CIE-9-MC"),
+
+    ("admin:catalogos:tipos_cirugia:read", "Ver catalogo de tipos de cirugia"),
+    ("admin:catalogos:tipos_cirugia:create", "Crear en catalogo de tipos de cirugia"),
+    ("admin:catalogos:tipos_cirugia:update", "Editar catalogo de tipos de cirugia"),
+    ("admin:catalogos:tipos_cirugia:delete", "Eliminar en catalogo de tipos de cirugia"),
+
+    ("admin:catalogos:clasificaciones_cirugia:read", "Ver catalogo de clasificaciones de cirugia"),
+    ("admin:catalogos:clasificaciones_cirugia:create", "Crear en catalogo de clasificaciones de cirugia"),
+    ("admin:catalogos:clasificaciones_cirugia:update", "Editar catalogo de clasificaciones de cirugia"),
+    ("admin:catalogos:clasificaciones_cirugia:delete", "Eliminar en catalogo de clasificaciones de cirugia"),
+
+    ("admin:catalogos:motivos_cancelacion_cirugia:read", "Ver catalogo de motivos de cancelacion de cirugia"),
+    ("admin:catalogos:motivos_cancelacion_cirugia:create", "Crear en catalogo de motivos de cancelacion de cirugia"),
+    ("admin:catalogos:motivos_cancelacion_cirugia:update", "Editar catalogo de motivos de cancelacion de cirugia"),
+    ("admin:catalogos:motivos_cancelacion_cirugia:delete", "Eliminar en catalogo de motivos de cancelacion de cirugia"),
+
+    ("admin:catalogos:motivos_traslado:read", "Ver catalogo de motivos de traslado en ambulancia"),
+    ("admin:catalogos:motivos_traslado:create", "Crear en catalogo de motivos de traslado en ambulancia"),
+    ("admin:catalogos:motivos_traslado:update", "Editar catalogo de motivos de traslado en ambulancia"),
+    ("admin:catalogos:motivos_traslado:delete", "Eliminar en catalogo de motivos de traslado en ambulancia"),
+
+    ("admin:catalogos:tipos_traslado:read", "Ver catalogo de tipos de traslado en ambulancia"),
+    ("admin:catalogos:tipos_traslado:create", "Crear en catalogo de tipos de traslado en ambulancia"),
+    ("admin:catalogos:tipos_traslado:update", "Editar catalogo de tipos de traslado en ambulancia"),
+    ("admin:catalogos:tipos_traslado:delete", "Eliminar en catalogo de tipos de traslado en ambulancia"),
+
+    ("admin:catalogos:tipos_servicio_ambulancia:read", "Ver catalogo de tipos de servicio de ambulancia"),
+    ("admin:catalogos:tipos_servicio_ambulancia:create", "Crear en catalogo de tipos de servicio de ambulancia"),
+    ("admin:catalogos:tipos_servicio_ambulancia:update", "Editar catalogo de tipos de servicio de ambulancia"),
+    ("admin:catalogos:tipos_servicio_ambulancia:delete", "Eliminar en catalogo de tipos de servicio de ambulancia"),
+
+    ("admin:catalogos:destinos_ambulancia:read", "Ver catalogo de destinos de ambulancia"),
+    ("admin:catalogos:destinos_ambulancia:create", "Crear en catalogo de destinos de ambulancia"),
+    ("admin:catalogos:destinos_ambulancia:update", "Editar catalogo de destinos de ambulancia"),
+    ("admin:catalogos:destinos_ambulancia:delete", "Eliminar en catalogo de destinos de ambulancia"),
 ]
