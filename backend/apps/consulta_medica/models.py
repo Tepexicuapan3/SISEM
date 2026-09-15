@@ -271,6 +271,89 @@ class VisitPrescriptionItem(models.Model):
         ]
 
 
+class PrescriptionAuthorization(models.Model):
+    """
+    Solicitud de autorizacion de una receta que contiene medicamentos
+    ESPECIAL o controlados -- equivalente moderno de `ope_autorizacion`
+    del legado. Se crea automaticamente al agregar un item de receta que
+    lo requiera (ver `prescription_item_usecase.add_prescription_item`);
+    si todos los medicamentos son BASICO y no controlados, no se crea
+    ninguna.
+
+    A diferencia del legado (`det_clinicas.pw_autoriza`, que en la
+    practica era reingresar la propia contraseña de login -- ver
+    exploracion `sdd/autorizadores/*`), el autorizador se resuelve por
+    RBAC real (permiso `clinico:recetas:authorize`), no por una clave
+    compartida.
+
+    Historico 1:N por receta (no OneToOne): el legado permitia mas de una
+    solicitud de autorizacion por receta a lo largo del tiempo (PK
+    compuesta con `no_autoriza` autoincremental en `ope_autorizacion`) --
+    si ya hay una PENDIENTE no se crea otra, pero una ya
+    autorizada/rechazada no se toca ni se revierte automaticamente.
+    """
+
+    class Status(models.TextChoices):
+        PENDIENTE = "pendiente", "Pendiente"
+        AUTORIZADA = "autorizada", "Autorizada"
+        RECHAZADA = "rechazada", "Rechazada"
+
+    id_authorization = models.BigAutoField(primary_key=True, db_column="id_autorizacion")
+    prescription = models.ForeignKey(
+        VisitPrescription,
+        db_column="id_receta",
+        on_delete=models.PROTECT,
+        related_name="authorizations",
+    )
+    # Denormalizado a proposito (mismo criterio que Visit.no_exp/pk_num en
+    # todo SIRES): evita tener que navegar prescription.id_visit para
+    # armar el contrato -- VisitPrescription.items (JSONField) tiene un
+    # conflicto real psycopg2/Django al leerse fresco desde Postgres
+    # (JSONB ya viene deserializado por el driver, Django intenta
+    # re-parsearlo como string), asi que mejor no tocar ese modelo desde
+    # una ruta de solo lectura que no lo necesita.
+    visit = models.ForeignKey(
+        "recepcion.Visit",
+        db_column="id_visit",
+        on_delete=models.PROTECT,
+        related_name="prescription_authorizations",
+    )
+    # Denormalizado (mismo motivo que `visit` arriba): quien prescribio,
+    # tomado de VisitPrescription.created_by_id en el momento de crear la
+    # solicitud. Habilita la segregacion de funciones -- ver
+    # `_ensure_not_self_authorization` en prescription_item_usecase --
+    # sin tener que volver a tocar VisitPrescription despues.
+    prescribed_by_id = models.BigIntegerField(db_column="usr_prescribe", null=True, blank=True)
+    # Snapshot de conteos al momento de crear la solicitud (mismo criterio
+    # que ope_autorizacion.no_medicamentos/no_especializado/no_controlado).
+    medications_count = models.PositiveIntegerField(db_column="no_medicamentos", default=0)
+    specialized_count = models.PositiveIntegerField(db_column="no_especializado", default=0)
+    controlled_count = models.PositiveIntegerField(db_column="no_controlado", default=0)
+
+    status = models.CharField(
+        max_length=20, db_column="estatus", choices=Status.choices,
+        default=Status.PENDIENTE,
+    )
+    authorized_by_id = models.BigIntegerField(db_column="usr_autoriza", null=True, blank=True)
+    authorized_at = models.DateTimeField(db_column="fch_autoriza", null=True, blank=True)
+    rejection_reason = models.CharField(
+        max_length=500, db_column="motivo_rechazo", null=True, blank=True,
+    )
+
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+
+    class Meta:
+        db_table = "cns_prescription_authorization"
+        indexes = [
+            models.Index(fields=["status"], name="cns_rxauth_status_idx"),
+            models.Index(fields=["prescription"], name="cns_rxauth_prescription_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Autorizacion receta {self.prescription_id} — {self.status}"
+
+
 class MedicalLeave(models.Model):
     """
     Incapacidad/licencia emitida a partir de una consulta cerrada. Solo el
@@ -714,3 +797,53 @@ class LegacyConsultationRecord(models.Model):
 
     def __str__(self) -> str:
         return f"[Legado] {self.legacy_folio} — {self.no_exp}/{self.pk_num} ({self.consultation_date})"
+
+
+class LegacyConsultationDiagnosis(models.Model):
+    """
+    Diagnostico CIE-10 de una nota del legado (`det_hisnotcie`, 1:N por
+    `LegacyConsultationRecord`) -- archivo de SOLO LECTURA, mismo espiritu
+    que `LegacyConsultationRecord` (ver su docstring). Es lo que le falta
+    a `LegacyConsultationRecord.diagnostic_impression` (texto libre) para
+    tener el diagnostico CODIFICADO, no solo texto.
+
+    `record` es nullable a proposito: `det_hisnotcie.cd_snota` no tiene
+    garantia de integridad referencial real contra `his_notas.cd_snota`
+    en el legado (era una relacion logica, no un FK fisico) -- si algun
+    diagnostico legado quedo huerfano (su nota no esta en el dump, o
+    nunca existio), se preserva igual con `legacy_folio` crudo en vez de
+    descartarlo silenciosamente.
+
+    `legacy_id` (= `det_hisnotcie.cd_detcie`, PK real del legado) es la
+    clave de upsert -- permite re-correr la migracion sin duplicar.
+    """
+
+    id_legacy_diagnosis = models.BigAutoField(primary_key=True, db_column="id_diagnostico_legado")
+    legacy_id = models.BigIntegerField(unique=True, db_column="id_legado")
+    record = models.ForeignKey(
+        LegacyConsultationRecord,
+        db_column="id_registro",
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name="legacy_diagnoses",
+    )
+    legacy_folio = models.CharField(max_length=20, db_column="folio_legado", db_index=True)
+    cie_code_legacy = models.IntegerField(db_column="clave_cie_legado")
+    doctor_code_legacy = models.CharField(
+        max_length=10, db_column="clave_medico_legado", null=True, blank=True,
+    )
+    clinic_code_legacy = models.IntegerField(
+        db_column="clave_clinica_legado", null=True, blank=True,
+    )
+    status_legacy = models.CharField(max_length=2, db_column="estatus_legado", null=True, blank=True)
+    migrated_at = models.DateTimeField(db_column="fch_migracion", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_legacy_consultation_diagnosis"
+        indexes = [
+            models.Index(fields=["legacy_folio"], name="cns_legacy_diag_folio_idx"),
+            models.Index(fields=["cie_code_legacy"], name="cns_legacy_diag_cie_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"[Legado] {self.legacy_folio} — CIE {self.cie_code_legacy}"

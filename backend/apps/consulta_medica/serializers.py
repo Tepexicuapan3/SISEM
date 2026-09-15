@@ -192,6 +192,16 @@ class CreateStudyResultSerializer(serializers.Serializer):
         return value
 
 
+class RejectPrescriptionAuthorizationSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=500, allow_blank=False)
+
+    def validate_reason(self, value):
+        normalized = value.strip()
+        if not normalized:
+            raise serializers.ValidationError("El motivo de rechazo es obligatorio.")
+        return normalized
+
+
 class AddConsultationAddendumSerializer(serializers.Serializer):
     text = serializers.CharField(max_length=4000, allow_blank=False)
 

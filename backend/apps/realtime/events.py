@@ -15,6 +15,7 @@ VISIT_EVENT_NO_SHOW = "visit.no_show"
 VISIT_EVENT_DIAGNOSIS_SAVED = "visit.diagnosis.saved"
 VISIT_EVENT_PRESCRIPTIONS_SAVED = "visit.prescriptions.saved"
 VISIT_EVENT_CLOSED = "visit.closed"
+VISIT_EVENT_PRESCRIPTION_AUTHORIZATION_REJECTED = "visit.prescription_authorization.rejected"
 
 
 def _build_metadata(*, request_id, correlation_id):
@@ -219,6 +220,33 @@ def publish_visit_prescriptions_saved(
         payload={
             "status": status,
             "items": list(items),
+        },
+        request_id=request_id,
+        correlation_id=correlation_id,
+        publisher=publisher,
+    )
+
+
+def publish_visit_prescription_authorization_rejected(
+    *,
+    visit_id,
+    authorization_id,
+    reason,
+    request_id,
+    correlation_id=None,
+    publisher=None,
+):
+    """
+    Avisa al medico que prescribio que su receta con medicamentos
+    ESPECIAL/controlados fue rechazada -- sin esto no se entera salvo que
+    vuelva a consultar la receta a mano.
+    """
+    return _publish_visit_event(
+        event_type=VISIT_EVENT_PRESCRIPTION_AUTHORIZATION_REJECTED,
+        visit_id=visit_id,
+        payload={
+            "authorizationId": authorization_id,
+            "reason": reason,
         },
         request_id=request_id,
         correlation_id=correlation_id,

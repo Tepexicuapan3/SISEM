@@ -141,3 +141,11 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:reportes:read", "Ver reportes clinicos (ej. informe diario de consulta medica)"),
 ]
+
+# Sexta tanda (2026-09-14): autorizacion de recetas con medicamentos
+# ESPECIAL/controlados -- equivalente moderno de la rama de recetas de
+# autorizacion.jsp del legado (det_clinicas.pw_autoriza reemplazado por
+# RBAC real, mismo criterio que clinico:ambulancias:authorize).
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:recetas:authorize", "Autorizar o rechazar recetas con medicamentos especiales o controlados"),
+]

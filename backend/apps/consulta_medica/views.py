@@ -19,6 +19,7 @@ from apps.authentication.services.session_service import authenticate_request
 from apps.realtime.events import (
     publish_visit_closed,
     publish_visit_diagnosis_saved,
+    publish_visit_prescription_authorization_rejected,
     publish_visit_prescriptions_saved,
     publish_visit_status_changed,
 )
@@ -33,6 +34,7 @@ from .serializers import (
     CreateMedicalLeaveSerializer,
     CreateStudyResultSerializer,
     OdontogramToothUpdateSerializer,
+    RejectPrescriptionAuthorizationSerializer,
     SearchCieSerializer,
     SaveDiagnosisSerializer,
     SavePrescriptionsSerializer,
@@ -69,8 +71,12 @@ from .uses_case.patient_history_usecase import (
 )
 from .uses_case.prescription_item_usecase import (
     add_prescription_item,
+    authorize_prescription,
     cancel_prescription_item,
     get_prescription_items,
+    list_pending_prescription_authorizations,
+    list_prescription_authorizations_history,
+    reject_prescription,
 )
 from .uses_case.study_result_usecase import (
     create_study_result,
@@ -213,6 +219,30 @@ def _emit_visit_prescriptions_saved_event(
         logger.exception(
             "No se pudo publicar evento realtime de receta",
             extra={"visit_id": visit_id, "request_id": request_id},
+        )
+
+
+def _emit_prescription_authorization_rejected_event(
+    request, *, visit_id, authorization_id, reason,
+):
+    request_id = get_request_id(request)
+
+    try:
+        publish_visit_prescription_authorization_rejected(
+            visit_id=visit_id,
+            authorization_id=authorization_id,
+            reason=reason,
+            request_id=request_id,
+            correlation_id=request_id,
+        )
+    except Exception:
+        logger.exception(
+            "No se pudo publicar evento realtime de rechazo de autorizacion de receta",
+            extra={
+                "visit_id": visit_id,
+                "authorization_id": authorization_id,
+                "request_id": request_id,
+            },
         )
 
 
@@ -1161,6 +1191,179 @@ class VisitPrescriptionItemsView(APIView):
         )
 
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class PrescriptionAuthorizationsPendingView(APIView):
+    """
+    GET /prescriptions/authorizations/pending -- cola de recetas con
+    medicamentos ESPECIAL/controlados esperando autorizacion. Equivalente
+    moderno de la rama de recetas de `autorizacion.jsp` (legado), sin la
+    tabla `det_clinicas` ni `pw_autoriza` -- ver docstring de
+    PrescriptionAuthorization.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = list_pending_prescription_authorizations(roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PrescriptionAuthorizationDecisionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, authorization_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        try:
+            payload = authorize_prescription(
+                authorization_id, roles, actor_id=actor_id, permissions=permissions,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        log_event(
+            request,
+            "PrescriptionAuthorizationApproved",
+            "SUCCESS",
+            actor_user=user,
+            meta={
+                "module": "consulta_medica",
+                "endpoint": request.path,
+                "authorizationId": authorization_id,
+                "actorId": actor_id,
+            },
+        )
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PrescriptionAuthorizationRejectView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, authorization_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        serializer = RejectPrescriptionAuthorizationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details=serializer.errors,
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        try:
+            payload = reject_prescription(
+                authorization_id,
+                roles,
+                reason=serializer.validated_data["reason"],
+                actor_id=actor_id,
+                permissions=permissions,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        log_event(
+            request,
+            "PrescriptionAuthorizationRejected",
+            "SUCCESS",
+            actor_user=user,
+            meta={
+                "module": "consulta_medica",
+                "endpoint": request.path,
+                "authorizationId": authorization_id,
+                "actorId": actor_id,
+                "reason": serializer.validated_data["reason"],
+            },
+        )
+
+        _emit_prescription_authorization_rejected_event(
+            request,
+            visit_id=payload.get("visitId"),
+            authorization_id=authorization_id,
+            reason=serializer.validated_data["reason"],
+        )
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class PrescriptionAuthorizationsHistoryView(APIView):
+    """
+    GET /prescriptions/authorizations -- historial completo (cualquier
+    estatus) para auditoria NOM-024, a diferencia de
+    PrescriptionAuthorizationsPendingView que solo muestra la cola activa.
+    Filtros opcionales: estatus, fechaInicio, fechaFin (sobre fch_alta).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        _, roles, permissions = _actor_context(user)
+
+        raw_start = request.query_params.get("fechaInicio")
+        raw_end = request.query_params.get("fechaFin")
+        date_from = parse_date(raw_start) if raw_start else None
+        date_to = parse_date(raw_end) if raw_end else None
+
+        if (raw_start and date_from is None) or (raw_end and date_to is None):
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"fecha": ["Formato esperado: YYYY-MM-DD."]},
+                request_id=get_request_id(request),
+            )
+
+        try:
+            payload = list_prescription_authorizations_history(
+                roles,
+                permissions,
+                status=request.query_params.get("estatus") or None,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

@@ -74,17 +74,17 @@ export const ExpedienteDetailPage = () => {
   const selectedMember = members.find((m) => m.pkNum === pkNum);
 
   // Datos reales via /visits/patient-lookup (mismo endpoint que Recepcion).
-  // CURP existe en CatEmpleado.curp pero ningun endpoint lo expone todavia;
-  // sexo/tipo de sangre/telefono/email/direccion no existen en ningun
-  // modelo del backend hoy -- se muestran como SIN_DATO en vez de inventar
-  // un valor. No hay fuente estructurada de alergias/padecimientos
+  // CURP ya se expone (ver buscar_expediente.py / _build_member); sexo/tipo
+  // de sangre/telefono/email/direccion siguen sin existir en ningun modelo
+  // del backend hoy -- se muestran como SIN_DATO en vez de inventar un
+  // valor. No hay fuente estructurada de alergias/padecimientos
   // cronicos/medicamentos habituales todavia (ClinicalHistory.allergies es
   // texto libre, no una lista), asi que esa tarjeta queda sin datos por ahora.
   const expediente = {
     folio: folioReal || SIN_DATO,
     paciente: selectedMember?.nombre ?? SIN_DATO,
     parentesco: pkNum === 0 ? "Titular" : (selectedMember?.parentesco ?? "Familiar"),
-    curp: SIN_DATO,
+    curp: selectedMember?.curp ?? SIN_DATO,
     fecha_nacimiento: selectedMember?.fechaNac ?? SIN_DATO,
     edad: selectedMember?.edad ?? null,
     sexo: SIN_DATO,
@@ -139,8 +139,16 @@ export const ExpedienteDetailPage = () => {
           </CardHeader>
           <CardContent>
             <div className="flex items-start gap-6">
-              <div className="size-24 rounded-full bg-brand/10 flex items-center justify-center flex-shrink-0">
-                <User className="size-12 text-brand" />
+              <div className="size-24 rounded-full bg-brand/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {selectedMember?.foto ? (
+                  <img
+                    src={selectedMember.foto}
+                    alt={`Foto de ${expediente.paciente}`}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <User className="size-12 text-brand" />
+                )}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">

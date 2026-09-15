@@ -18,7 +18,7 @@ El repo crecio por modulos y features, con riesgo de colisiones cuando varios eq
 | Consulta Medica | `backend/apps/consulta_medica` | `frontend/src/features/consulta-medica`, `frontend/src/features/consultas` | Schema/logical ownership dedicado por dominio | Legacy activo |
 | Catalogos | `backend/apps/catalogos`, `backend/apps/opciones` | `frontend/src/features/catalogos` | Schema/logical ownership dedicado por dominio | Legacy activo |
 | Movimientos/Pases | `backend/apps/movimientos`, `backend/apps/pases` | `frontend/src/features/operativo` | Schema/logical ownership dedicado por dominio | Legacy activo |
-| Farmacia | `backend/apps/farmacia` | (sin modulo dedicado estable) | Definir ownership en discovery | Discovery |
+| Farmacia | `backend/apps/farmacia` (modelo `VacInventario` -- inventario de vacunas, CRUD completo + permisos `farmacia:vacunas:*`, migraciones `0001`/`0002` ya aplicadas) | (sin modulo dedicado estable -- backend real, sin pagina propia) | Schema/logical ownership dedicado por dominio | Piloto en progreso (backend) |
 | Realtime | `backend/apps/realtime` | `frontend/src/realtime` | Read-model/event stream, sin tablas cross-domain directas | Shared capability |
 
 ### Ownership minimo por dominio

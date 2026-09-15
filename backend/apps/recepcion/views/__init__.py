@@ -291,9 +291,21 @@ class VisitStatusView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class PatientLookupView(APIView):
     """
-    GET /visits/patient-lookup?noExp=12345
+    GET /visits/patient-lookup?noExp=12345&historico=
 
-    Retorna titular + derechohabientes sin fotos, para el selector de check-in.
+    Retorna titular + derechohabientes -- incluye foto (JPEG base64) y CURP
+    desde 2026-09-14 (antes se calculaban en buscar_expediente() y se
+    descartaban en _build_member; ver PatientMember.foto/.curp). El
+    parametro `historico` (antes ignorado por este serializer -- bug real,
+    corregido en la misma fecha) decide si se incluyen miembros de baja.
+
+    NOTA DE PERFORMANCE: este endpoint tambien lo usa el selector de
+    check-in de Recepcion (uso de alta frecuencia); incluir la foto de
+    cada miembro del nucleo engorda la respuesta ~15-20KB por persona. Si
+    eso se nota lento en el check-in, la opcion es que buscar_expediente()
+    reciba un `incluir_fotos` explicito hasta este endpoint (hoy siempre
+    True) para que el check-in pueda pedir `historico=False` SIN fotos, y
+    solo el expediente (historico=True) las pida.
     """
 
     authentication_classes = []
@@ -315,7 +327,10 @@ class PatientLookupView(APIView):
                                   details=serializer.errors, request_id=get_request_id(request))
 
         try:
-            payload = lookup_patient(serializer.validated_data["noExp"])
+            payload = lookup_patient(
+                serializer.validated_data["noExp"],
+                historico=serializer.validated_data["historico"],
+            )
         except VisitDomainError as exc:
             return _visit_error_response(request, exc)
 

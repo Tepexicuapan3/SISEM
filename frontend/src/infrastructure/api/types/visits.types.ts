@@ -125,6 +125,9 @@ export interface PatientMember {
   parentesco: string | null;
   estatus:    string | null;
   cdClinica:  string | null;
+  curp:       string | null;
+  /** Data URI (image/jpeg;base64) lista para <img src>, o null si no hay foto cargada. */
+  foto:       string | null;
 }
 
 export interface PatientLookupResponse {

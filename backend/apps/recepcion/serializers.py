@@ -112,9 +112,13 @@ class UpdateVisitStatusSerializer(serializers.Serializer):
 
 
 class PatientLookupQuerySerializer(serializers.Serializer):
-    """Parámetro de búsqueda para lookup de paciente por expediente."""
+    """Parámetros de búsqueda para lookup de paciente por expediente."""
 
     noExp = serializers.CharField(max_length=20)
+    # False (default): solo miembros ACTIVOS (check-in). True: incluye
+    # miembros de baja -- usado en fichas/expediente (ver
+    # visitsAPI.patientLookup(noExp, historico=true) en el frontend).
+    historico = serializers.BooleanField(required=False, default=False)
 
 
 class VerificarQRSerializer(serializers.Serializer):
