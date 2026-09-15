@@ -13,10 +13,20 @@
 >
 > **Actualización misma fecha**: se agregó el backend completo de
 > **Autorización de Recetas** (reemplaza `det_clinicas.pw_autoriza` del
-> legado por RBAC real), verificado contra Postgres real. La integración
-> **EMA Recetas sigue bloqueada** — solo hay un plan, no se implementó
-> nada (instrucción explícita del usuario), esperando que responda 3
-> preguntas abiertas (ver sección "Bloqueado").
+> legado por RBAC real), verificado contra Postgres real, más 3 mejoras
+> de NOM-024/funcionalidad (segregación de funciones, historial de
+> auditoría, notificación de rechazo). También se cerraron 2 de 3 mejoras
+> no bloqueantes del Portal de Citas (banner de anuncios + calendario
+> visual mensual reemplazando el input simple; especialidades se descartó
+> por estar deprecated en el propio backend). La **migración de médicos
+> desde el legado** quedó con plan acordado pero sin implementar (ver
+> "Bloqueado", punto 7). La integración **EMA Recetas sigue bloqueada** —
+> solo hay un plan, no se implementó nada (instrucción explícita del
+> usuario), esperando que responda 3 preguntas abiertas (ver sección
+> "Bloqueado"). La conexión a Postgres dev (`50.192.41.223`) estuvo
+> **intermitente** en el tramo final de la sesión — algunas verificaciones
+> end-to-end quedaron pendientes de confirmar, marcadas explícitamente
+> abajo.
 
 ## Cómo usar este documento
 
@@ -191,6 +201,41 @@ frontend después"**:
   relación a este trabajo). Detalle en Engram
   (`bugs/test-visit-stream-events-broken`).
 
+### Portal de Citas — 2 de 3 mejoras no bloqueantes cerradas
+De la lista de mejoras futuras (calendario visual, anuncios,
+especialidades), quedó así:
+- **Calendario visual mensual — HECHO** —
+  `PortalReservarCitaPage.tsx` reemplazó el `<input type="date">` por
+  `<Calendar>` (`shared/ui/calendar.tsx`, `react-day-picker`), con
+  navegación de mes (`onMonthChange` dispara refetch de
+  `getDisponibilidadMensual`) y días pintados con/sin cupo (`modifiers`
+  `disponible`/`sinCupo` a partir de `dias[]`, punto verde/rojo bajo el
+  número). Días anteriores a hoy deshabilitados (`disabled={{ before }}`).
+  Al cambiar de consultorio se resetea fecha + mes visible. Type-check y
+  ESLint limpios. **Verificación end-to-end contra Postgres real
+  PENDIENTE** — la conexión a `50.192.41.223` estuvo intermitente en este
+  tramo de la sesión (se cayó varias veces a mitad de verificar); el
+  contrato de `get_disponibilidad_mensual` se confirmó leyendo
+  `portal_citas/views.py:372-402` y `services/slots_service.py`
+  directamente (no adivinado), pero falta el click-through real en
+  navegador con datos de un consultorio en línea real. Hacerlo apenas la
+  red esté estable antes de dar esto 100% por cerrado.
+- **Anuncios del portal — HECHO** — banner nuevo
+  (`PortalAnunciosBanner.tsx`) arriba de la lista en
+  `PortalMisCitasPage.tsx`, consume `GET /portal/anuncios`
+  (`portalAnunciosAPI.getAll()`). Sin anuncios vigentes no renderiza nada
+  (mismo criterio que el backend: nunca 404, lista vacía). Misma
+  verificación E2E pendiente que el punto anterior, por el mismo motivo
+  de red.
+- **Especialidades del portal — DESCARTADO, no era un gap real** — el
+  propio backend marca `especialidadId` como DEPRECATED en
+  `SlotsPortalQuerySerializer` (`portal_citas/views.py:230-234`, "cliente
+  legado", a remover una release después del portal nuevo). El flujo real
+  (`PortalReservarCitaPage.tsx`) ya filtra 100% por `consultorioId` —
+  agregar un selector de especialidad iría en contra de la dirección de
+  arquitectura ya escrita en el código. No construir esto salvo que el
+  usuario pida explícitamente revertir esa decisión.
+
 ## Bloqueado — necesita algo de la red del trabajo
 
 1. ~~Backup de `his_clinica`~~ **RESUELTO HOY** — ya se migró.
@@ -228,6 +273,36 @@ frontend después"**:
      alcance, o se arranca de cero sobre la API .NET existente?
    **No retomar implementación sin luz verde explícita y fresca del
    usuario.**
+7. **Migración de médicos desde el legado** (`dbclinicas.cat_medicos` →
+   `medicos.CatMedico`) — plan cerrado con el usuario en esta sesión,
+   **nada implementado todavía**. Conteos reales dados por el usuario (no
+   verificados contra el dump, solo contra su propia consulta al legado):
+   ~2730 médicos, ~560 sin `cd_usuario` asignado — de esos 560, algunos
+   tienen una cuenta pero con un rol distinto al de médico, otros están
+   realmente vacíos. Plan acordado:
+   1. Agregar `CatMedico.legacy_no_medico` (`CharField` único, indexado —
+      tarea 1.1/1.2 de `sdd/historia-clinica-migracion/tasks`, Engram
+      obs #482, nunca implementada pese a estar planeada desde antes).
+   2. Comando nuevo `migrar_medicos_legacy.py` (no existe todavía): por
+      cada médico del legado, matchear `cd_usuario` contra
+      `SyUsuario.usuario` ya migrado (el rol de esa cuenta NO bloquea el
+      match — `SyUsuario.usuario == cat_usuarios.cd_usuario` sin importar
+      rol) y setear `CatMedico.id_usuario`; si `cd_usuario` está vacío,
+      `CatMedico.id_usuario` queda `NULL` (ya soportado por diseño,
+      "médico externo") + `nombre_display` con el nombre real para que no
+      aparezca como "Médico #N" en la UI.
+   3. **Sentinela `SyUsuario` compartido — DESCARTADO, ya no hace falta**:
+      la idea original (Engram obs #480) asumía que `VisitConsultation`
+      necesitaba un doctor NOT NULL; pero las notas históricas migradas
+      viven en `LegacyConsultationRecord.doctor_code_legacy`, que es
+      texto plano, no FK (confirmado leyendo el modelo) — no hay
+      integridad referencial que romper.
+   - **No se necesita generar usuarios únicos para nadie** — decisión
+     explícita del usuario, los médicos sin `cd_usuario` en el legado son
+     "solo historial", no requieren login real.
+   - Falta acceso al dump/tabla real de `dbclinicas.cat_medicos` para
+     poder migrar de verdad — mismo bloqueo de red que el resto de esta
+     sección.
 
 ## Pendiente de decisión (el usuario define alcance, no el asistente)
 
@@ -249,36 +324,6 @@ frontend después"**:
 - **Farmacia**: `domain-map.md` dice "Discovery" pero en realidad YA HAY
   un módulo real (`VacInventario`, inventario de vacunas) sin frontend —
   el doc de arquitectura está desactualizado, corregirlo.
-- **Portal de Citas — mejoras futuras** (no bloqueantes):
-  - ~~Calendario visual mensual~~ **HECHO** —
-    `PortalReservarCitaPage.tsx` reemplazó el `<input type="date">` por
-    `<Calendar>` (`shared/ui/calendar.tsx`, `react-day-picker`), con
-    navegación de mes (`onMonthChange` dispara refetch de
-    `getDisponibilidadMensual`) y días pintados con/sin cupo (`modifiers`
-    `disponible`/`sinCupo` a partir de `dias[]`, punto verde/rojo bajo el
-    número). Días anteriores a hoy deshabilitados (`disabled={{ before }}`).
-    Al cambiar de consultorio se resetea fecha + mes visible. Type-check y
-    ESLint limpios. **Verificación end-to-end contra Postgres real
-    PENDIENTE** — la conexión a `50.192.41.223` estuvo intermitente toda
-    la sesión (se cayó varias veces a mitad de verificar); el contrato de
-    `get_disponibilidad_mensual` se confirmó leyendo
-    `portal_citas/views.py:372-402` y `services/slots_service.py`
-    directamente (no adivinado), pero falta el click-through real en
-    navegador con datos de un consultorio en línea real. Hacerlo apenas
-    la red esté estable antes de dar esto 100% por cerrado.
-  - ~~Anuncios del portal~~ **HECHO** — banner nuevo
-    (`PortalAnunciosBanner.tsx`) arriba de la lista en
-    `PortalMisCitasPage.tsx`, consume `GET /portal/anuncios`
-    (`portalAnunciosAPI.getAll()`). Sin anuncios vigentes no renderiza
-    nada (mismo criterio que el backend: nunca 404, lista vacía).
-  - ~~Especialidades del portal~~ **DESCARTADO, no es un gap** — el propio
-    backend marca `especialidadId` como DEPRECATED en
-    `SlotsPortalQuerySerializer` (`portal_citas/views.py:230-234`,
-    "cliente legado", a remover una release después del portal nuevo). El
-    flujo real (`PortalReservarCitaPage.tsx`) ya filtra 100% por
-    `consultorioId` — agregar un selector de especialidad iría en contra
-    de la dirección de arquitectura ya escrita en el código. No construir
-    esto salvo que el usuario pida explícitamente revertir esa decisión.
 - **Cirugías/Ambulancias — mejoras futuras** (sesión anterior, siguen
   pendientes): internamiento hospitalario, calendario visual,
   autorización de ambulancias segmentada por clínica, catálogo de
@@ -303,6 +348,7 @@ frontend después"**:
 **Sin commitear todavía** — todo lo de hoy (historia clínica, catálogos,
 `ClinicalHistoryRevision`, `ConsultationAddendum`, fix de migración
 `medicos/0009`, expediente con datos reales + selector de núcleo, portal
-de citas completo, backend de Autorización de Recetas) está en el working
-tree. Correr `git status` antes de seguir para confirmar el alcance
-exacto antes de armar el commit.
+de citas completo, backend de Autorización de Recetas + sus 3 mejoras de
+NOM-024, banner de anuncios y calendario visual del Portal de Citas) está
+en el working tree. Correr `git status` antes de seguir para confirmar el
+alcance exacto antes de armar el commit.
