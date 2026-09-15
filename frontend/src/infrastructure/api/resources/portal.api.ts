@@ -1,5 +1,6 @@
 import portalClient from "@api/portalClient";
 import type {
+  PortalAnunciosResponse,
   PortalCancelarCitaRequest,
   PortalCancelarCitaResponse,
   PortalCapturarCorreoRequest,
@@ -53,6 +54,13 @@ export const portalAuthAPI = {
 export const portalNucleoAPI = {
   get: async (): Promise<PortalNucleoResponse> => {
     const r = await portalClient.get<PortalNucleoResponse>("/portal/nucleo");
+    return r.data;
+  },
+};
+
+export const portalAnunciosAPI = {
+  getAll: async (): Promise<PortalAnunciosResponse> => {
+    const r = await portalClient.get<PortalAnunciosResponse>("/portal/anuncios");
     return r.data;
   },
 };

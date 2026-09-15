@@ -137,3 +137,19 @@ export interface PortalCancelarCitaResponse {
   folio: string;
   estatus: PortalEstatusCita;
 }
+
+export interface PortalAnuncio {
+  id: number;
+  titulo: string;
+  /** Nunca null en el wire -- TextField(blank=True, default=""). */
+  descripcion: string;
+  imagenUrl: string | null;
+  adjuntoUrl: string | null;
+  /** Nunca null en el wire -- URLField(blank=True, default=""). */
+  enlaceUrl: string;
+  orden: number;
+}
+
+export interface PortalAnunciosResponse {
+  anuncios: PortalAnuncio[];
+}

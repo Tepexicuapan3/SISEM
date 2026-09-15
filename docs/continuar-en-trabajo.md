@@ -249,9 +249,42 @@ frontend después"**:
 - **Farmacia**: `domain-map.md` dice "Discovery" pero en realidad YA HAY
   un módulo real (`VacInventario`, inventario de vacunas) sin frontend —
   el doc de arquitectura está desactualizado, corregirlo.
-- **Portal de Citas — mejoras futuras** (no bloqueantes): calendario
-  visual mensual (hoy es un `<input type="date">` simple), anuncios/
-  especialidades del portal (endpoints ya existen, no se consumieron).
+- **Portal de Citas — mejoras futuras** (no bloqueantes):
+  - **Calendario visual mensual — PENDIENTE, siguiente en la cola.** Hoy
+    `PortalReservarCitaPage.tsx` usa un `<input type="date">` simple para
+    elegir fecha. Investigado (no implementado): ya existe TODO lo
+    necesario para no arrancar de cero —
+    - Backend: `GET /portal/consultorios/<id>/disponibilidad-mensual`
+      (`?anio=&mes=`) ya devuelve `{ consultorioId, anio, mes, dias: [{
+      fecha, slotsDisponibles }] }`.
+    - Frontend: tipo `PortalDisponibilidadMensualResponse` y método
+      `portalCatalogosAPI.getDisponibilidadMensual()` ya existen en
+      `infrastructure/api/{types,resources}/portal.api.ts`, sin consumir.
+    - Componente de calendario reusable ya en la librería de UI
+      (`shared/ui/calendar.tsx`, `react-day-picker`), con precedente de
+      uso en `CentroAtencionDetailsExcepcionesSection.tsx` y
+      `UserDetailsPermissionsTab.tsx` — soporta `modifiers` para pintar
+      días con/sin cupo.
+    - Trabajo real: reemplazar el input por el calendario en
+      `PortalReservarCitaPage.tsx`, manejar navegación de mes (refetch al
+      cambiar), mapear `dias[]` a modifiers del calendario, sin romper el
+      fetch de horarios que depende de la fecha elegida. Esfuerzo
+      comparable al banner de anuncios recién hecho, algo mayor por el
+      manejo de estado de mes y por tocar una pantalla existente en vez
+      de agregar una nueva.
+  - ~~Anuncios del portal~~ **HECHO** — banner nuevo
+    (`PortalAnunciosBanner.tsx`) arriba de la lista en
+    `PortalMisCitasPage.tsx`, consume `GET /portal/anuncios`
+    (`portalAnunciosAPI.getAll()`). Sin anuncios vigentes no renderiza
+    nada (mismo criterio que el backend: nunca 404, lista vacía).
+  - ~~Especialidades del portal~~ **DESCARTADO, no es un gap** — el propio
+    backend marca `especialidadId` como DEPRECATED en
+    `SlotsPortalQuerySerializer` (`portal_citas/views.py:230-234`,
+    "cliente legado", a remover una release después del portal nuevo). El
+    flujo real (`PortalReservarCitaPage.tsx`) ya filtra 100% por
+    `consultorioId` — agregar un selector de especialidad iría en contra
+    de la dirección de arquitectura ya escrita en el código. No construir
+    esto salvo que el usuario pida explícitamente revertir esa decisión.
 - **Cirugías/Ambulancias — mejoras futuras** (sesión anterior, siguen
   pendientes): internamiento hospitalario, calendario visual,
   autorización de ambulancias segmentada por clínica, catálogo de

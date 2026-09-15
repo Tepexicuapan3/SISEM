@@ -20,6 +20,7 @@ import { portalCitasAPI, portalNucleoAPI } from "@api/resources/portal.api";
 import { usePortalSessionStore } from "@app/state/portal/portalSessionStore";
 import { ApiError } from "@api/utils/errors";
 import type { PortalEstatusCita } from "@api/types/portal.types";
+import { PortalAnunciosBanner } from "@features/portal-citas/components/PortalAnunciosBanner";
 
 const ESTATUS_LABEL: Record<PortalEstatusCita, string> = {
   agendada: "Agendada",
@@ -112,6 +113,8 @@ export const PortalMisCitasPage = () => {
             </Button>
           </div>
         </div>
+
+        <PortalAnunciosBanner />
 
         {isLoading && (
           <p className="text-txt-muted text-sm text-center py-12">Cargando tus citas...</p>
