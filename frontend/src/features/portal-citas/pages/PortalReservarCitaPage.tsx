@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@shared/ui/button";
+import { Calendar } from "@shared/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@shared/ui/card";
 import { Label } from "@shared/ui/label";
 import { Textarea } from "@shared/ui/textarea";
@@ -17,7 +18,23 @@ import {
 import { portalCatalogosAPI, portalCitasAPI, portalNucleoAPI } from "@api/resources/portal.api";
 import { ApiError } from "@api/utils/errors";
 
-const hoyISO = () => new Date().toISOString().slice(0, 10);
+const toDateObj = (dateStr: string): Date => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const toDateStr = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const inicioDeHoy = () => {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  return hoy;
+};
 
 export const PortalReservarCitaPage = () => {
   const navigate = useNavigate();
@@ -34,6 +51,7 @@ export const PortalReservarCitaPage = () => {
   const [fecha, setFecha] = useState<string>("");
   const [slotId, setSlotId] = useState<number | null>(null);
   const [motivo, setMotivo] = useState("");
+  const [mesVisible, setMesVisible] = useState<Date>(() => new Date());
 
   // Si solo hay un miembro (titular sin núcleo), lo pre-selecciona.
   const nucleo = nucleoData?.nucleo ?? [];
@@ -60,6 +78,32 @@ export const PortalReservarCitaPage = () => {
     () => (slotsData?.slots ?? []).filter((s) => s.estado === "disponible"),
     [slotsData],
   );
+
+  const { data: disponibilidadData, isFetching: cargandoDisponibilidad } = useQuery({
+    queryKey: [
+      "portal",
+      "disponibilidad-mensual",
+      consultorioId,
+      mesVisible.getFullYear(),
+      mesVisible.getMonth() + 1,
+    ],
+    queryFn: () =>
+      portalCatalogosAPI.getDisponibilidadMensual(
+        Number(consultorioId),
+        mesVisible.getFullYear(),
+        mesVisible.getMonth() + 1,
+      ),
+    enabled: Boolean(consultorioId),
+  });
+
+  const diasCalendario = useMemo(() => {
+    const disponible: Date[] = [];
+    const sinCupo: Date[] = [];
+    for (const dia of disponibilidadData?.dias ?? []) {
+      (dia.slotsDisponibles > 0 ? disponible : sinCupo).push(toDateObj(dia.fecha));
+    }
+    return { disponible, sinCupo };
+  }, [disponibilidadData]);
 
   const reservarMutation = useMutation({
     mutationFn: () =>
@@ -146,6 +190,8 @@ export const PortalReservarCitaPage = () => {
                 onValueChange={(v) => {
                   setConsultorioId(v);
                   setSlotId(null);
+                  setFecha("");
+                  setMesVisible(new Date());
                 }}
               >
                 <SelectTrigger className="w-full">
@@ -163,19 +209,48 @@ export const PortalReservarCitaPage = () => {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="fecha">Fecha</Label>
-              <input
-                id="fecha"
-                type="date"
-                min={hoyISO()}
-                value={fecha}
-                onChange={(e) => {
-                  setFecha(e.target.value);
-                  setSlotId(null);
-                }}
-                disabled={!consultorioId}
-                className="w-full h-9 rounded-xl border border-line-struct bg-transparent px-3 text-sm disabled:opacity-50"
-              />
+              <div className="flex items-center justify-between">
+                <Label>Fecha</Label>
+                {consultorioId && cargandoDisponibilidad && (
+                  <span className="text-xs text-txt-muted">Cargando disponibilidad...</span>
+                )}
+              </div>
+              {consultorioId ? (
+                <div className="rounded-xl border border-line-struct bg-paper p-2">
+                  <div className="mb-1 flex flex-wrap items-center gap-3 px-2 text-xs text-txt-muted">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block size-2.5 rounded-full bg-status-stable" />
+                      Con cupo
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block size-2.5 rounded-full bg-status-critical" />
+                      Sin cupo
+                    </span>
+                  </div>
+                  <Calendar
+                    mode="single"
+                    selected={fecha ? toDateObj(fecha) : undefined}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      setFecha(toDateStr(date));
+                      setSlotId(null);
+                    }}
+                    month={mesVisible}
+                    onMonthChange={setMesVisible}
+                    disabled={{ before: inicioDeHoy() }}
+                    modifiers={diasCalendario}
+                    modifiersClassNames={{
+                      disponible:
+                        "after:absolute after:bottom-0.5 after:left-1/2 after:-translate-x-1/2 after:size-1 after:rounded-full after:bg-status-stable after:content-[''] relative",
+                      sinCupo:
+                        "after:absolute after:bottom-0.5 after:left-1/2 after:-translate-x-1/2 after:size-1 after:rounded-full after:bg-status-critical after:content-[''] relative",
+                    }}
+                    className="w-full"
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-txt-muted">Elegí un consultorio para ver la disponibilidad.</p>
+              )}
             </div>
 
             {fecha && consultorioId && (

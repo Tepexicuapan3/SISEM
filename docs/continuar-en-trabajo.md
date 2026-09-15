@@ -250,28 +250,22 @@ frontend después"**:
   un módulo real (`VacInventario`, inventario de vacunas) sin frontend —
   el doc de arquitectura está desactualizado, corregirlo.
 - **Portal de Citas — mejoras futuras** (no bloqueantes):
-  - **Calendario visual mensual — PENDIENTE, siguiente en la cola.** Hoy
-    `PortalReservarCitaPage.tsx` usa un `<input type="date">` simple para
-    elegir fecha. Investigado (no implementado): ya existe TODO lo
-    necesario para no arrancar de cero —
-    - Backend: `GET /portal/consultorios/<id>/disponibilidad-mensual`
-      (`?anio=&mes=`) ya devuelve `{ consultorioId, anio, mes, dias: [{
-      fecha, slotsDisponibles }] }`.
-    - Frontend: tipo `PortalDisponibilidadMensualResponse` y método
-      `portalCatalogosAPI.getDisponibilidadMensual()` ya existen en
-      `infrastructure/api/{types,resources}/portal.api.ts`, sin consumir.
-    - Componente de calendario reusable ya en la librería de UI
-      (`shared/ui/calendar.tsx`, `react-day-picker`), con precedente de
-      uso en `CentroAtencionDetailsExcepcionesSection.tsx` y
-      `UserDetailsPermissionsTab.tsx` — soporta `modifiers` para pintar
-      días con/sin cupo.
-    - Trabajo real: reemplazar el input por el calendario en
-      `PortalReservarCitaPage.tsx`, manejar navegación de mes (refetch al
-      cambiar), mapear `dias[]` a modifiers del calendario, sin romper el
-      fetch de horarios que depende de la fecha elegida. Esfuerzo
-      comparable al banner de anuncios recién hecho, algo mayor por el
-      manejo de estado de mes y por tocar una pantalla existente en vez
-      de agregar una nueva.
+  - ~~Calendario visual mensual~~ **HECHO** —
+    `PortalReservarCitaPage.tsx` reemplazó el `<input type="date">` por
+    `<Calendar>` (`shared/ui/calendar.tsx`, `react-day-picker`), con
+    navegación de mes (`onMonthChange` dispara refetch de
+    `getDisponibilidadMensual`) y días pintados con/sin cupo (`modifiers`
+    `disponible`/`sinCupo` a partir de `dias[]`, punto verde/rojo bajo el
+    número). Días anteriores a hoy deshabilitados (`disabled={{ before }}`).
+    Al cambiar de consultorio se resetea fecha + mes visible. Type-check y
+    ESLint limpios. **Verificación end-to-end contra Postgres real
+    PENDIENTE** — la conexión a `50.192.41.223` estuvo intermitente toda
+    la sesión (se cayó varias veces a mitad de verificar); el contrato de
+    `get_disponibilidad_mensual` se confirmó leyendo
+    `portal_citas/views.py:372-402` y `services/slots_service.py`
+    directamente (no adivinado), pero falta el click-through real en
+    navegador con datos de un consultorio en línea real. Hacerlo apenas
+    la red esté estable antes de dar esto 100% por cerrado.
   - ~~Anuncios del portal~~ **HECHO** — banner nuevo
     (`PortalAnunciosBanner.tsx`) arriba de la lista en
     `PortalMisCitasPage.tsx`, consume `GET /portal/anuncios`
