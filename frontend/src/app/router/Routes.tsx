@@ -7,6 +7,7 @@ import { PortalProtectedRoute } from "@features/portal-citas/guards/PortalProtec
 import { MainLayout } from "@shared/layouts/MainLayout";
 import { RootLayout } from "@shared/layouts/RootLayout";
 import { SuspenseWrapper } from "@shared/components/SuspenseWrapper";
+import { RouteErrorBoundary } from "@shared/components/RouteErrorBoundary";
 
 // Core auth
 const LoginPage = lazy(() =>
@@ -63,6 +64,7 @@ const UrgenciasRoutes = lazy(() =>
 export const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: "/",
