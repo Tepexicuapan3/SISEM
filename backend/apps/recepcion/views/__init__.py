@@ -293,9 +293,13 @@ class PatientLookupView(APIView):
     """
     GET /visits/patient-lookup?noExp=12345&historico=
 
-    Retorna titular + derechohabientes -- incluye foto (JPEG base64) y CURP
-    desde 2026-09-14 (antes se calculaban en buscar_expediente() y se
-    descartaban en _build_member; ver PatientMember.foto/.curp). El
+    Retorna titular + derechohabientes -- incluye foto (JPEG base64) desde
+    2026-09-14 (antes se calculaba en buscar_expediente() y se descartaba en
+    _build_member; ver PatientMember.foto). El campo `curp` tambien se
+    expuso desde esa fecha, pero se removio temporalmente el 2026-09-17
+    (columna inexistente en Postgres, rompia produccion -- ver
+    docs/continuar-en-trabajo.md); hoy `curp` siempre llega en `None`
+    (`_build_member` usa `.get("CURP") or None`, nunca falta la clave). El
     parametro `historico` (antes ignorado por este serializer -- bug real,
     corregido en la misma fecha) decide si se incluyen miembros de baja.
 

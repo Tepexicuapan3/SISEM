@@ -306,14 +306,45 @@ especialidades), quedó así:
 
 ## Pendiente de decisión (el usuario define alcance, no el asistente)
 
-- **Ficha del paciente sigue incompleta**: ~~CURP~~ y ~~foto~~
-  **RESUELTOS** — ambos ya se resolvían en `buscar_expediente()` pero se
-  descartaban al armar `PatientMember` (`visit_queue_usecase._build_member`);
-  ahora se propagan y se ven en el header del expediente (foto real,
-  JPEG optimizado, en vez del ícono genérico). Sexo/tipo de sangre/
-  teléfono de contacto/email/dirección **siguen sin existir en ningún
-  modelo** — hay que definir de dónde salen (¿sincronizar más campos
-  desde Oracle? ¿capturarlos en SIRES?) antes de poder mostrarlos.
+- **Ficha del paciente sigue incompleta**: ~~CURP~~ y foto se habían
+  resuelto en `buscar_expediente()` (ya no se descartaban al armar
+  `PatientMember`), pero **CURP se removió de nuevo el 2026-09-17** — ver
+  sección nueva abajo, "CURP removido temporalmente (2026-09-17)". Foto
+  sigue funcionando (JPEG optimizado, en vez del ícono genérico). Sexo/
+  tipo de sangre/teléfono de contacto/email/dirección **siguen sin existir
+  en ningún modelo** — hay que definir de dónde salen (¿sincronizar más
+  campos desde Oracle? ¿capturarlos en SIRES?) antes de poder mostrarlos.
+- **CURP removido temporalmente (2026-09-17)**: el commit `795c2eb`
+  (12-sep-2026) había agregado `curp` a `CatEmpleado`/`CatFamiliar`
+  (`backend/apps/administracion/models/`), pero la columna **nunca se creó
+  en Postgres** (solo existe en el DDL `backend/storage/expedientes-ddl/002_tablas_faltantes_expediente.sql`,
+  nunca aplicado) — rompía en producción TODA query sobre esos modelos sin
+  `.only()` (`UndefinedColumn: column cat_empleados.curp does not exist`).
+  Se sacó el campo de los modelos, del SQL crudo en
+  `buscar_expediente.py` (`SQL_EMPLEADO`/`SQL_FAMILIAR`), y se ajustó
+  `test_patient_lookup_api.py` para reflejar que `curp` llega en `None`
+  (`_build_member` ya usaba `.get("CURP") or None`, así que no rompe nada
+  downstream — frontend ya tenía fallback `?? SIN_DATO`). `makemigrations`
+  no generó nada nuevo (el campo nunca había llegado a tener su propia
+  migración — drift preexistente entre modelo y migración `0003`).
+  **Para restaurarlo bien** (sesión futura, no trivial):
+  1. Correr el DDL existente (`ALTER TABLE cat_empleados/cat_familiar ADD
+     COLUMN IF NOT EXISTS curp varchar(18)`) contra Postgres.
+  2. Backfill: el sync (`sync_service.py`) solo actualiza filas cuya
+     `fec_ult_actualizacion` cambió, así que agregar la columna vacía NO
+     la va a llenar sola para expedientes ya sincronizados — hace falta un
+     backfill explícito (o forzar una resincronización completa) para
+     `cat_empleados` (Oracle sí tiene CURP con datos ahí).
+  3. `cat_familiar` es el caso difícil: Oracle **nunca tuvo** columna CURP
+     en esa tabla, así que agregar la columna en Postgres sin más rompe el
+     sync de esa tabla en cada corrida (`sync_service.py` arma el SELECT
+     contra Oracle descubriendo columnas dinámicamente vía
+     `information_schema.columns` de Postgres — si Postgres tiene `curp`
+     y Oracle no, el SELECT a Oracle falla). Hay que decidir: ¿excluir
+     `curp` del descubrimiento dinámico para `cat_familiar` específicamente,
+     o resolver de otra fuente (derivarlo del titular vía RENAPO,
+     capturarlo a mano en SIRES, etc.)? No hay una respuesta obvia — el
+     usuario tiene que decidir antes de tocar `sync_service.py`.
 - **Interoperabilidad HL7/CDA**: nunca se verificó contra el texto
   oficial del DOF si NOM-024 exige un formato de intercambio específico.
 - **Segundo catálogo NOM-024**: confirmar con el certificador cuál es.

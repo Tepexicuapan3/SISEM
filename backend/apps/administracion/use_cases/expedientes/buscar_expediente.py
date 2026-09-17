@@ -36,7 +36,8 @@ SQL_EMPLEADO = """
         e.fec_vig,
         e.cve_baja,
         e.cd_clinica,
-        e.curp,
+        -- curp removido temporalmente (2026-09-17): la columna no existe
+        -- todavia en Postgres. Ver docs/continuar-en-trabajo.md.
         'TRABAJADOR' AS parentesco,
         c.ds_clinica AS clinica,
         CASE
@@ -97,7 +98,8 @@ SQL_FAMILIAR = """
         f.fec_vig,
         f.pk_num,
         f.cd_clinica,
-        f.curp,
+        -- curp removido temporalmente (2026-09-17): la columna no existe
+        -- en Postgres ni en Oracle para esta tabla. Ver docs/continuar-en-trabajo.md.
         c.ds_clinica AS clinica,
         CASE
             WHEN f.fec_vig < CURRENT_DATE THEN 'NO ACTIVO'

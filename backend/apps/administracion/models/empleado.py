@@ -19,7 +19,10 @@ class CatEmpleado(models.Model):
     fec_vig             = models.DateField(null=True, blank=True, db_column='fec_vig')
     no_edad             = models.IntegerField(null=True, blank=True, db_column='no_edad')
     cd_clinica          = models.CharField(max_length=10,  null=True, blank=True, db_column='cd_clinica')
-    curp                = models.CharField(max_length=18,  null=True, blank=True, db_column='curp')
+    # curp: removido temporalmente (2026-09-17) -- la columna no existe todavia
+    # en Postgres (solo en el DDL pendiente de aplicar), rompia toda query sobre
+    # este modelo sin .only(). Ver docs/continuar-en-trabajo.md para el plan de
+    # restauracion.
     fec_ult_actualizacion = models.DateTimeField(null=True, blank=True, db_column='fec_ult_actualizacion')
 
     class Meta:
