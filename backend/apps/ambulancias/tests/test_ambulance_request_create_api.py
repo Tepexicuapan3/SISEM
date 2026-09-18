@@ -62,6 +62,11 @@ class AmbulanceRequestCreateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.client.cookies = response.cookies
 
+    def _csrf_headers(self):
+        csrf_token = "csrf-token-test"
+        self.client.cookies["csrf_token"] = csrf_token
+        return {"HTTP_X_CSRF_TOKEN": csrf_token}
+
     def _payload(self, **overrides):
         payload = {
             "noExp": "EXP-A001",
@@ -91,7 +96,9 @@ class AmbulanceRequestCreateApiTests(APITestCase):
              "transferTypeId": self.transfer_type.id, "serviceTypeId": self.service_type.id},
         ])
 
-        response = self.client.post("/api/v1/ambulance-requests", payload, format="json")
+        response = self.client.post(
+            "/api/v1/ambulance-requests", payload, format="json", **self._csrf_headers(),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(response.data["schedules"]), 2)
@@ -103,7 +110,9 @@ class AmbulanceRequestCreateApiTests(APITestCase):
 
         payload = self._payload(reasonId=self.reason_other.id)
 
-        response = self.client.post("/api/v1/ambulance-requests", payload, format="json")
+        response = self.client.post(
+            "/api/v1/ambulance-requests", payload, format="json", **self._csrf_headers(),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.assertIn("reasonNotes", response.data["details"])
@@ -113,7 +122,9 @@ class AmbulanceRequestCreateApiTests(APITestCase):
 
         payload = self._payload(reasonId=self.reason_other.id, reasonNotes="Traslado especial")
 
-        response = self.client.post("/api/v1/ambulance-requests", payload, format="json")
+        response = self.client.post(
+            "/api/v1/ambulance-requests", payload, format="json", **self._csrf_headers(),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -122,6 +133,8 @@ class AmbulanceRequestCreateApiTests(APITestCase):
 
         payload = self._payload(schedules=[])
 
-        response = self.client.post("/api/v1/ambulance-requests", payload, format="json")
+        response = self.client.post(
+            "/api/v1/ambulance-requests", payload, format="json", **self._csrf_headers(),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)

@@ -147,7 +147,7 @@ def schedule_surgery(
     return SurgeryRepository.to_contract(surgery)
 
 
-def cancel_surgery(surgery_id, *, reason_id, notes=None, actor_id, permissions=None):
+def cancel_surgery(surgery_id, *, reason_id, notes=None, actor_id, permissions=None, audit_hook):
     ensure_surgery_write(permissions)
 
     surgery = SurgeryRepository.get_by_id(surgery_id)
@@ -166,9 +166,25 @@ def cancel_surgery(surgery_id, *, reason_id, notes=None, actor_id, permissions=N
             details={"reasonId": ["El motivo de cancelacion no existe o no esta activo."]},
         )
 
-    surgery = SurgeryRepository.cancel(
-        surgery, reason=reason, notes=notes, updated_by_id=actor_id,
-    )
+    with transaction.atomic():
+        # `SurgeryRepository.cancel` muta `surgery` en memoria y devuelve el
+        # MISMO objeto (gotcha B2/A4.4) -- `datos_antes` se captura ANTES.
+        datos_antes = {"status": surgery.status}
+        surgery = SurgeryRepository.cancel(
+            surgery, reason=reason, notes=notes, updated_by_id=actor_id,
+        )
+        audit_hook(
+            resource_id=surgery.id,
+            folio=surgery.folio,
+            datos_antes=datos_antes,
+            datos_despues={
+                "status": surgery.status,
+                "reasonId": reason.id,
+                "reasonName": reason.name,
+                "notes": notes,
+            },
+        )
+
     return SurgeryRepository.to_contract(surgery)
 
 

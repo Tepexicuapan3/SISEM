@@ -20,6 +20,14 @@ from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
 
+def _noop_audit_hook(**kwargs):
+    """Los tests de este archivo son unit-level sobre el usecase -- el
+    audit_hook se valida en los tests de API (test_consultation_audit_api.py,
+    Fase 6). `audit_hook` es keyword-only requerido (A0.3), asi que todo
+    caller directo del usecase debe pasar algo; este helper no hace nada."""
+    return None
+
+
 class ConsultationUseCaseTests(TestCase):
     def setUp(self):
         # doctor_id ahora es FK real a SyUsuario (ver 0006_doctor_fk_integrity) --
@@ -52,7 +60,7 @@ class ConsultationUseCaseTests(TestCase):
     def test_start_consultation_happy_path(self):
         visit = self._visit("lista_para_doctor")
 
-        payload = start_consultation(visit.id_visit, ["doctor"])
+        payload = start_consultation(visit.id_visit, ["doctor"], audit_hook=_noop_audit_hook)
 
         self.assertEqual(payload["id"], visit.id_visit)
         self.assertEqual(payload["status"], "en_consulta")
@@ -63,7 +71,7 @@ class ConsultationUseCaseTests(TestCase):
         visit = self._visit("lista_para_doctor")
 
         with self.assertRaises(VisitDomainError) as raised:
-            start_consultation(visit.id_visit, ["recepcion"])
+            start_consultation(visit.id_visit, ["recepcion"], audit_hook=_noop_audit_hook)
 
         self.assertEqual(raised.exception.code, "ROLE_NOT_ALLOWED")
         self.assertEqual(raised.exception.status_code, 403)
@@ -75,6 +83,7 @@ class ConsultationUseCaseTests(TestCase):
             visit.id_visit,
             ["CLINICO"],
             ["clinico:consultas:read"],
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["status"], "en_consulta")
@@ -83,7 +92,7 @@ class ConsultationUseCaseTests(TestCase):
         visit = self._visit("en_espera")
 
         with self.assertRaises(VisitDomainError) as raised:
-            start_consultation(visit.id_visit, ["DOCTOR"])
+            start_consultation(visit.id_visit, ["DOCTOR"], audit_hook=_noop_audit_hook)
 
         self.assertEqual(raised.exception.code, "VISIT_STATE_INVALID")
         self.assertEqual(raised.exception.status_code, 409)
@@ -98,6 +107,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Paciente estable y con tratamiento inicial.",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["visit"]["status"], "cerrada")
@@ -122,6 +132,7 @@ class ConsultationUseCaseTests(TestCase):
             doctor_id=self.doctor_id,
             permissions=["clinico:consultas:read"],
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["visit"]["status"], "cerrada")
@@ -137,6 +148,7 @@ class ConsultationUseCaseTests(TestCase):
                 final_note="",
                 doctor_id=self.doctor_id,
                 cie_code=self.cie_code,
+                audit_hook=_noop_audit_hook,
             )
 
         self.assertEqual(raised.exception.code, "VISIT_STATE_INVALID")
@@ -152,6 +164,7 @@ class ConsultationUseCaseTests(TestCase):
                 primary_diagnosis="Dx",
                 final_note="Nota",
                 doctor_id=self.doctor_id,
+                audit_hook=_noop_audit_hook,
             )
 
         self.assertEqual(raised.exception.code, "VALIDATION_ERROR")
@@ -167,6 +180,7 @@ class ConsultationUseCaseTests(TestCase):
             "Nota inicial",
             self.doctor_id,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         visit.status = "en_consulta"
@@ -179,6 +193,7 @@ class ConsultationUseCaseTests(TestCase):
             "Nota final",
             self.doctor_id_2,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(VisitConsultation.objects.filter(id_visit=visit).count(), 1)
@@ -195,6 +210,7 @@ class ConsultationUseCaseTests(TestCase):
             primary_diagnosis="Faringitis aguda",
             final_note="Paciente estable.",
             doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["visitId"], visit.id_visit)
@@ -225,6 +241,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Paciente estable.",
             doctor_id=self.doctor_id,
             cie_code="a090",
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["cieCode"], "A090")
@@ -241,6 +258,7 @@ class ConsultationUseCaseTests(TestCase):
             primary_diagnosis="Dx borrador",
             final_note="Nota borrador",
             doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
 
         save_diagnosis(
@@ -250,6 +268,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota corregida",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         consultation = VisitConsultation.objects.get(id_visit=visit)
@@ -274,6 +293,7 @@ class ConsultationUseCaseTests(TestCase):
                 primary_diagnosis="Dx estable",
                 final_note="Nota estable",
                 doctor_id=self.doctor_id,
+                audit_hook=_noop_audit_hook,
             )
 
         consultation = VisitConsultation.objects.get(id_visit=visit)
@@ -291,6 +311,7 @@ class ConsultationUseCaseTests(TestCase):
             primary_diagnosis="Faringitis aguda",
             final_note="Paciente estable.",
             doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertIsNone(payload["subjective"])
@@ -319,6 +340,7 @@ class ConsultationUseCaseTests(TestCase):
             objective="Faringe eritematosa, sin exudado.",
             assessment="Faringitis aguda viral.",
             plan="Manejo sintomatico, abundantes liquidos.",
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["subjective"], "Refiere dolor de garganta de 3 dias.")
@@ -347,6 +369,7 @@ class ConsultationUseCaseTests(TestCase):
             objective="Objetivo inicial",
             assessment="Analisis inicial",
             plan="Plan inicial",
+            audit_hook=_noop_audit_hook,
         )
 
         save_diagnosis(
@@ -359,6 +382,7 @@ class ConsultationUseCaseTests(TestCase):
             objective="Objetivo inicial",
             assessment="Analisis inicial",
             plan="Plan inicial",
+            audit_hook=_noop_audit_hook,
         )
 
         consultation = VisitConsultation.objects.get(id_visit=visit)
@@ -385,6 +409,7 @@ class ConsultationUseCaseTests(TestCase):
                 final_note="Nota",
                 doctor_id=self.doctor_id,
                 cie_code="ZZ999",
+                audit_hook=_noop_audit_hook,
             )
 
         self.assertEqual(raised.exception.code, "VALIDATION_ERROR")
@@ -412,6 +437,7 @@ class ConsultationUseCaseTests(TestCase):
                 primary_diagnosis="Dx",
                 final_note="Nota",
                 doctor_id=self.doctor_id,
+                audit_hook=_noop_audit_hook,
             )
 
         self.assertEqual(raised.exception.code, "VISIT_STATE_INVALID")
@@ -425,6 +451,7 @@ class ConsultationUseCaseTests(TestCase):
             roles=["DOCTOR"],
             items=["Paracetamol 500mg", "Reposo domiciliario"],
             doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["visitId"], visit.id_visit)
@@ -444,6 +471,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota estable",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         second_payload = close_consultation(
@@ -453,6 +481,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota estable",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(first_payload["visit"]["status"], "cerrada")
@@ -471,6 +500,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota original",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            audit_hook=_noop_audit_hook,
         )
         return visit
 
@@ -520,6 +550,7 @@ class ConsultationUseCaseTests(TestCase):
             visit_id=visit.id_visit, roles=["DOCTOR"],
             primary_diagnosis="Dx borrador", final_note="Nota borrador",
             doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
 
         with self.assertRaises(VisitDomainError) as raised:

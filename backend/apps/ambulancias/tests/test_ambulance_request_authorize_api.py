@@ -79,12 +79,17 @@ class AmbulanceRequestAuthorizeApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.client.cookies = response.cookies
 
+    def _csrf_headers(self):
+        csrf_token = "csrf-token-test"
+        self.client.cookies["csrf_token"] = csrf_token
+        return {"HTTP_X_CSRF_TOKEN": csrf_token}
+
     def test_write_permission_alone_cannot_authorize(self):
         self._login_as("ambulancias_writer2", self.writer_password)
 
         response = self.client.patch(
             f"/api/v1/ambulance-requests/{self.ambulance_request.id}/authorize",
-            {"serviceNumber": "AMB-01"}, format="json",
+            {"serviceNumber": "AMB-01"}, format="json", **self._csrf_headers(),
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -94,7 +99,7 @@ class AmbulanceRequestAuthorizeApiTests(APITestCase):
 
         response = self.client.patch(
             f"/api/v1/ambulance-requests/{self.ambulance_request.id}/authorize",
-            {}, format="json",
+            {}, format="json", **self._csrf_headers(),
         )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -104,7 +109,7 @@ class AmbulanceRequestAuthorizeApiTests(APITestCase):
 
         first = self.client.patch(
             f"/api/v1/ambulance-requests/{self.ambulance_request.id}/authorize",
-            {"serviceNumber": "AMB-01"}, format="json",
+            {"serviceNumber": "AMB-01"}, format="json", **self._csrf_headers(),
         )
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(first.data["authorizationStatus"], "autorizada")
@@ -112,7 +117,7 @@ class AmbulanceRequestAuthorizeApiTests(APITestCase):
 
         second = self.client.patch(
             f"/api/v1/ambulance-requests/{self.ambulance_request.id}/authorize",
-            {"serviceNumber": "AMB-02"}, format="json",
+            {"serviceNumber": "AMB-02"}, format="json", **self._csrf_headers(),
         )
         self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
 
@@ -121,12 +126,13 @@ class AmbulanceRequestAuthorizeApiTests(APITestCase):
 
         missing_notes = self.client.patch(
             f"/api/v1/ambulance-requests/{self.ambulance_request.id}/reject", {}, format="json",
+            **self._csrf_headers(),
         )
         self.assertEqual(missing_notes.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         rejected = self.client.patch(
             f"/api/v1/ambulance-requests/{self.ambulance_request.id}/reject",
-            {"notes": "No cumple criterios"}, format="json",
+            {"notes": "No cumple criterios"}, format="json", **self._csrf_headers(),
         )
         self.assertEqual(rejected.status_code, status.HTTP_200_OK)
         self.assertEqual(rejected.data["authorizationStatus"], "rechazada")

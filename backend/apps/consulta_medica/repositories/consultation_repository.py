@@ -66,6 +66,23 @@ class ConsultationRepository:
         updated_by_id=None,
     ):
         existing = VisitConsultation.objects.filter(id_visit=visit).first()
+
+        # Snapshot JSON-safe del estado previo para auditoria (NOM-024):
+        # se arma ANTES de pisar la fila, o None si no existia consulta
+        # previa. No se reutiliza `to_contract()` (devuelve datetimes
+        # crudos y expone mas campos de los que la auditoria necesita).
+        previous_snapshot = None
+        if existing is not None:
+            previous_snapshot = {
+                "primaryDiagnosis": existing.primary_diagnosis,
+                "cieCode": existing.cie_id,
+                "finalNoteLen": len(existing.final_note) if existing.final_note else None,
+                "hasSubjective": bool(existing.subjective),
+                "hasObjective": bool(existing.objective),
+                "hasAssessment": bool(existing.assessment),
+                "hasPlan": bool(existing.plan),
+            }
+
         if existing is not None and (
             existing.primary_diagnosis != primary_diagnosis
             or existing.cie_id != cie_code
@@ -109,7 +126,7 @@ class ConsultationRepository:
                 "updated_by_id": updated_by_id,
             },
         )
-        return consultation, created
+        return consultation, created, previous_snapshot
 
     @staticmethod
     def add_addendum(consultation, *, text, created_by_id=None):

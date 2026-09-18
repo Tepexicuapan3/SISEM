@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.repositories.user_repository import UserRepository
+from apps.authentication.services.audit_service import log_event
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
@@ -137,6 +138,28 @@ class AmbulanceRequestsListCreateView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_event(
+            request,
+            "AmbulanceRequestCreated",
+            "SUCCESS",
+            actor_user=user,
+            resource_type="ambulancias",
+            resource_id=payload["id"],
+            datos_antes=None,
+            datos_despues={
+                "status": payload["status"],
+                "authorizationStatus": payload["authorizationStatus"],
+                "reasonId": payload["reasonId"],
+                "destinationId": payload["destinationId"],
+                "requestingClinicId": payload["requestingClinicId"],
+                "schedulesCount": len(payload["schedules"]),
+            },
+            meta={
+                "module": "ambulancias", "endpoint": request.path,
+                "actorId": actor_id, "folio": payload["folio"],
+            },
+        )
+
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
@@ -164,12 +187,30 @@ class AmbulanceRequestAuthorizeView(APIView):
 
         actor_id, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, folio, datos_antes, datos_despues):
+            log_event(
+                request,
+                "AmbulanceRequestAuthorized",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="ambulancias",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "ambulancias", "endpoint": request.path,
+                    "actorId": actor_id, "folio": folio,
+                },
+                raise_on_error=True,
+            )
+
         try:
             payload = authorize_request(
                 request_id,
                 service_number=serializer.validated_data["serviceNumber"],
                 actor_id=actor_id,
                 permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
@@ -201,12 +242,30 @@ class AmbulanceRequestRejectView(APIView):
 
         actor_id, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, folio, datos_antes, datos_despues):
+            log_event(
+                request,
+                "AmbulanceRequestRejected",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="ambulancias",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "ambulancias", "endpoint": request.path,
+                    "actorId": actor_id, "folio": folio,
+                },
+                raise_on_error=True,
+            )
+
         try:
             payload = reject_request(
                 request_id,
                 notes=serializer.validated_data["notes"],
                 actor_id=actor_id,
                 permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
@@ -230,8 +289,27 @@ class AmbulanceRequestCancelView(APIView):
 
         actor_id, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, folio, datos_antes, datos_despues):
+            log_event(
+                request,
+                "AmbulanceRequestCancelled",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="ambulancias",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "ambulancias", "endpoint": request.path,
+                    "actorId": actor_id, "folio": folio,
+                },
+                raise_on_error=True,
+            )
+
         try:
-            payload = cancel_request(request_id, actor_id=actor_id, permissions=permissions)
+            payload = cancel_request(
+                request_id, actor_id=actor_id, permissions=permissions, audit_hook=audit_hook,
+            )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 

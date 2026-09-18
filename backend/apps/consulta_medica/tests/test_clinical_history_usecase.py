@@ -9,6 +9,13 @@ from apps.consulta_medica.uses_case.clinical_history_usecase import (
 from apps.recepcion.services.errors import VisitDomainError
 
 
+def _noop_audit_hook(**kwargs):
+    """Unit-level: el audit_hook se valida en los tests de API. `audit_hook`
+    es keyword-only requerido (A0.3), asi que todo caller directo del
+    usecase debe pasar algo."""
+    return None
+
+
 class ClinicalHistoryUseCaseTests(TestCase):
     def setUp(self):
         self.no_exp = "EXP9001"
@@ -22,6 +29,7 @@ class ClinicalHistoryUseCaseTests(TestCase):
             self.no_exp, self.pk_num, ["DOCTOR"],
             {"occupationId": self.ocupacion_a.id, "phone": "5555555555"},
             actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
 
         history = ClinicalHistory.objects.get(no_exp=self.no_exp, pk_num=self.pk_num)
@@ -33,12 +41,14 @@ class ClinicalHistoryUseCaseTests(TestCase):
             self.no_exp, self.pk_num, ["DOCTOR"],
             {"occupationId": self.ocupacion_a.id, "phone": "5555555555"},
             actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
 
         upsert_clinical_history(
             self.no_exp, self.pk_num, ["DOCTOR"],
             {"occupationId": self.ocupacion_b.id, "phone": "6666666666"},
             actor_id=2,
+            audit_hook=_noop_audit_hook,
         )
 
         history = ClinicalHistory.objects.get(no_exp=self.no_exp, pk_num=self.pk_num)
@@ -57,11 +67,13 @@ class ClinicalHistoryUseCaseTests(TestCase):
             self.no_exp, self.pk_num, ["DOCTOR"],
             {"occupationId": self.ocupacion_a.id, "phone": "5555555555"},
             actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
         upsert_clinical_history(
             self.no_exp, self.pk_num, ["DOCTOR"],
             {"occupationId": self.ocupacion_a.id, "phone": "5555555555"},
             actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
 
         history = ClinicalHistory.objects.get(no_exp=self.no_exp, pk_num=self.pk_num)
@@ -70,12 +82,15 @@ class ClinicalHistoryUseCaseTests(TestCase):
     def test_third_edit_accumulates_a_second_revision(self):
         upsert_clinical_history(
             self.no_exp, self.pk_num, ["DOCTOR"], {"phone": "1111111111"}, actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
         upsert_clinical_history(
             self.no_exp, self.pk_num, ["DOCTOR"], {"phone": "2222222222"}, actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
         upsert_clinical_history(
             self.no_exp, self.pk_num, ["DOCTOR"], {"phone": "3333333333"}, actor_id=1,
+            audit_hook=_noop_audit_hook,
         )
 
         history = ClinicalHistory.objects.get(no_exp=self.no_exp, pk_num=self.pk_num)

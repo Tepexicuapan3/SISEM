@@ -16,6 +16,7 @@ from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
 from apps.authentication.services.session_service import authenticate_request
+from apps.catalogos.models import Medicamentos
 from apps.realtime.events import (
     publish_visit_closed,
     publish_visit_diagnosis_saved,
@@ -78,6 +79,7 @@ from .uses_case.prescription_item_usecase import (
     list_prescription_authorizations_history,
     reject_prescription,
 )
+from .repositories.prescription_repository import PrescriptionRepository
 from .uses_case.study_result_usecase import (
     create_study_result,
     get_patient_study_results,
@@ -272,23 +274,33 @@ class VisitConsultationStartView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        # A7: camino critico de consulta -- audit_hook con strict=False, un
+        # fallo del logger no bloquea la atencion al paciente.
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "ConsultationStarted",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": resource_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
-            payload = start_consultation(visit_id, roles, permissions, doctor_id=actor_id)
+            payload = start_consultation(
+                visit_id, roles, permissions, doctor_id=actor_id, audit_hook=audit_hook,
+            )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "ConsultationStarted",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "visitId": payload.get("id"),
-                "actorId": actor_id,
-            },
-        )
 
         _emit_visit_status_changed_event(
             request,
@@ -325,6 +337,26 @@ class VisitDiagnosisSaveView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        # A7: camino critico de consulta -- audit_hook con strict=False.
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "DiagnosisSaved",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = save_diagnosis(
                 visit_id,
@@ -338,22 +370,10 @@ class VisitDiagnosisSaveView(APIView):
                 serializer.validated_data.get("objective"),
                 serializer.validated_data.get("assessment"),
                 serializer.validated_data.get("plan"),
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "DiagnosisSaved",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "visitId": payload.get("visitId"),
-                "actorId": actor_id,
-            },
-        )
 
         _emit_visit_diagnosis_saved_event(
             request,
@@ -442,6 +462,26 @@ class PatientClinicalHistoryView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "ClinicalHistoryUpdated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "noExp": no_exp,
+                    "pkNum": pk_num,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = upsert_clinical_history(
                 no_exp,
@@ -450,23 +490,10 @@ class PatientClinicalHistoryView(APIView):
                 serializer.validated_data,
                 actor_id,
                 permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "ClinicalHistoryUpdated",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "noExp": no_exp,
-                "pkNum": pk_num,
-                "actorId": actor_id,
-            },
-        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -517,6 +544,21 @@ class VisitMedicalLeaveCreateView(APIView):
             "MedicalLeaveCreated",
             "SUCCESS",
             actor_user=user,
+            resource_type="consulta_medica",
+            resource_id=payload.get("id"),
+            datos_antes=None,
+            datos_despues={
+                "visitId": visit_id,
+                "folio": payload.get("folio"),
+                "leaveTypeId": payload.get("leaveTypeId"),
+                "leaveTypeName": payload.get("leaveTypeName"),
+                "days": payload.get("days"),
+                "isSubsequent": payload.get("isSubsequent"),
+                "startDate": (
+                    payload["startDate"].isoformat() if payload.get("startDate") else None
+                ),
+                "endDate": payload["endDate"].isoformat() if payload.get("endDate") else None,
+            },
             meta={
                 "module": "consulta_medica",
                 "endpoint": request.path,
@@ -707,6 +749,27 @@ class PatientOdontogramToothView(APIView):
         actor_id, roles, permissions = _actor_context(user)
         data = serializer.validated_data
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "OdontogramToothUpdated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "noExp": no_exp,
+                    "pkNum": pk_num,
+                    "toothFdi": tooth_fdi,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = upsert_tooth_condition(
                 no_exp,
@@ -717,24 +780,10 @@ class PatientOdontogramToothView(APIView):
                 notes=data.get("notes"),
                 actor_id=actor_id,
                 permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "OdontogramToothUpdated",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "noExp": no_exp,
-                "pkNum": pk_num,
-                "toothFdi": tooth_fdi,
-                "actorId": actor_id,
-            },
-        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -805,6 +854,26 @@ class PatientStomatologyHistoryView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "StomatologyHistoryUpdated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "noExp": no_exp,
+                    "pkNum": pk_num,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = upsert_stomatology_history(
                 no_exp,
@@ -813,23 +882,10 @@ class PatientStomatologyHistoryView(APIView):
                 serializer.validated_data,
                 actor_id,
                 permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "StomatologyHistoryUpdated",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "noExp": no_exp,
-                "pkNum": pk_num,
-                "actorId": actor_id,
-            },
-        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -881,6 +937,19 @@ class VisitStudyResultCreateView(APIView):
             "StudyResultCreated",
             "SUCCESS",
             actor_user=user,
+            resource_type="consulta_medica",
+            resource_id=payload.get("id"),
+            datos_antes=None,
+            datos_despues={
+                "visitId": visit_id,
+                "studyTypeId": payload.get("studyTypeId"),
+                "studyTypeName": payload.get("studyTypeName"),
+                "resultDate": (
+                    payload["resultDate"].isoformat() if payload.get("resultDate") else None
+                ),
+                "hasFile": True,
+                "notesLen": len(payload["notes"]) if payload.get("notes") else None,
+            },
             meta={
                 "module": "consulta_medica",
                 "endpoint": request.path,
@@ -988,6 +1057,15 @@ class VisitSecondaryDiagnosesView(APIView):
             "SecondaryDiagnosisAdded",
             "SUCCESS",
             actor_user=user,
+            resource_type="consulta_medica",
+            resource_id=payload.get("id"),
+            datos_antes=None,
+            datos_despues={
+                "visitId": visit_id,
+                "cieCode": payload.get("cieCode"),
+                "status": payload.get("status"),
+                "notesLen": len(payload["notes"]) if payload.get("notes") else None,
+            },
             meta={
                 "module": "consulta_medica",
                 "endpoint": request.path,
@@ -1062,6 +1140,13 @@ class VisitConsultationAddendumView(APIView):
             "ConsultationAddendumAdded",
             "SUCCESS",
             actor_user=user,
+            resource_type="consulta_medica",
+            resource_id=payload.get("id"),
+            datos_antes=None,
+            datos_despues={
+                "consultationId": payload.get("consultationId"),
+                "textLen": len(payload["text"]) if payload.get("text") else None,
+            },
             meta={
                 "module": "consulta_medica",
                 "endpoint": request.path,
@@ -1089,6 +1174,26 @@ class VisitSecondaryDiagnosisCancelView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "SecondaryDiagnosisCancelled",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "diagnosisId": diagnosis_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = cancel_secondary_diagnosis(
                 visit_id,
@@ -1096,23 +1201,10 @@ class VisitSecondaryDiagnosisCancelView(APIView):
                 roles,
                 doctor_id=actor_id,
                 permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "SecondaryDiagnosisCancelled",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "visitId": visit_id,
-                "diagnosisId": diagnosis_id,
-                "actorId": actor_id,
-            },
-        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1177,11 +1269,40 @@ class VisitPrescriptionItemsView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        # `add_prescription_item` es SIMPLE, sin audit_hook (A5) -- prescriptionId
+        # y requiresAuthorization no vienen en el payload de to_contract, se
+        # resuelven aca con 2 lecturas extra solo para el snapshot de
+        # auditoria (mismo criterio que _maybe_create_authorization interno).
+        prescription = PrescriptionRepository.get_by_visit(visit_id)
+        medication = Medicamentos.objects.filter(pk=data["medicationId"]).first()
+        requires_authorization = bool(
+            medication is not None
+            and (
+                medication.cuadro_basico == Medicamentos.CuadroBasico.ESPECIAL
+                or medication.is_controlled
+            )
+        )
+
         log_event(
             request,
             "PrescriptionItemAdded",
             "SUCCESS",
             actor_user=user,
+            resource_type="consulta_medica",
+            resource_id=payload.get("id"),
+            datos_antes=None,
+            datos_despues={
+                "visitId": visit_id,
+                "prescriptionId": prescription.id_prescription if prescription else None,
+                "medicationId": payload.get("medicationId"),
+                "medicationName": payload.get("medicationName"),
+                "quantity": payload.get("quantity"),
+                "dose": payload.get("dose"),
+                "indicationsLen": (
+                    len(payload["indications"]) if payload.get("indications") else None
+                ),
+                "requiresAuthorization": requires_authorization,
+            },
             meta={
                 "module": "consulta_medica",
                 "endpoint": request.path,
@@ -1236,25 +1357,35 @@ class PrescriptionAuthorizationDecisionView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "PrescriptionAuthorizationApproved",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "authorizationId": authorization_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = authorize_prescription(
-                authorization_id, roles, actor_id=actor_id, permissions=permissions,
+                authorization_id,
+                roles,
+                actor_id=actor_id,
+                permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "PrescriptionAuthorizationApproved",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "authorizationId": authorization_id,
-                "actorId": actor_id,
-            },
-        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1285,6 +1416,26 @@ class PrescriptionAuthorizationRejectView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "PrescriptionAuthorizationRejected",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "authorizationId": authorization_id,
+                    "actorId": actor_id,
+                    "reason": serializer.validated_data["reason"],
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = reject_prescription(
                 authorization_id,
@@ -1292,23 +1443,10 @@ class PrescriptionAuthorizationRejectView(APIView):
                 reason=serializer.validated_data["reason"],
                 actor_id=actor_id,
                 permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "PrescriptionAuthorizationRejected",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "authorizationId": authorization_id,
-                "actorId": actor_id,
-                "reason": serializer.validated_data["reason"],
-            },
-        )
 
         _emit_prescription_authorization_rejected_event(
             request,
@@ -1382,26 +1520,37 @@ class VisitPrescriptionItemCancelView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "PrescriptionItemCancelled",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "itemId": item_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = cancel_prescription_item(
-                visit_id, item_id, roles, actor_id=actor_id, permissions=permissions,
+                visit_id,
+                item_id,
+                roles,
+                actor_id=actor_id,
+                permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "PrescriptionItemCancelled",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "visitId": visit_id,
-                "itemId": item_id,
-                "actorId": actor_id,
-            },
-        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1467,6 +1616,25 @@ class VisitPrescriptionsSaveView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "PrescriptionsSaved",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             payload = save_prescriptions(
                 visit_id,
@@ -1474,22 +1642,10 @@ class VisitPrescriptionsSaveView(APIView):
                 serializer.validated_data["items"],
                 actor_id,
                 permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
-
-        log_event(
-            request,
-            "PrescriptionsSaved",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "visitId": payload.get("visitId"),
-                "actorId": actor_id,
-            },
-        )
 
         _emit_visit_prescriptions_saved_event(
             request,
@@ -1527,6 +1683,28 @@ class VisitConsultationCloseView(APIView):
 
         actor_id, roles, permissions = _actor_context(user)
 
+        # A7: camino critico de consulta -- audit_hook con strict=False.
+        # A4.3: los 3 return paths de close_consultation invocan este mismo
+        # hook exactamente una vez cada uno (invariante: 1 evento por request).
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "ConsultationClosed",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
         try:
             validated_data = dict(serializer.validated_data)
             primary_diagnosis = validated_data.get("primaryDiagnosis", "")
@@ -1543,24 +1721,12 @@ class VisitConsultationCloseView(APIView):
                 validated_data.get("objective"),
                 validated_data.get("assessment"),
                 validated_data.get("plan"),
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
         visit_payload = payload.get("visit", {})
-
-        log_event(
-            request,
-            "ConsultationClosed",
-            "SUCCESS",
-            actor_user=user,
-            meta={
-                "module": "consulta_medica",
-                "endpoint": request.path,
-                "visitId": visit_payload.get("id"),
-                "actorId": actor_id,
-            },
-        )
 
         _emit_visit_closed_event(
             request,

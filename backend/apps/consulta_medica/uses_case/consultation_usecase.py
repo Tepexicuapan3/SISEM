@@ -20,6 +20,12 @@ DOCTOR_CONSULTATION_PERMISSION_REQUIREMENT = {
 
 CIE_SEARCH_MIN_LENGTH = 2
 
+# `SavePrescriptionsSerializer.items` no acota la cantidad de indicaciones
+# (ver serializers.py) -- se acota aca solo para el snapshot de auditoria de
+# `datos_despues` (A3 fila #15), igual que en PrescriptionRepository para
+# `datos_antes`. `itemsCount` siempre refleja el total real, sin truncar.
+_AUDIT_PRESCRIPTION_ITEMS_LIMIT = 50
+
 
 def ensure_doctor_role(roles, permissions=None):
     normalized_roles = {(role or "").strip().upper() for role in roles}
@@ -91,23 +97,37 @@ def _resolve_cie_code_or_error(cie_code):
     return normalized_code
 
 
-def start_consultation(visit_id, roles, permissions=None, doctor_id=None):
+def start_consultation(visit_id, roles, permissions=None, doctor_id=None, *, audit_hook):
     ensure_doctor_role(roles, permissions)
     visit = _get_visit_or_error(visit_id)
 
-    previous_status = visit.status
     next_state = transition_visit_state(
         current_state=visit.status,
         target_state="en_consulta",
         actor_role=ROLE_DOCTOR,
     )
-    visit = VisitRepository.update_status(visit, next_state)
-    VisitRepository.log_status_change(
-        visit=visit,
-        from_status=previous_status,
-        to_status=next_state,
-        changed_by_id=doctor_id,
-    )
+
+    # atomic() agregado por A0.2 (bug de atomicidad preexistente: update_status
+    # + log_status_change eran 2 writes sin proteccion) -- se mantiene
+    # independientemente de que el hook, tras A7, sea strict=False.
+    with transaction.atomic():
+        # Gotcha A4.4: VisitRepository.update_status muta la instancia en
+        # memoria y devuelve el MISMO objeto -- previous_status se captura
+        # ANTES de llamarlo.
+        previous_status = visit.status
+        visit = VisitRepository.update_status(visit, next_state)
+        VisitRepository.log_status_change(
+            visit=visit,
+            from_status=previous_status,
+            to_status=next_state,
+            changed_by_id=doctor_id,
+        )
+        audit_hook(
+            resource_id=visit.id_visit,
+            datos_antes={"status": previous_status},
+            datos_despues={"status": next_state, "doctorId": doctor_id},
+            strict=False,
+        )
     return VisitRepository.to_contract(visit)
 
 
@@ -128,6 +148,8 @@ def save_diagnosis(
     objective=None,
     assessment=None,
     plan=None,
+    *,
+    audit_hook,
 ):
     ensure_doctor_role(roles, permissions)
 
@@ -149,7 +171,7 @@ def save_diagnosis(
         )
 
     with transaction.atomic():
-        consultation, _ = ConsultationRepository.upsert_for_visit(
+        consultation, _, previous_snapshot = ConsultationRepository.upsert_for_visit(
             visit,
             doctor_id=doctor_id,
             primary_diagnosis=normalized_primary_diagnosis,
@@ -161,6 +183,21 @@ def save_diagnosis(
             plan=normalized_plan,
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
+        )
+        audit_hook(
+            resource_id=consultation.id_consultation,
+            datos_antes=previous_snapshot,
+            datos_despues={
+                "visitId": visit.id_visit,
+                "primaryDiagnosis": consultation.primary_diagnosis,
+                "cieCode": consultation.cie_id,
+                "finalNoteLen": len(consultation.final_note) if consultation.final_note else None,
+                "hasSubjective": bool(consultation.subjective),
+                "hasObjective": bool(consultation.objective),
+                "hasAssessment": bool(consultation.assessment),
+                "hasPlan": bool(consultation.plan),
+            },
+            strict=False,
         )
 
     return {
@@ -182,6 +219,8 @@ def save_prescriptions(
     items,
     doctor_id,
     permissions=None,
+    *,
+    audit_hook,
 ):
     ensure_doctor_role(roles, permissions)
 
@@ -198,17 +237,47 @@ def save_prescriptions(
         )
 
     with transaction.atomic():
-        prescription, _ = PrescriptionRepository.upsert_for_visit(
+        prescription, _, previous_snapshot = PrescriptionRepository.upsert_for_visit(
             visit,
             items=normalized_items,
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
+        )
+        audit_hook(
+            resource_id=prescription.id_prescription,
+            datos_antes=previous_snapshot,
+            datos_despues={
+                "visitId": visit.id_visit,
+                "itemsCount": len(prescription.items or []),
+                "items": list(prescription.items or [])[:_AUDIT_PRESCRIPTION_ITEMS_LIMIT],
+            },
+            strict=True,
         )
 
     return {
         "visitId": visit.id_visit,
         "status": visit.status,
         "items": list(prescription.items or []),
+    }
+
+
+def _close_consultation_datos_antes(previous_visit_status, previous_snapshot):
+    return {
+        "visitStatus": previous_visit_status,
+        "primaryDiagnosis": previous_snapshot["primaryDiagnosis"] if previous_snapshot else None,
+        "cieCode": previous_snapshot["cieCode"] if previous_snapshot else None,
+        "finalNoteLen": previous_snapshot["finalNoteLen"] if previous_snapshot else None,
+    }
+
+
+def _close_consultation_datos_despues(visit, consultation, *, is_replay):
+    return {
+        "visitId": visit.id_visit,
+        "visitStatus": "cerrada",
+        "primaryDiagnosis": consultation.primary_diagnosis,
+        "cieCode": consultation.cie_id,
+        "finalNoteLen": len(consultation.final_note) if consultation.final_note else None,
+        "isReplay": is_replay,
     }
 
 
@@ -224,6 +293,8 @@ def close_consultation(
     objective=None,
     assessment=None,
     plan=None,
+    *,
+    audit_hook,
 ):
     ensure_doctor_role(roles, permissions)
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
@@ -255,6 +326,19 @@ def close_consultation(
             and existing_consultation.assessment == normalized_assessment
             and existing_consultation.plan == normalized_plan
         ):
+            # Path idempotente: no hay mutacion de dominio, no hace falta
+            # atomic(). Invariante del spec: datos_antes == datos_despues,
+            # isReplay=True, strict=False (A7) -- un fallo del hook nunca
+            # convierte este 200 en 500.
+            replay_snapshot = _close_consultation_datos_despues(
+                visit, existing_consultation, is_replay=True,
+            )
+            audit_hook(
+                resource_id=existing_consultation.id_consultation,
+                datos_antes=replay_snapshot,
+                datos_despues=replay_snapshot,
+                strict=False,
+            )
             return {
                 "visit": VisitRepository.to_contract(visit),
                 "consultation": ConsultationRepository.to_contract(existing_consultation),
@@ -268,7 +352,7 @@ def close_consultation(
             )
 
         with transaction.atomic():
-            consultation, _ = ConsultationRepository.upsert_for_visit(
+            consultation, _, previous_snapshot = ConsultationRepository.upsert_for_visit(
                 visit,
                 doctor_id=doctor_id,
                 primary_diagnosis=normalized_primary_diagnosis,
@@ -280,6 +364,15 @@ def close_consultation(
                 plan=normalized_plan,
                 created_by_id=doctor_id,
                 updated_by_id=doctor_id,
+            )
+            # La visita ya estaba "cerrada" (guarda del if externo) -- este
+            # path solo crea la fila de consulta que faltaba, no transiciona
+            # estado. strict=False (A7): un fallo del hook no revierte esto.
+            audit_hook(
+                resource_id=consultation.id_consultation,
+                datos_antes=_close_consultation_datos_antes(visit.status, previous_snapshot),
+                datos_despues=_close_consultation_datos_despues(visit, consultation, is_replay=False),
+                strict=False,
             )
 
         return {
@@ -297,7 +390,7 @@ def close_consultation(
 
     previous_status = visit.status
     with transaction.atomic():
-        consultation, _ = ConsultationRepository.upsert_for_visit(
+        consultation, _, previous_snapshot = ConsultationRepository.upsert_for_visit(
             visit,
             doctor_id=doctor_id,
             primary_diagnosis=normalized_primary_diagnosis,
@@ -310,12 +403,24 @@ def close_consultation(
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
         )
+        # Gotcha A4.4: VisitRepository.update_status muta la instancia en
+        # memoria -- previous_status ya se capturo ANTES del atomic, mientras
+        # visit.status todavia era el valor previo.
         visit = VisitRepository.update_status(visit, next_state)
         VisitRepository.log_status_change(
             visit=visit,
             from_status=previous_status,
             to_status=next_state,
             changed_by_id=doctor_id,
+        )
+        # Invariante A4.3: exactamente 1 evento ConsultationClosed por
+        # request aunque haya 3 escrituras de dominio en este path.
+        # strict=False (A7): un fallo del hook no revierte el cierre.
+        audit_hook(
+            resource_id=consultation.id_consultation,
+            datos_antes=_close_consultation_datos_antes(previous_status, previous_snapshot),
+            datos_despues=_close_consultation_datos_despues(visit, consultation, is_replay=False),
+            strict=False,
         )
 
     return {
@@ -452,6 +557,7 @@ def cancel_secondary_diagnosis(
     *,
     doctor_id,
     permissions=None,
+    audit_hook,
 ):
     ensure_doctor_role(roles, permissions)
 
@@ -464,7 +570,17 @@ def cancel_secondary_diagnosis(
             "DIAGNOSIS_NOT_FOUND", "Diagnostico secundario no encontrado.", 404,
         )
 
-    diagnosis = VisitDiagnosisRepository.cancel(diagnosis, updated_by_id=doctor_id)
+    with transaction.atomic():
+        # Gotcha A4.4: VisitDiagnosisRepository.cancel muta la instancia en
+        # memoria y devuelve el MISMO objeto -- datos_antes se captura ANTES.
+        datos_antes = {"status": diagnosis.status, "cieCode": diagnosis.cie_id}
+        diagnosis = VisitDiagnosisRepository.cancel(diagnosis, updated_by_id=doctor_id)
+        audit_hook(
+            resource_id=diagnosis.id_visit_diagnosis,
+            datos_antes=datos_antes,
+            datos_despues={"status": diagnosis.status, "cieCode": diagnosis.cie_id},
+            strict=True,
+        )
     return VisitDiagnosisRepository.to_contract(diagnosis)
 
 

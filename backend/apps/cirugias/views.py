@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.repositories.user_repository import UserRepository
+from apps.authentication.services.audit_service import log_event
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
@@ -129,6 +130,31 @@ class SurgeriesListCreateView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_event(
+            request,
+            "SurgeryScheduled",
+            "SUCCESS",
+            actor_user=user,
+            resource_type="cirugias",
+            resource_id=payload["id"],
+            datos_antes=None,
+            datos_despues={
+                "status": payload["status"],
+                "scheduledDate": payload["scheduledDate"].isoformat(),
+                "scheduledTime": payload["scheduledTime"].isoformat(),
+                "surgeonId": payload["surgeonId"],
+                "surgeryTypeId": payload["surgeryTypeId"],
+                "classificationId": payload["classificationId"],
+                "cieCodesCount": len(payload["diagnoses"]),
+            },
+            meta={
+                "module": "cirugias",
+                "endpoint": request.path,
+                "actorId": actor_id,
+                "folio": payload["folio"],
+            },
+        )
+
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
@@ -156,6 +182,28 @@ class SurgeryCancelView(APIView):
 
         actor_id, permissions = _actor_context(user)
 
+        def audit_hook(*, resource_id, folio, datos_antes, datos_despues):
+            # ESTRICTO: `raise_on_error=True` -- si esto falla, la excepcion
+            # se propaga y `cancel_surgery` revierte todo el
+            # `transaction.atomic()`, incluida la cancelacion ya aplicada.
+            log_event(
+                request,
+                "SurgeryCancelled",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="cirugias",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "cirugias",
+                    "endpoint": request.path,
+                    "actorId": actor_id,
+                    "folio": folio,
+                },
+                raise_on_error=True,
+            )
+
         try:
             payload = cancel_surgery(
                 surgery_id,
@@ -163,6 +211,7 @@ class SurgeryCancelView(APIView):
                 notes=serializer.validated_data.get("notes"),
                 actor_id=actor_id,
                 permissions=permissions,
+                audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)

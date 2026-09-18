@@ -68,6 +68,11 @@ class SurgeryScheduleApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.client.cookies = response.cookies
 
+    def _csrf_headers(self):
+        csrf_token = "csrf-token-test"
+        self.client.cookies["csrf_token"] = csrf_token
+        return {"HTTP_X_CSRF_TOKEN": csrf_token}
+
     def _payload(self, **overrides):
         payload = {
             "noExp": "EXP-C001",
@@ -85,7 +90,9 @@ class SurgeryScheduleApiTests(APITestCase):
     def test_schedule_surgery_succeeds_with_permission(self):
         self._login_as("cirugias_writer", self.writer_password)
 
-        response = self.client.post("/api/v1/surgeries", self._payload(), format="json")
+        response = self.client.post(
+            "/api/v1/surgeries", self._payload(), format="json", **self._csrf_headers(),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["noExp"], "EXP-C001")
@@ -95,7 +102,9 @@ class SurgeryScheduleApiTests(APITestCase):
     def test_schedule_surgery_requires_permission(self):
         self._login_as("sin_permiso_cirugias", self.no_perm_password)
 
-        response = self.client.post("/api/v1/surgeries", self._payload(), format="json")
+        response = self.client.post(
+            "/api/v1/surgeries", self._payload(), format="json", **self._csrf_headers(),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data["code"], "ROLE_NOT_ALLOWED")
@@ -103,11 +112,14 @@ class SurgeryScheduleApiTests(APITestCase):
     def test_double_booking_same_surgeon_same_slot_fails(self):
         self._login_as("cirugias_writer", self.writer_password)
 
-        first = self.client.post("/api/v1/surgeries", self._payload(), format="json")
+        first = self.client.post(
+            "/api/v1/surgeries", self._payload(), format="json", **self._csrf_headers(),
+        )
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
 
         second = self.client.post(
             "/api/v1/surgeries", self._payload(noExp="EXP-C002"), format="json",
+            **self._csrf_headers(),
         )
 
         self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
@@ -116,13 +128,16 @@ class SurgeryScheduleApiTests(APITestCase):
     def test_overlapping_time_slot_fails(self):
         self._login_as("cirugias_writer", self.writer_password)
 
-        first = self.client.post("/api/v1/surgeries", self._payload(), format="json")
+        first = self.client.post(
+            "/api/v1/surgeries", self._payload(), format="json", **self._csrf_headers(),
+        )
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
 
         second = self.client.post(
             "/api/v1/surgeries",
             self._payload(noExp="EXP-C003", scheduledTime="09:30:00"),
             format="json",
+            **self._csrf_headers(),
         )
 
         self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
@@ -131,7 +146,9 @@ class SurgeryScheduleApiTests(APITestCase):
     def test_cancel_requires_reason_and_cannot_repeat(self):
         self._login_as("cirugias_writer", self.writer_password)
 
-        created = self.client.post("/api/v1/surgeries", self._payload(), format="json")
+        created = self.client.post(
+            "/api/v1/surgeries", self._payload(), format="json", **self._csrf_headers(),
+        )
         surgery_id = created.data["id"]
 
         from apps.catalogos.models import CatMotivoCancelacionCirugia
@@ -139,12 +156,14 @@ class SurgeryScheduleApiTests(APITestCase):
 
         missing_reason = self.client.patch(
             f"/api/v1/surgeries/{surgery_id}/cancel", {}, format="json",
+            **self._csrf_headers(),
         )
         self.assertEqual(missing_reason.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         cancel = self.client.patch(
             f"/api/v1/surgeries/{surgery_id}/cancel",
             {"reasonId": reason.id}, format="json",
+            **self._csrf_headers(),
         )
         self.assertEqual(cancel.status_code, status.HTTP_200_OK)
         self.assertEqual(cancel.data["status"], SurgerySchedule.Status.CANCELADA)
@@ -152,6 +171,7 @@ class SurgeryScheduleApiTests(APITestCase):
         repeat = self.client.patch(
             f"/api/v1/surgeries/{surgery_id}/cancel",
             {"reasonId": reason.id}, format="json",
+            **self._csrf_headers(),
         )
         self.assertEqual(repeat.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(repeat.data["code"], "SURGERY_ALREADY_CANCELLED")

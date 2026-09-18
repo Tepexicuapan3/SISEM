@@ -1,3 +1,5 @@
+from django.db import transaction
+
 from apps.consulta_medica.models import OdontogramTooth
 from apps.consulta_medica.odontogram_constants import (
     ALL_TEETH_FDI,
@@ -56,6 +58,7 @@ def upsert_tooth_condition(
     notes,
     actor_id,
     permissions=None,
+    audit_hook,
 ):
     ensure_doctor_role(roles, permissions)
 
@@ -75,12 +78,39 @@ def upsert_tooth_condition(
             details={"condition": ["Condicion invalida."]},
         )
 
-    tooth = OdontogramRepository.upsert_tooth(
-        no_exp=no_exp,
-        pk_num=pk_num,
-        tooth_fdi=tooth_fdi,
-        condition=condition,
-        notes=notes,
-        updated_by_id=actor_id,
-    )
+    with transaction.atomic():
+        # Estado previo leido ANTES de upsert_tooth (que sobreescribe sin
+        # tabla de revisiones -- A0.2/A1 #5, el mas expuesto junto con
+        # StomatologyHistory por no tener ninguna mitigacion lateral).
+        existing_tooth = OdontogramRepository.list_for_patient(no_exp, pk_num).get(tooth_fdi)
+        datos_antes = {
+            "condition": existing_tooth.condition if existing_tooth is not None else None,
+            "notesLen": (
+                len(existing_tooth.notes)
+                if existing_tooth is not None and existing_tooth.notes
+                else None
+            ),
+        }
+
+        tooth = OdontogramRepository.upsert_tooth(
+            no_exp=no_exp,
+            pk_num=pk_num,
+            tooth_fdi=tooth_fdi,
+            condition=condition,
+            notes=notes,
+            updated_by_id=actor_id,
+        )
+
+        audit_hook(
+            resource_id=tooth.id_odontogram_tooth,
+            datos_antes=datos_antes,
+            datos_despues={
+                "toothFdi": tooth.tooth_fdi,
+                "condition": tooth.condition,
+                "notesLen": len(tooth.notes) if tooth.notes else None,
+                "created": existing_tooth is None,
+            },
+            strict=True,
+        )
+
     return OdontogramRepository.to_contract(tooth)

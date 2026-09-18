@@ -1,3 +1,5 @@
+from django.db import transaction
+
 from apps.catalogos.models import Medicamentos
 from apps.consulta_medica.models import PrescriptionAuthorization
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
@@ -197,7 +199,7 @@ def add_prescription_item(
     return PrescriptionItemRepository.to_contract(item)
 
 
-def cancel_prescription_item(visit_id, item_id, roles, *, actor_id, permissions=None):
+def cancel_prescription_item(visit_id, item_id, roles, *, actor_id, permissions=None, audit_hook):
     ensure_doctor_role(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
@@ -213,7 +215,25 @@ def cancel_prescription_item(visit_id, item_id, roles, *, actor_id, permissions=
             "PRESCRIPTION_ITEM_NOT_FOUND", "Item de receta no encontrado.", 404,
         )
 
-    item = PrescriptionItemRepository.cancel(item, updated_by_id=actor_id)
+    with transaction.atomic():
+        # Gotcha A4.4: PrescriptionItemRepository.cancel muta la instancia en
+        # memoria y devuelve el MISMO objeto -- datos_antes se captura ANTES.
+        datos_antes = {
+            "status": item.status,
+            "medicationId": item.medication_id,
+            "quantity": item.quantity,
+        }
+        item = PrescriptionItemRepository.cancel(item, updated_by_id=actor_id)
+        audit_hook(
+            resource_id=item.id_prescription_item,
+            datos_antes=datos_antes,
+            datos_despues={
+                "status": item.status,
+                "medicationId": item.medication_id,
+                "quantity": item.quantity,
+            },
+            strict=True,
+        )
     return PrescriptionItemRepository.to_contract(item)
 
 
@@ -264,7 +284,7 @@ def list_prescription_authorizations_history(
     return {"items": contracts, "total": len(contracts)}
 
 
-def authorize_prescription(authorization_id, roles, *, actor_id, permissions=None):
+def authorize_prescription(authorization_id, roles, *, actor_id, permissions=None, audit_hook):
     _ensure_authorize_role(roles, permissions)
 
     authorization = PrescriptionAuthorizationRepository.get_by_id(authorization_id)
@@ -280,13 +300,40 @@ def authorize_prescription(authorization_id, roles, *, actor_id, permissions=Non
 
     _ensure_not_self_authorization(authorization, actor_id)
 
-    authorization = PrescriptionAuthorizationRepository.authorize(
-        authorization, authorized_by_id=actor_id,
-    )
+    with transaction.atomic():
+        # Gotcha A4.4: PrescriptionAuthorizationRepository.authorize muta la
+        # instancia en memoria y devuelve el MISMO objeto -- datos_antes se
+        # captura ANTES.
+        datos_antes = {
+            "status": authorization.status,
+            "authorizedById": authorization.authorized_by_id,
+            "authorizedAt": (
+                authorization.authorized_at.isoformat() if authorization.authorized_at else None
+            ),
+        }
+        authorization = PrescriptionAuthorizationRepository.authorize(
+            authorization, authorized_by_id=actor_id,
+        )
+        audit_hook(
+            resource_id=authorization.id_authorization,
+            datos_antes=datos_antes,
+            datos_despues={
+                "status": authorization.status,
+                "authorizedById": authorization.authorized_by_id,
+                "authorizedAt": (
+                    authorization.authorized_at.isoformat() if authorization.authorized_at else None
+                ),
+                "prescribedById": authorization.prescribed_by_id,
+                "medicationsCount": authorization.medications_count,
+                "specializedCount": authorization.specialized_count,
+                "controlledCount": authorization.controlled_count,
+            },
+            strict=True,
+        )
     return PrescriptionAuthorizationRepository.to_contract(authorization)
 
 
-def reject_prescription(authorization_id, roles, *, reason, actor_id, permissions=None):
+def reject_prescription(authorization_id, roles, *, reason, actor_id, permissions=None, audit_hook):
     _ensure_authorize_role(roles, permissions)
 
     normalized_reason = (reason or "").strip()
@@ -311,7 +358,32 @@ def reject_prescription(authorization_id, roles, *, reason, actor_id, permission
 
     _ensure_not_self_authorization(authorization, actor_id)
 
-    authorization = PrescriptionAuthorizationRepository.reject(
-        authorization, authorized_by_id=actor_id, reason=normalized_reason,
-    )
+    with transaction.atomic():
+        # Gotcha A4.4: PrescriptionAuthorizationRepository.reject muta la
+        # instancia en memoria y devuelve el MISMO objeto -- datos_antes se
+        # captura ANTES.
+        datos_antes = {
+            "status": authorization.status,
+            "authorizedById": authorization.authorized_by_id,
+            "authorizedAt": (
+                authorization.authorized_at.isoformat() if authorization.authorized_at else None
+            ),
+            "rejectionReason": authorization.rejection_reason,
+        }
+        authorization = PrescriptionAuthorizationRepository.reject(
+            authorization, authorized_by_id=actor_id, reason=normalized_reason,
+        )
+        audit_hook(
+            resource_id=authorization.id_authorization,
+            datos_antes=datos_antes,
+            datos_despues={
+                "status": authorization.status,
+                "authorizedById": authorization.authorized_by_id,
+                "authorizedAt": (
+                    authorization.authorized_at.isoformat() if authorization.authorized_at else None
+                ),
+                "rejectionReason": authorization.rejection_reason,
+            },
+            strict=True,
+        )
     return PrescriptionAuthorizationRepository.to_contract(authorization)

@@ -18,6 +18,13 @@ from apps.recepcion.services.errors import VisitDomainError
 AUTHORIZE_PERMISSION = ["clinico:recetas:authorize"]
 
 
+def _noop_audit_hook(**kwargs):
+    """Unit-level: el audit_hook se valida en los tests de API. `audit_hook`
+    es keyword-only requerido (A0.3), asi que todo caller directo del
+    usecase debe pasar algo."""
+    return None
+
+
 class PrescriptionAuthorizationUseCaseTests(TestCase):
     def setUp(self):
         self.doctor_id = SyUsuario.objects.create(
@@ -56,6 +63,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
             visit_id=visit.id_visit, roles=["DOCTOR"],
             primary_diagnosis="Dx de prueba", final_note="Nota de prueba",
             doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
         return visit
 
@@ -132,6 +140,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         payload = authorize_prescription(
             auth.id_authorization, ["FARMACIA"],
             actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+            audit_hook=_noop_audit_hook,
         )
 
         self.assertEqual(payload["status"], "autorizada")
@@ -153,12 +162,14 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
             reject_prescription(
                 auth.id_authorization, ["FARMACIA"], reason="   ",
                 actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+                audit_hook=_noop_audit_hook,
             )
         self.assertEqual(raised.exception.code, "VALIDATION_ERROR")
 
         payload = reject_prescription(
             auth.id_authorization, ["FARMACIA"], reason="Sin existencias en farmacia",
             actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+            audit_hook=_noop_audit_hook,
         )
         self.assertEqual(payload["status"], "rechazada")
         self.assertEqual(payload["rejectionReason"], "Sin existencias en farmacia")
@@ -174,12 +185,14 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         authorize_prescription(
             auth.id_authorization, ["FARMACIA"],
             actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+            audit_hook=_noop_audit_hook,
         )
 
         with self.assertRaises(VisitDomainError) as raised:
             authorize_prescription(
                 auth.id_authorization, ["FARMACIA"],
                 actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+                audit_hook=_noop_audit_hook,
             )
         self.assertEqual(raised.exception.code, "AUTHORIZATION_ALREADY_RESOLVED")
         self.assertEqual(raised.exception.status_code, 409)
@@ -197,6 +210,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
             authorize_prescription(
                 auth.id_authorization, ["FARMACIA"],
                 actor_id=self.authorizer_id, permissions=[],
+                audit_hook=_noop_audit_hook,
             )
         self.assertEqual(raised.exception.code, "ROLE_NOT_ALLOWED")
         self.assertEqual(raised.exception.status_code, 403)
@@ -218,6 +232,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         authorize_prescription(
             auth_b.id_authorization, ["FARMACIA"],
             actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+            audit_hook=_noop_audit_hook,
         )
 
         result = list_pending_prescription_authorizations(
@@ -242,6 +257,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
 
         cancel_prescription_item(
             visit.id_visit, item_payload["id"], ["DOCTOR"], actor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
         )
 
         auth = PrescriptionAuthorization.objects.get()
@@ -277,6 +293,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
             authorize_prescription(
                 auth.id_authorization, ["FARMACIA"],
                 actor_id=self.doctor_id, permissions=AUTHORIZE_PERMISSION,
+                audit_hook=_noop_audit_hook,
             )
         self.assertEqual(raised.exception.code, "SELF_AUTHORIZATION_NOT_ALLOWED")
         self.assertEqual(raised.exception.status_code, 403)
@@ -285,6 +302,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
             reject_prescription(
                 auth.id_authorization, ["FARMACIA"], reason="No aplica",
                 actor_id=self.doctor_id, permissions=AUTHORIZE_PERMISSION,
+                audit_hook=_noop_audit_hook,
             )
         self.assertEqual(raised.exception.code, "SELF_AUTHORIZATION_NOT_ALLOWED")
 
@@ -309,10 +327,12 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         authorize_prescription(
             auth_a.id_authorization, ["FARMACIA"],
             actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+            audit_hook=_noop_audit_hook,
         )
         reject_prescription(
             auth_b.id_authorization, ["FARMACIA"], reason="Sin existencias",
             actor_id=self.authorizer_id, permissions=AUTHORIZE_PERMISSION,
+            audit_hook=_noop_audit_hook,
         )
 
         full_history = list_prescription_authorizations_history(

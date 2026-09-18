@@ -158,7 +158,7 @@ def _get_request_or_error(request_id):
     return ambulance_request
 
 
-def authorize_request(request_id, *, service_number, actor_id, permissions=None):
+def authorize_request(request_id, *, service_number, actor_id, permissions=None, audit_hook):
     ensure_ambulance_authorize(permissions)
 
     ambulance_request = _get_request_or_error(request_id)
@@ -172,13 +172,40 @@ def authorize_request(request_id, *, service_number, actor_id, permissions=None)
             details={"serviceNumber": ["Debes indicar el numero de servicio/ambulancia."]},
         )
 
-    ambulance_request = AmbulanceRequestRepository.authorize(
-        ambulance_request, service_number=service_number, updated_by_id=actor_id,
-    )
+    # `datos_antes` se captura ANTES de `.authorize(...)`: el repository
+    # muta la instancia en memoria y devuelve el MISMO objeto, no una copia
+    # (gotcha B2 del diseno) -- capturarlo despues dejaria datos_antes
+    # identico a datos_despues.
+    datos_antes = {
+        "authorizationStatus": ambulance_request.authorization_status,
+        "serviceNumber": ambulance_request.service_number,
+    }
+
+    with transaction.atomic():
+        ambulance_request = AmbulanceRequestRepository.authorize(
+            ambulance_request, service_number=service_number, updated_by_id=actor_id,
+        )
+        datos_despues = {
+            "authorizationStatus": ambulance_request.authorization_status,
+            "serviceNumber": ambulance_request.service_number,
+            "authorizedAt": (
+                ambulance_request.authorized_at.isoformat()
+                if ambulance_request.authorized_at else None
+            ),
+        }
+        # Si el hook lanza (auditoria ESTRICTA, `raise_on_error=True` en la
+        # vista), este `atomic()` revierte la autorizacion completa.
+        audit_hook(
+            resource_id=ambulance_request.id,
+            folio=ambulance_request.folio,
+            datos_antes=datos_antes,
+            datos_despues=datos_despues,
+        )
+
     return AmbulanceRequestRepository.to_contract(ambulance_request)
 
 
-def reject_request(request_id, *, notes, actor_id, permissions=None):
+def reject_request(request_id, *, notes, actor_id, permissions=None, audit_hook):
     ensure_ambulance_authorize(permissions)
 
     ambulance_request = _get_request_or_error(request_id)
@@ -192,20 +219,51 @@ def reject_request(request_id, *, notes, actor_id, permissions=None):
             details={"notes": ["Debes indicar el motivo del rechazo."]},
         )
 
-    ambulance_request = AmbulanceRequestRepository.reject(
-        ambulance_request, notes=notes, updated_by_id=actor_id,
-    )
+    # Gotcha B2: capturar `datos_antes` ANTES de `.reject(...)`.
+    datos_antes = {"authorizationStatus": ambulance_request.authorization_status}
+
+    with transaction.atomic():
+        ambulance_request = AmbulanceRequestRepository.reject(
+            ambulance_request, notes=notes, updated_by_id=actor_id,
+        )
+        datos_despues = {
+            "authorizationStatus": ambulance_request.authorization_status,
+            "rejectionNotes": ambulance_request.rejection_notes,
+            "authorizedAt": (
+                ambulance_request.authorized_at.isoformat()
+                if ambulance_request.authorized_at else None
+            ),
+        }
+        audit_hook(
+            resource_id=ambulance_request.id,
+            folio=ambulance_request.folio,
+            datos_antes=datos_antes,
+            datos_despues=datos_despues,
+        )
+
     return AmbulanceRequestRepository.to_contract(ambulance_request)
 
 
-def cancel_request(request_id, *, actor_id, permissions=None):
+def cancel_request(request_id, *, actor_id, permissions=None, audit_hook):
     ensure_ambulance_write(permissions)
 
     ambulance_request = _get_request_or_error(request_id)
     if ambulance_request.status == AmbulanceRequest.Status.BAJA:
         raise VisitDomainError("AMBULANCE_REQUEST_ALREADY_CANCELLED", "La solicitud ya esta dada de baja.", 409)
 
-    ambulance_request = AmbulanceRequestRepository.cancel(ambulance_request, updated_by_id=actor_id)
+    # Gotcha B2: capturar `datos_antes` ANTES de `.cancel(...)`.
+    datos_antes = {"status": ambulance_request.status}
+
+    with transaction.atomic():
+        ambulance_request = AmbulanceRequestRepository.cancel(ambulance_request, updated_by_id=actor_id)
+        datos_despues = {"status": ambulance_request.status}
+        audit_hook(
+            resource_id=ambulance_request.id,
+            folio=ambulance_request.folio,
+            datos_antes=datos_antes,
+            datos_despues=datos_despues,
+        )
+
     return AmbulanceRequestRepository.to_contract(ambulance_request)
 
 

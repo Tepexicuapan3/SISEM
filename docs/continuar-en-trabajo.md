@@ -374,6 +374,73 @@ especialidades), quedó así:
 - **Licencias/Incapacidades — autorización**: mismo patrón del legado
   pendiente de revisar, prioridad baja.
 
+## Completado 2026-09-17 — infraestructura (gateway, CORS/CSRF, celery-beat)
+
+Sesión aparte, enfocada en poner a producción el acceso público a SISEM
+(puerto 80/443) y al **Portal de Citas** (puerto 8081) vía la IP pública
+`187.217.145.12` (servidor `sma1`, Linux, IP interna `10.15.15.22`).
+Resultado: SISEM público funcionando 100%; Portal de Citas funcionando
+100% por red interna, **bloqueado en público solo por falta de una regla
+de red externa a este repo** (ver "Bloqueado" abajo).
+
+1. **Typo crítico en el gateway externo — corregido y desplegado**.
+   `nginx/conf.d/sisem.conf:1` (repo `ngnix-gateway`) tenía `sserver {`
+   en vez de `server {`, commiteado en `main` desde antes de esta sesión.
+   nginx carga todo `conf.d/*.conf` como un solo bloque: ese typo hacía
+   fallar `nginx -t` completo, así que **cualquier restart del contenedor
+   `proxy_nginx` tiraba abajo SISEM y Portal de Citas juntos**, no solo
+   uno. Corregido, pusheado, pulleado en `sma1` y recargado con
+   `nginx -s reload` (verificado: `syntax is ok` / `test is successful`).
+
+2. **Gap de CORS/CSRF para el Portal de Citas por IP pública — corregido**.
+   `DJANGO_CORS_ALLOWED_ORIGINS` y `DJANGO_CSRF_TRUSTED_ORIGINS` (`.env`
+   de SIRES) tenían `https://10.15.15.22:8081` (IP interna) pero les
+   faltaba `https://187.217.145.12:8081` (IP pública) — a diferencia de
+   `ALLOWED_HOSTS`, estas dos variables comparan origin completo
+   (scheme+host+puerto) sin normalizar puerto, así que cualquier
+   POST/PUT real (login, agendar cita) desde la IP pública iba a tirar
+   403 aunque la página cargara bien. Se agregó la entrada faltante a
+   ambas variables y se recreó `backend`
+   (`docker compose up -d --force-recreate backend`).
+
+3. **`celery-beat` quedaba `unhealthy` permanentemente — corregido**.
+   Causa real: `backend/Dockerfile` define un `HEALTHCHECK` (`curl
+   localhost:5000/health`) pensado para el proceso `daphne` del servicio
+   `backend`; `celery-beat` usa la misma imagen pero su `command:`
+   levanta `celery -A config beat`, que no expone HTTP en el 5000 — el
+   check fallaba siempre, sin relación con si el scheduler realmente
+   funcionaba. `celery-worker` ya tenía este problema resuelto con un
+   healthcheck propio (`celery inspect ping`); a `celery-beat` nunca se
+   le agregó el equivalente. Se agregó un `healthcheck:` propio en
+   `docker-compose.yml` (repo `SIRES`) que valida que
+   `/data/celerybeat-schedule` se siga reescribiendo (margen de 600s,
+   acorde al `beat_max_loop_interval` default de Celery sin overrides en
+   este proyecto — confirmado en `config/settings.py`). Commiteado
+   (`bab53ab`, "cambiso celery"), pendiente de push/deploy al momento de
+   escribir esto.
+
+## Bloqueado (2026-09-17) — necesita al equipo de red, no código
+
+- **Portal de Citas inalcanzable en `https://187.217.145.12:8081`
+  (timeout) pese a que todo lo demás ya se probó sano.** Diagnóstico
+  hecho por eliminación, capa por capa, con evidencia en cada paso:
+  - Docker publica el puerto bien (`docker ps` → `0.0.0.0:8081->8081/tcp`).
+  - nginx del gateway sirve bien (`curl -k -I https://localhost:8081` en
+    `sma1` → `200 OK`).
+  - Portal de Citas responde bien por la IP interna
+    (`https://10.15.15.22:8081` funciona completo).
+  - Firewall del SO en `sma1` no filtra nada (`ufw` inactivo, `iptables
+    -L INPUT` con policy `ACCEPT` y cero reglas).
+  - Conclusión: el router/firewall perimetral que traduce
+    `187.217.145.12` hacia `10.15.15.22` tiene la regla de NAT/port-forward
+    para `80` y `443` (por eso SISEM sí entra) pero **le falta la regla
+    para `8081`**. Nada de esto se arregla desde los repos ni desde
+    `sma1` — hay que pedirle a quien administre ese equipo (Telecom/Redes
+    del Metro) que agregue: **NAT/port-forward TCP 8081, de
+    `187.217.145.12:8081` hacia `10.15.15.22:8081`**, mismo criterio que
+    ya existe para 80/443. En cuanto se agregue esa regla, no hace falta
+    tocar nada más — todo el resto de la cadena ya quedó probado.
+
 ## Estado del repo
 
 **Sin commitear todavía** — todo lo de hoy (historia clínica, catálogos,
