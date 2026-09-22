@@ -361,10 +361,12 @@ especialidades), quedó así:
   horarios de quirófano.
 - Correr `python manage.py seed_catalogos_crud_permissions` a mano en el
   próximo deploy (sesión anterior, sigue pendiente).
-- **Autorización de Recetas — frontend**: backend ya completo y validado
-  (ver sección arriba), falta la pantalla de cola de pendientes +
-  autorizar/rechazar. Preguntar al usuario si seguir con esto antes de
-  construirlo.
+- ~~**Autorización de Recetas — frontend**~~ **COMPLETADO (2026-09-22)**:
+  feature plana `frontend/src/features/autorizacion-recetas/` (cola Pendientes +
+  Historial, autorizar/rechazar con dialogs). Backend validado, frontend +
+  frontend commiteado en rama `SISEM-15-07-2026` (commit `9e9b604`), pendiente
+  de push. Incluye eliminación atómica del placeholder huérfano
+  `/admin/autorizacion/recetas`.
 - **Autorización de Estudios**: segunda mitad de "Autorizadores", queda
   aparte porque falta definir el criterio de negocio (a diferencia de
   Recetas, que ya tenía `cuadro_basico`/`is_controlled` en el catálogo).
