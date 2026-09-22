@@ -93,7 +93,6 @@ PERMISSIONS = [
     ("admin:catalogos:especialidades:delete", "Admin - Eliminar especialidades"),
     ("admin:reportes:read", "Admin - Ver reportes"),
     ("admin:estadisticas:read", "Admin - Ver estadisticas"),
-    ("admin:autorizacion:recetas:read", "Admin - Autorizacion recetas"),
     ("admin:autorizacion:estudios:read", "Admin - Autorizacion estudios"),
     ("admin:licencias:read", "Admin - Licencias"),
     ("admin:conciliacion:read", "Admin - Conciliacion"),
@@ -235,9 +234,8 @@ ROLE_DEFS = [
     {
         "code": "ADMIN_AUTORIZACION",
         "desc": "Admin Autorizacion",
-        "landing": "/admin/autorizacion/recetas",
+        "landing": "/admin/autorizacion/estudios",
         "perms": [
-            "admin:autorizacion:recetas:read",
             "admin:autorizacion:estudios:read",
         ],
     },

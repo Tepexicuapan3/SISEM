@@ -613,18 +613,6 @@ export const adminRoutes: RouteObject[] = [
     ),
   },
   {
-    path: "autorizacion/recetas",
-    element: (
-      <ProtectedRoute requiredPermission="admin:autorizacion:recetas:read">
-        <PlaceholderPage
-          title="Autorizacion de Recetas"
-          description="Flujo de aprobacion y seguimiento de recetas"
-          moduleName="Administracion"
-        />
-      </ProtectedRoute>
-    ),
-  },
-  {
     path: "autorizacion/estudios",
     element: (
       <ProtectedRoute requiredPermission="admin:autorizacion:estudios:read">

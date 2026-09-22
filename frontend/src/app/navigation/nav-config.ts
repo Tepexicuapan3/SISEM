@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarClock,
   Clock,
+  ClipboardCheck,
   ClipboardList,
   Database,
   FileText,
@@ -351,12 +352,6 @@ export const NAV_CONFIG: NavSection[] = [
         icon: Shield,
         items: [
           {
-            title: "Recetas",
-            url: "/admin/autorizacion/recetas",
-            permissions: ["admin:autorizacion:recetas:read"],
-            badge: PLACEHOLDER_BADGE,
-          },
-          {
             title: "Estudios",
             url: "/admin/autorizacion/estudios",
             permissions: ["admin:autorizacion:estudios:read"],
@@ -449,6 +444,12 @@ export const NAV_CONFIG: NavSection[] = [
         url: "/clinico/ambulancias",
         icon: Ambulance,
         permissions: ["clinico:ambulancias:read"],
+      },
+      {
+        title: "Autorizacion de Recetas",
+        url: "/clinico/autorizacion-recetas",
+        icon: ClipboardCheck,
+        permissions: ["clinico:recetas:authorize"],
       },
     ],
   },

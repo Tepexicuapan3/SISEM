@@ -34,10 +34,6 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Autorización de Estudios",
     grupo: "Administración",
   },
-  "/admin/autorizacion/recetas": {
-    label: "Autorización de Recetas",
-    grupo: "Administración",
-  },
   "/admin/catalogos": { label: "Catálogos", grupo: "Catálogos" },
   "/admin/catalogos/areas": { label: "Áreas", grupo: "Catálogos" },
   "/admin/catalogos/areas-clinicas": {
@@ -172,6 +168,12 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Unidades de Medida",
     grupo: "Almacén",
   },
+  "/clinico/ambulancias": { label: "Ambulancias", grupo: "Clínico" },
+  "/clinico/autorizacion-recetas": {
+    label: "Autorización de Recetas",
+    grupo: "Clínico",
+  },
+  "/clinico/cirugias": { label: "Cirugías", grupo: "Clínico" },
   "/clinico/consultas": { label: "Consultas", grupo: "Clínico" },
   "/clinico/consultas/agenda": {
     label: "Agenda de Consultas",

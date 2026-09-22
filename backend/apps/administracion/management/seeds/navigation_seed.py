@@ -855,6 +855,22 @@ NAV_SEED = [
         "parent_clave": "clinico",
         "permisos": ["clinico:ambulancias:read"],
     },
+    {
+        # Agregado 2026-09-21: cola de autorizacion de recetas con
+        # medicamentos ESPECIAL/controlados -- reemplaza el placeholder
+        # huerfano de admin.autorizacion.recetas (la pantalla real vive en
+        # Clinico, gateada por clinico:recetas:authorize).
+        "clave": "clinico.autorizacion_recetas",
+        "titulo": "Autorizacion de Recetas",
+        "icono": "clipboard-check",
+        "url": "/clinico/autorizacion-recetas",
+        "badge": None,
+        "orden": 5,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "clinico",
+        "permisos": ["clinico:recetas:authorize"],
+    },
     # ── Recepcion ────────────────────────────────────────────────────────
     {
         "clave": "recepcion",

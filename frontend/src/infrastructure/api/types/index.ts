@@ -949,6 +949,17 @@ export type {
 } from "@api/types/reportes-ambulancias.types";
 
 // =============================================================================
+// AUTORIZACION DE RECETAS (cola de pendientes + historial)
+// =============================================================================
+export type {
+  PrescriptionAuthorizationStatus,
+  PrescriptionAuthorizationItem,
+  PrescriptionAuthorizationListResponse,
+  PrescriptionAuthorizationHistoryParams,
+  RejectPrescriptionRequest,
+} from "@api/types/prescription-authorizations.types";
+
+// =============================================================================
 // CLINICAS (referencia de solo lectura, para poblar selects)
 // =============================================================================
 export type { ClinicaRefItem, ClinicasListResponse } from "@api/types/clinicas.types";

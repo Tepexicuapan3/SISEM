@@ -10,6 +10,7 @@ import DoctorConsultationPage from "@features/consulta-medica/modules/atencion/p
 import SomatometriaCapturePage from "@features/somatometria/modules/captura/pages/SomatometriaCapturePage";
 import CirugiasPage from "@features/cirugias/pages/CirugiasPage";
 import AmbulanciasPage from "@features/ambulancias/pages/AmbulanciasPage";
+import AutorizacionRecetasPage from "@features/autorizacion-recetas/pages/AutorizacionRecetasPage";
 import PlaceholderPage from "@shared/components/PlaceholderPage";
 
 // Clinico
@@ -117,6 +118,14 @@ export const clinicoRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute requiredPermission="clinico:ambulancias:read">
         <AmbulanciasPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "autorizacion-recetas",
+    element: (
+      <ProtectedRoute requiredPermission="clinico:recetas:authorize">
+        <AutorizacionRecetasPage />
       </ProtectedRoute>
     ),
   },
