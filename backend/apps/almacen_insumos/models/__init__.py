@@ -1,4 +1,5 @@
 from .catalogos import Almacen, CatCategoriaInsumo, CatInsumo, CatProveedor, CatUnidadMedida
+from .farmacia import MedicamentoInsumo
 from .kardex import (
     ConteoFisico,
     ConteoFisicoDetalle,
@@ -19,6 +20,7 @@ __all__ = [
     "CatProveedor",
     "CatInsumo",
     "Almacen",
+    "MedicamentoInsumo",
     "LoteInsumo",
     "EntradaInventario",
     "EntradaInventarioDetail",

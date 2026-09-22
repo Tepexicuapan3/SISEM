@@ -34,6 +34,7 @@ from .serializers import (
     CloseConsultationSerializer,
     CreateMedicalLeaveSerializer,
     CreateStudyResultSerializer,
+    DispensePrescriptionSerializer,
     OdontogramToothUpdateSerializer,
     RejectPrescriptionAuthorizationSerializer,
     SearchCieSerializer,
@@ -78,6 +79,11 @@ from .uses_case.prescription_item_usecase import (
     list_pending_prescription_authorizations,
     list_prescription_authorizations_history,
     reject_prescription,
+)
+from .uses_case.prescription_dispensation_usecase import (
+    dispense,
+    get_dispensation_preview,
+    list_pending_dispensation_queue,
 )
 from .repositories.prescription_repository import PrescriptionRepository
 from .uses_case.study_result_usecase import (
@@ -1502,6 +1508,141 @@ class PrescriptionAuthorizationsHistoryView(APIView):
             return _domain_error_response(request, exc)
 
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class PrescriptionDispensationsPendingView(APIView):
+    """
+    GET /prescriptions/dispensations/pending?idAlmacen= -- cola de recetas
+    AUTORIZADAS con al menos un item pendiente/parcial, filtrada por el
+    centro de atencion del almacen de farmacia (sdd/dispensacion-farmacia).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        _, roles, permissions = _actor_context(user)
+
+        raw_id_almacen = request.query_params.get("idAlmacen")
+        id_almacen = None
+        if raw_id_almacen:
+            try:
+                id_almacen = int(raw_id_almacen)
+            except ValueError:
+                return error_response(
+                    "VALIDATION_ERROR",
+                    "Hay errores en el formulario",
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    details={"idAlmacen": ["Debe ser un numero entero."]},
+                    request_id=get_request_id(request),
+                )
+
+        try:
+            payload = list_pending_dispensation_queue(
+                roles, permissions, id_almacen=id_almacen,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class PrescriptionDispensationView(APIView):
+    """
+    GET /prescriptions/<id>/dispensation -- preview de dispensacion: cada
+    item de la receta con `computedQuantity` y si tiene o no insumo
+    mapeado, ANTES de confirmar (sdd/dispensacion-farmacia).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, prescription_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = get_dispensation_preview(prescription_id, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PrescriptionDispenseView(APIView):
+    """
+    POST /prescriptions/<id>/dispense -- confirma la dispensacion de N
+    items de la receta y descuenta stock del almacen de farmacia indicado
+    (sdd/dispensacion-farmacia). Ver prescription_dispensation_usecase.dispense
+    para el orden exacto de la transaccion.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, prescription_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        serializer = DispensePrescriptionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details=serializer.errors,
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+        data = serializer.validated_data
+
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "PrescriptionDispensed",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "prescriptionId": prescription_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
+        try:
+            payload = dispense(
+                prescription_id,
+                roles,
+                id_almacen=data["idAlmacen"],
+                item_requests=data["items"],
+                actor_id=actor_id,
+                permissions=permissions,
+                audit_hook=audit_hook,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

@@ -204,6 +204,19 @@ class ConsumoConsultaDetalle(models.Model):
     id_insumo  = models.ForeignKey(CatInsumo,       on_delete=models.PROTECT, related_name="consumos_det", db_column="id_insumo")
     id_lote    = models.ForeignKey(LoteInsumo,      on_delete=models.PROTECT, related_name="consumos_det", db_column="id_lote",    null=True, blank=True)
     cantidad   = models.DecimalField(max_digits=14, decimal_places=4)
+    # Enlace opcional a la dispensacion de farmacia (sdd/dispensacion-farmacia).
+    # FK cross-app por STRING a proposito: cero import en tiempo de modulo de
+    # `consulta_medica` desde `almacen_insumos` (ver design seccion d). Se
+    # permiten multiples eventos parciales por item de receta -- NO llevar
+    # UniqueConstraint aca, seria incompatible con dispensacion parcial.
+    prescription_item = models.ForeignKey(
+        "consulta_medica.VisitPrescriptionItem",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        db_column="id_receta_item",
+        related_name="consumo_detalles",
+    )
 
     class Meta:
         db_table = "almacen_consumos_consulta_det"

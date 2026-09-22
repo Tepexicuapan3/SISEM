@@ -11,10 +11,14 @@ export function useKardexList(params: KardexListParams) {
   });
 }
 
-export function useExistenciasList(params: ExistenciasListParams) {
+export function useExistenciasList(
+  params: ExistenciasListParams,
+  opts: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: kardexKeys.existList(params),
     queryFn:  () => existenciasAPI.list(params),
     staleTime: 30_000,
+    enabled:  opts.enabled ?? true,
   });
 }

@@ -248,6 +248,24 @@ class VisitPrescriptionItem(models.Model):
         default=Status.ACTIVO,
     )
 
+    # sdd/dispensacion-farmacia: estado de dispensacion en farmacia,
+    # modificable UNICAMENTE por prescription_dispensation_usecase.dispense.
+    # Permite eventos parciales (pendiente -> parcial -> dispensado) --
+    # dispensed_quantity nunca puede superar quantity (CheckConstraint abajo,
+    # ultima linea de defensa contra doble dispensacion -- ver design (c)).
+    class DispensationStatus(models.TextChoices):
+        PENDIENTE = "pendiente", "Pendiente"
+        PARCIAL = "parcial", "Parcial"
+        DISPENSADO = "dispensado", "Dispensado"
+
+    dispensed_quantity = models.PositiveIntegerField(
+        db_column="cantidad_dispensada", default=0,
+    )
+    dispensation_status = models.CharField(
+        max_length=20, db_column="estatus_dispensacion",
+        choices=DispensationStatus.choices, default=DispensationStatus.PENDIENTE,
+    )
+
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
@@ -263,6 +281,10 @@ class VisitPrescriptionItem(models.Model):
                 fields=["prescription", "medication"],
                 condition=models.Q(status="activo"),
                 name="cns_rxitem_one_active_per_medication",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(dispensed_quantity__lte=models.F("quantity")),
+                name="cns_rxitem_dispensed_lte_quantity",
             ),
         ]
         indexes = [

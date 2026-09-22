@@ -15,6 +15,9 @@ from apps.consulta_medica.views import (
     PrescriptionAuthorizationRejectView,
     PrescriptionAuthorizationsHistoryView,
     PrescriptionAuthorizationsPendingView,
+    PrescriptionDispensationsPendingView,
+    PrescriptionDispensationView,
+    PrescriptionDispenseView,
     VisitCieSearchView,
     VisitConsultationAddendumView,
     VisitConsultationCloseView,
@@ -135,6 +138,21 @@ urlpatterns = [
         "prescriptions/authorizations/<int:authorization_id>/reject",
         PrescriptionAuthorizationRejectView.as_view(),
         name="prescription-authorization-reject",
+    ),
+    path(
+        "prescriptions/dispensations/pending",
+        PrescriptionDispensationsPendingView.as_view(),
+        name="prescription-dispensations-pending",
+    ),
+    path(
+        "prescriptions/<int:prescription_id>/dispensation",
+        PrescriptionDispensationView.as_view(),
+        name="prescription-dispensation",
+    ),
+    path(
+        "prescriptions/<int:prescription_id>/dispense",
+        PrescriptionDispenseView.as_view(),
+        name="prescription-dispense",
     ),
     path(
         "visits/<int:visit_id>/consultation/start",

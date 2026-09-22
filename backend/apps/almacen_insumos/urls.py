@@ -8,6 +8,7 @@ from .views.catalogos import (
     CatProveedorViewSet,
     CatUnidadMedidaViewSet,
 )
+from .views.farmacia import MedicamentoInsumoViewSet
 from .views.kardex import (
     ConteoFisicoViewSet,
     ConsumoConsultaViewSet,
@@ -26,6 +27,7 @@ router.register(r"almacen/categorias",       CatCategoriaInsumoViewSet, basename
 router.register(r"almacen/proveedores",      CatProveedorViewSet,       basename="almacen-proveedor")
 router.register(r"almacen/insumos",          CatInsumoViewSet,          basename="almacen-insumo")
 router.register(r"almacen/almacenes",        AlmacenViewSet,            basename="almacen-almacen")
+router.register(r"almacen/medicamento-insumos", MedicamentoInsumoViewSet, basename="almacen-medicamento-insumo")
 # Kardex engine
 router.register(r"almacen/lotes",            LoteInsumoViewSet,         basename="almacen-lote")
 router.register(r"almacen/entradas",         EntradaInventarioViewSet,  basename="almacen-entrada")

@@ -245,3 +245,20 @@ class SearchCieSerializer(serializers.Serializer):
                 "Debes ingresar al menos 2 caracteres para buscar CIE."
             )
         return normalized
+
+
+class DispensePrescriptionItemSerializer(serializers.Serializer):
+    itemId = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1)
+
+
+class DispensePrescriptionSerializer(serializers.Serializer):
+    idAlmacen = serializers.IntegerField()
+    items = DispensePrescriptionItemSerializer(many=True)
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "Debes indicar al menos un item a dispensar."
+            )
+        return value

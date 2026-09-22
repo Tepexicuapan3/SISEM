@@ -1136,6 +1136,26 @@ export type {
 } from "@api/types/farmacia/inventario-vacunas.types";
 
 // =============================================================================
+// FARMACIA TYPES (dispensacion)
+// =============================================================================
+export type {
+  DispensationQueueItem,
+  DispensationPreviewItem,
+  DispensationResultItem,
+  DispensePrescriptionItemRequest,
+  DispensePrescriptionRequest,
+  DispensationQueueResponse,
+  DispensationPreviewResponse,
+  DispensePrescriptionResponse,
+  DispensationQueueParams,
+} from "@api/types/farmacia/dispensacion.types";
+export {
+  DISPENSATION_STATUS,
+  DISPENSATION_STATUS_LABELS,
+} from "@api/types/farmacia/dispensacion.types";
+export type { DispensationStatus } from "@api/types/farmacia/dispensacion.types";
+
+// =============================================================================
 // NAVIGATION MENU TYPES (arbol servido por cat_modulos)
 // =============================================================================
 export type {
