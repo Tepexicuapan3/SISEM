@@ -361,6 +361,14 @@ especialidades), quedó así:
   horarios de quirófano.
 - Correr `python manage.py seed_catalogos_crud_permissions` a mano en el
   próximo deploy (sesión anterior, sigue pendiente).
+- **Códigos de permisos huérfanos en `seed_navigation_menu` (deuda
+  preexistente)**: el comando reporta 9 permisos sin consumidor bajo
+  `admin:catalogos:*` (`cie9_mc`, `clasificaciones_cirugia`,
+  `destinos_ambulancia`, `estudios`, `motivos_cancelacion_cirugia`,
+  `motivos_traslado`, `tipos_cirugia`, `tipos_servicio_ambulancia`,
+  `tipos_traslado`). Mismo origen que las fallas preexistentes de
+  `menu-destinations.test.ts` ya documentadas — el usuario decidió
+  dejarlo como change aparte. Sin acción requerida en esta sesión.
 - ~~**Autorización de Recetas — frontend**~~ **COMPLETADO (2026-09-22)**:
   feature plana `frontend/src/features/autorizacion-recetas/` (cola Pendientes +
   Historial, autorizar/rechazar con dialogs). Backend validado, frontend +
@@ -442,6 +450,80 @@ de red externa a este repo** (ver "Bloqueado" abajo).
     `187.217.145.12:8081` hacia `10.15.15.22:8081`**, mismo criterio que
     ya existe para 80/443. En cuanto se agregue esa regla, no hace falta
     tocar nada más — todo el resto de la cadena ya quedó probado.
+
+## Completado 2026-09-23 — Dispensación de Farmacia
+
+Flujo integral receta autorizada → descuento de stock vía kardex de almacén,
+implementado y verificado contra suite con 149 tests, branch `SISEM-15-07-2026`
+(commit local `dcae826`, sin pushear).
+
+### Dispensación de Farmacia — descuento de stock en Almacén
+**Qué se implementó**: puente entre la autorización de recetas (ya funcional)
+y el descuento real de stock de medicamentos/insumos. Mapeo manual
+`MedicamentoInsumo` (FK `medicamento` → FK `insumo`, con `factorConversion`)
+permite que una receta autorizada de un medicamento específico descuente
+unidades del insumo correspondiente en el Almacén tipo FARMACIA, vía la
+kardex existente de entrada/salida de existencias.
+- Modelo nuevo: `farmacia.MedicamentoInsumoMap` (FK medicamento + FK insumo +
+  factor de conversión, único por medicamento).
+- Modelo nuevo: `farmacia.PrescriptionDispensation` (FK receta + actor +
+  cantidad dispensada, con auditoria de cambios via historial).
+- Endpoint nuevo: `POST /api/v1/prescriptions/<id>/dispense` (valida
+  autorización, mapeo medicamento↔insumo, stock disponible, previene
+  doble-dispensación via `select_for_update` en la transacción).
+- Gate de autorización: respeta la decisión del autorizador ya tomada
+  (`PrescriptionAuthorization.estatus = AUTHORIZED`), **nunca toca ese
+  módulo** — segregación limpia.
+- **149 tests, todos pasan** — incluye casos de borde (stock insuficiente,
+  medicamento sin mapeo, doble dispensación concurrente, rollback por error).
+- Commit `dcae826` local, branch `SISEM-15-07-2026`.
+
+### Verificación manual pendiente (Postgres real, DEV)
+
+**Paso 1 — Preparar datos reales**
+```bash
+python manage.py seed_farmacia_almacenes
+```
+Cargar al menos un mapeo vía `POST /api/v1/almacen/medicamento-insumos`
+(`{"medicamento": <id>, "insumo": <id>, "factorConversion": 1}`) y stock
+real en ese insumo (una "entrada" normal en Almacén de Insumos, almacén
+tipo FARMACIA).
+
+**Paso 2 — Confirmar que NO toca la columna jsonb**
+```python
+# python manage.py shell
+from django.conf import settings
+settings.DEBUG = True
+from django.db import connection, reset_queries
+reset_queries()
+
+from apps.consulta_medica.uses_case.prescription_dispensation_usecase import dispense
+dispense(prescription_id=<id_receta_real>, items=[...], actor_id=<user_id>)
+
+sospechosas = [q["sql"] for q in connection.queries if '"items"' in q["sql"]]
+print(f"{len(connection.queries)} queries totales; sospechosas (deben ser 0): {sospechosas}")
+```
+
+**Paso 3 — Confirmar que la concurrencia no duplica el descuento**
+```bash
+curl -X POST http://localhost:5000/api/v1/prescriptions/<id>/dispense \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"items":[{"prescriptionItemId": <id>, "quantity": <n>}]}' &
+curl -X POST http://localhost:5000/api/v1/prescriptions/<id>/dispense \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"items":[{"prescriptionItemId": <id>, "quantity": <n>}]}' &
+wait
+```
+Esperado: una responde 200, la otra 409 (`ALREADY_DISPENSED` o
+`DISPENSATION_EXCEEDS_PRESCRIBED`). La existencia/kardex del insumo debe
+reflejar UNA sola dispensación, no dos.
+
+**Paso 4 — Rollback por stock insuficiente**
+Dispensar más cantidad de la disponible. Esperado: 409 `INSUFFICIENT_STOCK`,
+sin ningún campo modificado (ni el item de receta, ni la existencia).
+
+**Solo después de correr esto y confirmar los 4 pasos, hacer `git push` del
+commit `dcae826` y cerrar el change con `sdd-archive`.**
 
 ## Estado del repo
 
