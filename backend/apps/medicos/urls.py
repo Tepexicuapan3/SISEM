@@ -1,5 +1,10 @@
 from django.urls import path
 
+from apps.medicos.views.medico_import_views import (
+    MedicoImportConfirmView,
+    MedicoImportPreviewView,
+    MedicoImportTemplateView,
+)
 from apps.medicos.views.medico_views import (
     MedicosListCreateView,
     MedicoDetailView,
@@ -18,6 +23,14 @@ from apps.medicos.views.medico_views import (
 urlpatterns = [
     # Catálogo
     path("medicos",                                           MedicosListCreateView.as_view(),       name="medicos-list-create"),
+
+    # Import masivo (Excel) -- declarado ANTES de `<int:user_id>` para
+    # documentar intención (aunque "import" nunca matchea el converter
+    # `int`, así que no hay colisión real de rutas posible).
+    path("medicos/import/template",                           MedicoImportTemplateView.as_view(),     name="medico-import-template"),
+    path("medicos/import/preview",                             MedicoImportPreviewView.as_view(),      name="medico-import-preview"),
+    path("medicos/import/confirm",                             MedicoImportConfirmView.as_view(),      name="medico-import-confirm"),
+
     path("medicos/<int:user_id>",                             MedicoDetailView.as_view(),             name="medico-detail"),
 
     # Disponibilidad (consumida por recepción y citas)

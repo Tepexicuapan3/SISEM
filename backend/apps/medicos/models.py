@@ -89,6 +89,15 @@ class CatMedico(models.Model):
     # apps.medicos.identity.display_name() para la cadena de fallback
     # completa (cierre de R5, propuesta obs #467).
     nombre_display  = models.CharField(max_length=200, null=True, blank=True)
+    # Clave del médico en el sistema legado (RH, MySQL). Distinta de
+    # `id_usuario`/los `*_id_legacy` de `0006`/`0007`: aquellos son la PK
+    # vieja intra-SIRES para el médico como usuario; esta es la clave con la
+    # que el legado identifica al médico en `det_cirugia.cd_medico`, y la
+    # usa el import masivo (`services/medico_import_service.py`) para
+    # resolver ese join a futuro. `unique=True` + `null=True`: Postgres/SQLite
+    # tratan múltiples NULL como distintos, así que los médicos nativos de
+    # SIRES (sin origen legado) conviven sin colisión.
+    legacy_cd_medico = models.CharField(max_length=10, null=True, blank=True, unique=True)
     tipo_medico     = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
     servicio        = models.CharField(max_length=100, null=True, blank=True)
     observaciones   = models.TextField(null=True, blank=True)

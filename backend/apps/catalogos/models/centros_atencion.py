@@ -21,6 +21,17 @@ class CatCentroAtencion(CatalogBase):
         db_index=True,          # útil si filtras por tipo
     )
     legacy_folio = models.CharField(max_length=10, null=True, blank=True, db_column="folio_clin")
+    # Puente cd_clinica (legado his_hospital.cd_origeno) -> este centro.
+    # legacy_folio ya guarda cat_clinicas.ds_folio (varchar(2)); ninguno de
+    # los campos existentes guarda el INT cd_clinica que usa his_hospital,
+    # de ahi este campo nuevo (change his-hospital-modelo-nom024, migracion
+    # 0029). Sin unique=True: ~14 clinicas, pero un indice unico sobre una
+    # tabla managed=False con posible drift en produccion es riesgo
+    # innecesario -- db_index alcanza para el JOIN; la unicidad se valida
+    # en el seed/carga manual.
+    legacy_cd_clinica = models.IntegerField(
+        null=True, blank=True, db_column="cd_clinica_legado", db_index=True,
+    )
     is_external  = models.BooleanField(default=False, db_column="es_externo")
 
     # Dirección

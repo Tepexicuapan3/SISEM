@@ -255,3 +255,46 @@ export interface MedicoExcepcionesResponse {
 export interface MedicoCoberturasResponse {
   items: MedicoCoberturaItem[];
 }
+
+// ─── IMPORTACIÓN MASIVA (EXCEL) ───────────────────────────────────────────────
+
+/**
+ * Datos normalizados de una fila del Excel de importación.
+ * Columnas de origen (en este orden exacto):
+ * ID del Médico | Usuario (Login del sistema) | Nombre del Médico |
+ * Tipo de Médico | Servicio | Estatus del Médico | Observaciones
+ */
+export interface MedicoImportRowData {
+  legacyCdMedico: string | null;
+  usuario: string;
+  usuarioId: number | null;
+  nombreDisplay: string | null;
+  tipoMedico: TipoMedico;
+  servicio: string | null;
+  estatusMedico: EstatusMedico;
+  observaciones: string | null;
+}
+
+/**
+ * Fila procesada de la importación (válida o con errores).
+ */
+export interface MedicoImportRow {
+  row: number;
+  data: MedicoImportRowData;
+  errors: string[];
+}
+
+/**
+ * Response de preview/confirm de importación masiva.
+ * POST /api/v1/medicos/import/preview
+ * POST /api/v1/medicos/import/confirm
+ *
+ * A diferencia del import de usuarios, médicos no envía correos -- no hay
+ * campo `emailFailures` en esta response.
+ */
+export interface MedicoImportResult {
+  totalRecords: number;
+  totalErrores: number;
+  inserted: number;
+  rows: MedicoImportRow[];
+}

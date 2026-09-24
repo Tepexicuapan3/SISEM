@@ -76,7 +76,29 @@ class MedicoRepository:
         return CatMedico.objects.filter(id_usuario=usuario).exists()
 
     @staticmethod
-    def create(*, usuario=None, nombre_display=None, tipo_medico, servicio, observaciones, created_by_id):
+    def create(
+        *,
+        usuario=None,
+        nombre_display=None,
+        tipo_medico,
+        servicio,
+        observaciones,
+        created_by_id,
+        estatus_medico=None,
+        legacy_cd_medico=None,
+    ):
+        # `estatus_medico`/`legacy_cd_medico` son kwargs nuevos (import
+        # masivo, ver Engram sdd/medicos-legacy-field-bulk-import) con
+        # default `None`: si el caller no los pasa, `CatMedico` aplica sus
+        # propios defaults de modelo (`estatus_medico="ACTIVO"`,
+        # `legacy_cd_medico=None`) -- los callers existentes
+        # (`medico_usecase.create_medico`) no rompen.
+        kwargs = {}
+        if estatus_medico is not None:
+            kwargs["estatus_medico"] = estatus_medico
+        if legacy_cd_medico is not None:
+            kwargs["legacy_cd_medico"] = legacy_cd_medico
+
         return CatMedico.objects.create(
             id_usuario=usuario,
             nombre_display=nombre_display,
@@ -84,6 +106,7 @@ class MedicoRepository:
             servicio=servicio,
             observaciones=observaciones,
             created_by_id=created_by_id,
+            **kwargs,
         )
 
     @staticmethod

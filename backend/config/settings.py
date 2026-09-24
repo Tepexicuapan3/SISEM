@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "apps.consulta_medica",
     "apps.pases",
     "apps.cirugias",
+    "apps.hospitalizacion",
     "apps.ambulancias",
     "apps.catalogos",
     "apps.administracion",

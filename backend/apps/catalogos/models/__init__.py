@@ -49,6 +49,8 @@ from .tipo_consulta import TipoConsulta
 from .tipos_licencias import Licencias
 from .tipo_residencia import TipoResidencia
 from .tipos_sanguineo import TiposSanguineo
+from .tipo_hospitalizacion import CatTipoHospitalizacion
+from .tipo_alta import CatTipoAlta
 from .turnos import Turnos
 from .vacunas import Vacunas
 
@@ -106,4 +108,6 @@ __all__ = [
     "Vacunas",
     "CatCies",
     "CatTipoPersonal",
+    "CatTipoHospitalizacion",
+    "CatTipoAlta",
 ]

@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { ApiError } from "@api/utils/errors";
 import type {
   MedicosListResponse,
   MedicoDetailResponse,
@@ -17,7 +18,24 @@ import type {
   MedicoCoberturasResponse,
   MedicosDisponiblesResponse,
   MedicoDisponible,
+  MedicoImportResult,
 } from "@api/types/medicos.types";
+
+// Duplicados a propósito de `infrastructure/api/resources/users.api.ts`
+// (helpers locales, no exportados ahi -- extraerlos a un módulo compartido
+// queda fuera de alcance de este change, ver Engram, topic_key
+// sdd/medicos-legacy-field-bulk-import/design, "Open Questions").
+const waitForTokenRefresh = (): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, 800));
+
+const isApiError = (error: unknown): error is ApiError =>
+  error instanceof ApiError;
+
+const buildImportFormData = (file: File): FormData => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return formData;
+};
 
 export const medicosAPI = {
   // ── Catálogo ──────────────────────────────────────────────────────────────
@@ -142,5 +160,91 @@ export const medicosAPI = {
       params: { fecha },
     });
     return r.data;
+  },
+
+  // ── Importación masiva (Excel) ────────────────────────────────────────────
+  import: {
+    /**
+     * Descargar plantilla .xlsx para carga masiva de médicos.
+     * @endpoint GET /api/v1/medicos/import/template
+     * @permission admin:gestion:medicos:create
+     */
+    downloadTemplate: async (): Promise<Blob> => {
+      const response = await apiClient.get("/medicos/import/template", {
+        responseType: "blob",
+      });
+      return response.data as Blob;
+    },
+
+    /**
+     * PASO 1 - Preview: valida el Excel y devuelve las filas con sus errores.
+     * NO persiste nada en la base de datos.
+     *
+     * NOTA SOBRE UPLOAD Y FORMDATA:
+     * El interceptor global refresca el token en 401 pero no puede reenviar
+     * el mismo FormData (stream consumido). Reconstruimos el FormData en
+     * cada intento (mismo patrón que `users.api.ts`).
+     *
+     * @endpoint POST /api/v1/medicos/import/preview
+     * @permission admin:gestion:medicos:create
+     */
+    preview: async (file: File, _retry = false): Promise<MedicoImportResult> => {
+      try {
+        const response = await apiClient.post<MedicoImportResult>(
+          "/medicos/import/preview",
+          buildImportFormData(file),
+          {
+            headers: { "Content-Type": undefined },
+            timeout: 60000,
+          },
+        );
+        return response.data;
+      } catch (err: unknown) {
+        if (!_retry && isApiError(err) && err.status === 401) {
+          await waitForTokenRefresh();
+          return medicosAPI.import.preview(file, true);
+        }
+        throw err;
+      }
+    },
+
+    /**
+     * PASO 2 - Confirm: crea todos los médicos SOLO SI no hay ningún error
+     * (todo-o-nada). Reenvía el MISMO archivo; el servidor re-valida como
+     * única autoridad.
+     *
+     * NOTA SOBRE CONFIRM Y 409:
+     * El backend responde 409 con `{ totalRecords, totalErrores, inserted: 0,
+     * rows, code: "IMPORT_HAS_ERRORS" }` cuando el todo-o-nada rechaza el
+     * lote. El interceptor global normaliza cualquier error 4xx/5xx a
+     * `ApiError` (solo conserva code/message/status/details) y ese cuerpo
+     * (rows) se pierde. Como preview y confirm validan el MISMO archivo,
+     * ante un 409 reconstruimos las filas re-llamando a `preview` en vez de
+     * propagar un error vacío de contenido (mismo patrón que `users.api.ts`).
+     *
+     * @endpoint POST /api/v1/medicos/import/confirm
+     * @permission admin:gestion:medicos:create
+     */
+    confirm: async (file: File, _retry = false): Promise<MedicoImportResult> => {
+      try {
+        const response = await apiClient.post<MedicoImportResult>(
+          "/medicos/import/confirm",
+          buildImportFormData(file),
+          {
+            headers: { "Content-Type": undefined },
+          },
+        );
+        return response.data;
+      } catch (err: unknown) {
+        if (!_retry && isApiError(err) && err.status === 401) {
+          await waitForTokenRefresh();
+          return medicosAPI.import.confirm(file, true);
+        }
+        if (isApiError(err) && err.status === 409) {
+          return medicosAPI.import.preview(file);
+        }
+        throw err;
+      }
+    },
   },
 };

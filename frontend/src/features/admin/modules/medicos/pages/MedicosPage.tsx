@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, RotateCcw, Stethoscope } from "lucide-react";
+import { Plus, RotateCcw, Stethoscope, Upload } from "lucide-react";
+import { Button } from "@shared/ui/button";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { DataTable } from "@features/admin/shared/components/DataTable";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@features/admin/modules/medicos/components/MedicoTableColumns";
 import { MedicoCreateDialog } from "@features/admin/modules/medicos/components/MedicoCreateDialog";
 import { MedicoDetailsDialog } from "@features/admin/modules/medicos/components/MedicoDetailsDialog";
+import { MedicoImportDialog } from "@features/admin/modules/medicos/components/MedicoImportDialog";
 import type { MedicoListItem } from "@api/types/medicos.types";
 
 const ESTATUS_FILTER_ALL = "all";
@@ -36,6 +38,7 @@ export function MedicosPage() {
   const [estatusFilter, setEstatusFilter] = useState(ESTATUS_FILTER_ALL);
   const [tipoFilter, setTipoFilter]       = useState(TIPO_FILTER_ALL);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({
     nombre: true, tipoMedico: true, servicio: true,
     especialidades: true, estatusMedico: true, actions: true,
@@ -151,6 +154,16 @@ export function MedicosPage() {
             ) : null}
             {canRead ? <TableOptionsMenu options={tableOptions} /> : null}
             {canCreate ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+              >
+                <Upload className="size-4" />
+                Importar
+              </Button>
+            ) : null}
+            {canCreate ? (
               <TablePrimaryAction
                 permission="admin:gestion:medicos:create"
                 dependencyAware
@@ -194,6 +207,8 @@ export function MedicosPage() {
           handleOpenDetails(newMedico);
         }}
       />
+
+      <MedicoImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </CatalogModuleLayout>
   );
 }
