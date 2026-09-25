@@ -545,6 +545,68 @@ mismo commit `e66328b`). El usuario está pensando el rediseño de idempotencia
 del comando migración — **no relajar la validación de `id_usuario` sin
 resolver ese aspecto**.
 
+## Completado 2026-09-25 — `menu-destinations-drift-cleanup`
+
+Causa raíz: dos comandos de seed de permisos separados corrían independientemente
+—`seed_navigation_permissions` en `start-docker.sh` + `seed_catalogos_crud_permissions`
+sin ejecutarse nunca en ese script—, dejando 8 permisos de catálogos sin sembrarse
+en producción.
+
+**Fix aplicado**:
+- Agregado `seed_catalogos_crud_permissions` a `start-docker.sh` (solo si no existen,
+  idempotente).
+- Agregadas ~17 labels faltantes a `menu-destinations.labels.ts` (códigos de permisos
+  que el frontend esperaba pero no existían).
+- Eliminado label huérfano `/admin/reportes` y nodo muerto `administracion.catalogos.estudios`
+  de `navigation_seed.py` (no tenían consumidor real).
+
+**Resultado**: `seed_navigation_menu` ahora reporta **0 códigos huérfanos** (antes 9);
+`menu-destinations.test.ts` **3/3 OK**. **Estado**: implementado y verificado,
+pendiente de commit por el usuario.
+
+## Completado 2026-09-25 — Fix migración `catalogos.0016`
+
+**Bug**: en una base de datos completamente fresca (sin historial migración previo),
+`0016_autorizadores_fk_integrity.py` fallaba por constraint FK duplicada. Causa:
+`0013_create_missing_catalog_tables.py` usaba el registro de apps global en vez
+del histórico, creando la constraint dos veces.
+
+**Fix aplicado**: migración reescrita con `SeparateDatabaseAndState` + verificación
+de introspección antes de crear la constraint (mismo patrón defensive que `0015`).
+
+**Nota de alcance acotado**: `consulta_medica.0012` tiene un problema similar sospechado
+pero NO confirmado (posible artefacto de volumen Docker reciclado, no reproducido
+limpio) — queda para otra sesión, requiere reproducir en un entorno 100% limpio.
+
+**Estado**: implementado, verificado solo en SQLite (no se pudo confirmar contra
+Postgres real por regla de no tocar bases externas/DEV). El usuario tiene el comando
+(`python manage.py migrate catalogos`) para confirmarlo cuando prepare su propia
+Postgres de prueba.
+
+## Completado 2026-09-25 — `incapacidad-medica-recepcion-frontend`
+
+**Hallazgo clave**: el backend y la mayoría del frontend YA existían (emisión desde
+consulta médica, historial por paciente, reporte con export). Solo faltaba la
+pantalla de Recepción.
+
+**Decisión de alcance** (confirmada con evidencia del legado java-main: 6 pantallas
+de admisión distintas enlazaban solo al historial de solo lectura, nunca a captura):
+la pantalla de Recepción es SOLO CONSULTA/HISTORIAL, sin formulario de creación —
+la creación sigue siendo exclusiva del médico.
+
+**Cambio de backend**: permiso nuevo `recepcion:incapacidad:read` (reemplaza el
+permiso fantasma `recepcion:incapacidad:create` que nunca existió en RBAC real),
+usado SOLO en el GET de historial — el POST de creación sigue exigiendo rol médico
+exclusivamente. Verificado con test adversarial: mismo usuario, GET 200 y POST 403.
+
+**⚠️ ACCIÓN REQUERIDA EN DEPLOY**: después de correr `seed_navigation_permissions`
+en el servidor, hay que asignar manualmente `recepcion:incapacidad:read` al rol de
+Recepción — si no, la pantalla queda invisible para el personal real aunque el código
+esté bien.
+
+**Estado**: implementado y verificado (PASS sin hallazgos), pendiente de commit por
+el usuario.
+
 ## Convenciones y Reglas Operacionales
 
 ### Regla: nunca probar directo contra bases de datos externas/legado
