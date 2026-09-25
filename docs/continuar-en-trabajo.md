@@ -525,6 +525,48 @@ sin ningún campo modificado (ni el item de receta, ni la existencia).
 **Solo después de correr esto y confirmar los 4 pasos, hacer `git push` del
 commit `dcae826` y cerrar el change con `sdd-archive`.**
 
+## Completado 2026-09-24 — Hospitalización (NOM-024)
+
+Change `his-hospital-modelo-nom024` implementado y verificado (17/17 tasks,
+PASS sin CRITICALs). Modelos nuevos `HospitalAdmission` y `HospitalAdmissionRevision`
+(app `hospitalizacion`) con protección NOM-024 (snapshot de revisión, append-only
+real, soft-delete), más 2 catálogos nuevos (`CatTipoHospitalizacion`,
+`CatTipoAlta`) con 23+6 valores extraídos y verificados contra el dump real.
+Campo puente `legacy_cd_clinica` agregado a `CatCentroAtencion` para facilitar
+la migración de datos reales desde el legado.
+
+**Estado**: modelo e infraestructura **100% implementados y verificados** (commit
+`e66328b`); **PENDIENTE migración de datos reales** (~32,000 filas de
+`his_hospital` del legado — el usuario ejecutará usando el documento de mapeo
+ya generado: `docs/runbooks/his-hospital-migracion-mapeo.md`).
+
+**También pendiente**: ~300 médicos sin usuario asignado (`medicos-legacy-field-bulk-import`,
+mismo commit `e66328b`). El usuario está pensando el rediseño de idempotencia
+del comando migración — **no relajar la validación de `id_usuario` sin
+resolver ese aspecto**.
+
+## Convenciones y Reglas Operacionales
+
+### Regla: nunca probar directo contra bases de datos externas/legado
+
+Cuando el trabajo involucra bases de datos externas (MySQL legado, Oracle, o
+cualquier servidor fuera del entorno de desarrollo local) o la Postgres de
+PRODUCCIÓN de SIRES, **NUNCA correr pruebas/queries directas contra esos
+servidores reales desde el flujo de agentes** — ni siquiera lecturas exploratorias.
+
+- Toda exploración de esquema/datos legado se hace contra el dump local ya
+  descargado (`Dump20260903.sql`), nunca contra una conexión viva al servidor
+  MySQL/Oracle real.
+- Los management commands que sí requieren conexión viva (`migrar_*_legacy.py`
+  con credenciales `LEGACY_MYSQL_*`) se documentan y se entregan al usuario,
+  pero no se ejecutan de forma autónoma para "probar que funcionan" — la
+  ejecución real la hace el usuario, bajo su propio criterio y ventana de
+  mantenimiento.
+- Cualquier verificación que implique escritura contra Postgres de
+  producción/DEV real debe quedar documentada como checklist para que el usuario
+  la ejecute él mismo (ver el checklist de verificación manual de
+  `dispensacion-farmacia` como ejemplo del formato esperado).
+
 ## Estado del repo
 
 **Sin commitear todavía** — todo lo de hoy (historia clínica, catálogos,
