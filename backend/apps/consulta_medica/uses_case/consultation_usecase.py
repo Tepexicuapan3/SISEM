@@ -18,6 +18,15 @@ DOCTOR_CONSULTATION_PERMISSION_REQUIREMENT = {
     "allOf": ["clinico:consultas:read"]
 }
 
+# `recepcion:incapacidad:read` (change `incapacidad-medica-recepcion-frontend`)
+# es de SOLO LECTURA -- solo se acepta como alternativa a
+# `clinico:consultas:read` para consultar el historial de incapacidades
+# (GET), nunca para crearlas (POST sigue usando ensure_doctor_role/
+# DOCTOR_CONSULTATION_PERMISSION_REQUIREMENT exclusivamente).
+DOCTOR_OR_INCAPACIDAD_READ_PERMISSION_REQUIREMENT = {
+    "anyOf": ["clinico:consultas:read", "recepcion:incapacidad:read"]
+}
+
 CIE_SEARCH_MIN_LENGTH = 2
 
 # `SavePrescriptionsSerializer.items` no acota la cantidad de indicaciones
@@ -34,6 +43,32 @@ def ensure_doctor_role(roles, permissions=None):
 
     permission_state = evaluate_permission_requirement(
         DOCTOR_CONSULTATION_PERMISSION_REQUIREMENT,
+        permissions or [],
+    )
+    if permission_state["granted"]:
+        return
+
+    raise VisitDomainError(
+        "ROLE_NOT_ALLOWED",
+        "No tenes permiso para ejecutar esta accion.",
+        403,
+    )
+
+
+def ensure_doctor_or_incapacidad_read_role(roles, permissions=None):
+    """
+    Guard de SOLO LECTURA para `get_patient_medical_leaves` (GET). Acepta
+    rol DOCTOR / `clinico:consultas:read` (igual que ensure_doctor_role) O
+    `recepcion:incapacidad:read` -- este ultimo NO debe usarse para ninguna
+    accion de escritura (ver create_medical_leave, que sigue llamando
+    ensure_doctor_role a secas).
+    """
+    normalized_roles = {(role or "").strip().upper() for role in roles}
+    if ROLE_DOCTOR in normalized_roles:
+        return
+
+    permission_state = evaluate_permission_requirement(
+        DOCTOR_OR_INCAPACIDAD_READ_PERMISSION_REQUIREMENT,
         permissions or [],
     )
     if permission_state["granted"]:

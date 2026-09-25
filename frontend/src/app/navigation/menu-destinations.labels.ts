@@ -57,8 +57,20 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Centros de Atención",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/cie9-mc": {
+    label: "CIE-9-MC (Procedimientos, NOM-024)",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/cies": {
     label: "CIE-10 (Diagnósticos)",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/clasificaciones-cirugia": {
+    label: "Clasificaciones de Cirugía",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/destinos-ambulancia": {
+    label: "Destinos de Ambulancia",
     grupo: "Catálogos",
   },
   "/admin/catalogos/edo-civil": { label: "Estado Civil", grupo: "Catálogos" },
@@ -91,6 +103,14 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Licencias (Catálogo)",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/motivos-cancelacion-cirugia": {
+    label: "Motivos de Cancelación de Cirugía",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/motivos-traslado": {
+    label: "Motivos de Traslado en Ambulancia",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/ocupaciones": {
     label: "Ocupaciones",
     grupo: "Catálogos",
@@ -104,6 +124,7 @@ export const MENU_DESTINATION_LABELS: Record<
     grupo: "Catálogos",
   },
   "/admin/catalogos/pases": { label: "Pases", grupo: "Catálogos" },
+  "/admin/catalogos/religiones": { label: "Religiones", grupo: "Catálogos" },
   "/admin/catalogos/sucursales": { label: "Sucursales", grupo: "Catálogos" },
   "/admin/catalogos/tipo-personal": {
     label: "Tipo de Personal",
@@ -117,6 +138,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Tipos de Autorización",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/tipos-cirugia": {
+    label: "Tipos de Cirugía",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/tipos-citas": {
     label: "Tipos de Citas",
     grupo: "Catálogos",
@@ -125,8 +150,20 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Tipos de Consulta",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/tipos-residencia": {
+    label: "Tipos de Residencia",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/tipos-sanguineo": {
     label: "Tipos Sanguíneos",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/tipos-servicio-ambulancia": {
+    label: "Tipos de Servicio de Ambulancia",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/tipos-traslado": {
+    label: "Tipos de Traslado en Ambulancia",
     grupo: "Catálogos",
   },
   "/admin/catalogos/turnos": { label: "Turnos", grupo: "Catálogos" },
@@ -147,8 +184,24 @@ export const MENU_DESTINATION_LABELS: Record<
   },
   "/admin/medicos": { label: "Médicos", grupo: "Administración" },
   "/admin/menus": { label: "Gestión de Menús", grupo: "Administración" },
-  "/admin/reportes": {
-    label: "Reportes y Analítica Operativa",
+  "/admin/reportes/ambulancias": {
+    label: "Reporte de Ambulancias",
+    grupo: "Administración",
+  },
+  "/admin/reportes/cirugias": {
+    label: "Reporte de Cirugías",
+    grupo: "Administración",
+  },
+  "/admin/reportes/consultas-diario": {
+    label: "Reporte Diario de Consultas",
+    grupo: "Administración",
+  },
+  "/admin/reportes/incapacidades": {
+    label: "Reporte de Incapacidades",
+    grupo: "Administración",
+  },
+  "/admin/reportes/pases": {
+    label: "Reporte de Pases",
     grupo: "Administración",
   },
   "/admin/roles": { label: "Roles", grupo: "Administración" },

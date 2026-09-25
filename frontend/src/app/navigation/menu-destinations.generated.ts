@@ -114,7 +114,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/recepcion/checkin","permissions":[]},
   {"path":"/recepcion/checkin/qr","permissions":["recepcion:fichas:medicina_general:create","recepcion:fichas:especialidad:create","recepcion:fichas:urgencias:create","clinico:consultas:read","clinico:somatometria:read"]},
   {"path":"/recepcion/fichas","permissions":["recepcion:fichas:medicina_general:create","recepcion:fichas:especialidad:create","recepcion:fichas:urgencias:create","clinico:consultas:read","clinico:somatometria:read"]},
-  {"path":"/recepcion/incapacidad","permissions":["recepcion:incapacidad:create"]},
+  {"path":"/recepcion/incapacidad","permissions":["recepcion:incapacidad:read","clinico:consultas:read"]},
   {"path":"/recepcion/turnos","permissions":[]},
   {"path":"/servicios/contratos-oxigeno","permissions":["servicios:contratos_oxigeno:read"]},
   {"path":"/urgencias/triage","permissions":["urgencias:triage:read"]},

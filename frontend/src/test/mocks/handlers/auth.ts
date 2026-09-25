@@ -285,7 +285,7 @@ const buildLoginScenario = (username: string): LoginScenario => {
           "recepcion:fichas:medicina_general:create",
           "recepcion:fichas:especialidad:create",
           "recepcion:fichas:urgencias:create",
-          "recepcion:incapacidad:create",
+          "recepcion:incapacidad:read",
           "clinico:consultas:read",
           "clinico:somatometria:read",
           "clinico:expedientes:read",

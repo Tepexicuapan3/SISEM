@@ -485,18 +485,6 @@ NAV_SEED = [
         "permisos": ["admin:catalogos:vacunas:read"],
     },
     {
-        "clave": "administracion.catalogos.estudios",
-        "titulo": "Estudios",
-        "icono": None,
-        "url": "/admin/catalogos/estudios",
-        "badge": None,
-        "orden": 29,
-        "es_seccion": False,
-        "grupo": "primary",
-        "parent_clave": "administracion.catalogos",
-        "permisos": ["admin:catalogos:estudios:read"],
-    },
-    {
         "clave": "administracion.catalogos.areas_clinicas",
         "titulo": "Áreas clínicas",
         "icono": None,
@@ -935,6 +923,22 @@ NAV_SEED = [
             "recepcion:fichas:especialidad:create",
             "recepcion:fichas:urgencias:create",
         ],
+    },
+    {
+        # Agregado 2026-09-25 (change `incapacidad-medica-recepcion-frontend`):
+        # reemplaza el placeholder huerfano de /recepcion/incapacidad (nunca
+        # tuvo entrada de menu). Solo consulta -- gateado por el permiso
+        # nuevo recepcion:incapacidad:read O clinico:consultas:read (medico).
+        "clave": "recepcion.incapacidad",
+        "titulo": "Incapacidades",
+        "icono": "file-text",
+        "url": "/recepcion/incapacidad",
+        "badge": None,
+        "orden": 3,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "recepcion",
+        "permisos": ["recepcion:incapacidad:read", "clinico:consultas:read"],
     },
     # ── Farmacia ─────────────────────────────────────────────────────────
     {

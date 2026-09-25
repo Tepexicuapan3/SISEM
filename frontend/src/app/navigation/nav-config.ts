@@ -490,6 +490,12 @@ export const NAV_CONFIG: NavSection[] = [
           "recepcion:fichas:urgencias:create",
         ],
       },
+      {
+        title: "Incapacidades",
+        url: "/recepcion/incapacidad",
+        icon: FileText,
+        permissions: ["recepcion:incapacidad:read", "clinico:consultas:read"],
+      },
     ],
   },
   {

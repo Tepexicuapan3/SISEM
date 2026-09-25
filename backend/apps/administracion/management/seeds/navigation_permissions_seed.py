@@ -149,3 +149,15 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:recetas:authorize", "Autorizar o rechazar recetas con medicamentos especiales o controlados"),
 ]
+
+# Septima tanda (change `incapacidad-medica-recepcion-frontend`, 2026-09-25):
+# permiso de SOLO LECTURA para que Recepcion consulte el historial de
+# incapacidades de un paciente por no_exp sin depender de
+# clinico:consultas:read (ese permiso habilita lectura Y escritura de
+# consultas -- hueco documentado en la tanda de `clinico:consultas:read`
+# mas arriba). El endpoint de creacion de incapacidad
+# (POST visits/<id>/medical-leave) sigue siendo EXCLUSIVO del rol DOCTOR /
+# clinico:consultas:read -- este permiso nuevo NO lo habilita.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("recepcion:incapacidad:read", "Ver historial de incapacidades medicas"),
+]

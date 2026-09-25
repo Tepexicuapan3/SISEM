@@ -20,6 +20,13 @@ fi
 # estan en el seed, nunca los borra.
 if [ "${RUN_NAV_SEED_ON_BOOT:-true}" = "true" ]; then
   python manage.py seed_navigation_permissions
+  # Da de alta (idempotente) los permisos create/update/delete de los
+  # catalogos migrados a CRUD completo (change catalogos-crud). Sin esto,
+  # el codigo define el permiso en catalogos_crud_permissions_seed.py pero
+  # nunca queda como fila real en cat_permisos -- quedaba pendiente de
+  # correr a mano (ver docs/continuar-en-trabajo.md), causando permisos
+  # huerfanos reportados por seed_navigation_menu.
+  python manage.py seed_catalogos_crud_permissions
   python manage.py seed_navigation_menu --prune
 fi
 

@@ -8,7 +8,7 @@ from apps.consulta_medica.repositories.medical_leave_repository import MedicalLe
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
-from .consultation_usecase import ensure_doctor_role
+from .consultation_usecase import ensure_doctor_or_incapacidad_read_role, ensure_doctor_role
 
 # SIRES no tiene todavia una tabla de parametros por clinica (equivalente al
 # `ope_param` del legado) -- estos topes son un valor razonable de partida,
@@ -114,7 +114,10 @@ def create_medical_leave(
 
 
 def get_patient_medical_leaves(no_exp, pk_num, roles, permissions=None):
-    ensure_doctor_role(roles, permissions)
+    # GET (consulta) acepta el permiso de solo lectura `recepcion:incapacidad:read`
+    # ademas de DOCTOR/clinico:consultas:read -- ver docstring del guard.
+    # create_medical_leave (POST, arriba) sigue exclusivo de ensure_doctor_role.
+    ensure_doctor_or_incapacidad_read_role(roles, permissions)
 
     leaves = MedicalLeaveRepository.list_for_patient(no_exp, pk_num)
     items = [MedicalLeaveRepository.to_contract(leave) for leave in leaves]

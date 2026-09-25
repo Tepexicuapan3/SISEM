@@ -161,7 +161,7 @@ SEED_PERMISSION_CODES = (
     "recepcion:fichas:especialidad:create",
     "recepcion:fichas:urgencias:read",
     "recepcion:fichas:urgencias:create",
-    "recepcion:incapacidad:create",
+    "recepcion:incapacidad:read",
     "recepcion:citas:read",
     "recepcion:citas:write",
     "farmacia:recetas:dispensar",
