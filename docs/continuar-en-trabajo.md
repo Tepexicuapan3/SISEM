@@ -36,6 +36,46 @@
 3. "Pendiente de decisión" necesita que el usuario (no el asistente)
    defina algo antes de tocar código.
 
+## Tablas de MySQL (legado) pendientes de migrar a Postgres — vista consolidada
+
+Checklist rápido de qué tabla del legado ya se migró y cuál sigue pendiente
+— el detalle completo de cada una vive en las secciones "Completado"/
+"Bloqueado" correspondientes más abajo, esto es solo para no tener que
+releer todo el documento cada vez.
+
+### Ya migradas (no repetir trabajo)
+- `his_clinica` → `consulta_medica.ClinicalHistory` (3385 historias reales,
+  comando `migrar_historial_clinico_legacy.py`, ✅).
+- `his_notas` → `consulta_medica.LegacyConsultationRecord` (604,178 notas,
+  archivo de solo lectura, ✅).
+- `det_hisnotcie` → `consulta_medica.LegacyConsultationDiagnosis` (529,315
+  diagnósticos CIE-10, ✅).
+
+### Pendientes (necesitan acceso a la red del trabajo / al dump real)
+1. **`his_clinicad`** (historia clínica de ESTOMATOLOGÍA del legado) — tabla
+   aparte de `his_clinica`, **sigue sin explorar**, no existe comando de
+   migración todavía. **Importante, no confundir**: el comando nuevo de
+   esta sesión `backend/apps/consulta_medica/management/commands/
+   migrar_alergias_estructuradas.py` migra DENTRO de Postgres (de
+   `ClinicalHistory.allergies`/`StomatologyHistory.allergy_*`, que ya están
+   en Postgres, hacia la nueva tabla `Allergy`) — **no lee MySQL en
+   absoluto**. `his_clinicad` en el legado sigue intacto, sin tocar en el
+   origen.
+2. **`dbclinicas.cat_medicos`** (médicos) — plan ya cerrado con el usuario
+   (ver "Bloqueado", punto 7), pero el comando `migrar_medicos_legacy.py`
+   **todavía no existe** y falta acceso al dump real de esa tabla. Conteos
+   dados por el usuario (sin verificar contra dump): ~2730 médicos, ~560
+   sin `cd_usuario` asignado.
+3. **`det_cirugia`** / **`det_ambulancias`** — sin backup del legado
+   todavía (ver "Bloqueado", punto 4). Los modelos ya dejan `legacy_folio`
+   listo para cuando llegue el backup, así que en cuanto exista el dump el
+   trabajo de mapeo/comando es rápido.
+4. **`his_hospital`** (~32,000 filas) — único caso donde el modelo/infra en
+   Postgres YA está 100% listo y verificado (`hospitalizacion.
+  HospitalAdmission`, ver "Completado 2026-09-24"); solo falta que el
+   usuario ejecute la migración de datos reales con el mapeo ya
+   documentado en `docs/runbooks/his-hospital-migracion-mapeo.md`.
+
 ## Completado HOY (historia clínica + NOM-024 + Portal de Citas)
 
 ### Migración real de historia clínica (`his_clinica` → `ClinicalHistory`)
@@ -383,6 +423,18 @@ especialidades), quedó así:
   con él.
 - **Licencias/Incapacidades — autorización**: mismo patrón del legado
   pendiente de revisar, prioridad baja.
+- **Rangos CIE-10 de `SensitiveCieRange` (2026-09-28)**: los rangos
+  sembrados (`B20-B24` VIH, `F10-F19` sustancias, `F00-F09`/`F20-F99` salud
+  mental) son un valor por defecto razonable, no una decisión final —
+  confirmar con calidad/jurídico del hospital. También falta decidir a qué
+  roles se les asigna cada uno de los 3 permisos nuevos
+  (`clinico:diagnosticos_vih:read`/`..._salud_mental:read`/
+  `..._sustancias:read`) — ver checklist de deploy en "Completado
+  2026-09-28" arriba.
+- **Plazo legal de solicitudes ARCO** (Fase 4, sin implementar todavía): el
+  plan usa 20 días hábiles como default (Ley General de Protección de Datos
+  Personales en Posesión de Sujetos Obligados) — confirmar con jurídico
+  antes de implementar.
 
 ## Completado 2026-09-17 — infraestructura (gateway, CORS/CSRF, celery-beat)
 
@@ -607,6 +659,156 @@ esté bien.
 **Estado**: implementado y verificado (PASS sin hallazgos), pendiente de commit por
 el usuario.
 
+## Completado 2026-09-28 — Alergias unificadas + diagnósticos sensibles (NOM-024) + fix deuda técnica `apps.catalogos`
+
+Punto de partida: se revisó un documento externo (propuesta de terceros) que
+sugería rehacer la historia clínica de SISEM. Al contrastarlo contra el
+código real se confirmó que la mayor parte ya existía (`ClinicalHistory`
+unificada, versionado, odontograma FDI); quedaban 2 brechas reales que sí se
+implementaron, más deuda técnica preexistente que apareció en el camino.
+
+### Fase 1 — Alergias normalizadas
+`ClinicalHistory.allergies` (texto libre) y las 6 columnas
+`StomatologyHistory.allergy_*` quedaban duplicadas y sin cruzar contra
+medicamentos — una alergia capturada en Estomatología no aparecía en
+Medicina General. Reemplazadas por:
+- Modelo `consulta_medica.Allergy` (1:N por paciente, categoría/severidad/
+  sustancia/reacción) + `AllergyRevision` (versionado NOM-024, migración
+  `0026`). Visible desde ambas especialidades siempre.
+- `StomatologyHistory` ahora versiona ediciones (`StomatologyHistoryRevision`)
+  — cerraba una brecha real, era el único modelo de historia clínica sin
+  snapshot-antes-de-sobreescribir.
+- Comando `migrar_alergias_estructuradas.py` (dry-run + idempotente) migra
+  el texto libre YA EXISTENTE EN POSTGRES hacia `Allergy` — **ojo, esto NO
+  toca MySQL** (ver sección de tablas pendientes arriba, `his_clinicad`
+  sigue sin migrar del legado).
+- Cruce receta↔alergia en `add_prescription_item`: si el medicamento choca
+  con una alergia activa, se devuelve una advertencia y el frontend debe
+  reenviar con `acknowledgeAllergyWarning: true` para continuar — decisión
+  del usuario, advertencia con constancia auditada, nunca bloqueo duro.
+- Frontend: componente `AllergyList.tsx` reemplaza el textarea/6 campos en
+  Generales y Estomatología; la tarjeta "Alertas Médicas" del expediente
+  (que tenía `alergias: []` hardcodeado) ya muestra datos reales.
+
+### Fase 2 — Diagnósticos sensibles (VIH / salud mental / sustancias)
+No existía ningún control de acceso para diagnósticos CIE-10 sensibles.
+- Catálogo `catalogos.SensitiveCieRange` (migración `0030`, seed inicial
+  `B20-B24`→VIH, `F10-F19`→sustancias, `F00-F09`/`F20-F99`→salud mental —
+  **rangos por defecto, pendientes de confirmar con calidad/jurídico**, ver
+  "Pendiente de decisión" abajo).
+- Servicio `classify_cie()`: compara solo el PREFIJO DE CATEGORÍA de 3
+  caracteres (no el código completo) — se encontró y corrigió un bug real
+  de diseño: comparar el código completo como string rompía con subcódigos
+  decimales (`"B24.9" > "B24"` lexicográficamente, quedaba fuera del rango
+  aunque clínicamente sí es VIH).
+- Cuando el usuario no tiene el permiso requerido, se redacta el
+  diagnóstico (`cieCode`/`cieDescription` Y el texto ligado como
+  `primaryDiagnosis`/`notes` — dejar el texto libre visible hubiera hecho
+  trivial esquivar la redacción) — el resto de la consulta se sirve normal,
+  decisión del usuario de no ocultar el registro completo. Aplicado en
+  historial de consultas y diagnósticos secundarios. Evento de auditoría
+  `SensitiveDiagnosisRedacted` (uno por request, no bloqueante).
+- 3 permisos nuevos sembrados: `clinico:diagnosticos_vih:read`,
+  `clinico:diagnosticos_salud_mental:read`,
+  `clinico:diagnosticos_sustancias:read`. **⚠️ ACCIÓN REQUERIDA EN DEPLOY**
+  (mismo patrón que `recepcion:incapacidad:read` en la sesión del 25-sep):
+  después de correr `seed_navigation_permissions`, ningún rol tiene estos 3
+  permisos asignados todavía — hasta que se asignen a mano, **todo el
+  personal, incluidos médicos, va a ver "Diagnóstico restringido"** para
+  VIH/salud mental/sustancias. Es el comportamiento seguro por defecto,
+  pero avisar antes de que el personal clínico lo note y genere tickets.
+
+### Deuda técnica preexistente en `apps.catalogos` — encontrada y corregida
+Al escribir tests nuevos para la Fase 2 aparecieron **45 tests
+preexistentes rotos** en `apps.catalogos`, sin relación con este trabajo
+(confirmado con `git stash`: fallaban igual contra el código limpio). Causas
+reales, cada una verificada contra el modelo/vista/serializer actual (no
+supuestas):
+- `CatCentroAtencion.schedule` ya no existe (reemplazado hace tiempo por el
+  modelo `CatCentroAtencionHorario`) y `Consultorios.code` se renombró a
+  `numero` — los tests seguían usando los nombres viejos.
+- A todas las URLs de los tests de catálogos les faltaba la barra final que
+  las rutas reales exigen (`care-centers/`, `areas/`, `consulting-rooms/`).
+- Tests que hacen login real sin `cache.clear()` en `setUp` — el
+  policy_store (bloqueo de "sesión activa" por `user_id`) vive en cache
+  (Redis), no en la base de datos, así que sobrevive al rollback de
+  transacción entre tests; con SQLite reutilizando el mismo `id_usuario`
+  autoincremental tras cada rollback, el 2º test en adelante chocaba con la
+  sesión activa que dejó el 1º (mismo patrón ya usado en
+  `apps.authentication.tests.test_auth_api.py`, solo faltaba copiarlo acá).
+- Códigos de error desactualizados en los asserts (`PERMISSION_DENIED` →
+  `INSUFFICIENT_PERMISSIONS`/`CSRF_INVALID`, la API real cambió de códigos
+  y los tests no se actualizaron).
+- `HasCatalogPermission.__init__` pasó de aceptar `action`/`catalog`
+  opcionales a exigirlos como posicionales — un test que probaba "qué pasa
+  sin action/catalog" ya no aplica (Python lo impide al instanciar).
+- `_build_user_ref`/`_build_catalog_ref` dejaron de ser métodos de
+  instancia de `CatalogDetailSerializer`, ahora son funciones de módulo
+  (`build_user_ref`/`build_catalog_ref`) reusadas fuera de serializers.
+- `test_postal_code_service.py`: import sin el prefijo `apps.` (rompía en
+  cualquier entorno, no solo Windows), ruta `/tmp/...` hardcodeada (sí
+  rompía específicamente en Windows), y `CodigoPostalService.search()` es
+  un `@staticmethod` que usa un singleton de MÓDULO — el test intentaba
+  inyectar un repositorio de prueba en una instancia, sin ningún efecto
+  real (silenciosamente consultaba el catálogo real de 15 MB).
+
+**Efecto colateral de esta sesión**: Redis no estaba corriendo en esta PC de
+desarrollo (Windows, sin Docker por decisión explícita del usuario — acá se
+levanta backend/frontend por separado en bash, Docker solo se usa en
+producción). Se usó el `redis-server.exe` nativo ya instalado en
+`C:\Program Files\Redis\` (puerto 6379) — **no queda como servicio
+persistente, hay que volver a levantarlo a mano si se reinicia la máquina**.
+`CACHE_REDIS_URL`/el policy_store lo necesitan para funcionar (login,
+throttling, sesión activa).
+
+**Resultado**: 157 tests backend (consulta_medica + catalogos nuevos) +
+109/109 de `apps.catalogos` completo pasan (antes: 45 fallando). `tsc
+--noEmit` y `makemigrations --check` limpios.
+
+**Estado del commit**: todo lo de arriba quedó en un solo commit
+(`69297792`, "Alergias unificadas y redaccion de diagnosticos sensibles
+(NOM-024)") en la rama `SISEM-15-07-2026` — **pendiente de push** (el
+usuario decide cuándo).
+
+### Checklist para cuando se despliegue este commit
+1. `python manage.py migrate` (nuevas: `consulta_medica.0026`,
+   `catalogos.0030`).
+2. `python manage.py seed_navigation_permissions` (siembra los 3 permisos
+   nuevos de diagnósticos sensibles — se ejecuta solo en `runserver`/
+   `start-docker.sh`, correrlo a mano si el deploy no pasa por ahí).
+3. **Asignar los 3 permisos nuevos a los roles que correspondan** (ver
+   "⚠️ ACCIÓN REQUERIDA EN DEPLOY" arriba) — decisión institucional, no
+   técnica.
+4. Opcional pero recomendado: `python manage.py migrar_alergias_estructuradas
+   --dry-run` primero, revisar el reporte, después correrlo real para
+   migrar el texto libre de alergias ya existente en Postgres.
+5. Rebuild del frontend (`pnpm run build` o equivalente) — se tocaron
+   varios `.ts`/`.tsx`.
+6. Confirmar que Redis esté corriendo donde corra el backend (ya resuelto
+   en el `docker-compose.yml` de producción).
+
+## Pendiente (Fases 3 y 4 del mismo change, no implementadas todavía)
+
+El plan completo de esta sesión tenía 4 fases; solo se implementaron las
+Fases 1 y 2 (arriba). Quedan, en orden sugerido:
+- **Fase 3 — Bitácora de acceso general**: registrar quién VE un expediente
+  (no solo quién lo modifica — hoy `AuditoriaEvento` solo audita
+  escrituras). Agregar `log_event(...)` a los `GET` de
+  `PatientClinicalHistoryView`/`PatientStomatologyHistoryView`, más una
+  pantalla de consulta para calidad/auditoría (`GET administracion/
+  bitacora-acceso`). La bitácora ESPECÍFICA de diagnósticos sensibles
+  (`SensitiveDiagnosisRedacted`) ya quedó resuelta en la Fase 2 — lo que
+  falta es el registro general de lecturas.
+- **Fase 4 — Solicitudes ARCO**: modelo `SolicitudArco` (acceso/
+  rectificación/cancelación/oposición, Ley General de Protección de Datos
+  Personales), cola de gestión para el área de compliance. Vive en
+  `administracion`, no toca `consulta_medica` — se puede hacer antes o
+  después de la Fase 3 sin dependencias.
+
+Plan detallado de ambas fases (modelos, endpoints, permisos) en
+`C:\Users\tepex\.claude\plans\bubbly-launching-sparkle.md` (máquina de
+desarrollo de esta sesión) — pedir que se retome cuando se quiera seguir.
+
 ## Convenciones y Reglas Operacionales
 
 ### Regla: nunca probar directo contra bases de datos externas/legado
@@ -631,10 +833,13 @@ servidores reales desde el flujo de agentes** — ni siquiera lecturas explorato
 
 ## Estado del repo
 
-**Sin commitear todavía** — todo lo de hoy (historia clínica, catálogos,
-`ClinicalHistoryRevision`, `ConsultationAddendum`, fix de migración
-`medicos/0009`, expediente con datos reales + selector de núcleo, portal
-de citas completo, backend de Autorización de Recetas + sus 3 mejoras de
-NOM-024, banner de anuncios y calendario visual del Portal de Citas) está
-en el working tree. Correr `git status` antes de seguir para confirmar el
-alcance exacto antes de armar el commit.
+**Actualizado 2026-09-28**: verificado con `git log origin/SISEM-15-07-2026..HEAD`
+— el ÚNICO commit pendiente de push es `69297792` ("Alergias unificadas y
+redaccion de diagnosticos sensibles (NOM-024)"), contiene todo lo de la
+sección "Completado 2026-09-28" de arriba (Fases 1 y 2, más el fix de deuda
+técnica de `apps.catalogos`). Los commits de sesiones anteriores que en su
+momento se anotaron aquí como "pendiente de push" (`9e9b604`, `dcae826`,
+`e66328b`, `bab53ab`) **ya están pusheados** — esa nota había quedado
+desactualizada en este documento, corregida ahora. Working tree limpio al
+momento de escribir esto; correr `git status` igual antes de seguir por si
+hay cambios nuevos.
