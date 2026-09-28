@@ -33,8 +33,16 @@ class CatalogModelsAndPermissionsUnitTests(TestCase):
         self.assertEqual(permission.description, permission.descripcion)
         self.assertEqual(permission.is_system, permission.es_sistema)
 
+    def test_has_catalog_permission_requires_action_and_catalog(self):
+        # `action`/`catalog` son ahora posicionales obligatorios del
+        # constructor (ver HasCatalogPermission.__init__) -- Python mismo
+        # impide instanciar el permiso sin ambos, en vez de fallar mas tarde
+        # en tiempo de request como antes.
+        with self.assertRaises(TypeError):
+            HasCatalogPermission()
+
     @patch("apps.catalogos.permissions.authenticate_request")
-    def test_has_catalog_permission_requires_action_and_catalog(self, auth_mock):
+    def test_has_catalog_permission_denies_without_required_permission(self, auth_mock):
         user = SyUsuario.objects.create(
             usuario="perm_unit",
             correo="perm.unit@example.com",
@@ -45,11 +53,11 @@ class CatalogModelsAndPermissionsUnitTests(TestCase):
         )
         auth_mock.return_value = user
 
-        permission = HasCatalogPermission()
-        request = RequestFactory().get("/api/v1/care-centers")
+        permission = HasCatalogPermission(action="read", catalog="admin:catalogos:centros_atencion")
+        request = RequestFactory().get("/api/v1/care-centers/")
 
         with self.assertRaises(CatalogApiException) as ctx:
-            permission.has_permission(request, view=None)
+            permission.has_permission(request, None)
 
         self.assertEqual(ctx.exception.status_code, 403)
-        self.assertEqual(ctx.exception.detail["code"], "PERMISSION_DENIED")
+        self.assertEqual(ctx.exception.detail["code"], "INSUFFICIENT_PERMISSIONS")

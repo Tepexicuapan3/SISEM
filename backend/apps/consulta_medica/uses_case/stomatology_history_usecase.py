@@ -26,13 +26,10 @@ STOMATOLOGY_HISTORY_FIELD_MAP = {
     "diet": "diet",
     "surgicalHistory": "surgical_history",
     "traumaticHistory": "traumatic_history",
-    "allergyMedications": "allergy_medications",
-    "allergyDentalMaterial": "allergy_dental_material",
-    "allergyAnesthesia": "allergy_anesthesia",
-    "allergyFood": "allergy_food",
-    "allergyEnvironment": "allergy_environment",
-    "allergyOther": "allergy_other",
     "currentIllnessHistory": "current_illness_history",
+    # Los 6 `allergy*` (change `alergias-unificadas`) quedan CONGELADOS --
+    # reemplazados por el modelo Allergy, ya no se aceptan aqui. Ver nota en
+    # models.StomatologyHistory.
 }
 
 # Campos de texto largo (TextField en el modelo): se auditan como longitud
@@ -44,12 +41,6 @@ _LONG_TEXT_FIELDS = {
     "diet",
     "surgical_history",
     "traumatic_history",
-    "allergy_medications",
-    "allergy_dental_material",
-    "allergy_anesthesia",
-    "allergy_food",
-    "allergy_environment",
-    "allergy_other",
     "current_illness_history",
 }
 

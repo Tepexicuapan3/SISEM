@@ -4,42 +4,43 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from apps.catalogos.serializers import (AutorizadoresDetailSerializer,
-                                        CatalogDetailSerializer,
                                         PermisosDetailSerializer,
-                                        RolesDetailSerializer)
+                                        RolesDetailSerializer,
+                                        build_catalog_ref,
+                                        build_user_ref)
+
+# `_build_user_ref`/`_build_catalog_ref` dejaron de ser metodos de instancia
+# de CatalogDetailSerializer -- ahora son funciones de MODULO
+# (`build_user_ref`/`build_catalog_ref` en apps.catalogos.serializers),
+# reusadas tambien fuera de serializers (ej. _HorarioReadMixin.get_center).
+# Estos tests se actualizaron para reflejar eso.
 
 
 class CatalogSerializersUnitTests(SimpleTestCase):
     def test_build_user_ref_when_repository_returns_none(self):
-        serializer = CatalogDetailSerializer()
-
         with patch("apps.catalogos.serializers.UserRepository.get_by_id", return_value=None):
-            value = serializer._build_user_ref(99)
+            value = build_user_ref(99)
 
         self.assertEqual(value, {"id": 99, "name": ""})
 
     def test_build_user_ref_for_profile_object_with_empty_name_uses_username(self):
-        serializer = CatalogDetailSerializer()
         sy_user = SimpleNamespace(id_usuario=77, usuario="fallback_user")
         det_like = SimpleNamespace(nombre="", paterno="", materno="", id_usuario=sy_user)
 
         with patch("apps.catalogos.serializers.UserRepository.get_by_id", return_value=det_like):
-            value = serializer._build_user_ref(77)
+            value = build_user_ref(77)
 
         self.assertEqual(value, {"id": 77, "name": "fallback_user"})
 
     def test_build_user_ref_for_syusuario_without_profile_uses_username(self):
-        serializer = CatalogDetailSerializer()
         user = SimpleNamespace(id_usuario=55, usuario="plain_user", detalle=None)
 
         with patch("apps.catalogos.serializers.UserRepository.get_by_id", return_value=user):
-            value = serializer._build_user_ref(55)
+            value = build_user_ref(55)
 
         self.assertEqual(value, {"id": 55, "name": "plain_user"})
 
     def test_autorizadores_build_catalog_ref_helper(self):
-        serializer = AutorizadoresDetailSerializer()
-
         class FakeQuerySet:
             def __init__(self, item):
                 self.item = item
@@ -53,9 +54,9 @@ class CatalogSerializersUnitTests(SimpleTestCase):
             def first(self):
                 return self.item
 
-        none_ref = serializer._build_catalog_ref(None, FakeQuerySet(None))
-        found_ref = serializer._build_catalog_ref(10, FakeQuerySet(SimpleNamespace(name="Item")))
-        missing_ref = serializer._build_catalog_ref(11, FakeQuerySet(None))
+        none_ref = build_catalog_ref(None, FakeQuerySet(None))
+        found_ref = build_catalog_ref(10, FakeQuerySet(SimpleNamespace(name="Item")))
+        missing_ref = build_catalog_ref(11, FakeQuerySet(None))
 
         self.assertIsNone(none_ref)
         self.assertEqual(found_ref, {"id": 10, "name": "Item"})
@@ -65,11 +66,16 @@ class CatalogSerializersUnitTests(SimpleTestCase):
         serializer = AutorizadoresDetailSerializer()
         obj = SimpleNamespace(center_id=1, authorization_type_id=2, user_id=3)
 
-        with patch.object(serializer, "_build_catalog_ref", side_effect=[{"id": 1, "name": "C"}, {"id": 2, "name": "T"}]):
+        with patch(
+            "apps.catalogos.serializers.build_catalog_ref",
+            side_effect=[{"id": 1, "name": "C"}, {"id": 2, "name": "T"}],
+        ):
             center = serializer.get_center(obj)
             authorization_type = serializer.get_authorizationType(obj)
 
-        with patch.object(serializer, "_build_user_ref", return_value={"id": 3, "name": "U"}):
+        with patch(
+            "apps.catalogos.serializers.build_user_ref", return_value={"id": 3, "name": "U"},
+        ):
             user = serializer.get_user(obj)
 
         self.assertEqual(center, {"id": 1, "name": "C"})
@@ -81,11 +87,17 @@ class CatalogSerializersUnitTests(SimpleTestCase):
         role_serializer = RolesDetailSerializer()
         obj = SimpleNamespace(created_by_id=10, updated_by_id=11)
 
-        with patch.object(CatalogDetailSerializer, "_build_user_ref", side_effect=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}]):
+        with patch(
+            "apps.catalogos.serializers.build_user_ref",
+            side_effect=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}],
+        ):
             perm_created = perm_serializer.get_createdBy(obj)
             perm_updated = perm_serializer.get_updatedBy(obj)
 
-        with patch.object(CatalogDetailSerializer, "_build_user_ref", side_effect=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}]):
+        with patch(
+            "apps.catalogos.serializers.build_user_ref",
+            side_effect=[{"id": 10, "name": "A"}, {"id": 11, "name": "B"}],
+        ):
             role_created = role_serializer.get_createdBy(obj)
             role_updated = role_serializer.get_updatedBy(obj)
 

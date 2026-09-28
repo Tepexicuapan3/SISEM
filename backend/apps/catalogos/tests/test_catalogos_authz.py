@@ -1,4 +1,5 @@
 from django.contrib.auth.hashers import make_password
+from django.core.cache import cache
 from django.db import connection
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -6,11 +7,15 @@ from rest_framework.test import APITestCase
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.models import DetUsuario, SyUsuario
 from apps.authentication.services.token_service import CSRF_COOKIE
-from apps.catalogos.models import Areas, CatCentroAtencion, CatPermiso, CatRol
+from apps.catalogos.models import Areas, CatCentroAtencion, CatPermiso, CatRol, TiposAreas
 
 
 class CatalogosAuthzTests(APITestCase):
     def setUp(self):
+        # Ver comentario equivalente en test_catalogos_contract.py: sin esto
+        # el policy_store cache-backed (bloqueo de sesion activa) sobrevive
+        # entre tests y el 2o login en adelante falla con 409.
+        cache.clear()
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -78,13 +83,18 @@ class CatalogosAuthzTests(APITestCase):
             code="CA-001",
             is_external=False,
             address="Direccion 1",
-            schedule={"mon": "08:00-16:00"},
+            is_active=True,
+            created_by_id=self.user.id_usuario,
+        )
+        self.tipo_area = TiposAreas.objects.create(
+            name="Tipo Authz",
             is_active=True,
             created_by_id=self.user.id_usuario,
         )
         self.area = Areas.objects.create(
             name="Area Authz",
             code=10,
+            tipo_area=self.tipo_area,
             is_active=True,
             created_by_id=self.user.id_usuario,
         )
@@ -100,7 +110,7 @@ class CatalogosAuthzTests(APITestCase):
         return response
 
     def test_list_requires_authentication(self):
-        response = self.client.get("/api/v1/care-centers")
+        response = self.client.get("/api/v1/care-centers/")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["code"], "TOKEN_INVALID")
@@ -108,16 +118,16 @@ class CatalogosAuthzTests(APITestCase):
     def test_list_requires_permission(self):
         self._login()
 
-        response = self.client.get("/api/v1/care-centers")
+        response = self.client.get("/api/v1/care-centers/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(response.data["code"], "INSUFFICIENT_PERMISSIONS")
 
     def test_list_with_permission_succeeds(self):
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_read)
         self._login()
 
-        response = self.client.get("/api/v1/care-centers")
+        response = self.client.get("/api/v1/care-centers/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("items", response.data)
@@ -128,20 +138,19 @@ class CatalogosAuthzTests(APITestCase):
         self._login()
 
         response = self.client.post(
-            "/api/v1/care-centers",
+            "/api/v1/care-centers/",
             {
                 "name": "Centro Nuevo",
                 "code": "CA-002",
                 "isExternal": True,
                 "address": "Direccion 2",
-                "schedule": {"fri": "09:00-14:00"},
                 "isActive": True,
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(response.data["code"], "CSRF_INVALID")
 
     def test_create_with_permission_and_csrf_succeeds(self):
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_create)
@@ -149,13 +158,13 @@ class CatalogosAuthzTests(APITestCase):
         csrf_token = login_response.cookies.get(CSRF_COOKIE).value
 
         response = self.client.post(
-            "/api/v1/care-centers",
+            "/api/v1/care-centers/",
             {
                 "name": "Centro Nuevo",
                 "code": "CA-002",
+                "centerType": "CLINICA",
                 "isExternal": True,
                 "address": "Direccion 2",
-                "schedule": {"fri": "09:00-14:00"},
                 "isActive": True,
             },
             format="json",
@@ -164,10 +173,10 @@ class CatalogosAuthzTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("id", response.data)
-        self.assertEqual(response.data["name"], "Centro Nuevo")
+        self.assertEqual(response.data["name"], "Centro Nuevo (CA-002)")
 
     def test_areas_list_requires_authentication(self):
-        response = self.client.get("/api/v1/areas")
+        response = self.client.get("/api/v1/areas/")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["code"], "TOKEN_INVALID")
@@ -175,16 +184,16 @@ class CatalogosAuthzTests(APITestCase):
     def test_areas_list_requires_permission(self):
         self._login()
 
-        response = self.client.get("/api/v1/areas")
+        response = self.client.get("/api/v1/areas/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(response.data["code"], "INSUFFICIENT_PERMISSIONS")
 
     def test_areas_list_with_permission_succeeds(self):
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_area_read)
         self._login()
 
-        response = self.client.get("/api/v1/areas")
+        response = self.client.get("/api/v1/areas/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("items", response.data)
@@ -195,7 +204,7 @@ class CatalogosAuthzTests(APITestCase):
         self._login()
 
         response = self.client.post(
-            "/api/v1/areas",
+            "/api/v1/areas/",
             {
                 "name": "Area Nueva",
                 "code": "99",
@@ -204,7 +213,7 @@ class CatalogosAuthzTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(response.data["code"], "CSRF_INVALID")
 
     def test_areas_create_with_permission_and_csrf_succeeds(self):
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_area_create)
@@ -212,10 +221,11 @@ class CatalogosAuthzTests(APITestCase):
         csrf_token = login_response.cookies.get(CSRF_COOKIE).value
 
         response = self.client.post(
-            "/api/v1/areas",
+            "/api/v1/areas/",
             {
                 "name": "Area Nueva",
                 "code": "99",
+                "idTipoArea": self.tipo_area.id,
             },
             format="json",
             HTTP_X_CSRF_TOKEN=csrf_token,

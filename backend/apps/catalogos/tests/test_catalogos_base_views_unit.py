@@ -44,10 +44,21 @@ class _InvalidPostView(CatalogBaseListCreateView):
     model = _FakeModel
     write_serializer = _InvalidWriteSerializer
 
+    # HasCatalogPermission ahora exige `catalog` en la vista Y hace un
+    # chequeo real de auth/permisos (ver apps.catalogos.permissions) -- este
+    # test unitario aisla a proposito la logica de post()/serializer de la
+    # capa de autorizacion (esa ya la cubre test_catalogos_authz.py), asi
+    # que no requiere ningun permiso.
+    def get_permissions(self):
+        return []
+
 
 class _FallbackPostView(CatalogBaseListCreateView):
     model = _FakeModel
     write_serializer = _FallbackWriteSerializer
+
+    def get_permissions(self):
+        return []
 
 
 class CatalogBaseViewsUnitTests(SimpleTestCase):

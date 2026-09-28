@@ -464,7 +464,24 @@ export type {
   PrescriptionItem,
   VisitPrescriptionItemsResponse,
   AddPrescriptionItemRequest,
+  AllergyWarning,
+  AllergyAcknowledgedInfo,
+  AddPrescriptionItemRequiresAcknowledgment,
+  AddPrescriptionItemResult,
 } from "@api/types/prescription-item.types";
+
+// =============================================================================
+// ALERGIAS (Allergy) -- change `alergias-unificadas`
+// =============================================================================
+export type {
+  AllergyCategory,
+  AllergySeverity,
+  AllergySource,
+  Allergy,
+  PatientAllergiesResponse,
+  CreateAllergyRequest,
+  UpdateAllergyRequest,
+} from "@api/types/allergy.types";
 
 export type {
   CuadroBasico,

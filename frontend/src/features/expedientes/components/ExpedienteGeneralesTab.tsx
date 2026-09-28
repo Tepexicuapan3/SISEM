@@ -27,6 +27,7 @@ import { religionesAPI } from "@api/resources/catalogos/religiones.api";
 import { tiposResidenciaAPI } from "@api/resources/catalogos/tipos-residencia.api";
 import { useClinicalHistory } from "@features/expedientes/queries/useClinicalHistory";
 import { useUpdateClinicalHistory } from "@features/expedientes/mutations/useUpdateClinicalHistory";
+import { AllergyList } from "@features/expedientes/components/AllergyList";
 import type { UpdateClinicalHistoryRequest } from "@api/types";
 
 interface ExpedienteGeneralesTabProps {
@@ -52,7 +53,6 @@ interface FormValues {
   limbsExam: string;
   diagnosticManagement: string;
   therapeuticManagement: string;
-  allergies: string;
 }
 
 const EMPTY_VALUES: FormValues = {
@@ -73,7 +73,6 @@ const EMPTY_VALUES: FormValues = {
   limbsExam: "",
   diagnosticManagement: "",
   therapeuticManagement: "",
-  allergies: "",
 };
 
 const SELECT_FIELDS = [
@@ -97,7 +96,6 @@ const TEXT_FIELDS = [
   "limbsExam",
   "diagnosticManagement",
   "therapeuticManagement",
-  "allergies",
 ] as const;
 
 export function ExpedienteGeneralesTab({
@@ -150,7 +148,6 @@ export function ExpedienteGeneralesTab({
       limbsExam: data.limbsExam ?? "",
       diagnosticManagement: data.diagnosticManagement ?? "",
       therapeuticManagement: data.therapeuticManagement ?? "",
-      allergies: data.allergies ?? "",
     });
   }, [data, form]);
 
@@ -200,7 +197,13 @@ export function ExpedienteGeneralesTab({
   }
 
   return (
-    <Form {...form}>
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold text-txt-body">Alergias</h3>
+        <AllergyList noExp={noExp} pkNum={pkNum} source="general" />
+      </section>
+
+      <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <section className="space-y-4">
           <h3 className="text-sm font-semibold text-txt-body">
@@ -289,7 +292,7 @@ export function ExpedienteGeneralesTab({
 
         <section className="space-y-4">
           <h3 className="text-sm font-semibold text-txt-body">
-            Manejo y alergias
+            Manejo
           </h3>
           <TextareaField
             control={form.control}
@@ -301,7 +304,6 @@ export function ExpedienteGeneralesTab({
             name="therapeuticManagement"
             label="Manejo Terapéutico"
           />
-          <TextareaField control={form.control} name="allergies" label="Alergias" />
         </section>
 
         <div className="flex justify-end">
@@ -318,7 +320,8 @@ export function ExpedienteGeneralesTab({
           </Button>
         </div>
       </form>
-    </Form>
+      </Form>
+    </div>
   );
 }
 

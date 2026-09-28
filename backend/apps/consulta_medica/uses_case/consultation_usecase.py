@@ -7,6 +7,7 @@ from apps.consulta_medica.repositories.cies_repository import CiesRepository
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.repositories.visit_diagnosis_repository import VisitDiagnosisRepository
+from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
@@ -626,8 +627,29 @@ def get_secondary_diagnoses(visit_id, roles, permissions=None):
     consultation = _get_consultation_or_error(visit)
 
     diagnoses = VisitDiagnosisRepository.list_for_consultation(consultation)
-    items = [VisitDiagnosisRepository.to_contract(d) for d in diagnoses]
-    return {"items": items, "total": len(items)}
+    items = []
+    redacted_ids = []
+    for diagnosis in diagnoses:
+        item = VisitDiagnosisRepository.to_contract(diagnosis)
+        # Diagnosticos sensibles (change `diagnosticos-sensibles`): mismo
+        # criterio que `patient_history_usecase._consultation_to_history_item`
+        # -- se redacta cieCode/cieDescription/notes, el resto (estatus,
+        # fecha) se sirve normal.
+        cie_code, cie_description, notes, restricted = redact_cie_if_restricted(
+            code=item["cieCode"],
+            description=item["cieDescription"],
+            permissions=permissions,
+            linked_text=item["notes"],
+        )
+        item["cieCode"] = cie_code
+        item["cieDescription"] = cie_description
+        item["notes"] = notes
+        item["restricted"] = restricted
+        if restricted:
+            redacted_ids.append(item["id"])
+        items.append(item)
+
+    return {"items": items, "total": len(items), "redactedDiagnosisIds": redacted_ids}
 
 
 def search_cies(search, roles, permissions=None, *, limit=10):

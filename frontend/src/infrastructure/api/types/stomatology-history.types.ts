@@ -20,12 +20,9 @@ export interface StomatologyHistory {
   diet: string | null;
   surgicalHistory: string | null;
   traumaticHistory: string | null;
-  allergyMedications: string | null;
-  allergyDentalMaterial: string | null;
-  allergyAnesthesia: string | null;
-  allergyFood: string | null;
-  allergyEnvironment: string | null;
-  allergyOther: string | null;
+  // Los 6 `allergy*` (change `alergias-unificadas`) quedan CONGELADOS en el
+  // backend -- reemplazados por `Allergy` (ver allergy.types.ts), ya no se
+  // exponen aqui.
   currentIllnessHistory: string | null;
   isActive: boolean;
   createdAt: string;

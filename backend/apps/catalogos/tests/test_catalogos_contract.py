@@ -1,4 +1,5 @@
 from django.contrib.auth.hashers import make_password
+from django.core.cache import cache
 from django.db import connection
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -12,12 +13,22 @@ from apps.catalogos.models import (
     Consultorios,
     Permisos,
     Roles,
+    TiposAreas,
     Turnos,
 )
 
 
 class CatalogosContractTests(APITestCase):
     def setUp(self):
+        # Sin esto, el login real de cada test queda sujeto al policy_store
+        # cache-backed (bloqueo de sesion activa por user_id, throttle de
+        # intentos) -- Django NO lo limpia entre tests (no es parte del
+        # rollback de transaccion de APITestCase), y SQLite reutiliza el
+        # mismo id_usuario autoincremental tras cada rollback, asi que el
+        # login del 2o test en adelante choca con el "active session" que
+        # dejo el 1er test y falla con 409 SESSION_ALREADY_ACTIVE. Mismo
+        # criterio que apps.authentication.tests.test_auth_api.py.
+        cache.clear()
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -113,13 +124,18 @@ class CatalogosContractTests(APITestCase):
             code="CC-001",
             is_external=False,
             address="Av. Siempre Viva 123",
-            schedule={"mon": "08:00-16:00"},
+            is_active=True,
+            created_by_id=self.user.id_usuario,
+        )
+        self.tipo_area = TiposAreas.objects.create(
+            name="Tipo Contract",
             is_active=True,
             created_by_id=self.user.id_usuario,
         )
         self.area = Areas.objects.create(
             name="Urgencias",
             code=10,
+            tipo_area=self.tipo_area,
             is_active=True,
             created_by_id=self.user.id_usuario,
         )
@@ -130,7 +146,7 @@ class CatalogosContractTests(APITestCase):
         )
         self.consultorio = Consultorios.objects.create(
             name="Consultorio Contract",
-            code=301,
+            numero=301,
             id_turn=self.turn,
             id_center=self.center,
             is_active=True,
@@ -147,7 +163,7 @@ class CatalogosContractTests(APITestCase):
         self.csrf_token = login_response.cookies.get(CSRF_COOKIE).value
 
     def test_care_centers_list_contract(self):
-        response = self.client.get("/api/v1/care-centers")
+        response = self.client.get("/api/v1/care-centers/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("items", response.data)
@@ -165,7 +181,7 @@ class CatalogosContractTests(APITestCase):
         self.assertIn("isActive", item)
 
     def test_care_centers_detail_contract(self):
-        response = self.client.get(f"/api/v1/care-centers/{self.center.id}")
+        response = self.client.get(f"/api/v1/care-centers/{self.center.id}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("careCenter", response.data)
@@ -173,19 +189,18 @@ class CatalogosContractTests(APITestCase):
         self.assertEqual(center["id"], self.center.id)
         self.assertEqual(center["name"], "Centro Contract")
         self.assertIn("address", center)
-        self.assertIn("schedule", center)
         self.assertIn("createdAt", center)
         self.assertIn("updatedAt", center)
 
     def test_create_care_center_contract(self):
         response = self.client.post(
-            "/api/v1/care-centers",
+            "/api/v1/care-centers/",
             {
                 "name": "Centro Norte",
                 "code": "CC-002",
+                "centerType": "CLINICA",
                 "isExternal": True,
                 "address": "Calle Norte 55",
-                "schedule": {"fri": "09:00-14:00"},
                 "isActive": True,
             },
             format="json",
@@ -194,17 +209,16 @@ class CatalogosContractTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("id", response.data)
-        self.assertEqual(response.data["name"], "Centro Norte")
+        self.assertEqual(response.data["name"], "Centro Norte (CC-002)")
 
     def test_update_care_center_contract(self):
         response = self.client.put(
-            f"/api/v1/care-centers/{self.center.id}",
+            f"/api/v1/care-centers/{self.center.id}/",
             {
                 "name": "Centro Contract Actualizado",
                 "code": "CC-001",
                 "isExternal": False,
                 "address": "Av. Actualizada 555",
-                "schedule": {"mon": "07:00-15:00"},
                 "isActive": True,
             },
             format="json",
@@ -220,7 +234,7 @@ class CatalogosContractTests(APITestCase):
 
     def test_delete_care_center_contract(self):
         response = self.client.delete(
-            f"/api/v1/care-centers/{self.center.id}",
+            f"/api/v1/care-centers/{self.center.id}/",
             HTTP_X_CSRF_TOKEN=self.csrf_token,
         )
 
@@ -229,7 +243,7 @@ class CatalogosContractTests(APITestCase):
 
     def test_care_centers_invalid_sort_by_returns_contract_error(self):
         response = self.client.get(
-            "/api/v1/care-centers?sortBy=invalidField",
+            "/api/v1/care-centers/?sortBy=invalidField",
             HTTP_X_REQUEST_ID="req-catalog-123",
         )
 
@@ -239,25 +253,25 @@ class CatalogosContractTests(APITestCase):
         self.assertIn("details", response.data)
 
     def test_care_centers_invalid_pagination_format_returns_invalid_format(self):
-        response = self.client.get("/api/v1/care-centers?page=uno&pageSize=diez")
+        response = self.client.get("/api/v1/care-centers/?page=uno&pageSize=diez")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "INVALID_FORMAT")
 
     def test_care_centers_pagination_out_of_range_returns_validation_error(self):
-        response = self.client.get("/api/v1/care-centers?page=0&pageSize=101")
+        response = self.client.get("/api/v1/care-centers/?page=0&pageSize=101")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "VALIDATION_ERROR")
 
     def test_care_centers_invalid_sort_order_returns_validation_error(self):
-        response = self.client.get("/api/v1/care-centers?sortOrder=up")
+        response = self.client.get("/api/v1/care-centers/?sortOrder=up")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "VALIDATION_ERROR")
 
     def test_care_centers_invalid_is_active_returns_validation_error(self):
-        response = self.client.get("/api/v1/care-centers?isActive=quizas")
+        response = self.client.get("/api/v1/care-centers/?isActive=quizas")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "VALIDATION_ERROR")
@@ -268,13 +282,12 @@ class CatalogosContractTests(APITestCase):
             code="CC-099",
             is_external=False,
             address="Calle Inactiva",
-            schedule={"sun": "10:00-12:00"},
             is_active=False,
             created_by_id=self.user.id_usuario,
         )
 
         response = self.client.get(
-            "/api/v1/care-centers?search=Centro&isActive=true&sortBy=name&sortOrder=desc"
+            "/api/v1/care-centers/?search=Centro&isActive=true&sortBy=name&sortOrder=desc"
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -283,11 +296,10 @@ class CatalogosContractTests(APITestCase):
 
     def test_create_care_center_validation_error(self):
         response = self.client.post(
-            "/api/v1/care-centers",
+            "/api/v1/care-centers/",
             {
                 "isExternal": True,
                 "address": "Sin nombre",
-                "schedule": {"fri": "09:00-14:00"},
                 "isActive": True,
             },
             format="json",
@@ -298,20 +310,19 @@ class CatalogosContractTests(APITestCase):
         self.assertEqual(response.data["code"], "VALIDATION_ERROR")
 
     def test_care_center_detail_not_found(self):
-        response = self.client.get("/api/v1/care-centers/999999")
+        response = self.client.get("/api/v1/care-centers/999999/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data["code"], "CARE_CENTER_NOT_FOUND")
 
     def test_update_care_center_not_found(self):
         response = self.client.put(
-            "/api/v1/care-centers/999999",
+            "/api/v1/care-centers/999999/",
             {
                 "name": "No existe",
                 "code": "CC-404",
                 "isExternal": False,
                 "address": "N/A",
-                "schedule": {"mon": "07:00-15:00"},
                 "isActive": True,
             },
             format="json",
@@ -323,13 +334,12 @@ class CatalogosContractTests(APITestCase):
 
     def test_update_care_center_validation_error(self):
         response = self.client.put(
-            f"/api/v1/care-centers/{self.center.id}",
+            f"/api/v1/care-centers/{self.center.id}/",
             {
                 "name": "Centro Contract",
                 "code": "CC-001",
                 "isExternal": "no-bool",
                 "address": "Av. Actualizada 555",
-                "schedule": {"mon": "07:00-15:00"},
                 "isActive": True,
             },
             format="json",
@@ -345,19 +355,17 @@ class CatalogosContractTests(APITestCase):
             code="CC-777",
             is_external=False,
             address="Calle Duplicada",
-            schedule={"sat": "08:00-13:00"},
             is_active=True,
             created_by_id=self.user.id_usuario,
         )
 
         response = self.client.put(
-            f"/api/v1/care-centers/{self.center.id}",
+            f"/api/v1/care-centers/{self.center.id}/",
             {
                 "name": duplicated.name,
                 "code": "CC-001",
                 "isExternal": False,
                 "address": "Av. Actualizada 555",
-                "schedule": {"mon": "07:00-15:00"},
                 "isActive": True,
             },
             format="json",
@@ -369,7 +377,7 @@ class CatalogosContractTests(APITestCase):
 
     def test_delete_care_center_not_found(self):
         response = self.client.delete(
-            "/api/v1/care-centers/999999",
+            "/api/v1/care-centers/999999/",
             HTTP_X_CSRF_TOKEN=self.csrf_token,
         )
 
@@ -377,7 +385,7 @@ class CatalogosContractTests(APITestCase):
         self.assertEqual(response.data["code"], "CARE_CENTER_NOT_FOUND")
 
     def test_areas_list_contract(self):
-        response = self.client.get("/api/v1/areas")
+        response = self.client.get("/api/v1/areas/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("items", response.data)
@@ -390,23 +398,24 @@ class CatalogosContractTests(APITestCase):
         self.assertIn("isActive", item)
 
     def test_areas_detail_contract(self):
-        response = self.client.get(f"/api/v1/areas/{self.area.id}")
+        response = self.client.get(f"/api/v1/areas/{self.area.id}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("area", response.data)
         area = response.data["area"]
         self.assertEqual(area["id"], self.area.id)
         self.assertEqual(area["name"], "Urgencias")
-        self.assertEqual(area["code"], 10)
+        self.assertEqual(area["code"], "10")
         self.assertIn("createdAt", area)
         self.assertIn("updatedAt", area)
 
     def test_create_area_contract(self):
         response = self.client.post(
-            "/api/v1/areas",
+            "/api/v1/areas/",
             {
                 "name": "Farmacia",
                 "code": 20,
+                "idTipoArea": self.tipo_area.id,
                 "isActive": True,
             },
             format="json",
@@ -419,10 +428,11 @@ class CatalogosContractTests(APITestCase):
 
     def test_areas_duplicate_name_returns_409(self):
         response = self.client.post(
-            "/api/v1/areas",
+            "/api/v1/areas/",
             {
                 "name": "Urgencias",
                 "code": 30,
+                "idTipoArea": self.tipo_area.id,
                 "isActive": True,
             },
             format="json",
@@ -433,7 +443,7 @@ class CatalogosContractTests(APITestCase):
         self.assertEqual(response.data["code"], "AREAS_EXISTS")
 
     def test_consulting_rooms_list_contract(self):
-        response = self.client.get("/api/v1/consulting-rooms")
+        response = self.client.get("/api/v1/consulting-rooms/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("items", response.data)
@@ -442,7 +452,7 @@ class CatalogosContractTests(APITestCase):
         item = response.data["items"][0]
         self.assertIn("id", item)
         self.assertIn("name", item)
-        self.assertIn("code", item)
+        self.assertIn("numero", item)
         self.assertIn("isActive", item)
 
     def test_consulting_rooms_list_regression_no_ghost_folio_column_error(self):
@@ -451,14 +461,14 @@ class CatalogosContractTests(APITestCase):
         GET /consulting-rooms must not raise 500 due to stale center column mapping
         (legacy `folio` vs current `clues`).
         """
-        response = self.client.get("/api/v1/consulting-rooms?page=1&pageSize=10")
+        response = self.client.get("/api/v1/consulting-rooms/?page=1&pageSize=10")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("items", response.data)
         self.assertIsInstance(response.data["items"], list)
 
     def test_consulting_room_detail_contract(self):
-        response = self.client.get(f"/api/v1/consulting-rooms/{self.consultorio.id}")
+        response = self.client.get(f"/api/v1/consulting-rooms/{self.consultorio.id}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("consultingRoom", response.data)
@@ -466,7 +476,7 @@ class CatalogosContractTests(APITestCase):
 
         self.assertEqual(consultorio["id"], self.consultorio.id)
         self.assertEqual(consultorio["name"], self.consultorio.name)
-        self.assertEqual(consultorio["code"], self.consultorio.code)
+        self.assertEqual(consultorio["numero"], self.consultorio.numero)
         self.assertIn("turn", consultorio)
         self.assertIn("center", consultorio)
         self.assertIn("createdAt", consultorio)
@@ -474,10 +484,10 @@ class CatalogosContractTests(APITestCase):
 
     def test_create_consulting_room_contract(self):
         response = self.client.post(
-            "/api/v1/consulting-rooms",
+            "/api/v1/consulting-rooms/",
             {
                 "name": "Consultorio Norte",
-                "code": 401,
+                "numero": 401,
                 "idTurn": self.turn.id,
                 "idCenter": self.center.id,
                 "isActive": True,

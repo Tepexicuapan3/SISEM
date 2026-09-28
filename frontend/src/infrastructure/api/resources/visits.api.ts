@@ -1,6 +1,7 @@
 import apiClient from "@api/client";
 import type {
   AddPrescriptionItemRequest,
+  AddPrescriptionItemResult,
   AddSecondaryDiagnosisRequest,
   CieSearchParams,
   CieSearchResponse,
@@ -153,8 +154,8 @@ export const visitsAPI = {
   addPrescriptionItem: async (
     visitId: number,
     data: AddPrescriptionItemRequest,
-  ): Promise<PrescriptionItem> => {
-    const response = await apiClient.post<PrescriptionItem>(
+  ): Promise<AddPrescriptionItemResult> => {
+    const response = await apiClient.post<AddPrescriptionItemResult>(
       `/visits/${visitId}/prescription-items`,
       data,
     );

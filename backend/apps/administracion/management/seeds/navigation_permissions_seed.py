@@ -161,3 +161,18 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("recepcion:incapacidad:read", "Ver historial de incapacidades medicas"),
 ]
+
+# Octava tanda (change `diagnosticos-sensibles`, 2026-09-28): permisos de
+# SOLO LECTURA para ver diagnosticos CIE-10 clasificados como sensibles
+# (VIH, salud mental, consumo de sustancias -- ver
+# catalogos.SensitiveCieRange). Sin uno de estos permisos, el diagnostico
+# se sirve redactado ("Diagnostico restringido") en vez de bloquear el
+# registro completo -- ver
+# consulta_medica.services.diagnosis_redaction_service. La asignacion de
+# estos 3 permisos a roles concretos es una decision institucional
+# pendiente de confirmar con el area de calidad del hospital.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:diagnosticos_vih:read", "Ver diagnosticos CIE-10 de VIH sin redaccion"),
+    ("clinico:diagnosticos_salud_mental:read", "Ver diagnosticos CIE-10 de salud mental sin redaccion"),
+    ("clinico:diagnosticos_sustancias:read", "Ver diagnosticos CIE-10 de consumo de sustancias sin redaccion"),
+]

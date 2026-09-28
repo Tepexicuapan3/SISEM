@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { usePatientConsultationsHistory } from "@features/expedientes/queries/usePatientConsultationsHistory";
 import { ConsultationAddendaSection } from "@features/expedientes/components/ConsultationAddendaSection";
 import { LegacyConsultationHistorySection } from "@features/expedientes/components/LegacyConsultationHistorySection";
@@ -69,14 +70,24 @@ export function ExpedienteHistorialTab({
             </div>
             <div className="text-sm space-y-1">
               <p className="text-txt-body">
-                <strong>Diagnóstico:</strong> {consulta.primaryDiagnosis}
-                {consulta.cieCode ? (
-                  <span className="text-txt-muted">
-                    {" "}
-                    ({consulta.cieCode}
-                    {consulta.cieDescription ? ` - ${consulta.cieDescription}` : ""})
+                <strong>Diagnóstico:</strong>{" "}
+                {consulta.restricted ? (
+                  <span className="inline-flex items-center gap-1 italic text-txt-muted">
+                    <Lock className="size-3.5" />
+                    {consulta.primaryDiagnosis}
                   </span>
-                ) : null}
+                ) : (
+                  <>
+                    {consulta.primaryDiagnosis}
+                    {consulta.cieCode ? (
+                      <span className="text-txt-muted">
+                        {" "}
+                        ({consulta.cieCode}
+                        {consulta.cieDescription ? ` - ${consulta.cieDescription}` : ""})
+                      </span>
+                    ) : null}
+                  </>
+                )}
               </p>
               {consulta.prescriptionItems.length > 0 ? (
                 <p className="text-txt-muted">

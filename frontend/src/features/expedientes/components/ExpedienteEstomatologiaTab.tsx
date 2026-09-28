@@ -15,6 +15,7 @@ import {
 } from "@shared/ui/form";
 import { useStomatologyHistory } from "@features/expedientes/queries/useStomatologyHistory";
 import { useUpdateStomatologyHistory } from "@features/expedientes/mutations/useUpdateStomatologyHistory";
+import { AllergyList } from "@features/expedientes/components/AllergyList";
 import type { UpdateStomatologyHistoryRequest } from "@api/types";
 
 interface ExpedienteEstomatologiaTabProps {
@@ -41,12 +42,6 @@ interface FormValues {
   diet: string;
   surgicalHistory: string;
   traumaticHistory: string;
-  allergyMedications: string;
-  allergyDentalMaterial: string;
-  allergyAnesthesia: string;
-  allergyFood: string;
-  allergyEnvironment: string;
-  allergyOther: string;
   currentIllnessHistory: string;
 }
 
@@ -72,12 +67,6 @@ const TEXT_FIELDS = [
   "diet",
   "surgicalHistory",
   "traumaticHistory",
-  "allergyMedications",
-  "allergyDentalMaterial",
-  "allergyAnesthesia",
-  "allergyFood",
-  "allergyEnvironment",
-  "allergyOther",
   "currentIllnessHistory",
 ] as const;
 
@@ -100,12 +89,6 @@ const EMPTY_VALUES: FormValues = {
   diet: "",
   surgicalHistory: "",
   traumaticHistory: "",
-  allergyMedications: "",
-  allergyDentalMaterial: "",
-  allergyAnesthesia: "",
-  allergyFood: "",
-  allergyEnvironment: "",
-  allergyOther: "",
   currentIllnessHistory: "",
 };
 
@@ -139,12 +122,6 @@ export function ExpedienteEstomatologiaTab({
       diet: data.diet ?? "",
       surgicalHistory: data.surgicalHistory ?? "",
       traumaticHistory: data.traumaticHistory ?? "",
-      allergyMedications: data.allergyMedications ?? "",
-      allergyDentalMaterial: data.allergyDentalMaterial ?? "",
-      allergyAnesthesia: data.allergyAnesthesia ?? "",
-      allergyFood: data.allergyFood ?? "",
-      allergyEnvironment: data.allergyEnvironment ?? "",
-      allergyOther: data.allergyOther ?? "",
       currentIllnessHistory: data.currentIllnessHistory ?? "",
     });
   }, [data, form]);
@@ -194,7 +171,15 @@ export function ExpedienteEstomatologiaTab({
   }
 
   return (
-    <Form {...form}>
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-txt-body">
+          Antecedentes Alérgicos
+        </h3>
+        <AllergyList noExp={noExp} pkNum={pkNum} source="stomatology" />
+      </section>
+
+      <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-txt-body">
@@ -246,20 +231,6 @@ export function ExpedienteEstomatologiaTab({
 
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-txt-body">
-            Antecedentes Alérgicos
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TextField control={form.control} name="allergyMedications" label="Medicamentos" />
-            <TextField control={form.control} name="allergyDentalMaterial" label="Material Dental" />
-            <TextField control={form.control} name="allergyAnesthesia" label="Anestesia" />
-            <TextField control={form.control} name="allergyFood" label="Alimentos" />
-            <TextField control={form.control} name="allergyEnvironment" label="Medio Ambiente" />
-            <TextField control={form.control} name="allergyOther" label="Otros" />
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-txt-body">
             Padecimiento Actual
           </h3>
           <TextareaField
@@ -283,7 +254,8 @@ export function ExpedienteEstomatologiaTab({
           </Button>
         </div>
       </form>
-    </Form>
+      </Form>
+    </div>
   );
 }
 

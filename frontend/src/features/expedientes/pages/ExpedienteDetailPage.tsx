@@ -38,6 +38,7 @@ import { ExpedienteHistorialTab } from "@features/expedientes/components/Expedie
 import { ExpedienteLicenciasTab } from "@features/expedientes/components/ExpedienteLicenciasTab";
 import { ExpedienteEstudiosTab } from "@features/expedientes/components/ExpedienteEstudiosTab";
 import { usePatientGeneralInfo } from "@features/expedientes/queries/usePatientGeneralInfo";
+import { useAllergies } from "@features/expedientes/queries/useAllergies";
 
 const SIN_DATO = "No disponible";
 
@@ -73,13 +74,18 @@ export const ExpedienteDetailPage = () => {
 
   const selectedMember = members.find((m) => m.pkNum === pkNum);
 
+  // Alergias estructuradas (change `alergias-unificadas`) -- reemplaza el
+  // hardcodeo `alergias: []` que tenia esta tarjeta antes de que existiera
+  // una fuente estructurada (ClinicalHistory.allergies era texto libre).
+  const { data: allergiesData } = useAllergies(folioReal, pkNum);
+  const alergias = (allergiesData?.items ?? []).map((allergy) => allergy.substance);
+
   // Datos reales via /visits/patient-lookup (mismo endpoint que Recepcion).
   // CURP ya se expone (ver buscar_expediente.py / _build_member); sexo/tipo
   // de sangre/telefono/email/direccion siguen sin existir en ningun modelo
   // del backend hoy -- se muestran como SIN_DATO en vez de inventar un
-  // valor. No hay fuente estructurada de alergias/padecimientos
-  // cronicos/medicamentos habituales todavia (ClinicalHistory.allergies es
-  // texto libre, no una lista), asi que esa tarjeta queda sin datos por ahora.
+  // valor. `padecimientos_cronicos`/`medicamentos_habituales` tampoco
+  // tienen fuente estructurada todavia, siguen vacios.
   const expediente = {
     folio: folioReal || SIN_DATO,
     paciente: selectedMember?.nombre ?? SIN_DATO,
@@ -93,7 +99,7 @@ export const ExpedienteDetailPage = () => {
     email: SIN_DATO,
     direccion: SIN_DATO,
     status: selectedMember?.estatus ?? SIN_DATO,
-    alergias: [] as string[],
+    alergias,
     padecimientos_cronicos: [] as string[],
     medicamentos_habituales: [] as string[],
   };

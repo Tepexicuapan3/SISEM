@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ListPlus, Loader2, X } from "lucide-react";
+import { ListPlus, Loader2, Lock, X } from "lucide-react";
 import { ApiError } from "@api/utils/errors";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
@@ -159,7 +159,16 @@ export function SecondaryDiagnosesButton({
                     className="flex items-center justify-between rounded-lg border p-2"
                   >
                     <span className="text-sm">
-                      <strong>{diagnosis.cieCode}</strong> — {diagnosis.cieDescription}
+                      {diagnosis.restricted ? (
+                        <span className="inline-flex items-center gap-1 italic text-txt-muted">
+                          <Lock className="size-3.5" />
+                          {diagnosis.cieDescription}
+                        </span>
+                      ) : (
+                        <>
+                          <strong>{diagnosis.cieCode}</strong> — {diagnosis.cieDescription}
+                        </>
+                      )}
                     </span>
                     <Button
                       type="button"

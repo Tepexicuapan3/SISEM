@@ -34,6 +34,7 @@ from .origen_consulta import OrigenCons
 from .parentescos import Parentesco
 from .pases import Pases
 from .religion import Religion
+from .sensitive_cie_range import SensitiveCieRange
 
 # ALIAS IMPORTANTES
 from .roles import Roles
@@ -92,6 +93,7 @@ __all__ = [
     "Parentesco",
     "Pases",
     "Religion",
+    "SensitiveCieRange",
     "Roles",
     "Permisos",
     "CatRol",

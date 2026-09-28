@@ -13,7 +13,10 @@ export const useAddPrescriptionItem = () => {
   return useMutation({
     mutationFn: ({ visitId, data }: AddPrescriptionItemInput) =>
       visitsAPI.addPrescriptionItem(visitId, data),
-    onSuccess: async (_result, { visitId }) => {
+    onSuccess: async (result, { visitId }) => {
+      // Si el backend respondio con `requiresAcknowledgment`, NO se creo
+      // ningun item -- no hay nada que invalidar todavia.
+      if ("requiresAcknowledgment" in result) return;
       await queryClient.invalidateQueries({
         queryKey: ["doctor-consultation", "prescription-items", visitId],
       });

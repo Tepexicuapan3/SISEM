@@ -17,6 +17,7 @@ from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
 from apps.authentication.services.session_service import authenticate_request
 from apps.catalogos.models import Medicamentos
+from apps.consulta_medica.models import Allergy
 from apps.realtime.events import (
     publish_visit_closed,
     publish_visit_diagnosis_saved,
@@ -30,6 +31,7 @@ from .serializers import (
     AddConsultationAddendumSerializer,
     AddPrescriptionItemSerializer,
     AddSecondaryDiagnosisSerializer,
+    AllergyWriteSerializer,
     ClinicalHistoryUpdateSerializer,
     CloseConsultationSerializer,
     CreateMedicalLeaveSerializer,
@@ -47,6 +49,12 @@ from .services.report_export_service import build_daily_report_workbook
 from .services.report_export_service_medical_leave import build_medical_leave_report_workbook
 from .uses_case.daily_report_usecase import get_daily_consultation_report
 from .uses_case.medical_leave_report_usecase import get_medical_leave_report
+from .uses_case.allergy_usecase import (
+    create_allergy,
+    deactivate_allergy,
+    list_allergies,
+    update_allergy,
+)
 from .uses_case.clinical_history_usecase import (
     get_clinical_history,
     upsert_clinical_history,
@@ -133,6 +141,42 @@ def _domain_error_response(request, exc):
         exc.status_code,
         details=exc.details,
         request_id=get_request_id(request),
+    )
+
+
+def _log_sensitive_diagnosis_redaction_if_any(
+    request, user, *, actor_id, resource_ids, no_exp=None, pk_num=None, visit_id=None,
+):
+    """
+    Diagnosticos sensibles (change `diagnosticos-sensibles`): registra UN
+    evento por request (no uno por item redactado, para no inundar la
+    bitacora) cuando la respuesta trae al menos un diagnostico CIE-10
+    restringido -- para que calidad pueda ver intentos de acceso a
+    diagnosticos de VIH/salud mental/sustancias sin el permiso requerido.
+    `raise_on_error=False`: nunca debe bloquear que el usuario vea el resto
+    del historial por un fallo de logging.
+    """
+    if not resource_ids:
+        return
+
+    meta = {"module": "consulta_medica", "endpoint": request.path, "actorId": actor_id}
+    if no_exp is not None:
+        meta["noExp"] = no_exp
+        meta["pkNum"] = pk_num
+    if visit_id is not None:
+        meta["visitId"] = visit_id
+
+    log_event(
+        request,
+        "SensitiveDiagnosisRedacted",
+        "SUCCESS",
+        actor_user=user,
+        resource_type="consulta_medica",
+        resource_id=resource_ids[0],
+        datos_antes=None,
+        datos_despues={"redactedResourceIds": resource_ids, "count": len(resource_ids)},
+        meta=meta,
+        raise_on_error=False,
     )
 
 
@@ -505,6 +549,240 @@ class PatientClinicalHistoryView(APIView):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+class PatientAllergiesView(APIView):
+    """
+    Alergias estructuradas de un paciente/familiar (no_exp + pk_num) --
+    reemplaza el texto libre duplicado de ClinicalHistory.allergies y los 6
+    campos StomatologyHistory.allergy_* (change `alergias-unificadas`). GET
+    lista, POST crea. Visible/editable tanto desde Medicina General como
+    desde Estomatologia -- la especialidad de origen (`source`) es solo
+    trazabilidad, nunca restringe la visibilidad.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, no_exp):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        pk_num = _parse_pk_num(request)
+        if pk_num is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"pkNum": ["pkNum debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+
+        _, roles, permissions = _actor_context(user)
+
+        try:
+            payload = list_allergies(no_exp, pk_num, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def post(self, request, no_exp):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        pk_num = _parse_pk_num(request)
+        if pk_num is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"pkNum": ["pkNum debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+
+        serializer = AllergyWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details=serializer.errors,
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+        data = serializer.validated_data
+        source = data.get("source") or Allergy.Source.GENERAL
+
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "AllergyCreated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "noExp": no_exp,
+                    "pkNum": pk_num,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
+        try:
+            payload = create_allergy(
+                no_exp,
+                pk_num,
+                roles,
+                data,
+                actor_id,
+                permissions,
+                source=source,
+                audit_hook=audit_hook,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PatientAllergyDetailView(APIView):
+    """PATCH corrige una alergia (versionada en AllergyRevision). DELETE la
+    desactiva (baja logica, nunca DELETE real -- ver Allergy.deactivate)."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def patch(self, request, no_exp, allergy_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        pk_num = _parse_pk_num(request)
+        if pk_num is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"pkNum": ["pkNum debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+
+        serializer = AllergyWriteSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details=serializer.errors,
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "AllergyUpdated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "noExp": no_exp,
+                    "pkNum": pk_num,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
+        try:
+            payload = update_allergy(
+                no_exp,
+                pk_num,
+                allergy_id,
+                roles,
+                serializer.validated_data,
+                actor_id,
+                permissions,
+                audit_hook=audit_hook,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def delete(self, request, no_exp, allergy_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        pk_num = _parse_pk_num(request)
+        if pk_num is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"pkNum": ["pkNum debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "AllergyDeactivated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "noExp": no_exp,
+                    "pkNum": pk_num,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
+        try:
+            payload = deactivate_allergy(
+                no_exp, pk_num, allergy_id, roles, actor_id, permissions, audit_hook=audit_hook,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class VisitMedicalLeaveCreateView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -632,12 +910,17 @@ class PatientConsultationsHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_patient_consultations_history(no_exp, pk_num, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        _log_sensitive_diagnosis_redaction_if_any(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            resource_ids=payload.get("redactedVisitIds") or [],
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1015,12 +1298,17 @@ class VisitSecondaryDiagnosesView(APIView):
         if error:
             return error
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_secondary_diagnoses(visit_id, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        _log_sensitive_diagnosis_redaction_if_any(
+            request, user, actor_id=actor_id, visit_id=visit_id,
+            resource_ids=payload.get("redactedDiagnosisIds") or [],
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1271,9 +1559,40 @@ class VisitPrescriptionItemsView(APIView):
                 dose=data.get("dose"),
                 actor_id=actor_id,
                 permissions=permissions,
+                acknowledge_allergy_warning=data.get("acknowledgeAllergyWarning", False),
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        if payload.get("requiresAcknowledgment"):
+            # Cruce receta<->alergia: NO se creo ningun item -- se avisa al
+            # frontend para que muestre la alerta y reenvie con
+            # acknowledgeAllergyWarning=true si el medico decide continuar.
+            # Se deja constancia del aviso igual (non-strict: es solo
+            # informativo, un fallo de auditoria aca no debe bloquear que
+            # el medico vea la alerta).
+            log_event(
+                request,
+                "PrescriptionAllergyWarningShown",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=payload["allergyWarning"]["allergyId"],
+                datos_antes=None,
+                datos_despues={
+                    "visitId": visit_id,
+                    "medicationId": data["medicationId"],
+                    "substance": payload["allergyWarning"]["substance"],
+                    "severity": payload["allergyWarning"]["severity"],
+                },
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "actorId": actor_id,
+                },
+            )
+            return Response(payload, status=status.HTTP_200_OK)
 
         # `add_prescription_item` es SIMPLE, sin audit_hook (A5) -- prescriptionId
         # y requiresAuthorization no vienen en el payload de to_contract, se
@@ -1316,6 +1635,33 @@ class VisitPrescriptionItemsView(APIView):
                 "actorId": actor_id,
             },
         )
+
+        allergy_ack = payload.get("allergyWarningAcknowledged")
+        if allergy_ack:
+            # Constancia de que el medico vio la advertencia (evento
+            # anterior "PrescriptionAllergyWarningShown") y decidio
+            # continuar de todas formas -- non-strict, el item ya se creo.
+            log_event(
+                request,
+                "PrescriptionAllergyWarningAcknowledged",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=allergy_ack["allergyId"],
+                datos_antes=None,
+                datos_despues={
+                    "visitId": visit_id,
+                    "prescriptionItemId": payload.get("id"),
+                    "medicationId": payload.get("medicationId"),
+                    "substance": allergy_ack["substance"],
+                },
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "actorId": actor_id,
+                },
+            )
 
         return Response(payload, status=status.HTTP_201_CREATED)
 

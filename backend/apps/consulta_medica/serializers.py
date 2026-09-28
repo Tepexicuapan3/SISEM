@@ -2,6 +2,8 @@ import os
 
 from rest_framework import serializers
 
+from apps.consulta_medica.models import Allergy
+
 STUDY_RESULT_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 _ALLOWED_STUDY_RESULT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
 _ALLOWED_STUDY_RESULT_CONTENT_TYPES = {
@@ -148,13 +150,26 @@ class StomatologyHistoryUpdateSerializer(serializers.Serializer):
     diet = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     surgicalHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     traumaticHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergyMedications = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergyDentalMaterial = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergyAnesthesia = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergyFood = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergyEnvironment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergyOther = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     currentIllnessHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Los 6 `allergy*` (change `alergias-unificadas`) quedan CONGELADOS --
+    # reemplazados por Allergy (ver AllergyWriteSerializer mas abajo), ya no
+    # se aceptan aqui.
+
+
+class AllergyWriteSerializer(serializers.Serializer):
+    """Creacion/edicion de una Allergy -- a diferencia de ClinicalHistory/
+    StomatologyHistory (captura incremental, todo opcional), una alergia se
+    crea completa: category/substance/severity son obligatorios."""
+
+    category = serializers.ChoiceField(choices=Allergy.Category.choices)
+    substance = serializers.CharField(max_length=255, allow_blank=False)
+    medicationId = serializers.IntegerField(required=False, allow_null=True)
+    severity = serializers.ChoiceField(choices=Allergy.Severity.choices)
+    reaction = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Solo se usa en creacion (POST) -- de que pestana/especialidad viene el
+    # registro, unicamente para trazabilidad (la alergia es visible para
+    # ambas especialidades siempre). Default GENERAL si no se manda.
+    source = serializers.ChoiceField(choices=Allergy.Source.choices, required=False)
 
 
 class CreateMedicalLeaveSerializer(serializers.Serializer):
@@ -232,6 +247,13 @@ class AddPrescriptionItemSerializer(serializers.Serializer):
     dose = serializers.CharField(
         max_length=100, required=False, allow_blank=True, allow_null=True,
     )
+    # Cruce receta<->alergia (change `alergias-unificadas`): si el
+    # medicamento choca con una alergia activa del paciente, el backend
+    # responde con `allergyWarning` SIN bloquear (decision del usuario:
+    # advertencia con override auditado, no bloqueo duro). El frontend
+    # reenvia con este flag en `true` para dejar constancia de que el
+    # medico vio la alerta y decidio continuar.
+    acknowledgeAllergyWarning = serializers.BooleanField(required=False, default=False)
 
 
 class SearchCieSerializer(serializers.Serializer):

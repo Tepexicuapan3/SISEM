@@ -486,6 +486,10 @@ class StomatologyHistory(models.Model):
     investigacion_flujo.md SS17.3 -- NO incluye los signos vitales que esa
     tabla tambien guardaba en el legado, porque SIRES ya los resuelve bien
     con somatometria.VisitVitalSigns (una fila por visita, con fecha).
+
+    Las EDICIONES si quedan versionadas (ver StomatologyHistoryRevision mas
+    abajo), mismo patron que ClinicalHistory -- excepto los 6 campos
+    `allergy_*`, que quedan CONGELADOS (ver nota en cada uno mas abajo).
     """
 
     id_stomatology_history = models.BigAutoField(
@@ -520,7 +524,14 @@ class StomatologyHistory(models.Model):
     surgical_history = models.TextField(db_column="antecedentes_quirurgicos", null=True, blank=True)
     traumatic_history = models.TextField(db_column="antecedentes_traumaticos", null=True, blank=True)
 
-    # Antecedentes Alergicos
+    # Antecedentes Alergicos -- CONGELADOS (change `alergias-unificadas`):
+    # reemplazados por el modelo `Allergy` (1:N, categoria+severidad+
+    # sustancia, visible tanto en Estomatologia como en Medicina General).
+    # Las columnas se conservan sin borrar por el criterio de "sin
+    # eliminaciones" de NOM-024 y para no perder el texto libre historico
+    # (migrado a `Allergy` via el comando `migrar_alergias_estructuradas`),
+    # pero ya no se aceptan en `StomatologyHistoryUpdateSerializer` ni se
+    # versionan en `StomatologyHistoryRevision`.
     allergy_medications = models.TextField(db_column="alergia_medicamentos", null=True, blank=True)
     allergy_dental_material = models.TextField(db_column="alergia_material_dental", null=True, blank=True)
     allergy_anesthesia = models.TextField(db_column="alergia_anestesia", null=True, blank=True)
@@ -549,14 +560,190 @@ class StomatologyHistory(models.Model):
         ]
 
 
+class StomatologyHistoryRevision(models.Model):
+    """
+    Snapshot del valor de ``StomatologyHistory`` justo ANTES de que se
+    sobrescriba (ver ``StomatologyHistoryRepository.update``). Mismo patron
+    que ``ClinicalHistoryRevision`` -- cierra la brecha NOM-024 que existia
+    hasta el change `alergias-unificadas` (esta tabla se sobreescribia
+    in-place sin dejar rastro del valor anterior).
+
+    NO incluye los campos `allergy_*` (congelados, ver ``StomatologyHistory``
+    -- ya no se editan, no hace falta versionarlos aqui).
+    """
+
+    history = models.ForeignKey(
+        StomatologyHistory,
+        db_column="id_historia_dental",
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    previous_family_diabetes = models.BooleanField(db_column="af_diabetes_anterior")
+    previous_family_cancer = models.BooleanField(db_column="af_cancer_anterior")
+    previous_family_high_blood_pressure = models.BooleanField(db_column="af_presion_alta_anterior")
+    previous_family_low_blood_pressure = models.BooleanField(db_column="af_presion_baja_anterior")
+    previous_cause_of_death = models.CharField(
+        max_length=255, db_column="causa_muerte_anterior", null=True, blank=True,
+    )
+    previous_personal_diabetes = models.BooleanField(db_column="app_diabetes_anterior")
+    previous_personal_asthma = models.BooleanField(db_column="app_asma_anterior")
+    previous_personal_high_blood_pressure = models.BooleanField(db_column="app_presion_alta_anterior")
+    previous_personal_low_blood_pressure = models.BooleanField(db_column="app_presion_baja_anterior")
+    previous_personal_hepatitis = models.BooleanField(db_column="app_hepatitis_anterior")
+    previous_personal_hiv = models.BooleanField(db_column="app_vih_anterior")
+    previous_personal_smoking = models.BooleanField(db_column="app_tabaquismo_anterior")
+    previous_personal_alcoholism = models.BooleanField(db_column="app_alcoholismo_anterior")
+    previous_personal_substance_abuse = models.BooleanField(db_column="app_toxicomanias_anterior")
+    previous_habits = models.TextField(db_column="habitos_anterior", null=True, blank=True)
+    previous_diet = models.TextField(db_column="alimentacion_anterior", null=True, blank=True)
+    previous_surgical_history = models.TextField(
+        db_column="antecedentes_quirurgicos_anterior", null=True, blank=True,
+    )
+    previous_traumatic_history = models.TextField(
+        db_column="antecedentes_traumaticos_anterior", null=True, blank=True,
+    )
+    previous_current_illness_history = models.TextField(
+        db_column="padecimiento_actual_anterior", null=True, blank=True,
+    )
+    changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+    changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_stomatology_history_revision"
+        ordering = ["changed_at"]
+
+    def __str__(self) -> str:
+        return f"Historia dental {self.history_id} — revision {self.changed_at}"
+
+
+class Allergy(models.Model):
+    """
+    Alergia estructurada de un paciente/familiar (no_exp + pk_num) --
+    reemplaza el texto libre duplicado de ``ClinicalHistory.allergies`` y
+    los 6 campos ``StomatologyHistory.allergy_*`` (change
+    `alergias-unificadas`): una sola fuente de verdad, visible tanto en
+    Medicina General como en Estomatologia, con severidad y (cuando aplica)
+    ligada a un medicamento real del catalogo para poder cruzarla contra
+    recetas (ver `prescription_item_usecase.add_prescription_item`).
+
+    1:N por paciente (a diferencia de ClinicalHistory/StomatologyHistory) --
+    puede haber varias alergias. Nunca se borra, solo se desactiva
+    (`is_active=False`, mismo criterio "sin eliminaciones" de NOM-024).
+    """
+
+    class Category(models.TextChoices):
+        MEDICATION = "medication", "Medicamento"
+        DENTAL_MATERIAL = "dental_material", "Material dental"
+        ANESTHESIA = "anesthesia", "Anestesia"
+        FOOD = "food", "Alimento"
+        ENVIRONMENTAL = "environmental", "Ambiental"
+        OTHER = "other", "Otro"
+
+    class Severity(models.TextChoices):
+        MILD = "mild", "Leve"
+        MODERATE = "moderate", "Moderada"
+        SEVERE = "severe", "Grave"
+
+    class Source(models.TextChoices):
+        GENERAL = "general", "Medicina General"
+        STOMATOLOGY = "stomatology", "Estomatologia"
+
+    id_allergy = models.BigAutoField(primary_key=True, db_column="id_alergia")
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0)
+
+    category = models.CharField(
+        max_length=20, db_column="categoria", choices=Category.choices,
+    )
+    substance = models.CharField(max_length=255, db_column="sustancia")
+    # FK opcional al catalogo real -- solo tiene sentido para
+    # category=MEDICATION. Permite el cruce receta<->alergia sin depender
+    # de que `substance` coincida textualmente con el nombre del catalogo.
+    medication = models.ForeignKey(
+        "catalogos.Medicamentos",
+        db_column="id_medic",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    severity = models.CharField(
+        max_length=20, db_column="severidad", choices=Severity.choices,
+    )
+    reaction = models.TextField(db_column="reaccion", null=True, blank=True)
+    source = models.CharField(
+        max_length=20, db_column="origen", choices=Source.choices,
+    )
+
+    is_active = models.BooleanField(db_column="est_activo", default=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+    deleted_at = models.DateTimeField(db_column="fch_baja", null=True, blank=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+    updated_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+    deleted_by_id = models.BigIntegerField(db_column="usr_baja", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_allergy"
+        indexes = [
+            models.Index(fields=["no_exp", "pk_num"], name="cns_allergy_patient_idx"),
+            models.Index(fields=["is_active"], name="cns_allergy_active_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Alergia {self.substance} ({self.no_exp}/{self.pk_num})"
+
+
+class AllergyRevision(models.Model):
+    """
+    Snapshot del valor de ``Allergy`` justo ANTES de que se sobrescriba
+    (ver ``AllergyRepository.update``). Mismo patron que
+    ``ClinicalHistoryRevision`` -- versionado real requerido por NOM-024.
+    Append-only, sin soft-delete (una alergia desactivada no se "revisiona",
+    queda registrado en `Allergy.deleted_at`/`deleted_by_id` directamente).
+    """
+
+    allergy = models.ForeignKey(
+        Allergy,
+        db_column="id_alergia",
+        on_delete=models.CASCADE,
+        related_name="revisions",
+    )
+    previous_category = models.CharField(
+        max_length=20, db_column="categoria_anterior", choices=Allergy.Category.choices,
+    )
+    previous_substance = models.CharField(max_length=255, db_column="sustancia_anterior")
+    previous_medication = models.ForeignKey(
+        "catalogos.Medicamentos",
+        db_column="id_medic_anterior",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    previous_severity = models.CharField(
+        max_length=20, db_column="severidad_anterior", choices=Allergy.Severity.choices,
+    )
+    previous_reaction = models.TextField(db_column="reaccion_anterior", null=True, blank=True)
+    changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+    changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_allergy_revision"
+        ordering = ["changed_at"]
+
+    def __str__(self) -> str:
+        return f"Alergia {self.allergy_id} — revision {self.changed_at}"
+
+
 class OdontogramTooth(models.Model):
     """
     Condicion de UNA pieza dental de un paciente/familiar, identificada por
     su numero FDI (ISO 3950): permanentes 11-48, deciduas (dientes de
     leche) 51-85. Un registro por (no_exp, pk_num, tooth_fdi) -- se
     sobreescribe al actualizar, no se versiona (decision explicita: mismo
-    criterio que ClinicalHistory/StomatologyHistory). Un diente sin
-    registro se interpreta como "sano" (ver OdontogramRepository).
+    criterio que OdontogramRepository, ver docstring de la propia clase). Un
+    diente sin registro se interpreta como "sano" (ver OdontogramRepository).
     """
 
     class Condition(models.TextChoices):

@@ -3,6 +3,8 @@ from django.urls import path
 from apps.consulta_medica.views import (
     DailyConsultationReportView,
     MedicalLeaveReportView,
+    PatientAllergiesView,
+    PatientAllergyDetailView,
     PatientClinicalHistoryView,
     PatientConsultationsHistoryView,
     PatientLegacyConsultationsHistoryView,
@@ -48,6 +50,16 @@ urlpatterns = [
         "patients/<str:no_exp>/stomatology-history",
         PatientStomatologyHistoryView.as_view(),
         name="patient-stomatology-history",
+    ),
+    path(
+        "patients/<str:no_exp>/allergies",
+        PatientAllergiesView.as_view(),
+        name="patient-allergies",
+    ),
+    path(
+        "patients/<str:no_exp>/allergies/<int:allergy_id>",
+        PatientAllergyDetailView.as_view(),
+        name="patient-allergy-detail",
     ),
     path(
         "patients/<str:no_exp>/odontogram",

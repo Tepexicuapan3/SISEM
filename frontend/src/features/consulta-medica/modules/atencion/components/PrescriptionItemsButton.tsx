@@ -37,6 +37,13 @@ import { medicamentosAPI } from "@api/resources/catalogos/medicamentos.api";
 import { usePrescriptionItems } from "@features/consulta-medica/modules/atencion/queries/usePrescriptionItems";
 import { useAddPrescriptionItem } from "@features/consulta-medica/modules/atencion/mutations/useAddPrescriptionItem";
 import { useCancelPrescriptionItem } from "@features/consulta-medica/modules/atencion/mutations/useCancelPrescriptionItem";
+import type { AllergyWarning } from "@api/types";
+
+const SEVERITY_LABEL: Record<AllergyWarning["severity"], string> = {
+  mild: "Leve",
+  moderate: "Moderada",
+  severe: "Grave",
+};
 
 const PRESCRIPTION_ITEM_ERROR_MESSAGE: Record<string, string> = {
   ROLE_NOT_ALLOWED: "No tenes permiso para editar la receta.",
@@ -87,6 +94,8 @@ export function PrescriptionItemsButton({
   disabled,
 }: PrescriptionItemsButtonProps) {
   const [open, setOpen] = useState(false);
+  const [allergyWarning, setAllergyWarning] = useState<AllergyWarning | null>(null);
+  const [pendingValues, setPendingValues] = useState<AddItemFormValues | null>(null);
 
   const { data: itemsData, isLoading: isLoadingItems } = usePrescriptionItems(
     visitId,
@@ -115,28 +124,71 @@ export function PrescriptionItemsButton({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       form.reset(buildDefaultValues());
+      setAllergyWarning(null);
+      setPendingValues(null);
     }
     setOpen(nextOpen);
   };
 
+  const submitItem = async (
+    values: AddItemFormValues,
+    { acknowledgeAllergyWarning = false }: { acknowledgeAllergyWarning?: boolean } = {},
+  ) => {
+    const result = await addItem.mutateAsync({
+      visitId,
+      data: {
+        medicationId: Number(values.medicationId),
+        quantity: values.quantity,
+        indications: values.indications.trim(),
+        dose: values.dose?.trim() || undefined,
+        acknowledgeAllergyWarning,
+      },
+    });
+
+    if ("requiresAcknowledgment" in result) {
+      // El backend NO creo el item -- el paciente tiene una alergia activa
+      // que choca con este medicamento. Se muestra la alerta y se espera
+      // confirmacion explicita antes de reenviar (decision del usuario:
+      // advertencia con constancia auditada, nunca bloqueo duro).
+      setAllergyWarning(result.allergyWarning);
+      setPendingValues(values);
+      return;
+    }
+
+    setAllergyWarning(null);
+    setPendingValues(null);
+    toast.success(
+      result.allergyWarningAcknowledged
+        ? "Medicamento agregado (alerta de alergia confirmada)"
+        : "Medicamento agregado a la receta",
+    );
+    form.reset(buildDefaultValues());
+  };
+
   const onSubmit = async (values: AddItemFormValues) => {
     try {
-      await addItem.mutateAsync({
-        visitId,
-        data: {
-          medicationId: Number(values.medicationId),
-          quantity: values.quantity,
-          indications: values.indications.trim(),
-          dose: values.dose?.trim() || undefined,
-        },
-      });
-      toast.success("Medicamento agregado a la receta");
-      form.reset(buildDefaultValues());
+      await submitItem(values);
     } catch (error) {
       toast.error("No se pudo agregar el medicamento", {
         description: resolveError(error),
       });
     }
+  };
+
+  const handleConfirmDespiteAllergy = async () => {
+    if (!pendingValues) return;
+    try {
+      await submitItem(pendingValues, { acknowledgeAllergyWarning: true });
+    } catch (error) {
+      toast.error("No se pudo agregar el medicamento", {
+        description: resolveError(error),
+      });
+    }
+  };
+
+  const handleCancelAllergyWarning = () => {
+    setAllergyWarning(null);
+    setPendingValues(null);
   };
 
   const handleCancel = async (itemId: number) => {
@@ -208,6 +260,40 @@ export function PrescriptionItemsButton({
               </ul>
             )}
           </div>
+
+          {allergyWarning ? (
+            <div className="space-y-2 rounded-lg border border-status-critical/50 bg-status-critical/5 p-3">
+              <p className="text-sm font-semibold text-status-critical">
+                ⚠️ Alergia registrada: {allergyWarning.substance} (
+                {SEVERITY_LABEL[allergyWarning.severity]})
+              </p>
+              {allergyWarning.reaction ? (
+                <p className="text-xs text-txt-muted">{allergyWarning.reaction}</p>
+              ) : null}
+              <p className="text-xs text-txt-muted">
+                El medicamento seleccionado choca con esta alergia. Podés
+                continuar si lo consideras clínicamente necesario — quedará
+                registrado en la bitácora de auditoría.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleCancelAllergyWarning}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={addItem.isPending}
+                  onClick={handleConfirmDespiteAllergy}
+                >
+                  {addItem.isPending ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : null}
+                  Agregar de todas formas
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <Form {...form}>
             <form

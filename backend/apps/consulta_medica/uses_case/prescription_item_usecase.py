@@ -2,6 +2,7 @@ from django.db import transaction
 
 from apps.catalogos.models import Medicamentos
 from apps.consulta_medica.models import PrescriptionAuthorization
+from apps.consulta_medica.repositories.allergy_repository import AllergyRepository
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.repositories.prescription_authorization_repository import (
     PrescriptionAuthorizationRepository,
@@ -122,6 +123,31 @@ def _get_consultation_or_error(visit):
     return consultation
 
 
+def _find_matching_allergy(no_exp, pk_num, medication):
+    """
+    Cruce receta<->alergia (change `alergias-unificadas`): busca una
+    Allergy activa de categoria MEDICATION que choque con `medication`,
+    por FK directa o por coincidencia de texto contra el nombre
+    generico/comercial. No es un motor real de interacciones -- es una
+    alerta de apoyo, decision del usuario: advertir sin bloquear (ver
+    `add_prescription_item`).
+    """
+    generic_name = (medication.generic_name or "").strip().lower()
+    commercial_name = (medication.name or "").strip().lower()
+
+    for allergy in AllergyRepository.list_active_medication_allergies(no_exp, pk_num):
+        if allergy.medication_id == medication.id:
+            return allergy
+        substance = (allergy.substance or "").strip().lower()
+        if not substance:
+            continue
+        if generic_name and (substance in generic_name or generic_name in substance):
+            return allergy
+        if commercial_name and (substance in commercial_name or commercial_name in substance):
+            return allergy
+    return None
+
+
 def add_prescription_item(
     visit_id,
     roles,
@@ -132,11 +158,20 @@ def add_prescription_item(
     dose=None,
     actor_id,
     permissions=None,
+    acknowledge_allergy_warning=False,
 ):
     """
     Agrega un item de receta estructurado (medicamento del catalogo +
     indicaciones + cantidad) -- complementa a save_prescriptions (texto
     libre). Equivalente moderno de det_receta del legado.
+
+    Si el medicamento choca con una alergia activa del paciente y todavia
+    no se reconocio la advertencia (`acknowledge_allergy_warning=False`),
+    NO se crea el item -- se devuelve `requiresAcknowledgment` con el
+    detalle de la alergia para que el frontend muestre la alerta y el
+    medico decida si reenviar con `acknowledge_allergy_warning=True`.
+    Decision del usuario: advertencia con constancia auditada, nunca
+    bloqueo duro (no se impide la atencion).
     """
     ensure_doctor_role(roles, permissions)
 
@@ -163,6 +198,18 @@ def add_prescription_item(
                 ]
             },
         )
+
+    allergy_match = _find_matching_allergy(visit.no_exp, visit.pk_num, medication)
+    if allergy_match is not None and not acknowledge_allergy_warning:
+        return {
+            "requiresAcknowledgment": True,
+            "allergyWarning": {
+                "allergyId": allergy_match.id_allergy,
+                "substance": allergy_match.substance,
+                "severity": allergy_match.severity,
+                "reaction": allergy_match.reaction,
+            },
+        }
 
     prescription = PrescriptionRepository.get_or_create_for_visit(
         visit, created_by_id=actor_id, updated_by_id=actor_id,
@@ -196,7 +243,14 @@ def add_prescription_item(
         updated_by_id=actor_id,
     )
     _maybe_create_authorization(prescription, visit)
-    return PrescriptionItemRepository.to_contract(item)
+
+    payload = PrescriptionItemRepository.to_contract(item)
+    if allergy_match is not None:
+        payload["allergyWarningAcknowledged"] = {
+            "allergyId": allergy_match.id_allergy,
+            "substance": allergy_match.substance,
+        }
+    return payload
 
 
 def cancel_prescription_item(visit_id, item_id, roles, *, actor_id, permissions=None, audit_hook):
