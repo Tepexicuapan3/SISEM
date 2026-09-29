@@ -129,6 +129,14 @@ const renderDoctorPage = (initialEntry = "/clinico/consultas/doctor") => {
   );
 };
 
+// his_notas ampliada: el formulario siempre envia los 4 campos (vacios si no se capturan).
+const EMPTY_NOTE_FIELDS = {
+  currentIllness: "",
+  systemsReview: "",
+  diagnosticPlan: "",
+  therapeuticPlan: "",
+};
+
 describe("DoctorConsultationPage UI", () => {
   const startMutateAsync = vi.fn();
   const saveDiagnosisMutateAsync = vi.fn();
@@ -459,6 +467,14 @@ describe("DoctorConsultationPage UI", () => {
       screen.getByLabelText("Nota final"),
       "Paciente estable y con manejo ambulatorio.",
     );
+    await user.type(
+      screen.getByLabelText("Padecimiento actual"),
+      "Evacuaciones liquidas de 2 dias.",
+    );
+    await user.type(
+      screen.getByLabelText("Plan terapeutico"),
+      "Hidratacion oral.",
+    );
 
     await user.click(
       screen.getByRole("button", { name: "Guardar diagnostico" }),
@@ -470,6 +486,9 @@ describe("DoctorConsultationPage UI", () => {
         data: {
           primaryDiagnosis: "Gastroenteritis aguda",
           finalNote: "Paciente estable y con manejo ambulatorio.",
+          ...EMPTY_NOTE_FIELDS,
+          currentIllness: "Evacuaciones liquidas de 2 dias.",
+          therapeuticPlan: "Hidratacion oral.",
         },
       });
     });
@@ -543,6 +562,7 @@ describe("DoctorConsultationPage UI", () => {
           primaryDiagnosis: "Gastroenteritis aguda",
           finalNote: "Paciente estable y con manejo ambulatorio.",
           cieCode: "A090",
+          ...EMPTY_NOTE_FIELDS,
         },
       });
     });
@@ -670,6 +690,7 @@ describe("DoctorConsultationPage UI", () => {
           primaryDiagnosis: "Dx final",
           finalNote: "Nota final de egreso",
           cieCode: "A090",
+          ...EMPTY_NOTE_FIELDS,
         },
       });
     });
@@ -681,6 +702,7 @@ describe("DoctorConsultationPage UI", () => {
           primaryDiagnosis: "Dx final",
           finalNote: "Nota final de egreso",
           cieCode: "A090",
+          ...EMPTY_NOTE_FIELDS,
         },
       });
     });

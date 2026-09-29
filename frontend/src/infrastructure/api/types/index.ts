@@ -384,7 +384,9 @@ export type {
 // =============================================================================
 export type {
   ClinicalHistory,
-  UpdateClinicalHistoryRequest,
+  PatientProfile,
+  PatientSex,
+  UpdatePatientProfileRequest,
 } from "@api/types/clinical-history.types";
 
 // =============================================================================
@@ -474,14 +476,36 @@ export type {
 // ALERGIAS (Allergy) -- change `alergias-unificadas`
 // =============================================================================
 export type {
-  AllergyCategory,
   AllergySeverity,
   AllergySource,
+  AllergyStatus,
+  ChangeAllergyStatusRequest,
   Allergy,
   PatientAllergiesResponse,
   CreateAllergyRequest,
   UpdateAllergyRequest,
 } from "@api/types/allergy.types";
+
+export type {
+  AccessLogEventType,
+  AccessLogAction,
+  AccessLogSection,
+  AccessLogItem,
+  AccessLogListParams,
+  AccessLogListResponse,
+} from "@api/types/access-log.types";
+
+export type {
+  ArcoRequestType,
+  ArcoRequestStatus,
+  ArcoRequesterRelation,
+  ArcoUserRef,
+  ArcoRequestItem,
+  ArcoRequestListParams,
+  ArcoRequestListResponse,
+  CreateArcoRequestPayload,
+  ChangeArcoRequestStatusPayload,
+} from "@api/types/arco.types";
 
 export type {
   CuadroBasico,
@@ -503,20 +527,53 @@ export type {
 // HISTORIA CLINICA DE ESTOMATOLOGIA (StomatologyHistory)
 // =============================================================================
 export type {
+  OralHygiene,
   StomatologyHistory,
   UpdateStomatologyHistoryRequest,
 } from "@api/types/stomatology-history.types";
 
 // =============================================================================
-// ODONTOGRAMA (OdontogramTooth)
+// ODONTOGRAMA versionado (Odontogram / OdontogramToothState)
 // =============================================================================
 export type {
   ToothCondition,
+  ToothFace,
+  OdontogramFaceState,
   OdontogramToothItem,
+  OdontogramDmft,
+  OdontogramVersion,
   PatientOdontogramResponse,
+  OdontogramVersionsResponse,
   UpdateOdontogramToothRequest,
+  UpdateOdontogramToothResponse,
   OdontogramDentition,
 } from "@api/types/odontogram.types";
+
+// =============================================================================
+// HISTORIA CLINICA UNIFICADA (antecedentes, habitos, tratamientos, notas)
+// =============================================================================
+export type {
+  RecordSource,
+  PersonalHistoryItem,
+  FamilyHistoryItem,
+  SurgicalHistoryItem,
+  HabitItem,
+  DentalTreatmentItem,
+  RecordListResponse,
+  PersonalHistoryRequest,
+  FamilyHistoryRequest,
+  SurgicalHistoryRequest,
+  HabitRequest,
+  DentalTreatmentRequest,
+  PatientRecordResource,
+  HistoricalNote,
+  HistoricalNotesResponse,
+  LegacyVitalSigns,
+  PhysicalExamFinding,
+  PhysicalExamResponse,
+  SavePhysicalExamRequest,
+  ClinicalCatalogs,
+} from "@api/types/unified-history.types";
 
 // =============================================================================
 // TIPO PERSONAL TYPES (CRUD)

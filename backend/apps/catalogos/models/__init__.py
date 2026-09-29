@@ -34,7 +34,7 @@ from .origen_consulta import OrigenCons
 from .parentescos import Parentesco
 from .pases import Pases
 from .religion import Religion
-from .sensitive_cie_range import SensitiveCieRange
+from .sensitive_cie_range import SensitiveAccessProfile, SensitiveCieRange
 
 # ALIAS IMPORTANTES
 from .roles import Roles
@@ -52,6 +52,13 @@ from .tipo_residencia import TipoResidencia
 from .tipos_sanguineo import TiposSanguineo
 from .tipo_hospitalizacion import CatTipoHospitalizacion
 from .tipo_alta import CatTipoAlta
+from .historia_clinica_catalogos import (
+    CatEstadoPieza,
+    CatHabito,
+    CatPiezaDental,
+    CatRegionCorporal,
+    CatTipoAlergia,
+)
 from .turnos import Turnos
 from .vacunas import Vacunas
 
@@ -94,6 +101,7 @@ __all__ = [
     "Pases",
     "Religion",
     "SensitiveCieRange",
+    "SensitiveAccessProfile",
     "Roles",
     "Permisos",
     "CatRol",
@@ -112,4 +120,9 @@ __all__ = [
     "CatTipoPersonal",
     "CatTipoHospitalizacion",
     "CatTipoAlta",
+    "CatEstadoPieza",
+    "CatHabito",
+    "CatPiezaDental",
+    "CatRegionCorporal",
+    "CatTipoAlergia",
 ]

@@ -32,7 +32,8 @@ export interface AddPrescriptionItemRequest {
 export interface AllergyWarning {
   allergyId: number;
   substance: string;
-  severity: "mild" | "moderate" | "severe";
+  /** L leve, M moderada, G grave (codigos del documento). */
+  severity: "L" | "M" | "G";
   reaction: string | null;
 }
 

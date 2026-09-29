@@ -8,5 +8,7 @@ from .clinica import CatClinica
 from .empleado import CatEmpleado
 from .familiar import CatFamiliar
 from .foto_credencial import DntFotosCredenciales
+from .solicitud_arco import SolicitudArco
+from .bitacora_acceso import BitacoraAcceso
 
 

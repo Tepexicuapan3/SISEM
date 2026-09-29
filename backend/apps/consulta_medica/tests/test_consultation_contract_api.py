@@ -279,6 +279,32 @@ class ConsultationContractsApiTests(APITestCase):
         consultation = VisitConsultation.objects.get(id_visit=self.visit_in_consultation)
         self.assertEqual(consultation.cie_id, "A090")
 
+    def test_save_diagnosis_with_note_fields_contract(self):
+        # his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+        self._login_as("doctor_user", self.doctor_password)
+
+        response = self.client.post(
+            f"/api/v1/visits/{self.visit_in_consultation.id_visit}/diagnosis",
+            {
+                "primaryDiagnosis": "Gastroenteritis aguda",
+                "finalNote": "Paciente hidratado y estable.",
+                "currentIllness": "Evacuaciones liquidas de 2 dias.",
+                "systemsReview": "",
+                "diagnosticPlan": "Coprologico.",
+                "therapeuticPlan": "Hidratacion oral.",
+            },
+            format="json",
+            HTTP_X_REQUEST_ID=self.request_id,
+            **self._csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["currentIllness"], "Evacuaciones liquidas de 2 dias.")
+        self.assertIsNone(response.data["systemsReview"])
+        consultation = VisitConsultation.objects.get(id_visit=self.visit_in_consultation)
+        self.assertEqual(consultation.diagnostic_plan, "Coprologico.")
+        self.assertEqual(consultation.therapeutic_plan, "Hidratacion oral.")
+
     def test_search_cies_contract(self):
         self._login_as("doctor_user", self.doctor_password)
 

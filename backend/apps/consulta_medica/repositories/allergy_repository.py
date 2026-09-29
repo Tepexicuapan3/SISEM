@@ -1,10 +1,11 @@
+from apps.catalogos.models import CatTipoAlergia
 from apps.consulta_medica.models import Allergy, AllergyRevision
 
 # Campos editables via update() -- se usa para saber que "previous_<campo>"
 # snapshotear en AllergyRevision. No incluye no_exp/pk_num/source/is_active
 # (identidad/trazabilidad del registro, no un dato clinico que se corrija).
 _VERSIONED_FIELDS = (
-    "category",
+    "allergy_type_id",
     "substance",
     "medication_id",
     "severity",
@@ -15,7 +16,7 @@ _VERSIONED_FIELDS = (
 class AllergyRepository:
     @staticmethod
     def list_for_patient(no_exp, pk_num):
-        return Allergy.objects.filter(
+        return Allergy.objects.select_related("allergy_type").filter(
             no_exp=no_exp, pk_num=pk_num, is_active=True,
         ).order_by("created_at")
 
@@ -28,25 +29,27 @@ class AllergyRepository:
     @staticmethod
     def list_active_medication_allergies(no_exp, pk_num):
         """Alergias activas de categoria MEDICATION -- usado por el cruce
-        receta<->alergia (ver `prescription_item_usecase.add_prescription_item`)."""
+        receta<->alergia (ver `prescription_item_usecase.add_prescription_item`).
+        Una alergia RESUELTA sigue visible como historia pero ya no alerta."""
         return Allergy.objects.filter(
             no_exp=no_exp,
             pk_num=pk_num,
             is_active=True,
-            category=Allergy.Category.MEDICATION,
+            status=Allergy.Status.ACTIVE,
+            allergy_type_id=CatTipoAlergia.MEDICATION,
         )
 
     @staticmethod
-    def create(*, no_exp, pk_num, category, substance, severity, source, medication_id=None, reaction=None, created_by_id=None):
+    def create(*, no_exp, pk_num, allergy_type_id, substance, severity, source, medication_id=None, reaction=None, created_by_id=None):
         return Allergy.objects.create(
             no_exp=no_exp,
             pk_num=pk_num,
-            category=category,
+            allergy_type_id=allergy_type_id,
             substance=substance,
             medication_id=medication_id,
             severity=severity,
             reaction=reaction,
-            source=source,
+            service_origin_code=Allergy.SERVICE_BY_SOURCE[source],
             created_by_id=created_by_id,
             updated_by_id=created_by_id,
         )
@@ -60,7 +63,7 @@ class AllergyRepository:
         AllergyRevision.objects.create(
             allergy=allergy,
             changed_by_id=updated_by_id,
-            previous_category=allergy.category,
+            previous_allergy_type_id=allergy.allergy_type_id,
             previous_substance=allergy.substance,
             previous_medication_id=allergy.medication_id,
             previous_severity=allergy.severity,
@@ -71,6 +74,9 @@ class AllergyRepository:
             setattr(allergy, field_name, value)
         allergy.updated_by_id = updated_by_id
         allergy.save()
+        if "allergy_type_id" in fields:
+            # Evita servir el tipo anterior cacheado en la instancia.
+            allergy.allergy_type = CatTipoAlergia.objects.get(pk=allergy.allergy_type_id)
         return allergy
 
     @staticmethod
@@ -78,6 +84,7 @@ class AllergyRepository:
         from django.utils import timezone
 
         allergy.is_active = False
+        allergy.status = Allergy.Status.ENTERED_IN_ERROR
         allergy.deleted_at = timezone.now()
         allergy.deleted_by_id = updated_by_id
         allergy.updated_by_id = updated_by_id
@@ -90,12 +97,15 @@ class AllergyRepository:
             "id": allergy.id_allergy,
             "noExp": allergy.no_exp,
             "pkNum": allergy.pk_num,
-            "category": allergy.category,
+            "allergyTypeId": allergy.allergy_type_id,
+            "allergyTypeName": allergy.allergy_type.name,
             "substance": allergy.substance,
             "medicationId": allergy.medication_id,
             "severity": allergy.severity,
             "reaction": allergy.reaction,
             "source": allergy.source,
+            "status": allergy.status,
+            "statusReason": allergy.status_reason,
             "isActive": allergy.is_active,
             "createdAt": allergy.created_at,
             "updatedAt": allergy.updated_at,

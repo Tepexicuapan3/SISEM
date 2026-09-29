@@ -17,7 +17,7 @@ el documento fuente de este change lo deja pendiente.
 from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
-from apps.catalogos.services.sensitive_diagnosis_service import classify_cie
+from apps.catalogos.services.sensitive_diagnosis_service import allowed_roles_for, classify_cie
 
 REDACTED_DESCRIPTION = "Diagnóstico restringido"
 REDACTED_TEXT = "Información restringida"
@@ -30,7 +30,7 @@ def _has_permission(required_permission, permissions):
     return permission_state["granted"]
 
 
-def redact_cie_if_restricted(*, code, description, permissions, linked_text=None):
+def redact_cie_if_restricted(*, code, description, permissions, linked_text=None, roles=None):
     """
     Si `code` cae en un rango CIE-10 sensible y el actor (via `permissions`)
     no tiene el `required_permission` de ese rango, devuelve una tupla
@@ -54,6 +54,10 @@ def redact_cie_if_restricted(*, code, description, permissions, linked_text=None
 
     _category, required_permission = classification
     if _has_permission(required_permission, permissions):
+        return code, description, linked_text, False
+    # CAT_PERFIL_ACCESO: perfiles (roles) habilitados para este rango.
+    normalized_roles = {(role or "").strip().upper() for role in (roles or ())}
+    if normalized_roles & allowed_roles_for(code):
         return code, description, linked_text, False
 
     redacted_linked_text = REDACTED_TEXT if linked_text else linked_text

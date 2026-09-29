@@ -161,6 +161,33 @@ NAV_SEED = [
         "permisos": ["admin:usuarios:sesiones:read"],
     },
     {
+        # Agregado 2026-09-28: bitacora de acceso al expediente clinico
+        # (NOM-024) -- quien vio que seccion de que paciente.
+        "clave": "administracion.panel.bitacora_acceso",
+        "titulo": "Bitacora de acceso",
+        "icono": None,
+        "url": "/admin/bitacora-acceso",
+        "badge": None,
+        "orden": 5,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.panel",
+        "permisos": ["admin:auditoria:accesos:read"],
+    },
+    {
+        # Agregado 2026-09-28: cola de solicitudes de derechos ARCO.
+        "clave": "administracion.panel.solicitudes_arco",
+        "titulo": "Solicitudes ARCO",
+        "icono": None,
+        "url": "/admin/solicitudes-arco",
+        "badge": None,
+        "orden": 6,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.panel",
+        "permisos": ["admin:arco:read"],
+    },
+    {
         "clave": "administracion.catalogos",
         "titulo": "Catalogos",
         "icono": "book-open",

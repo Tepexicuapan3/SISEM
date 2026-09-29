@@ -5,6 +5,10 @@ from apps.consulta_medica.models import (
 )
 
 
+# Columnas de his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+NOTE_FIELDS = ("current_illness", "systems_review", "diagnostic_plan", "therapeutic_plan")
+
+
 class ConsultationRepository:
     @staticmethod
     def get_by_visit(visit):
@@ -64,7 +68,11 @@ class ConsultationRepository:
         plan=None,
         created_by_id=None,
         updated_by_id=None,
+        **note_fields,
     ):
+        # his_notas ampliada (documento 5.2): current_illness, systems_review,
+        # diagnostic_plan, therapeutic_plan -- ver NOTE_FIELDS.
+        note_fields = {field: note_fields.get(field) for field in NOTE_FIELDS}
         existing = VisitConsultation.objects.filter(id_visit=visit).first()
 
         # Snapshot JSON-safe del estado previo para auditoria (NOM-024):
@@ -91,6 +99,7 @@ class ConsultationRepository:
             or existing.objective != objective
             or existing.assessment != assessment
             or existing.plan != plan
+            or any(getattr(existing, field) != value for field, value in note_fields.items())
         ):
             # Versionado real (NOM-024): se guarda un snapshot del valor
             # anterior ANTES de pisarlo -- nunca se sobrescribe sin dejar
@@ -105,6 +114,7 @@ class ConsultationRepository:
                 previous_objective=existing.objective,
                 previous_assessment=existing.assessment,
                 previous_plan=existing.plan,
+                **{f"previous_{field}": getattr(existing, field) for field in NOTE_FIELDS},
                 changed_by_id=updated_by_id,
             )
 
@@ -119,6 +129,7 @@ class ConsultationRepository:
                 "objective": objective,
                 "assessment": assessment,
                 "plan": plan,
+                **note_fields,
                 "is_active": True,
                 "deleted_at": None,
                 "deleted_by_id": None,
@@ -163,6 +174,10 @@ class ConsultationRepository:
             "objective": consultation.objective,
             "assessment": consultation.assessment,
             "plan": consultation.plan,
+            "currentIllness": consultation.current_illness,
+            "systemsReview": consultation.systems_review,
+            "diagnosticPlan": consultation.diagnostic_plan,
+            "therapeuticPlan": consultation.therapeutic_plan,
             "isActive": consultation.is_active,
             "createdAt": consultation.created_at,
             "updatedAt": consultation.updated_at,

@@ -25,6 +25,7 @@ from apps.realtime.events import (
     publish_visit_prescriptions_saved,
     publish_visit_status_changed,
 )
+from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
 from .serializers import (
@@ -32,7 +33,7 @@ from .serializers import (
     AddPrescriptionItemSerializer,
     AddSecondaryDiagnosisSerializer,
     AllergyWriteSerializer,
-    ClinicalHistoryUpdateSerializer,
+    PatientProfileUpdateSerializer,
     CloseConsultationSerializer,
     CreateMedicalLeaveSerializer,
     CreateStudyResultSerializer,
@@ -44,6 +45,13 @@ from .serializers import (
     SavePrescriptionsSerializer,
     StartConsultationSerializer,
     StomatologyHistoryUpdateSerializer,
+)
+from .services.record_access_audit_service import (
+    RecordSection,
+    log_export,
+    log_patient_record_access,
+    log_patient_record_change,
+    log_restricted_access,
 )
 from .services.report_export_service import build_daily_report_workbook
 from .services.report_export_service_medical_leave import build_medical_leave_report_workbook
@@ -57,7 +65,8 @@ from .uses_case.allergy_usecase import (
 )
 from .uses_case.clinical_history_usecase import (
     get_clinical_history,
-    upsert_clinical_history,
+    get_patient_profile,
+    update_patient_profile,
 )
 from .uses_case.consultation_usecase import (
     add_consultation_addendum,
@@ -146,6 +155,7 @@ def _domain_error_response(request, exc):
 
 def _log_sensitive_diagnosis_redaction_if_any(
     request, user, *, actor_id, resource_ids, no_exp=None, pk_num=None, visit_id=None,
+    section=RecordSection.CONSULTATIONS,
 ):
     """
     Diagnosticos sensibles (change `diagnosticos-sensibles`): registra UN
@@ -177,6 +187,16 @@ def _log_sensitive_diagnosis_redaction_if_any(
         datos_despues={"redactedResourceIds": resource_ids, "count": len(resource_ids)},
         meta=meta,
         raise_on_error=False,
+    )
+
+    # BITACORA_ACCESO: lectura con diagnosticos restringidos.
+    if no_exp is None and visit_id is not None:
+        visit = Visit.objects.filter(pk=visit_id).only("no_exp", "pk_num").first()
+        if visit is not None:
+            no_exp, pk_num = visit.no_exp, visit.pk_num
+    log_restricted_access(
+        request, user, no_exp=no_exp, pk_num=pk_num, section=section,
+        restricted_count=len(resource_ids),
     )
 
 
@@ -420,6 +440,10 @@ class VisitDiagnosisSaveView(APIView):
                 serializer.validated_data.get("objective"),
                 serializer.validated_data.get("assessment"),
                 serializer.validated_data.get("plan"),
+                current_illness=serializer.validated_data.get("currentIllness"),
+                systems_review=serializer.validated_data.get("systemsReview"),
+                diagnostic_plan=serializer.validated_data.get("diagnosticPlan"),
+                therapeutic_plan=serializer.validated_data.get("therapeuticPlan"),
                 audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
@@ -448,10 +472,10 @@ def _parse_pk_num(request):
 @method_decorator(csrf_exempt, name="dispatch")
 class PatientClinicalHistoryView(APIView):
     """
-    Historia Clinica General de un paciente/familiar (no_exp + pk_num).
-    NO cuelga de una visita especifica -- a diferencia del resto de este
-    modulo (diagnostico, receta), es un solo registro por paciente que se
-    consulta/edita desde el Expediente, con o sin visita activa.
+    HISTORIA_CLINICA (cabecera unica del paciente, documento "Historia Clinica
+    Unificada" 5.1): fecha, clinica y medico de apertura. Solo lectura -- se
+    abre sola la primera vez que se consulta. Los datos de la persona se
+    editan en PatientProfileView (PACIENTE).
     """
 
     authentication_classes = []
@@ -472,12 +496,58 @@ class PatientClinicalHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_clinical_history(no_exp, pk_num, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.CLINICAL_HISTORY,
+        )
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PatientProfileView(APIView):
+    """
+    PACIENTE (documento "Historia Clinica Unificada" 5.1): identidad (CURP,
+    sexo) y datos sociodemograficos, capturados una sola vez y compartidos
+    por todas las especialidades. Ediciones versionadas (PatientRevision).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, no_exp):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        pk_num = _parse_pk_num(request)
+        if pk_num is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"pkNum": ["pkNum debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        try:
+            payload = get_patient_profile(no_exp, pk_num, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.PATIENT_PROFILE,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -500,7 +570,7 @@ class PatientClinicalHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        serializer = ClinicalHistoryUpdateSerializer(data=request.data, partial=True)
+        serializer = PatientProfileUpdateSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return error_response(
                 "VALIDATION_ERROR",
@@ -515,7 +585,7 @@ class PatientClinicalHistoryView(APIView):
         def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
             log_event(
                 request,
-                "ClinicalHistoryUpdated",
+                "PatientProfileUpdated",
                 "SUCCESS",
                 actor_user=user,
                 resource_type="consulta_medica",
@@ -533,7 +603,7 @@ class PatientClinicalHistoryView(APIView):
             )
 
         try:
-            payload = upsert_clinical_history(
+            payload = update_patient_profile(
                 no_exp,
                 pk_num,
                 roles,
@@ -545,6 +615,9 @@ class PatientClinicalHistoryView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.PATIENT_PROFILE,
+        )
         return Response(payload, status=status.HTTP_200_OK)
 
 
@@ -577,12 +650,17 @@ class PatientAllergiesView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = list_allergies(no_exp, pk_num, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.ALLERGIES,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -653,6 +731,9 @@ class PatientAllergiesView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.ALLERGIES,
+        )
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
@@ -729,6 +810,9 @@ class PatientAllergyDetailView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.ALLERGIES,
+        )
         return Response(payload, status=status.HTTP_200_OK)
 
     def delete(self, request, no_exp, allergy_id):
@@ -779,6 +863,9 @@ class PatientAllergyDetailView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.ALLERGIES,
+        )
         return Response(payload, status=status.HTTP_200_OK)
 
 
@@ -874,12 +961,17 @@ class PatientMedicalLeavesHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_patient_medical_leaves(no_exp, pk_num, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.MEDICAL_LEAVES,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -921,6 +1013,10 @@ class PatientConsultationsHistoryView(APIView):
             request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
             resource_ids=payload.get("redactedVisitIds") or [],
         )
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.CONSULTATIONS,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -951,12 +1047,17 @@ class PatientLegacyConsultationsHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.LEGACY_CONSULTATIONS,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -987,14 +1088,30 @@ class PatientOdontogramView(APIView):
             )
 
         dentition = request.query_params.get("dentition", "permanent")
-        _, roles, permissions = _actor_context(user)
+        raw_version = request.query_params.get("versionId")
+        try:
+            version_id = int(raw_version) if raw_version else None
+        except ValueError:
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={"versionId": ["versionId debe ser un numero entero."]},
+                request_id=get_request_id(request),
+            )
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_patient_odontogram(
-                no_exp, pk_num, roles, permissions, dentition=dentition,
+                no_exp, pk_num, roles, permissions, dentition=dentition, version_id=version_id,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.ODONTOGRAM,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1067,6 +1184,8 @@ class PatientOdontogramToothView(APIView):
                 roles,
                 condition=data["condition"],
                 notes=data.get("notes"),
+                face=data.get("face") or "",
+                visit_id=data.get("visitId"),
                 actor_id=actor_id,
                 permissions=permissions,
                 audit_hook=audit_hook,
@@ -1074,6 +1193,9 @@ class PatientOdontogramToothView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.ODONTOGRAM,
+        )
         return Response(payload, status=status.HTTP_200_OK)
 
 
@@ -1103,12 +1225,17 @@ class PatientStomatologyHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_stomatology_history(no_exp, pk_num, roles, permissions)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.STOMATOLOGY_HISTORY,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -1176,6 +1303,9 @@ class PatientStomatologyHistoryView(APIView):
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.STOMATOLOGY_HISTORY,
+        )
         return Response(payload, status=status.HTTP_200_OK)
 
 
@@ -1270,7 +1400,7 @@ class PatientStudyResultsHistoryView(APIView):
                 request_id=get_request_id(request),
             )
 
-        _, roles, permissions = _actor_context(user)
+        actor_id, roles, permissions = _actor_context(user)
 
         try:
             payload = get_patient_study_results(
@@ -1278,6 +1408,11 @@ class PatientStudyResultsHistoryView(APIView):
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
+
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.STUDY_RESULTS,
+        )
 
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -2208,6 +2343,10 @@ class VisitConsultationCloseView(APIView):
                 validated_data.get("objective"),
                 validated_data.get("assessment"),
                 validated_data.get("plan"),
+                current_illness=validated_data.get("currentIllness"),
+                systems_review=validated_data.get("systemsReview"),
+                diagnostic_plan=validated_data.get("diagnosticPlan"),
+                therapeutic_plan=validated_data.get("therapeuticPlan"),
                 audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
@@ -2279,6 +2418,7 @@ class DailyConsultationReportView(APIView):
             )
             filename = f"informe_diario_consulta_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.xlsx"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            log_export(request, user, section=RecordSection.DAILY_REPORT)
             return response
 
         return Response(payload, status=status.HTTP_200_OK)
@@ -2340,6 +2480,7 @@ class MedicalLeaveReportView(APIView):
             )
             filename = f"informe_incapacidades_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.xlsx"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            log_export(request, user, section=RecordSection.MEDICAL_LEAVE_REPORT)
             return response
 
         return Response(payload, status=status.HTTP_200_OK)

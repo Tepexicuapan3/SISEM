@@ -8,40 +8,18 @@ from .consultation_usecase import ensure_doctor_role
 
 # Serializer (camelCase) -> columna del modelo (snake_case).
 STOMATOLOGY_HISTORY_FIELD_MAP = {
-    "familyDiabetes": "family_diabetes",
-    "familyCancer": "family_cancer",
-    "familyHighBloodPressure": "family_high_blood_pressure",
-    "familyLowBloodPressure": "family_low_blood_pressure",
-    "causeOfDeath": "cause_of_death",
-    "personalDiabetes": "personal_diabetes",
-    "personalAsthma": "personal_asthma",
-    "personalHighBloodPressure": "personal_high_blood_pressure",
-    "personalLowBloodPressure": "personal_low_blood_pressure",
-    "personalHepatitis": "personal_hepatitis",
-    "personalHiv": "personal_hiv",
-    "personalSmoking": "personal_smoking",
-    "personalAlcoholism": "personal_alcoholism",
-    "personalSubstanceAbuse": "personal_substance_abuse",
-    "habits": "habits",
-    "diet": "diet",
-    "surgicalHistory": "surgical_history",
-    "traumaticHistory": "traumatic_history",
-    "currentIllnessHistory": "current_illness_history",
-    # Los 6 `allergy*` (change `alergias-unificadas`) quedan CONGELADOS --
-    # reemplazados por el modelo Allergy, ya no se aceptan aqui. Ver nota en
-    # models.StomatologyHistory.
+    "oralHygiene": "oral_hygiene",
+    "brushingsPerDay": "brushings_per_day",
+    "usesFloss": "uses_floss",
+    "softTissues": "soft_tissues",
+    "tmj": "tmj",
 }
 
-# Campos de texto largo (TextField en el modelo): se auditan como longitud
-# (`<campo>Len`), nunca el contenido -- mismo criterio A3 que ClinicalHistory.
-# `cause_of_death` es CharField(255) corto -- se audita tal cual (booleanos y
-# el resto de campos cortos van sin transformar).
+# Campos de texto largo: se auditan como longitud (`<campo>Len`), nunca el
+# contenido -- mismo criterio A3 que ClinicalHistory.
 _LONG_TEXT_FIELDS = {
-    "habits",
-    "diet",
-    "surgical_history",
-    "traumatic_history",
-    "current_illness_history",
+    "soft_tissues",
+    "tmj",
 }
 
 _SNAKE_TO_CAMEL = {snake: camel for camel, snake in STOMATOLOGY_HISTORY_FIELD_MAP.items()}

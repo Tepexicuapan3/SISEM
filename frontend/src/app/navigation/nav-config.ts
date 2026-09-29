@@ -101,6 +101,16 @@ export const NAV_CONFIG: NavSection[] = [
             url: "/admin/conexiones",
             permissions: ["admin:usuarios:sesiones:read"],
           },
+          {
+            title: "Bitacora de acceso",
+            url: "/admin/bitacora-acceso",
+            permissions: ["admin:auditoria:accesos:read"],
+          },
+          {
+            title: "Solicitudes ARCO",
+            url: "/admin/solicitudes-arco",
+            permissions: ["admin:arco:read"],
+          },
         ],
       },
       {

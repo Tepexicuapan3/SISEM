@@ -12,15 +12,10 @@
 -- base "expedientes" ya inicializada hay que aplicarlo a mano, p. ej.:
 --   psql -h $EXPEDIENTES_HOST -U $EXPEDIENTES_USER -d $EXPEDIENTES_NAME -f 002_tablas_faltantes_expediente.sql
 
--- ── CURP (NOM-024-SSA3: identificador de paciente para intercambio de informacion) ─────────────
--- IMPORTANTE: agregar la columna aqui es seguro y aditivo, pero para que el sync la traiga sola
--- (sync_service.py replica columnas de Postgres por nombre desde Oracle) hace falta confirmar
--- primero, con `python manage.py inspeccionar_oracle --tabla cat_empleados --tabla cat_familiar`,
--- que la tabla origen en Oracle realmente tiene una columna equivalente. Si Oracle no la tiene
--- capturada, esta columna queda disponible para captura manual desde administracion mientras
--- se resuelve el gap en el sistema de RH (Oracle/SERMED).
-ALTER TABLE cat_empleados ADD COLUMN IF NOT EXISTS curp varchar(18);
-ALTER TABLE cat_familiar  ADD COLUMN IF NOT EXISTS curp varchar(18);
+-- ── CURP: NO va en estas tablas ──────────────────────────────────────────────────────────────
+-- Son replicas de Oracle y sync_service.py descubre columnas via information_schema: una
+-- columna que Oracle no tiene rompe el sync (incidente 2026-09-17). El CURP del paciente vive
+-- en la base principal de SIRES, en cns_paciente.curp (historia clinica unificada).
 
 -- ── cat_empleados_sis ────────────────────────────────────────────────────────────────────────
 -- Mismo shape que cat_empleados (el nombre "_sis" sugiere la misma entidad desde otra fuente/
@@ -39,7 +34,6 @@ CREATE TABLE IF NOT EXISTS cat_empleados_sis (
     fec_vig                date,
     no_edad                integer,
     cd_clinica             varchar(10),
-    curp                   varchar(18),
     fec_ult_actualizacion  timestamp
 );
 
@@ -57,7 +51,6 @@ CREATE TABLE IF NOT EXISTS cat_familiar2 (
     no_edad                integer,
     fec_vig                date,
     cd_clinica             varchar(10),
-    curp                   varchar(18),
     fec_ult_actualizacion  timestamp
 );
 

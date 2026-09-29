@@ -10,6 +10,11 @@ const diagnosisFieldsSchema = z.object({
     .string()
     .trim()
     .max(8, { error: "La clave CIE debe tener maximo 8 caracteres." }),
+  // his_notas ampliada (documento "Historia Clinica Unificada", 5.2): opcionales.
+  currentIllness: z.string().trim(),
+  systemsReview: z.string().trim(),
+  diagnosticPlan: z.string().trim(),
+  therapeuticPlan: z.string().trim(),
 });
 
 export const saveDiagnosisFormSchema = diagnosisFieldsSchema;

@@ -1,6 +1,7 @@
 import apiClient from "@api/client";
 import type {
   Allergy,
+  ChangeAllergyStatusRequest,
   CreateAllergyRequest,
   PatientAllergiesResponse,
   UpdateAllergyRequest,
@@ -42,13 +43,15 @@ export const allergyAPI = {
     return response.data;
   },
 
-  deactivate: async (
+  changeStatus: async (
     noExp: string,
     pkNum: number,
     allergyId: number,
+    data: ChangeAllergyStatusRequest,
   ): Promise<Allergy> => {
-    const response = await apiClient.delete<Allergy>(
-      `/patients/${noExp}/allergies/${allergyId}`,
+    const response = await apiClient.post<Allergy>(
+      `/patients/${noExp}/allergies/${allergyId}/status`,
+      data,
       { params: { pkNum } },
     );
     return response.data;

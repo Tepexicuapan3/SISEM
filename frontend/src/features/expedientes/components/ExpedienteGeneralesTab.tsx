@@ -11,8 +11,8 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
 } from "@shared/ui/form";
-import { Textarea } from "@shared/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -25,54 +25,48 @@ import { escolaridadAPI } from "@api/resources/catalogos/escolaridad.api";
 import { edoCivilAPI } from "@api/resources/catalogos/edoCivil.api";
 import { religionesAPI } from "@api/resources/catalogos/religiones.api";
 import { tiposResidenciaAPI } from "@api/resources/catalogos/tipos-residencia.api";
-import { useClinicalHistory } from "@features/expedientes/queries/useClinicalHistory";
-import { useUpdateClinicalHistory } from "@features/expedientes/mutations/useUpdateClinicalHistory";
+import { useClinicalHistory, usePatientProfile } from "@features/expedientes/queries/useClinicalHistory";
+import { useUpdatePatientProfile } from "@features/expedientes/mutations/useUpdatePatientProfile";
 import { AllergyList } from "@features/expedientes/components/AllergyList";
-import type { UpdateClinicalHistoryRequest } from "@api/types";
+import { PatientBackgroundSection } from "@features/expedientes/components/PatientBackgroundSection";
+import { HistoricalNotesSection } from "@features/expedientes/components/HistoricalNotesSection";
+import {
+  PATIENT_SEX_LABELS,
+  isValidCurp,
+  normalizeCurp,
+} from "@features/expedientes/domain/patient-identity";
+import { ApiError } from "@api/utils/errors";
+import type { PatientSex, UpdatePatientProfileRequest } from "@api/types";
 
 interface ExpedienteGeneralesTabProps {
   noExp: string;
   pkNum?: number;
 }
 
+// Radix Select no admite un item con value="" -- este centinela representa
+// "Sin especificar" y se traduce a null al guardar.
+const SEX_NONE = "none";
+
 interface FormValues {
+  curp: string;
+  sex: PatientSex | typeof SEX_NONE;
   occupationId: string;
   educationLevelId: string;
   maritalStatusId: string;
   religionId: string;
   residenceTypeId: string;
   phone: string;
-  familyHistory: string;
-  currentIllness: string;
-  systemsReview: string;
-  headExam: string;
-  neckExam: string;
-  chestExam: string;
-  abdomenExam: string;
-  genitalsExam: string;
-  limbsExam: string;
-  diagnosticManagement: string;
-  therapeuticManagement: string;
 }
 
 const EMPTY_VALUES: FormValues = {
+  curp: "",
+  sex: SEX_NONE,
   occupationId: "",
   educationLevelId: "",
   maritalStatusId: "",
   religionId: "",
   residenceTypeId: "",
   phone: "",
-  familyHistory: "",
-  currentIllness: "",
-  systemsReview: "",
-  headExam: "",
-  neckExam: "",
-  chestExam: "",
-  abdomenExam: "",
-  genitalsExam: "",
-  limbsExam: "",
-  diagnosticManagement: "",
-  therapeuticManagement: "",
 };
 
 const SELECT_FIELDS = [
@@ -85,25 +79,16 @@ const SELECT_FIELDS = [
 
 const TEXT_FIELDS = [
   "phone",
-  "familyHistory",
-  "currentIllness",
-  "systemsReview",
-  "headExam",
-  "neckExam",
-  "chestExam",
-  "abdomenExam",
-  "genitalsExam",
-  "limbsExam",
-  "diagnosticManagement",
-  "therapeuticManagement",
 ] as const;
 
 export function ExpedienteGeneralesTab({
   noExp,
   pkNum = 0,
 }: ExpedienteGeneralesTabProps) {
-  const { data, isLoading, isError } = useClinicalHistory(noExp, pkNum);
-  const updateClinicalHistory = useUpdateClinicalHistory();
+  // PACIENTE (ficha editable) + HISTORIA_CLINICA (cabecera: apertura).
+  const { data, isLoading, isError } = usePatientProfile(noExp, pkNum);
+  const { data: history } = useClinicalHistory(noExp, pkNum);
+  const updateClinicalHistory = useUpdatePatientProfile();
 
   const { data: ocupaciones } = useQuery({
     queryKey: ["catalogos", "ocupaciones", "options"],
@@ -131,29 +116,32 @@ export function ExpedienteGeneralesTab({
   useEffect(() => {
     if (!data) return;
     form.reset({
+      curp: data.curp ?? "",
+      sex: data.sex ?? SEX_NONE,
       occupationId: data.occupationId?.toString() ?? "",
       educationLevelId: data.educationLevelId?.toString() ?? "",
       maritalStatusId: data.maritalStatusId?.toString() ?? "",
       religionId: data.religionId?.toString() ?? "",
       residenceTypeId: data.residenceTypeId?.toString() ?? "",
       phone: data.phone ?? "",
-      familyHistory: data.familyHistory ?? "",
-      currentIllness: data.currentIllness ?? "",
-      systemsReview: data.systemsReview ?? "",
-      headExam: data.headExam ?? "",
-      neckExam: data.neckExam ?? "",
-      chestExam: data.chestExam ?? "",
-      abdomenExam: data.abdomenExam ?? "",
-      genitalsExam: data.genitalsExam ?? "",
-      limbsExam: data.limbsExam ?? "",
-      diagnosticManagement: data.diagnosticManagement ?? "",
-      therapeuticManagement: data.therapeuticManagement ?? "",
     });
   }, [data, form]);
 
   const onSubmit = async (values: FormValues) => {
     const dirtyFields = form.formState.dirtyFields;
-    const payload: UpdateClinicalHistoryRequest = {};
+    const payload: UpdatePatientProfileRequest = {};
+
+    if (dirtyFields.curp) {
+      const curp = normalizeCurp(values.curp);
+      if (curp && !isValidCurp(curp)) {
+        form.setError("curp", { message: "CURP con formato inválido" });
+        return;
+      }
+      payload.curp = curp || null;
+    }
+    if (dirtyFields.sex) {
+      payload.sex = values.sex === SEX_NONE ? null : values.sex;
+    }
 
     for (const field of SELECT_FIELDS) {
       if (dirtyFields[field]) {
@@ -171,11 +159,18 @@ export function ExpedienteGeneralesTab({
 
     try {
       await updateClinicalHistory.mutateAsync({ noExp, pkNum, data: payload });
-      toast.success("Historia clínica actualizada");
+      toast.success("Ficha del paciente actualizada");
       form.reset(values);
-    } catch {
-      toast.error("No se pudo guardar la historia clínica", {
-        description: "Intenta nuevamente en unos segundos.",
+    } catch (error) {
+      const details = error instanceof ApiError ? error.details : undefined;
+      const curpError = details && typeof details === "object" && "curp" in details;
+      if (curpError) {
+        form.setError("curp", { message: "CURP con formato inválido" });
+      }
+      toast.error("No se pudo guardar la ficha del paciente", {
+        description: curpError
+          ? "Revisa el CURP capturado."
+          : "Intenta nuevamente en unos segundos.",
       });
     }
   };
@@ -183,7 +178,7 @@ export function ExpedienteGeneralesTab({
   if (isLoading) {
     return (
       <p className="text-txt-muted text-sm py-12 text-center">
-        Cargando historia clínica...
+        Cargando ficha del paciente...
       </p>
     );
   }
@@ -191,13 +186,20 @@ export function ExpedienteGeneralesTab({
   if (isError) {
     return (
       <p className="text-status-critical text-sm py-12 text-center">
-        No se pudo cargar la historia clínica de este paciente.
+        No se pudo cargar la ficha de este paciente.
       </p>
     );
   }
 
   return (
     <div className="space-y-8">
+      {history?.openedOn ? (
+        <p className="text-xs text-txt-muted">
+          Historia clínica abierta el {history.openedOn}
+          {history.openingClinicCode ? ` · clínica ${history.openingClinicCode}` : ""}
+          {history.openingDoctorCode ? ` · médico ${history.openingDoctorCode}` : ""}
+        </p>
+      ) : null}
       <section className="space-y-4">
         <h3 className="text-sm font-semibold text-txt-body">Alergias</h3>
         <AllergyList noExp={noExp} pkNum={pkNum} source="general" />
@@ -205,6 +207,54 @@ export function ExpedienteGeneralesTab({
 
       <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <section className="space-y-4">
+          <h3 className="text-sm font-semibold text-txt-body">Identificación</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="curp"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>CURP</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      maxLength={18}
+                      className="font-mono uppercase"
+                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="sex"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sexo</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={SEX_NONE}>Sin especificar</SelectItem>
+                      {Object.entries(PATIENT_SEX_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          </div>
+        </section>
+
         <section className="space-y-4">
           <h3 className="text-sm font-semibold text-txt-body">
             Datos sociodemográficos
@@ -247,63 +297,12 @@ export function ExpedienteGeneralesTab({
                 <FormItem>
                   <FormLabel>Teléfono</FormLabel>
                   <FormControl>
-                    <Input {...field} maxLength={15} />
+                    <Input {...field} maxLength={50} />
                   </FormControl>
                 </FormItem>
               )}
             />
           </div>
-        </section>
-
-        <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Antecedentes y padecimiento
-          </h3>
-          <TextareaField
-            control={form.control}
-            name="familyHistory"
-            label="Antecedentes"
-          />
-          <TextareaField
-            control={form.control}
-            name="currentIllness"
-            label="Padecimiento Actual"
-          />
-          <TextareaField
-            control={form.control}
-            name="systemsReview"
-            label="Órganos, Aparatos y Sistemas"
-          />
-        </section>
-
-        <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Exploración Física
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ShortTextField control={form.control} name="headExam" label="Cabeza" />
-            <ShortTextField control={form.control} name="neckExam" label="Cuello" />
-            <ShortTextField control={form.control} name="chestExam" label="Tórax" />
-            <ShortTextField control={form.control} name="abdomenExam" label="Abdomen" />
-            <ShortTextField control={form.control} name="genitalsExam" label="Genitales" />
-            <ShortTextField control={form.control} name="limbsExam" label="Miembros" />
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Manejo
-          </h3>
-          <TextareaField
-            control={form.control}
-            name="diagnosticManagement"
-            label="Manejo Diagnóstico"
-          />
-          <TextareaField
-            control={form.control}
-            name="therapeuticManagement"
-            label="Manejo Terapéutico"
-          />
         </section>
 
         <div className="flex justify-end">
@@ -321,6 +320,13 @@ export function ExpedienteGeneralesTab({
         </div>
       </form>
       </Form>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold text-txt-body">Antecedentes</h3>
+        <PatientBackgroundSection noExp={noExp} pkNum={pkNum} source="general" />
+      </section>
+
+      <HistoricalNotesSection noExp={noExp} pkNum={pkNum} />
     </div>
   );
 }
@@ -364,56 +370,6 @@ function CatalogSelectField({
               ))}
             </SelectContent>
           </Select>
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function TextareaField({
-  control,
-  name,
-  label,
-}: {
-  control: ReturnType<typeof useForm<FormValues>>["control"];
-  name: (typeof TEXT_FIELDS)[number];
-  label: string;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Textarea {...field} rows={3} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function ShortTextField({
-  control,
-  name,
-  label,
-}: {
-  control: ReturnType<typeof useForm<FormValues>>["control"];
-  name: (typeof TEXT_FIELDS)[number];
-  label: string;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input {...field} />
-          </FormControl>
         </FormItem>
       )}
     />

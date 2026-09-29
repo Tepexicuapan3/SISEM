@@ -168,6 +168,10 @@ export const MENU_DESTINATION_LABELS: Record<
   },
   "/admin/catalogos/turnos": { label: "Turnos", grupo: "Catálogos" },
   "/admin/catalogos/vacunas": { label: "Vacunas", grupo: "Catálogos" },
+  "/admin/bitacora-acceso": {
+    label: "Bitácora de acceso a expedientes",
+    grupo: "Administración",
+  },
   "/admin/conciliacion": { label: "Conciliación", grupo: "Administración" },
   "/admin/conexiones": {
     label: "Conexiones / Sesiones",
@@ -183,6 +187,10 @@ export const MENU_DESTINATION_LABELS: Record<
     grupo: "Administración",
   },
   "/admin/medicos": { label: "Médicos", grupo: "Administración" },
+  "/admin/solicitudes-arco": {
+    label: "Solicitudes ARCO",
+    grupo: "Administración",
+  },
   "/admin/menus": { label: "Gestión de Menús", grupo: "Administración" },
   "/admin/reportes/ambulancias": {
     label: "Reporte de Ambulancias",

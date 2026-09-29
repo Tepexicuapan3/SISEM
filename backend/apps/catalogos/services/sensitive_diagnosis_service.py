@@ -23,8 +23,33 @@ def _active_ranges():
     )
 
 
+@lru_cache(maxsize=1)
+def _roles_by_range_start():
+    """CAT_PERFIL_ACCESO: {code_prefix_start: frozenset(codigos de rol)}."""
+    from apps.catalogos.models import SensitiveAccessProfile
+
+    result = {}
+    for start, role in SensitiveAccessProfile.objects.filter(
+        sensitive_range__is_active=True,
+    ).values_list("sensitive_range__code_prefix_start", "role__rol"):
+        result.setdefault(start, set()).add((role or "").strip().upper())
+    return {start: frozenset(roles) for start, roles in result.items()}
+
+
 def invalidate_cache():
     _active_ranges.cache_clear()
+    _roles_by_range_start.cache_clear()
+
+
+def allowed_roles_for(code):
+    """Roles (CAT_PERFIL_ACCESO) que ven sin redaccion el rango de `code`."""
+    if not code:
+        return frozenset()
+    category_prefix = code.strip().upper()[:3]
+    for start, end, _category, _permission in _active_ranges():
+        if start <= category_prefix <= end:
+            return _roles_by_range_start().get(start, frozenset())
+    return frozenset()
 
 
 def classify_cie(code):

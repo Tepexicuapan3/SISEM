@@ -1,8 +1,27 @@
 import os
+import re
 
 from rest_framework import serializers
 
-from apps.consulta_medica.models import Allergy
+from apps.consulta_medica.models import (
+    Allergy,
+    DentalTreatment,
+    Habit,
+    OdontogramToothState,
+    PersonalHistory,
+    Sex,
+    SpecialtySource,
+    StomatologyHistory,
+)
+
+# Estructura oficial RENAPO: 4 letras, fecha AAMMDD valida en rango, sexo
+# (H/M/X), entidad federativa (incluye NE = nacido en el extranjero), 3
+# consonantes internas, homoclave y digito verificador.
+CURP_REGEX = re.compile(
+    r"^[A-Z][AEIOUX][A-Z]{2}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HMX]"
+    r"(AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)"
+    r"[B-DF-HJ-NP-TV-Z]{3}[A-Z\d]\d$"
+)
 
 STUDY_RESULT_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 _ALLOWED_STUDY_RESULT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
@@ -32,6 +51,11 @@ class SaveDiagnosisSerializer(serializers.Serializer):
     objective = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     assessment = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     plan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+    currentIllness = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    systemsReview = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    diagnosticPlan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    therapeuticPlan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate_primaryDiagnosis(self, value):
         normalized = value.strip()
@@ -91,12 +115,10 @@ class CloseConsultationSerializer(SaveDiagnosisSerializer):
         return normalized
 
 
-class ClinicalHistoryUpdateSerializer(serializers.Serializer):
+class PatientProfileUpdateSerializer(serializers.Serializer):
     """
-    Todos los campos son opcionales a proposito: la Historia Clinica
-    General se captura de forma incremental a lo largo de varias
-    consultas, no en un solo formulario obligatorio (ver ClinicalHistory
-    en models.py).
+    PACIENTE: todos los campos son opcionales a proposito -- la ficha se
+    captura de forma incremental a lo largo de varias consultas.
     """
 
     occupationId = serializers.IntegerField(required=False, allow_null=True)
@@ -104,64 +126,151 @@ class ClinicalHistoryUpdateSerializer(serializers.Serializer):
     maritalStatusId = serializers.IntegerField(required=False, allow_null=True)
     religionId = serializers.IntegerField(required=False, allow_null=True)
     residenceTypeId = serializers.IntegerField(required=False, allow_null=True)
-    phone = serializers.CharField(max_length=15, required=False, allow_blank=True, allow_null=True)
-    familyHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    currentIllness = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    systemsReview = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    headExam = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    neckExam = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    chestExam = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    abdomenExam = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    genitalsExam = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    limbsExam = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    diagnosticManagement = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    therapeuticManagement = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    allergies = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    curp = serializers.CharField(max_length=18, required=False, allow_blank=True, allow_null=True)
+    sex = serializers.ChoiceField(
+        choices=Sex.choices, required=False, allow_blank=True, allow_null=True,
+    )
+    # max_length=50 igual que el modelo: el legado guarda "cel ... tel ...
+    # ext ..." (hasta 40 chars) en el 100% de las historias migradas.
+    phone = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+
+    def validate_curp(self, value):
+        normalized = (value or "").strip().upper()
+        if not normalized:
+            return None
+        if not CURP_REGEX.match(normalized):
+            raise serializers.ValidationError("CURP con formato invalido.")
+        return normalized
+
+    def validate_sex(self, value):
+        return value or None
 
 
 class OdontogramToothUpdateSerializer(serializers.Serializer):
+    # `condition` = CatEstadoPieza.code (mismo contrato que antes).
     condition = serializers.CharField()
+    face = serializers.ChoiceField(
+        choices=OdontogramToothState.Face.choices, required=False, allow_blank=True, default="",
+    )
     notes = serializers.CharField(
         max_length=255, required=False, allow_blank=True, allow_null=True,
     )
+    # Consulta en la que se levanta el cambio: define la version del
+    # odontograma (una version por consulta).
+    visitId = serializers.IntegerField(required=False, allow_null=True)
 
 
 class StomatologyHistoryUpdateSerializer(serializers.Serializer):
-    """
-    Todos los campos son opcionales -- misma logica de captura incremental
-    que ClinicalHistoryUpdateSerializer.
-    """
+    """HC_ESTOMATOLOGIA -- todos opcionales (captura incremental)."""
 
-    familyDiabetes = serializers.BooleanField(required=False)
-    familyCancer = serializers.BooleanField(required=False)
-    familyHighBloodPressure = serializers.BooleanField(required=False)
-    familyLowBloodPressure = serializers.BooleanField(required=False)
+    oralHygiene = serializers.ChoiceField(
+        choices=StomatologyHistory.OralHygiene.choices, required=False, allow_null=True, allow_blank=True,
+    )
+    brushingsPerDay = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=20)
+    usesFloss = serializers.BooleanField(required=False, allow_null=True)
+    softTissues = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    tmj = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate_oralHygiene(self, value):
+        return value or None
+
+
+class _RecordWriteSerializer(serializers.Serializer):
+    """Base de los registros permanentes: `source` solo trazabilidad."""
+
+    source = serializers.ChoiceField(
+        choices=[SpecialtySource.GENERAL, SpecialtySource.STOMATOLOGY], required=False,
+    )
+
+
+class PersonalHistoryWriteSerializer(_RecordWriteSerializer):
+    cieCode = serializers.CharField(max_length=8, required=False, allow_blank=True, allow_null=True)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    diagnosisDate = serializers.DateField(required=False, allow_null=True)
+    status = serializers.ChoiceField(choices=PersonalHistory.Status.choices, required=False)
+
+    def validate(self, attrs):
+        if self.partial:
+            return attrs
+        if not attrs.get("cieCode") and not (attrs.get("description") or "").strip():
+            raise serializers.ValidationError({"description": ["Indica un CIE-10 o una descripcion."]})
+        return attrs
+
+
+class FamilyHistoryWriteSerializer(_RecordWriteSerializer):
+    relationshipId = serializers.CharField(max_length=2, required=False, allow_blank=True, allow_null=True)
+    cieCode = serializers.CharField(max_length=8, required=False, allow_blank=True, allow_null=True)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    isDeceased = serializers.BooleanField(required=False)
     causeOfDeath = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
-    personalDiabetes = serializers.BooleanField(required=False)
-    personalAsthma = serializers.BooleanField(required=False)
-    personalHighBloodPressure = serializers.BooleanField(required=False)
-    personalLowBloodPressure = serializers.BooleanField(required=False)
-    personalHepatitis = serializers.BooleanField(required=False)
-    personalHiv = serializers.BooleanField(required=False)
-    personalSmoking = serializers.BooleanField(required=False)
-    personalAlcoholism = serializers.BooleanField(required=False)
-    personalSubstanceAbuse = serializers.BooleanField(required=False)
-    habits = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    diet = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    surgicalHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    traumaticHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    currentIllnessHistory = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    # Los 6 `allergy*` (change `alergias-unificadas`) quedan CONGELADOS --
-    # reemplazados por Allergy (ver AllergyWriteSerializer mas abajo), ya no
-    # se aceptan aqui.
+
+    def validate(self, attrs):
+        if self.partial:
+            return attrs
+        if not attrs.get("cieCode") and not (attrs.get("description") or "").strip() \
+                and not (attrs.get("causeOfDeath") or "").strip():
+            raise serializers.ValidationError({"description": ["Indica un CIE-10 o una descripcion."]})
+        return attrs
+
+
+class SurgicalHistoryWriteSerializer(_RecordWriteSerializer):
+    procedure = serializers.CharField(max_length=500, allow_blank=False)
+    procedureCie9Id = serializers.IntegerField(required=False, allow_null=True)
+    approximateDate = serializers.DateField(required=False, allow_null=True)
+    place = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+
+
+class HabitWriteSerializer(_RecordWriteSerializer):
+    habitId = serializers.IntegerField()
+    frequency = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    quantity = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    since = serializers.DateField(required=False, allow_null=True)
+    status = serializers.ChoiceField(choices=Habit.Status.choices, required=False)
+    notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+
+class DentalTreatmentWriteSerializer(_RecordWriteSerializer):
+    toothFdi = serializers.CharField(max_length=2, required=False, allow_blank=True, allow_null=True)
+    procedure = serializers.CharField(max_length=500, allow_blank=False)
+    procedureCie9Id = serializers.IntegerField(required=False, allow_null=True)
+    status = serializers.ChoiceField(choices=DentalTreatment.Status.choices, required=False)
+    visitId = serializers.IntegerField(required=False, allow_null=True)
+
+
+class RecordDeactivateSerializer(serializers.Serializer):
+    """Baja logica: el motivo es obligatorio (nada se borra sin rastro)."""
+
+    reason = serializers.CharField(max_length=500, allow_blank=False)
+
+
+class AllergyStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=Allergy.Status.choices)
+    reason = serializers.CharField(max_length=500, allow_blank=False)
+
+
+class PhysicalExamFindingSerializer(serializers.Serializer):
+    regionId = serializers.IntegerField()
+    isNormal = serializers.BooleanField()
+    finding = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs["isNormal"] and not (attrs.get("finding") or "").strip():
+            raise serializers.ValidationError({"finding": ["Describe el hallazgo anormal."]})
+        return attrs
+
+
+class PhysicalExamSaveSerializer(serializers.Serializer):
+    findings = PhysicalExamFindingSerializer(many=True)
 
 
 class AllergyWriteSerializer(serializers.Serializer):
     """Creacion/edicion de una Allergy -- a diferencia de ClinicalHistory/
     StomatologyHistory (captura incremental, todo opcional), una alergia se
-    crea completa: category/substance/severity son obligatorios."""
+    crea completa: tipo/sustancia/severidad son obligatorios."""
 
-    category = serializers.ChoiceField(choices=Allergy.Category.choices)
+    # CAT_TIPO_ALERGIA: 1 medicamento, 2 anestesia, 3 material dental,
+    # 4 ambiental, 5 alimento, 9 otro (se valida contra el catalogo).
+    allergyTypeId = serializers.IntegerField()
     substance = serializers.CharField(max_length=255, allow_blank=False)
     medicationId = serializers.IntegerField(required=False, allow_null=True)
     severity = serializers.ChoiceField(choices=Allergy.Severity.choices)

@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.administracion.services.bitacora_acceso_service import registrar_exportacion
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.audit_service import log_event
 from apps.authentication.services.csrf_service import validate_csrf
@@ -302,6 +303,7 @@ class ReferralReportView(APIView):
             )
             filename = f"informe_pases_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.xlsx"
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            registrar_exportacion(request, user, recurso="reporte_pases")
             return response
 
         return Response(payload, status=status.HTTP_200_OK)

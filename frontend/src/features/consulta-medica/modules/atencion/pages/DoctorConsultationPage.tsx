@@ -32,6 +32,7 @@ import { useDoctorQueue } from "@features/consulta-medica/modules/atencion/queri
 
 import {
   buildDiagnosisFingerprint,
+  buildDiagnosisPayload,
   CLOSE_CONSULTATION_DOMAIN_ERROR_MESSAGE,
   DEFAULT_DIAGNOSIS_FORM_VALUES,
   DEFAULT_PRESCRIPTIONS_FORM_VALUES,
@@ -45,7 +46,6 @@ import {
   formatDateShort,
   getMinutesUntilAppointment,
   hasVitalValue,
-  normalizeCieCode,
   OPEN_VISIT_STATUSES,
   resolveDomainErrorMessage,
   SAVE_DIAGNOSIS_DOMAIN_ERROR_MESSAGE,
@@ -368,12 +368,7 @@ export const DoctorConsultationPage = () => {
       return;
     }
 
-    const normalizedCieCode = normalizeCieCode(values.cieCode);
-    const diagnosisPayload = {
-      primaryDiagnosis: values.primaryDiagnosis,
-      finalNote: values.finalNote,
-      ...(normalizedCieCode ? { cieCode: normalizedCieCode } : {}),
-    };
+    const diagnosisPayload = buildDiagnosisPayload(values);
 
     try {
       await saveDiagnosis.mutateAsync({
@@ -437,12 +432,7 @@ export const DoctorConsultationPage = () => {
       return;
     }
 
-    const normalizedCieCode = normalizeCieCode(values.cieCode);
-    const diagnosisPayload = {
-      primaryDiagnosis: values.primaryDiagnosis,
-      finalNote: values.finalNote,
-      ...(normalizedCieCode ? { cieCode: normalizedCieCode } : {}),
-    };
+    const diagnosisPayload = buildDiagnosisPayload(values);
 
     const diagnosisFingerprint = buildDiagnosisFingerprint(values);
     const hasMatchingSavedDiagnosis =

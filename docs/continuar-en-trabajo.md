@@ -390,8 +390,8 @@ especialidades), quedó así:
 - **Segundo catálogo NOM-024**: confirmar con el certificador cuál es.
 - **Fase 5 (médicos)**: cerrar la ventana de compatibilidad de IDs
   necesita telemetría real de producción (`WARNING MEDICO_ID_LEGACY_FALLBACK`).
-- **`herramientas`, `movimientos`, `opciones`**: apps vacías, sin alcance
-  definido.
+- ~~**`herramientas`, `movimientos`, `opciones`**~~ **ELIMINADAS (2026-09-28)**: eran apps con
+  todos sus archivos vacíos, fuera de `INSTALLED_APPS` (junto con `core`).
 - **Farmacia**: `domain-map.md` dice "Discovery" pero en realidad YA HAY
   un módulo real (`VacInventario`, inventario de vacunas) sin frontend —
   el doc de arquitectura está desactualizado, corregirlo.
@@ -431,10 +431,11 @@ especialidades), quedó así:
   (`clinico:diagnosticos_vih:read`/`..._salud_mental:read`/
   `..._sustancias:read`) — ver checklist de deploy en "Completado
   2026-09-28" arriba.
-- **Plazo legal de solicitudes ARCO** (Fase 4, sin implementar todavía): el
-  plan usa 20 días hábiles como default (Ley General de Protección de Datos
-  Personales en Posesión de Sujetos Obligados) — confirmar con jurídico
-  antes de implementar.
+- **Plazo legal de solicitudes ARCO** (Fase 4, YA implementada con
+  default configurable): 20 días hábiles lunes-viernes vía
+  `ARCO_PLAZO_DIAS_HABILES` — confirmar con jurídico el número y si hay que
+  descontar feriados oficiales (el único punto a cambiar es
+  `add_business_days` en `administracion/use_cases/arco/arco_usecase.py`).
 
 ## Completado 2026-09-17 — infraestructura (gateway, CORS/CSRF, celery-beat)
 
@@ -787,27 +788,250 @@ usuario decide cuándo).
 6. Confirmar que Redis esté corriendo donde corra el backend (ya resuelto
    en el `docker-compose.yml` de producción).
 
-## Pendiente (Fases 3 y 4 del mismo change, no implementadas todavía)
+## Completado 2026-09-28 (2ª sesión) — Fases 3 y 4: bitácora de acceso + solicitudes ARCO
 
-El plan completo de esta sesión tenía 4 fases; solo se implementaron las
-Fases 1 y 2 (arriba). Quedan, en orden sugerido:
-- **Fase 3 — Bitácora de acceso general**: registrar quién VE un expediente
-  (no solo quién lo modifica — hoy `AuditoriaEvento` solo audita
-  escrituras). Agregar `log_event(...)` a los `GET` de
-  `PatientClinicalHistoryView`/`PatientStomatologyHistoryView`, más una
-  pantalla de consulta para calidad/auditoría (`GET administracion/
-  bitacora-acceso`). La bitácora ESPECÍFICA de diagnósticos sensibles
-  (`SensitiveDiagnosisRedacted`) ya quedó resuelta en la Fase 2 — lo que
-  falta es el registro general de lecturas.
-- **Fase 4 — Solicitudes ARCO**: modelo `SolicitudArco` (acceso/
-  rectificación/cancelación/oposición, Ley General de Protección de Datos
-  Personales), cola de gestión para el área de compliance. Vive en
-  `administracion`, no toca `consulta_medica` — se puede hacer antes o
-  después de la Fase 3 sin dependencias.
+El plan original (`bubbly-launching-sparkle.md`) quedó en la otra PC; ambas
+fases se reconstruyeron desde el código real. **Sin commitear** al momento
+de escribir esto.
 
-Plan detallado de ambas fases (modelos, endpoints, permisos) en
-`C:\Users\tepex\.claude\plans\bubbly-launching-sparkle.md` (máquina de
-desarrollo de esta sesión) — pedir que se retome cuando se quiera seguir.
+### Fase 3 — Bitácora de acceso al expediente
+- `consulta_medica/services/record_access_audit_service.py`: evento
+  `PatientRecordAccessed` (`recurso_tipo="expediente"`, `meta` con
+  `noExp`/`pkNum`/`section`) en los **8 GET del expediente** (historia
+  clínica, estomatología, alergias, consultas, consultas legado,
+  odontograma, incapacidades, estudios) — no solo los 2 del plan original.
+- **Deduplicación** con `cache.add` (Redis): máximo 1 evento por
+  (actor, no_exp, pk_num, sección) cada 5 min — sin esto, los refetch de
+  TanStack Query al reenfocar la ventana generaban decenas de filas por
+  lectura. Si Redis no responde, se registra igual (mejor duplicar que
+  perder un acceso). Nunca bloquea la lectura (`raise_on_error=False`).
+- `GET /api/v1/bitacora-acceso` (`administracion/views/access_log_views.py`
+  + `repositories/access_log_repository.py`): lista `PatientRecordAccessed`
+  + `SensitiveDiagnosisRedacted` (Fase 2), filtros `tipo`/`seccion`/`noExp`/
+  `pkNum`/`usuario`/`fechaInicio`/`fechaFin`, paginado. Permiso nuevo
+  **`admin:auditoria:accesos:read`**.
+- Frontend: `/admin/bitacora-acceso` (`features/admin/modules/bitacora-acceso/`).
+
+### Fase 4 — Solicitudes ARCO
+- Modelo `administracion.SolicitudArco` (migración `administracion.0007`):
+  paciente como `no_exp`/`pk_num` planos, sin FK (`CatEmpleado` vive en la
+  base `expedientes`). Folio `ARCO-AAAA-NNNNNN`.
+- Plazo: `settings.ARCO_PLAZO_DIAS_HABILES` (env, default **20 días
+  hábiles**, lunes a viernes, sin feriados) — **sigue pendiente de confirmar
+  con jurídico**, pero ya no bloquea: se cambia por variable de entorno sin
+  tocar código. `fecha_limite` se fija al recibir y no se recalcula.
+- Estatus `recibida → en_proceso → procedente|improcedente` (también
+  `recibida → resolución` directo). Resolver exige respuesta; **resuelta =
+  inmutable** (409 `ARCO_ALREADY_RESOLVED`). Cada alta/cambio audita
+  `ArcoRequestCreated`/`ArcoRequestStatusChanged` en modo ESTRICTO (si falla
+  la auditoría, se revierte todo).
+- Endpoints: `GET/POST /api/v1/solicitudes-arco`, `GET .../<id>`,
+  `POST .../<id>/status`. Permisos nuevos **`admin:arco:read`** /
+  **`admin:arco:write`** (separados a propósito).
+- Frontend: `/admin/solicitudes-arco` (listado con filtro "Solo vencidas",
+  alta y cambio de estatus).
+
+### Verificación
+- Backend: `apps.consulta_medica` + `apps.administracion` + `apps.catalogos`
+  → 543 tests OK antes de ARCO; `apps.administracion` → 287 OK después.
+  `makemigrations --check` limpio.
+- Frontend: `typecheck:app` limpio, ESLint sin warnings en lo nuevo, tests de
+  navegación 23/23. `menu-destinations.generated.ts` regenerado con
+  `pnpm run gen:menu-destinations`.
+
+### CURP y sexo en la ficha del paciente + limpieza de alergias (paso 1)
+- **Decisión**: la "ficha del paciente" (`PACIENTE` del documento de reforma
+  de historia clínica) en SIRES ES `cns_clinical_history` (ya tenía
+  ocupación/escolaridad/estado civil/religión/residencia/teléfono). Ahí se
+  agregaron `curp` (validación RENAPO, normalizada a mayúsculas) y `sexo`
+  (`H`/`M`/`X`), migración `consulta_medica.0027` (4 `AddField` nullable).
+  **NO se tocó `cat_empleados`/`cat_familiar`** (incidente 2026-09-17).
+  Versionados en `ClinicalHistoryRevision` (`curp_anterior`/`sexo_anterior`)
+  y auditados en `ClinicalHistoryUpdated`.
+- Frontend: sección "Identificación" en el tab Generales; el header del
+  expediente muestra CURP/sexo/teléfono reales (antes "No disponible").
+- Bug corregido de paso: el serializer limitaba `phone` a 15 caracteres
+  (modelo: 50) → editar la historia de un paciente migrado daba 422.
+- Alergias texto libre, paso 1: `ClinicalHistory.allergies` salió de la API
+  (serializer/contrato/tipos) y `migrar_historial_clinico_legacy` ahora
+  importa `ds_alergias` directo a `cns_allergy`. **Paso 2 HECHO** en la
+  historia clínica unificada (abajo): la migración `consulta_medica.0029`
+  mueve el texto a `cns_allergy` y `0030` borra las columnas.
+- Tests: 530 backend (`consulta_medica`/`administracion`/`recepcion`) con 10
+  fallas en `test_checkin_manual_api.py`, confirmadas idénticas en `HEAD`
+  limpio (worktree). Vitest: 13 fallas en 6 archivos, confirmadas idénticas
+  con `git stash -u` — ninguna relacionada.
+- Brechas vs. documento de reforma: **cerradas** en la sección siguiente.
+
+### Historia clínica unificada — implementación completa del documento de reforma (2026-09-28)
+
+Implementado el modelo del documento "Historia Clínica Unificada"
+(artifact `XMxgUTzoxU6mdPMgr2xDDN`, 25-sep-2026) completo, quitando lo que
+el modelo nuevo reemplaza. **Sin commitear.**
+
+| Documento | SIRES |
+|---|---|
+| PACIENTE / HISTORIA_CLINICA | `cns_paciente` (ficha + CURP/sexo) y `cns_clinical_history` (cabecera: fecha/clínica/médico de apertura) — ver "Núcleo del paciente" |
+| ALERGIA (estado A/R/E) | `cns_allergy` + `estado`/`motivo_estado`; resuelta = visible pero NO alerta en receta |
+| ANTECEDENTE_PERSONAL / _FAMILIAR / _QUIRURGICO, HABITO | `cns_antecedente_personal`/`_familiar`/`_quirurgico`, `cns_habito` (baja lógica con motivo, CIE sensible redactado) |
+| NOTA_HISTORICA | `cns_nota_historica` (solo lectura; texto acumulado partido por `[dd/mm/aaaa (usuario)]`) |
+| EXPLORACION_FISICA | `cns_exploracion_fisica` por consulta (solo editable `en_consulta`) |
+| SIGNOS_VITALES | ya existía (`smt_visit_vitals`); del legado → nota histórica (SIRES liga signos a visita) |
+| HC_ESTOMATOLOGIA | `cns_stomatology_history` reestructurada (higiene, cepillados, hilo, tejidos blandos, ATM) |
+| ODONTOGRAMA / _PIEZA | `cns_odontograma` versionado por consulta + CPOD, `cns_odontograma_pieza` con caras |
+| TRATAMIENTO_DENTAL | `cns_tratamiento_dental` |
+| cat_habito / cat_region_corporal / cat_estado_pieza / cat_pieza_dental | `catalogos.0031/0032` (sembrados; 52 piezas FDI) |
+| SOLICITUD_ARCO.folio_unidad_transparencia | `administracion.0008` |
+
+**Eliminado** (con los datos migrados ANTES en `consulta_medica.0029`, probado
+con migración real 0028→0030 en test): los 12 textos de `cns_clinical_history`
+(antecedentes, padecimiento, aparatos y sistemas, 6 exploraciones, manejo x2,
+alergias), las casillas/textos/`alergia_*` de `cns_stomatology_history`,
+`OdontogramTooth` (`cns_odontogram_tooth`), las `previous_*` de esos campos en
+las tablas de revisión (su contenido quedó como nota histórica "versión
+anterior"), el comando `migrar_alergias_estructuradas` (lo reemplaza 0029) y
+en el frontend el hook/endpoint de "desactivar alergia" (ahora estado con motivo).
+
+**Legado**: `migrar_historial_clinico_legacy` reescrito (notas históricas,
+alergias por elemento, signos) y NUEVO `migrar_historia_estomatologia_legacy`
+para `his_clinicad` (~24,100; respeta la inversión del sufijo `p`). Ambos
+idempotentes (`legacy_ref`), con `--dry-run`. Las respuestas "NEGADAS/NIEGA/
+NINGUNA" NO se convierten en alergias (se conservan como nota).
+
+**Frontend**: tab Generales (identidad + sociodemográficos + alergias +
+antecedentes + notas históricas), tab Estomatología (exploración bucal,
+tratamientos, antecedentes compartidos), Odontograma (versiones, CPOD,
+caras, estados desde catálogo), botón "Exploración física" en la consulta,
+alergias con resolver/reactivar/error con motivo, folio UT en ARCO.
+
+**Pendiente de validar por el área médica** (valores por defecto sembrados):
+equivalencias CIE-10 de las casillas (E14, C80, I10, I95, J45, B19, B24), el
+catálogo `cat_estado_pieza` y su componente CPOD (estomatología), y si la
+historia sigue siendo obligatoria por especialidad (`ope_param`).
+
+### Núcleo del paciente TAL CUAL el documento (5.1) — 2026-09-28
+Pedido explícito del usuario: la sección "Núcleo del paciente: datos
+permanentes" exacta y funcional (el resto del documento queda adaptado a lo
+que ya existía). Estructura exacta, con la convención de nombres/auditoría de
+SIRES (`usr_alta`/`fch_alta`/`est_activo`, prefijo `cns_`).
+
+| Documento | SIRES |
+|---|---|
+| PACIENTE (no_exp, tp_paciente, cd_ocupacion, cd_escolaridad, cd_edocivil, cd_religion, cd_residencia, ds_telefono) | `cns_paciente` (+ curp, sexo) y `cns_paciente_revision` (versionado NOM-024) |
+| HISTORIA_CLINICA (id_historia, fe_apertura, cd_clinica_apertura, cd_medico_apertura) 1:1 con PACIENTE | `cns_clinical_history` reducida a cabecera + `fe_apertura` + FK `id_paciente` |
+| ALERGIA.cd_tipo_alergia → CAT_TIPO_ALERGIA (1,2,3,4,5,9) | `cat_tipo_alergia` (PK = código del documento) + FK |
+| ALERGIA.severidad L/M/G, estado A/R/E, `ix_alergia_paciente` | códigos exactos, `char(1)`, índice creado |
+| ANTECEDENTE_PERSONAL.estado A/R, HABITO.estado A/E | códigos exactos |
+| NOTA_HISTORICA.id_historia (FK), origen M | FK obligatoria a `cns_clinical_history`; origen M (y V = versión anterior) |
+
+- Migraciones: `catalogos.0033` (catálogo sembrado), `consulta_medica.0031`
+  (esquema), `0032` (datos: ficha → paciente, revisiones, FK de notas, tipos y
+  códigos), `0033` (limpieza). La 0032 está probada con migración real en test.
+- API: `GET/PATCH /patients/<no_exp>/profile` (PACIENTE, evento de auditoría
+  `PatientProfileUpdated`); `GET /patients/<no_exp>/clinical-history` ahora
+  devuelve solo la cabecera (sin PATCH). Alergias: `allergyTypeId`,
+  severidad L/M/G, estado A/R/E. `/clinical-catalogs` incluye `allergyTypes`.
+- La advertencia de alergia al recetar manda severidad L/M/G.
+
+### Limpieza de código huérfano y BD (2026-09-28)
+- **Backend eliminado**: apps `herramientas`, `movimientos`, `opciones` (100%
+  archivos vacíos) y `core` (fuera de `INSTALLED_APPS`, nunca corría);
+  `administracion/repositories/expediente_repository.py`,
+  `serializers/common_serializers.py`, `serializers/expediente_serializer.py`
+  (sin ninguna referencia); comando `migrar_alergias_estructuradas` y
+  `AllergyRepository.import_free_text`. Campo `curp` del contrato de
+  `/visits/patient-lookup` (siempre `None`): el CURP vive en la ficha.
+- **Frontend eliminado** (detectado con un análisis de imports que resuelve
+  alias; ningún archivo lo importaba, incluidas cascadas): 34 archivos, entre
+  ellos `GenericCatalogPage` + `catalog-definitions` + `useCatalogList` +
+  `generic-catalog.api/types`, 12 `*.transform.ts` de catálogos,
+  `VisitTimelinePanel` + `VisitStageNavigator` (y su test), `PdfPreviewModal`,
+  `use-toast` (reemplazado por sonner), `accordion`, `__component-showcase`,
+  `utils/identity/*`, `utils/web/cookies`, `useCalidadLaboralList` duplicado.
+- **Se conservan a propósito** (solo los usan tests): `realtime/client.ts`,
+  `realtime/protocol.ts`, `realtime/visits/protocol.ts` (shims de compatibilidad
+  que re-exportan `realtime/core`/`streams`), `useRefreshSession`,
+  `deriveModuleKey` (lógica de dominio probada, sin pantalla aún).
+- **DDL** `storage/expedientes-ddl/002_*.sql`: quitada la columna `curp` de
+  `cat_empleados`/`cat_familiar`/`cat_empleados_sis`/`cat_familiar2` (se
+  recreaba en cada volumen nuevo y rompe el sync con Oracle).
+- **BD**: runbook `docs/runbooks/limpieza-bd-huerfanos-2026-09-28.sql`
+  (diagnóstico de solo lectura + DROP comentados). NO se ejecutó nada contra
+  ninguna base.
+- **Deuda detectada, no tocada** (no es código huérfano): `ExpedientesListPage`
+  (ruta `/clinico/expedientes`) muestra 4 pacientes MOCK hardcodeados; 8
+  errores ESLint preexistentes de reglas React 19 (`set-state-in-effect`,
+  `purity`, `only-export-components`) en auth, comunicados, farmacia y recepción.
+
+### Cierre del documento en SIRES (2026-09-29) — lo que faltaba
+Alcance: solo SIRES (SISEM Java/JSP descartado por decisión del usuario).
+- **Bitácora de acceso propia** (`bitacora_acceso`, `administracion.0010`) y
+  **perfiles de acceso a diagnósticos sensibles** (`cat_perfil_acceso_sensible`,
+  `catalogos.0035`; comando `perfil_acceso_sensible --listar/--agregar/--quitar`).
+- **his_notas ampliada** (`consulta_medica.0037`): `cns_visit_consultation`
+  gana `ds_padecimiento`, `ds_aparatos_sistemas`, `ds_plan_diagnostico`,
+  `ds_plan_terapeutico` (+ `*_anterior` en la revisión). API camelCase
+  `currentIllness/systemsReview/diagnosticPlan/therapeuticPlan` en guardar
+  diagnóstico y cerrar consulta (opcionales, vacío → NULL; un error de tipeo en
+  el nombre del argumento del caso de uso lanza `TypeError`). Formulario del
+  médico con 4 textareas.
+- **Signos vitales legado** (`cns_signos_vitales_legado`, `0038` + datos `0039`):
+  numéricos "sin consulta, fecha desconocida", con rangos de plausibilidad
+  (el dump tiene miles de `0`/`.` de relleno, talla en m y cm, TA con `//`);
+  `ds_texto_original` guarda siempre lo capturado. NO se usa `smt_visit_vitals`
+  (exige visita y peso/talla/IMC; nunca alimenta el caché de últimos signos).
+  `0039` convierte las notas "signos_vitales" que ya hubiera creado el
+  importador (reversible). Se ven en "Notas históricas" del expediente.
+- **Plan de migración (sección 8)** (`0040`):
+  - `cns_bitacora_migracion`: cada corrida de `migrar_historial_clinico_legacy`
+    y `migrar_historia_estomatologia_legacy` (también `--dry-run`, y las que
+    fallan). Nuevo argumento `--operador` (default: usuario del SO). La
+    contraseña nunca se guarda en `opciones`.
+  - `cns_conflicto_migracion` + `cns_paciente_origen_legado`: regla de la ficha
+    — el legado vacío nunca borra; lo editado en SIRES nunca se pisa; entre
+    filas del legado gana el `fe_hisclin` más reciente (independiente del orden
+    de los comandos); toda discrepancia queda registrada. **Bug corregido**: el
+    comando de his_clinica hacía `update()` ciego y al re-correrlo pisaba (o
+    ponía en NULL) lo editado en SIRES.
+  - **Bug corregido**: 26 pacientes con más de una fila en his_clinicad
+    duplicaban antecedentes/hábitos/quirúrgicos; el importador ahora deduplica
+    por paciente + contenido (incluye lo dado de baja: el legado no lo revive).
+  - Runbook `docs/runbooks/migracion-historia-clinica-legacy.sql`: limpieza
+    previa en MySQL (duplicados, tp_paciente inválido, códigos huérfanos,
+    vista previa de conflictos, relleno de signos) y revisión en Postgres.
+    Medido en el dump: 389 conflictos de ocupación y 335 de estado civil.
+- Runbook de huérfanos actualizado con las 6 tablas nuevas.
+
+### Checklist de deploy (historia clínica unificada) — ORDEN IMPORTANTE
+1. **Respaldo completo de la BD de SIRES antes de migrar**: `consulta_medica.0030`,
+   `0033` y `0036` borran columnas (su contenido ya se movió en la migración de
+   datos previa, probado, pero un respaldo es obligatorio antes de cualquier
+   migración destructiva).
+2. `python manage.py migrate` (nuevas: `catalogos.0031–0035`,
+   `consulta_medica.0027–0040`, `administracion.0007–0010`). Las migraciones de
+   datos corren dentro de la transacción: o se aplica todo o nada.
+3. Revisar el resultado: `SELECT apartado, COUNT(*) FROM cns_nota_historica GROUP BY 1;`
+   y `SELECT COUNT(*) FROM cns_odontograma;` (debe haber una versión "migrated"
+   por paciente que tenía odontograma).
+4. Legado (en ventana de mantenimiento): seguir
+   `docs/runbooks/migracion-historia-clinica-legacy.sql` — Parte A en MySQL,
+   luego `migrar_historial_clinico_legacy` y `migrar_historia_estomatologia_legacy`
+   con `--dry-run --operador <usuario>` primero, después reales, y Parte B.
+5. `perfil_acceso_sensible --agregar ...` según lo que defina el área médica
+   con datos personales (sin eso, nadie ve sin redacción los diagnósticos
+   sensibles salvo por permiso).
+6. Rebuild del frontend.
+
+### Checklist de deploy (Fases 3 y 4)
+1. `python manage.py migrate` (nuevas: `administracion.0007`,
+   `consulta_medica.0027`).
+2. `python manage.py seed_navigation_permissions` y `seed_navigation_menu`
+   (3 permisos + 2 entradas de menú nuevas).
+3. Asignar `admin:auditoria:accesos:read` al rol de calidad/auditoría, y
+   `admin:arco:read`/`admin:arco:write` al área de compliance — sin eso, las
+   2 pantallas quedan invisibles.
+4. Opcional: `ARCO_PLAZO_DIAS_HABILES` en `.env` si jurídico define otro plazo.
+5. Rebuild del frontend.
 
 ## Convenciones y Reglas Operacionales
 

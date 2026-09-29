@@ -18,9 +18,8 @@ class CatFamiliar(models.Model):
     no_edad         = models.IntegerField(null=True, blank=True, db_column='no_edad')
     fec_vig         = models.DateField(null=True, blank=True, db_column='fec_vig')
     cd_clinica      = models.CharField(max_length=10,  null=True, blank=True, db_column='cd_clinica')
-    # curp: removido temporalmente (2026-09-17) -- la columna no existe todavia
-    # en Postgres, y ademas Oracle (origen del sync) nunca tuvo CURP para
-    # cat_familiar. Ver docs/continuar-en-trabajo.md para el plan de restauracion.
+    # Sin curp A PROPOSITO: Oracle nunca tuvo CURP para cat_familiar y agregar
+    # columnas rompe el sync. El CURP del paciente vive en cns_paciente.curp (historia clinica unificada).
     fec_ult_actualizacion = models.DateTimeField(null=True, blank=True, db_column='fec_ult_actualizacion')
 
     class Meta:

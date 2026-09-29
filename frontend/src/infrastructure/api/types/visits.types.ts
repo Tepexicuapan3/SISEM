@@ -125,7 +125,6 @@ export interface PatientMember {
   parentesco: string | null;
   estatus:    string | null;
   cdClinica:  string | null;
-  curp:       string | null;
   /** Data URI (image/jpeg;base64) lista para <img src>, o null si no hay foto cargada. */
   foto:       string | null;
 }
@@ -288,13 +287,21 @@ export interface LatestVitalsResponse {
   todayCapture: TodayCapturePayload | null;
 }
 
-export interface SaveDiagnosisRequest {
+// his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+export interface ConsultationNoteFields {
+  currentIllness?: string | null;
+  systemsReview?: string | null;
+  diagnosticPlan?: string | null;
+  therapeuticPlan?: string | null;
+}
+
+export interface SaveDiagnosisRequest extends ConsultationNoteFields {
   primaryDiagnosis: string;
   finalNote: string;
   cieCode?: string;
 }
 
-export interface SaveDiagnosisResponse {
+export interface SaveDiagnosisResponse extends ConsultationNoteFields {
   visitId: number;
   status: VisitStatus;
   primaryDiagnosis: string;
@@ -330,13 +337,13 @@ export interface SavePrescriptionResponse {
 
 export type StartConsultationResponse = VisitQueueItem;
 
-export interface CloseVisitRequest {
+export interface CloseVisitRequest extends ConsultationNoteFields {
   primaryDiagnosis: string;
   finalNote: string;
   cieCode?: string;
 }
 
-export interface VisitConsultationSummary {
+export interface VisitConsultationSummary extends ConsultationNoteFields {
   id: number;
   visitId: number;
   doctorId: number;

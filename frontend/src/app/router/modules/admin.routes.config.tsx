@@ -52,6 +52,8 @@ import SucursalesPage from "@features/admin/modules/catalogos/sucursales/pages/S
 import PlaceholderPage from "@shared/components/PlaceholderPage";
 import MedicosPage from "@features/admin/modules/medicos/pages/MedicosPage";
 import MenusPage from "@features/admin/modules/menus/pages/MenusPage";
+import BitacoraAccesoPage from "@features/admin/modules/bitacora-acceso/pages/BitacoraAccesoPage";
+import SolicitudesArcoPage from "@features/admin/modules/solicitudes-arco/pages/SolicitudesArcoPage";
 import { lazy, Suspense } from "react";
 
 // Administracion
@@ -100,6 +102,26 @@ export const adminRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute requiredPermission="admin:usuarios:sesiones:read">
         <SessionsPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    // Bitacora de LECTURAS del expediente clinico (NOM-024) -- ver
+    // `AccessLogListView` en el backend.
+    path: "bitacora-acceso",
+    element: (
+      <ProtectedRoute requiredPermission="admin:auditoria:accesos:read">
+        <BitacoraAccesoPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    // Solicitudes de derechos ARCO -- `admin:arco:read` para ver la cola,
+    // alta/resolucion gateadas adentro por `admin:arco:write`.
+    path: "solicitudes-arco",
+    element: (
+      <ProtectedRoute requiredPermission="admin:arco:read">
+        <SolicitudesArcoPage />
       </ProtectedRoute>
     ),
   },

@@ -4,7 +4,7 @@ from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
 from apps.consulta_medica.repositories.cies_repository import CiesRepository
-from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
+from apps.consulta_medica.repositories.consultation_repository import NOTE_FIELDS, ConsultationRepository
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.repositories.visit_diagnosis_repository import VisitDiagnosisRepository
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
@@ -172,6 +172,24 @@ def _normalize_soap_field(value):
     return normalized or None
 
 
+def _normalize_note_fields(note_fields):
+    """his_notas ampliada (documento 5.2). Rechaza claves desconocidas para
+    que un error de tipeo no se pierda en silencio."""
+    unknown = set(note_fields) - set(NOTE_FIELDS)
+    if unknown:
+        raise TypeError(f"Campos de nota desconocidos: {sorted(unknown)}")
+    return {field: _normalize_soap_field(note_fields.get(field)) for field in NOTE_FIELDS}
+
+
+def _note_fields_contract(consultation):
+    return {
+        "currentIllness": consultation.current_illness,
+        "systemsReview": consultation.systems_review,
+        "diagnosticPlan": consultation.diagnostic_plan,
+        "therapeuticPlan": consultation.therapeutic_plan,
+    }
+
+
 def save_diagnosis(
     visit_id,
     roles,
@@ -186,11 +204,13 @@ def save_diagnosis(
     plan=None,
     *,
     audit_hook,
+    **note_fields,
 ):
     ensure_doctor_role(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
     _ensure_visit_in_consultation(visit)
+    normalized_note_fields = _normalize_note_fields(note_fields)
 
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
     normalized_final_note = (final_note or "").strip()
@@ -219,6 +239,7 @@ def save_diagnosis(
             plan=normalized_plan,
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
+            **normalized_note_fields,
         )
         audit_hook(
             resource_id=consultation.id_consultation,
@@ -246,6 +267,7 @@ def save_diagnosis(
         "objective": consultation.objective,
         "assessment": consultation.assessment,
         "plan": consultation.plan,
+        **_note_fields_contract(consultation),
     }
 
 
@@ -331,8 +353,10 @@ def close_consultation(
     plan=None,
     *,
     audit_hook,
+    **note_fields,
 ):
     ensure_doctor_role(roles, permissions)
+    normalized_note_fields = _normalize_note_fields(note_fields)
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
     normalized_final_note = (final_note or "").strip()
     normalized_cie_code = _resolve_cie_code_or_error(cie_code)
@@ -361,6 +385,10 @@ def close_consultation(
             and existing_consultation.objective == normalized_objective
             and existing_consultation.assessment == normalized_assessment
             and existing_consultation.plan == normalized_plan
+            and all(
+                getattr(existing_consultation, field) == value
+                for field, value in normalized_note_fields.items()
+            )
         ):
             # Path idempotente: no hay mutacion de dominio, no hace falta
             # atomic(). Invariante del spec: datos_antes == datos_despues,
@@ -400,6 +428,7 @@ def close_consultation(
                 plan=normalized_plan,
                 created_by_id=doctor_id,
                 updated_by_id=doctor_id,
+                **normalized_note_fields,
             )
             # La visita ya estaba "cerrada" (guarda del if externo) -- este
             # path solo crea la fila de consulta que faltaba, no transiciona
@@ -438,6 +467,7 @@ def close_consultation(
             plan=normalized_plan,
             created_by_id=doctor_id,
             updated_by_id=doctor_id,
+            **normalized_note_fields,
         )
         # Gotcha A4.4: VisitRepository.update_status muta la instancia en
         # memoria -- previous_status ya se capturo ANTES del atomic, mientras
@@ -639,6 +669,7 @@ def get_secondary_diagnoses(visit_id, roles, permissions=None):
             code=item["cieCode"],
             description=item["cieDescription"],
             permissions=permissions,
+            roles=roles,
             linked_text=item["notes"],
         )
         item["cieCode"] = cie_code

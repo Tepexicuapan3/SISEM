@@ -15,7 +15,7 @@ def _doctor_name(doctor):
     return detalle.nombre_completo if detalle else None
 
 
-def _consultation_to_history_item(consultation, permissions):
+def _consultation_to_history_item(consultation, permissions, roles=None):
     visit = consultation.id_visit
     prescription = PrescriptionRepository.get_by_visit(visit)
 
@@ -29,6 +29,7 @@ def _consultation_to_history_item(consultation, permissions):
         code=consultation.cie_id,
         description=consultation.cie.description if consultation.cie else None,
         permissions=permissions,
+        roles=roles,
         linked_text=consultation.primary_diagnosis,
     )
 
@@ -51,7 +52,7 @@ def get_patient_consultations_history(no_exp, pk_num, roles, permissions=None):
     ensure_doctor_role(roles, permissions)
 
     consultations = ConsultationRepository.list_for_patient(no_exp, pk_num)
-    items = [_consultation_to_history_item(c, permissions) for c in consultations]
+    items = [_consultation_to_history_item(c, permissions, roles) for c in consultations]
     redacted_visit_ids = [item["visitId"] for item in items if item["restricted"]]
 
     return {

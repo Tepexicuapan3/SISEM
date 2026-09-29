@@ -1,15 +1,15 @@
 from django.db import transaction
 
-from apps.catalogos.models import Medicamentos
+from apps.catalogos.models import CatTipoAlergia, Medicamentos
 from apps.consulta_medica.repositories.allergy_repository import AllergyRepository
 from apps.recepcion.services.errors import VisitDomainError
 
 from .consultation_usecase import ensure_doctor_role
 
 # Serializer (camelCase) -> columna del modelo (snake_case). Mismo criterio
-# que CLINICAL_HISTORY_FIELD_MAP en clinical_history_usecase.py.
+# que PATIENT_FIELD_MAP en clinical_history_usecase.py.
 ALLERGY_FIELD_MAP = {
-    "category": "category",
+    "allergyTypeId": "allergy_type_id",
     "substance": "substance",
     "medicationId": "medication_id",
     "severity": "severity",
@@ -39,6 +39,17 @@ def list_allergies(no_exp, pk_num, roles, permissions=None):
     return {"items": [AllergyRepository.to_contract(allergy) for allergy in allergies]}
 
 
+def _resolve_allergy_type_id(allergy_type_id):
+    if not CatTipoAlergia.objects.filter(pk=allergy_type_id, is_active=True).exists():
+        raise VisitDomainError(
+            "VALIDATION_ERROR",
+            "Hay errores en el formulario",
+            422,
+            details={"allergyTypeId": ["Tipo de alergia invalido."]},
+        )
+    return allergy_type_id
+
+
 def _resolve_medication_id(medication_id):
     """Valida que el medicamento exista y este activo -- mismo criterio que
     `add_prescription_item`. `None` (sin medicamento asociado) es valido:
@@ -66,7 +77,7 @@ def create_allergy(
         allergy = AllergyRepository.create(
             no_exp=no_exp,
             pk_num=pk_num,
-            category=validated_data["category"],
+            allergy_type_id=_resolve_allergy_type_id(validated_data["allergyTypeId"]),
             substance=validated_data["substance"],
             medication_id=medication_id,
             severity=validated_data["severity"],
@@ -80,7 +91,7 @@ def create_allergy(
             datos_antes=None,
             datos_despues=_allergy_field_snapshot(
                 {
-                    "category": allergy.category,
+                    "allergy_type_id": allergy.allergy_type_id,
                     "substance": allergy.substance,
                     "medication_id": allergy.medication_id,
                     "severity": allergy.severity,
@@ -109,6 +120,8 @@ def update_allergy(
     }
     if "medication_id" in model_fields:
         model_fields["medication_id"] = _resolve_medication_id(model_fields["medication_id"])
+    if "allergy_type_id" in model_fields:
+        model_fields["allergy_type_id"] = _resolve_allergy_type_id(model_fields["allergy_type_id"])
 
     with transaction.atomic():
         # Gotcha A4.4 (mismo que ClinicalHistoryRepository): update() muta

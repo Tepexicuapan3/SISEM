@@ -19,10 +19,8 @@ class CatEmpleado(models.Model):
     fec_vig             = models.DateField(null=True, blank=True, db_column='fec_vig')
     no_edad             = models.IntegerField(null=True, blank=True, db_column='no_edad')
     cd_clinica          = models.CharField(max_length=10,  null=True, blank=True, db_column='cd_clinica')
-    # curp: removido temporalmente (2026-09-17) -- la columna no existe todavia
-    # en Postgres (solo en el DDL pendiente de aplicar), rompia toda query sobre
-    # este modelo sin .only(). Ver docs/continuar-en-trabajo.md para el plan de
-    # restauracion.
+    # Sin curp A PROPOSITO: tabla replicada de Oracle (agregar columnas rompe el
+    # sync, incidente 2026-09-17). El CURP del paciente vive en cns_paciente.curp (historia clinica unificada).
     fec_ult_actualizacion = models.DateTimeField(null=True, blank=True, db_column='fec_ult_actualizacion')
 
     class Meta:

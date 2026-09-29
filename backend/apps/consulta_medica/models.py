@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.consulta_medica.storage import study_result_upload_to
 
@@ -31,6 +32,12 @@ class VisitConsultation(models.Model):
     objective = models.TextField(db_column="objetivo", null=True, blank=True)
     assessment = models.TextField(db_column="analisis", null=True, blank=True)
     plan = models.TextField(db_column="plan", null=True, blank=True)
+    # his_notas ampliada (documento "Historia Clinica Unificada", 5.2): lo
+    # que antes se sobrescribia en la historia ahora se captura por consulta.
+    current_illness = models.TextField(db_column="ds_padecimiento", null=True, blank=True)
+    systems_review = models.TextField(db_column="ds_aparatos_sistemas", null=True, blank=True)
+    diagnostic_plan = models.TextField(db_column="ds_plan_diagnostico", null=True, blank=True)
+    therapeutic_plan = models.TextField(db_column="ds_plan_terapeutico", null=True, blank=True)
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
@@ -84,6 +91,10 @@ class VisitConsultationRevision(models.Model):
         db_column="analisis_anterior", null=True, blank=True
     )
     previous_plan = models.TextField(db_column="plan_anterior", null=True, blank=True)
+    previous_current_illness = models.TextField(db_column="ds_padecimiento_anterior", null=True, blank=True)
+    previous_systems_review = models.TextField(db_column="ds_aparatos_sistemas_anterior", null=True, blank=True)
+    previous_diagnostic_plan = models.TextField(db_column="ds_plan_diagnostico_anterior", null=True, blank=True)
+    previous_therapeutic_plan = models.TextField(db_column="ds_plan_terapeutico_anterior", null=True, blank=True)
     changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
     changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
 
@@ -480,67 +491,41 @@ class StudyResult(models.Model):
 
 class StomatologyHistory(models.Model):
     """
-    Historia Clinica de Estomatologia: equivalente odontologico de
-    ClinicalHistory, un solo registro por paciente/familiar (no_exp +
-    pk_num). Replica los campos reales de `his_clinicad` documentados en
-    investigacion_flujo.md SS17.3 -- NO incluye los signos vitales que esa
-    tabla tambien guardaba en el legado, porque SIRES ya los resuelve bien
-    con somatometria.VisitVitalSigns (una fila por visita, con fecha).
+    HC_ESTOMATOLOGIA (historia clinica unificada): seccion dental de la
+    historia del paciente, un registro por paciente/familiar (no_exp +
+    pk_num). Solo guarda lo PROPIO de estomatologia (higiene oral, tejidos
+    blandos, ATM). Lo general -- antecedentes, habitos, alergias -- vive en
+    las tablas permanentes compartidas por todas las especialidades
+    (PersonalHistory, FamilyHistory, SurgicalHistory, Habit, Allergy); las
+    casillas y textos que esta tabla guardaba antes se migraron ahi
+    (migracion 0029). El odontograma versionado vive en Odontogram.
 
-    Las EDICIONES si quedan versionadas (ver StomatologyHistoryRevision mas
-    abajo), mismo patron que ClinicalHistory -- excepto los 6 campos
-    `allergy_*`, que quedan CONGELADOS (ver nota en cada uno mas abajo).
+    Las EDICIONES quedan versionadas en StomatologyHistoryRevision.
     """
+
+    class OralHygiene(models.TextChoices):
+        GOOD = "good", "Buena"
+        REGULAR = "regular", "Regular"
+        POOR = "poor", "Mala"
 
     id_stomatology_history = models.BigAutoField(
         primary_key=True, db_column="id_historia_dental",
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # HISTORIA_CLINICA ||--o| HC_ESTOMATOLOGIA (documento 5.3).
+    clinical_history = models.OneToOneField(
+        "ClinicalHistory", db_column="id_historia", on_delete=models.PROTECT,
+        related_name="stomatology_section",
+    )
 
-    # Antecedentes Heredofamiliares
-    family_diabetes = models.BooleanField(db_column="af_diabetes", default=False)
-    family_cancer = models.BooleanField(db_column="af_cancer", default=False)
-    family_high_blood_pressure = models.BooleanField(db_column="af_presion_alta", default=False)
-    family_low_blood_pressure = models.BooleanField(db_column="af_presion_baja", default=False)
-    cause_of_death = models.CharField(max_length=255, db_column="causa_muerte", null=True, blank=True)
-
-    # Antecedentes Personales Patologicos
-    personal_diabetes = models.BooleanField(db_column="app_diabetes", default=False)
-    personal_asthma = models.BooleanField(db_column="app_asma", default=False)
-    personal_high_blood_pressure = models.BooleanField(db_column="app_presion_alta", default=False)
-    personal_low_blood_pressure = models.BooleanField(db_column="app_presion_baja", default=False)
-    personal_hepatitis = models.BooleanField(db_column="app_hepatitis", default=False)
-    personal_hiv = models.BooleanField(db_column="app_vih", default=False)
-    personal_smoking = models.BooleanField(db_column="app_tabaquismo", default=False)
-    personal_alcoholism = models.BooleanField(db_column="app_alcoholismo", default=False)
-    personal_substance_abuse = models.BooleanField(db_column="app_toxicomanias", default=False)
-
-    # Antecedentes Personales No Patologicos
-    habits = models.TextField(db_column="habitos", null=True, blank=True)
-    diet = models.TextField(db_column="alimentacion", null=True, blank=True)
-
-    # Antecedentes Quirurgicos / Traumaticos
-    surgical_history = models.TextField(db_column="antecedentes_quirurgicos", null=True, blank=True)
-    traumatic_history = models.TextField(db_column="antecedentes_traumaticos", null=True, blank=True)
-
-    # Antecedentes Alergicos -- CONGELADOS (change `alergias-unificadas`):
-    # reemplazados por el modelo `Allergy` (1:N, categoria+severidad+
-    # sustancia, visible tanto en Estomatologia como en Medicina General).
-    # Las columnas se conservan sin borrar por el criterio de "sin
-    # eliminaciones" de NOM-024 y para no perder el texto libre historico
-    # (migrado a `Allergy` via el comando `migrar_alergias_estructuradas`),
-    # pero ya no se aceptan en `StomatologyHistoryUpdateSerializer` ni se
-    # versionan en `StomatologyHistoryRevision`.
-    allergy_medications = models.TextField(db_column="alergia_medicamentos", null=True, blank=True)
-    allergy_dental_material = models.TextField(db_column="alergia_material_dental", null=True, blank=True)
-    allergy_anesthesia = models.TextField(db_column="alergia_anestesia", null=True, blank=True)
-    allergy_food = models.TextField(db_column="alergia_alimentos", null=True, blank=True)
-    allergy_environment = models.TextField(db_column="alergia_medio_ambiente", null=True, blank=True)
-    allergy_other = models.TextField(db_column="alergia_otros", null=True, blank=True)
-
-    # Padecimiento actual
-    current_illness_history = models.TextField(db_column="padecimiento_actual", null=True, blank=True)
+    oral_hygiene = models.CharField(
+        max_length=10, db_column="higiene_oral", null=True, blank=True, choices=OralHygiene.choices,
+    )
+    brushings_per_day = models.PositiveSmallIntegerField(db_column="no_cepillados_dia", null=True, blank=True)
+    uses_floss = models.BooleanField(db_column="sw_hilo_dental", null=True, blank=True)
+    soft_tissues = models.TextField(db_column="tejidos_blandos", null=True, blank=True)
+    tmj = models.TextField(db_column="atm", null=True, blank=True)
 
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
@@ -564,12 +549,9 @@ class StomatologyHistoryRevision(models.Model):
     """
     Snapshot del valor de ``StomatologyHistory`` justo ANTES de que se
     sobrescriba (ver ``StomatologyHistoryRepository.update``). Mismo patron
-    que ``ClinicalHistoryRevision`` -- cierra la brecha NOM-024 que existia
-    hasta el change `alergias-unificadas` (esta tabla se sobreescribia
-    in-place sin dejar rastro del valor anterior).
-
-    NO incluye los campos `allergy_*` (congelados, ver ``StomatologyHistory``
-    -- ya no se editan, no hace falta versionarlos aqui).
+    que ``ClinicalHistoryRevision`` (NOM-024: nada se pisa sin rastro). Las
+    versiones de los campos que se movieron a tablas permanentes quedaron
+    como HistoricalNote origen "revision" (migracion 0029).
     """
 
     history = models.ForeignKey(
@@ -578,33 +560,15 @@ class StomatologyHistoryRevision(models.Model):
         on_delete=models.CASCADE,
         related_name="revisions",
     )
-    previous_family_diabetes = models.BooleanField(db_column="af_diabetes_anterior")
-    previous_family_cancer = models.BooleanField(db_column="af_cancer_anterior")
-    previous_family_high_blood_pressure = models.BooleanField(db_column="af_presion_alta_anterior")
-    previous_family_low_blood_pressure = models.BooleanField(db_column="af_presion_baja_anterior")
-    previous_cause_of_death = models.CharField(
-        max_length=255, db_column="causa_muerte_anterior", null=True, blank=True,
+    previous_oral_hygiene = models.CharField(
+        max_length=10, db_column="higiene_oral_anterior", null=True, blank=True,
     )
-    previous_personal_diabetes = models.BooleanField(db_column="app_diabetes_anterior")
-    previous_personal_asthma = models.BooleanField(db_column="app_asma_anterior")
-    previous_personal_high_blood_pressure = models.BooleanField(db_column="app_presion_alta_anterior")
-    previous_personal_low_blood_pressure = models.BooleanField(db_column="app_presion_baja_anterior")
-    previous_personal_hepatitis = models.BooleanField(db_column="app_hepatitis_anterior")
-    previous_personal_hiv = models.BooleanField(db_column="app_vih_anterior")
-    previous_personal_smoking = models.BooleanField(db_column="app_tabaquismo_anterior")
-    previous_personal_alcoholism = models.BooleanField(db_column="app_alcoholismo_anterior")
-    previous_personal_substance_abuse = models.BooleanField(db_column="app_toxicomanias_anterior")
-    previous_habits = models.TextField(db_column="habitos_anterior", null=True, blank=True)
-    previous_diet = models.TextField(db_column="alimentacion_anterior", null=True, blank=True)
-    previous_surgical_history = models.TextField(
-        db_column="antecedentes_quirurgicos_anterior", null=True, blank=True,
+    previous_brushings_per_day = models.PositiveSmallIntegerField(
+        db_column="no_cepillados_dia_anterior", null=True, blank=True,
     )
-    previous_traumatic_history = models.TextField(
-        db_column="antecedentes_traumaticos_anterior", null=True, blank=True,
-    )
-    previous_current_illness_history = models.TextField(
-        db_column="padecimiento_actual_anterior", null=True, blank=True,
-    )
+    previous_uses_floss = models.BooleanField(db_column="sw_hilo_dental_anterior", null=True, blank=True)
+    previous_soft_tissues = models.TextField(db_column="tejidos_blandos_anterior", null=True, blank=True)
+    previous_tmj = models.TextField(db_column="atm_anterior", null=True, blank=True)
     changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
     changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
 
@@ -631,29 +595,34 @@ class Allergy(models.Model):
     (`is_active=False`, mismo criterio "sin eliminaciones" de NOM-024).
     """
 
-    class Category(models.TextChoices):
-        MEDICATION = "medication", "Medicamento"
-        DENTAL_MATERIAL = "dental_material", "Material dental"
-        ANESTHESIA = "anesthesia", "Anestesia"
-        FOOD = "food", "Alimento"
-        ENVIRONMENTAL = "environmental", "Ambiental"
-        OTHER = "other", "Otro"
-
     class Severity(models.TextChoices):
-        MILD = "mild", "Leve"
-        MODERATE = "moderate", "Moderada"
-        SEVERE = "severe", "Grave"
+        # Documento: L leve, M moderada, G grave.
+        MILD = "L", "Leve"
+        MODERATE = "M", "Moderada"
+        SEVERE = "G", "Grave"
 
     class Source(models.TextChoices):
+        # Nombre de contrato de la API (el frontend manda/recibe esto); en BD
+        # se guarda como cd_servicio_origen (ver ServiceOrigin).
         GENERAL = "general", "Medicina General"
         STOMATOLOGY = "stomatology", "Estomatologia"
+
+    class ServiceOrigin(models.IntegerChoices):
+        # cat_servicios del legado (confirmado en el dump): 1, 5.
+        GENERAL = 1, "Medicina General"
+        STOMATOLOGY = 5, "Odontologia"
+
+    SERVICE_BY_SOURCE = {"general": 1, "stomatology": 5}
+    SOURCE_BY_SERVICE = {1: "general", 5: "stomatology"}
 
     id_allergy = models.BigAutoField(primary_key=True, db_column="id_alergia")
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
 
-    category = models.CharField(
-        max_length=20, db_column="categoria", choices=Category.choices,
+    # ALERGIA.cd_tipo_alergia -> CAT_TIPO_ALERGIA (documento).
+    allergy_type = models.ForeignKey(
+        "catalogos.CatTipoAlergia", db_column="cd_tipo_alergia", on_delete=models.PROTECT,
+        related_name="+",
     )
     substance = models.CharField(max_length=255, db_column="sustancia")
     # FK opcional al catalogo real -- solo tiene sentido para
@@ -668,12 +637,33 @@ class Allergy(models.Model):
         related_name="+",
     )
     severity = models.CharField(
-        max_length=20, db_column="severidad", choices=Severity.choices,
+        max_length=1, db_column="severidad", choices=Severity.choices,
     )
     reaction = models.TextField(db_column="reaccion", null=True, blank=True)
-    source = models.CharField(
-        max_length=20, db_column="origen", choices=Source.choices,
+    # ALERGIA.cd_servicio_origen (documento): cat_servicios del legado,
+    # 1 = Medicina General, 5 = Odontologia (confirmado en el dump). Solo
+    # trazabilidad: la alergia es visible para todas las especialidades.
+    service_origin_code = models.PositiveSmallIntegerField(
+        db_column="cd_servicio_origen", choices=ServiceOrigin.choices,
     )
+
+    @property
+    def source(self):
+        return self.SOURCE_BY_SERVICE.get(self.service_origin_code)
+
+    class Status(models.TextChoices):
+        # Documento: A activa, R resuelta, E capturada por error.
+        ACTIVE = "A", "Activa"
+        RESOLVED = "R", "Resuelta"
+        ENTERED_IN_ERROR = "E", "Capturada por error"
+
+    # Estado clinico (documento: A activa, R resuelta, E error). Cambiarlo
+    # exige motivo (`status_reason`). `is_active=False` <=> ENTERED_IN_ERROR:
+    # una alergia resuelta sigue siendo historia visible, no se oculta.
+    status = models.CharField(
+        max_length=1, db_column="estado", choices=Status.choices, default=Status.ACTIVE,
+    )
+    status_reason = models.CharField(max_length=500, db_column="motivo_estado", null=True, blank=True)
 
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
@@ -687,6 +677,8 @@ class Allergy(models.Model):
         db_table = "cns_allergy"
         indexes = [
             models.Index(fields=["no_exp", "pk_num"], name="cns_allergy_patient_idx"),
+            # Documento: ix_alergia_paciente (no_exp, tp_paciente, estado).
+            models.Index(fields=["no_exp", "pk_num", "status"], name="ix_alergia_paciente"),
             models.Index(fields=["is_active"], name="cns_allergy_active_idx"),
         ]
 
@@ -709,8 +701,9 @@ class AllergyRevision(models.Model):
         on_delete=models.CASCADE,
         related_name="revisions",
     )
-    previous_category = models.CharField(
-        max_length=20, db_column="categoria_anterior", choices=Allergy.Category.choices,
+    previous_allergy_type = models.ForeignKey(
+        "catalogos.CatTipoAlergia", db_column="cd_tipo_alergia_anterior", on_delete=models.PROTECT,
+        related_name="+",
     )
     previous_substance = models.CharField(max_length=255, db_column="sustancia_anterior")
     previous_medication = models.ForeignKey(
@@ -722,7 +715,7 @@ class AllergyRevision(models.Model):
         related_name="+",
     )
     previous_severity = models.CharField(
-        max_length=20, db_column="severidad_anterior", choices=Allergy.Severity.choices,
+        max_length=1, db_column="severidad_anterior", choices=Allergy.Severity.choices,
     )
     previous_reaction = models.TextField(db_column="reaccion_anterior", null=True, blank=True)
     changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
@@ -736,117 +729,133 @@ class AllergyRevision(models.Model):
         return f"Alergia {self.allergy_id} — revision {self.changed_at}"
 
 
-class OdontogramTooth(models.Model):
+class Sex(models.TextChoices):
+    # Mismas letras que la posicion 11 del CURP (RENAPO), incluida X.
+    MALE = "H", "Hombre"
+    FEMALE = "M", "Mujer"
+    NON_BINARY = "X", "No binario"
+
+
+class Patient(models.Model):
     """
-    Condicion de UNA pieza dental de un paciente/familiar, identificada por
-    su numero FDI (ISO 3950): permanentes 11-48, deciduas (dientes de
-    leche) 51-85. Un registro por (no_exp, pk_num, tooth_fdi) -- se
-    sobreescribe al actualizar, no se versiona (decision explicita: mismo
-    criterio que OdontogramRepository, ver docstring de la propia clase). Un
-    diente sin registro se interpreta como "sano" (ver OdontogramRepository).
+    PACIENTE (documento "Historia Clinica Unificada", 5.1 Nucleo del
+    paciente): datos de la persona que se capturan UNA sola vez y comparten
+    todas las especialidades -- ocupacion, escolaridad, estado civil,
+    religion, residencia, telefono (+ CURP y sexo, identidad NOM-024).
+
+    El documento la define como "lo que ya existe (expediente), ampliado".
+    En SIRES la identidad base (nombre, fecha de nacimiento) vive en
+    `cat_empleados`/`cat_familiar`, replicadas de Oracle, que NO se pueden
+    ampliar (agregarles columnas rompe el sync -- incidente 2026-09-17). Por
+    eso la ampliacion vive en esta tabla propia, 1:1 con el paciente
+    (no_exp + tp_paciente/pk_num). Las ediciones se versionan en
+    PatientRevision (NOM-024).
     """
 
-    class Condition(models.TextChoices):
-        HEALTHY = "healthy", "Sano"
-        CARIES = "caries", "Caries"
-        FILLED = "filled", "Obturado"
-        CROWN = "crown", "Corona"
-        MISSING = "missing", "Ausente"
-        EXTRACTION_NEEDED = "extraction_needed", "Extracción Indicada"
-        ROOT_CANAL = "root_canal", "Endodoncia"
-        SEALANT = "sealant", "Sellante"
-        FRACTURE = "fracture", "Fracturado"
-        IMPLANT = "implant", "Implante"
+    id_patient = models.BigAutoField(primary_key=True, db_column="id_paciente")
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    pk_num = models.IntegerField(db_column="tp_paciente", default=0)
 
-    id_odontogram_tooth = models.BigAutoField(primary_key=True, db_column="id_diente")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
-    tooth_fdi = models.CharField(max_length=2, db_column="pieza_fdi")
-    condition = models.CharField(
-        max_length=32,
-        db_column="condicion",
-        choices=Condition.choices,
-        default=Condition.HEALTHY,
+    # Identidad (NOM-024). Sin unique: el legado puede tener expedientes
+    # duplicados (ajusta_dh) que comparten persona.
+    curp = models.CharField(max_length=18, db_column="curp", null=True, blank=True, db_index=True)
+    sex = models.CharField(max_length=1, db_column="sexo", choices=Sex.choices, null=True, blank=True)
+
+    occupation = models.ForeignKey(
+        "catalogos.Ocupaciones", db_column="cd_ocupacion",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
     )
-    notes = models.CharField(max_length=255, db_column="notas", null=True, blank=True)
+    education_level = models.ForeignKey(
+        "catalogos.Escolaridad", db_column="cd_escolaridad",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    marital_status = models.ForeignKey(
+        "catalogos.EdoCivil", db_column="cd_edocivil",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    religion = models.ForeignKey(
+        "catalogos.Religion", db_column="cd_religion",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    residence_type = models.ForeignKey(
+        "catalogos.TipoResidencia", db_column="cd_residencia",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    # 50: el legado guarda "cel ... tel ... ext ..." (his_clinica.ds_telefono).
+    phone = models.CharField(max_length=50, db_column="ds_telefono", null=True, blank=True)
 
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
-    deleted_at = models.DateTimeField(db_column="fch_baja", null=True, blank=True)
     created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
     updated_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
-    deleted_by_id = models.BigIntegerField(db_column="usr_baja", null=True, blank=True)
 
     class Meta:
-        db_table = "cns_odontogram_tooth"
+        db_table = "cns_paciente"
         constraints = [
-            models.UniqueConstraint(
-                fields=["no_exp", "pk_num", "tooth_fdi"],
-                name="cns_odontogram_tooth_uniq",
-            ),
+            models.UniqueConstraint(fields=["no_exp", "pk_num"], name="cns_paciente_uniq"),
         ]
-        indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cns_odontogram_patient_idx"),
-        ]
+
+
+class PatientRevision(models.Model):
+    """Snapshot de ``Patient`` justo ANTES de sobrescribirse (NOM-024)."""
+
+    patient = models.ForeignKey(
+        Patient, db_column="id_paciente", on_delete=models.CASCADE, related_name="revisions",
+    )
+    previous_curp = models.CharField(max_length=18, db_column="curp_anterior", null=True, blank=True)
+    previous_sex = models.CharField(max_length=1, db_column="sexo_anterior", null=True, blank=True)
+    previous_occupation = models.ForeignKey(
+        "catalogos.Ocupaciones", db_column="cd_ocupacion_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_education_level = models.ForeignKey(
+        "catalogos.Escolaridad", db_column="cd_escolaridad_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_marital_status = models.ForeignKey(
+        "catalogos.EdoCivil", db_column="cd_edocivil_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_religion = models.ForeignKey(
+        "catalogos.Religion", db_column="cd_religion_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_residence_type = models.ForeignKey(
+        "catalogos.TipoResidencia", db_column="cd_residencia_anterior",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+    previous_phone = models.CharField(max_length=50, db_column="ds_telefono_anterior", null=True, blank=True)
+    changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+    changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_paciente_revision"
+        ordering = ["changed_at"]
 
 
 class ClinicalHistory(models.Model):
     """
-    Historia Clinica General: un solo registro por paciente/familiar
-    (no_exp + pk_num) -- no hay una fila nueva por cada consulta, a
-    diferencia de VisitConsultation. Se captura de forma incremental a lo
-    largo de varias visitas, por eso todos los campos son nullable.
-
-    Las EDICIONES si quedan versionadas (ver ClinicalHistoryRevision mas
-    abajo): cada vez que se sobrescribe un campo se guarda antes un
-    snapshot del valor anterior, mismo patron que
-    VisitConsultation/VisitConsultationRevision -- requerido por
-    NOM-024-SSA3 (integridad del dato clinico sin riesgo de alteracion
-    silenciosa).
+    HISTORIA_CLINICA (documento "Historia Clinica Unificada", 5.1): cabecera
+    UNICA por paciente (no_exp + tp_paciente/pk_num), 1:1 con PACIENTE.
+    Guarda cuando, donde y quien la abrio. Los datos de la persona viven en
+    Patient; los datos permanentes (alergias, antecedentes, habitos) en sus
+    tablas 1:N; el texto del modelo anterior en HistoricalNote (1:N).
     """
+
+    # Compatibilidad: el enum vive a nivel de modulo (lo usa Patient).
+    Sex = Sex
 
     id_clinical_history = models.BigAutoField(primary_key=True, db_column="id_historia")
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
-
-    occupation = models.ForeignKey(
-        "catalogos.Ocupaciones", db_column="id_ocupacion",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    patient = models.OneToOneField(
+        Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="clinical_history",
     )
-    education_level = models.ForeignKey(
-        "catalogos.Escolaridad", db_column="id_escolaridad",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    marital_status = models.ForeignKey(
-        "catalogos.EdoCivil", db_column="id_edocivil",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    religion = models.ForeignKey(
-        "catalogos.Religion", db_column="id_religion",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    residence_type = models.ForeignKey(
-        "catalogos.TipoResidencia", db_column="id_residencia",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    # max_length=50 para alojar el formato compuesto real del legado
-    # ("cel XX-XXXX-XXXX tel XXXX-XXXX ext XXXXX", hasta 40 chars, con
-    # margen) -- confirmado contra his_clinica.ds_telefono (varchar(50)).
-    phone = models.CharField(max_length=50, db_column="telefono", null=True, blank=True)
-
-    family_history = models.TextField(db_column="antecedentes", null=True, blank=True)
-    current_illness = models.TextField(db_column="padecimiento_actual", null=True, blank=True)
-    systems_review = models.TextField(db_column="organos_aparatos_sistemas", null=True, blank=True)
-    head_exam = models.TextField(db_column="exploracion_cabeza", null=True, blank=True)
-    neck_exam = models.TextField(db_column="exploracion_cuello", null=True, blank=True)
-    chest_exam = models.TextField(db_column="exploracion_torax", null=True, blank=True)
-    abdomen_exam = models.TextField(db_column="exploracion_abdomen", null=True, blank=True)
-    genitals_exam = models.TextField(db_column="exploracion_genitales", null=True, blank=True)
-    limbs_exam = models.TextField(db_column="exploracion_miembros", null=True, blank=True)
-    diagnostic_management = models.TextField(db_column="manejo_diagnostico", null=True, blank=True)
-    therapeutic_management = models.TextField(db_column="manejo_terapeutico", null=True, blank=True)
-    allergies = models.TextField(db_column="alergias", null=True, blank=True)
+    opened_on = models.DateField(db_column="fe_apertura", default=timezone.localdate)
+    # Del legado: his_clinica.cd_clinica / cd_medico.
+    opening_clinic_code = models.IntegerField(db_column="cd_clinica_apertura", null=True, blank=True)
+    opening_doctor_code = models.CharField(max_length=10, db_column="cd_medico_apertura", null=True, blank=True)
 
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
@@ -864,67 +873,6 @@ class ClinicalHistory(models.Model):
         indexes = [
             models.Index(fields=["is_active"], name="cns_clinhist_active_idx"),
         ]
-
-
-class ClinicalHistoryRevision(models.Model):
-    """
-    Snapshot del valor de ``ClinicalHistory`` justo ANTES de que se
-    sobrescriba (ver ``ClinicalHistoryRepository.update``). Mismo patron
-    que ``VisitConsultationRevision`` -- versionado real requerido por
-    NOM-024-SSA3, reemplaza el anti-patron del legado de pisar el campo
-    in-place sin dejar rastro del valor anterior.
-    """
-
-    history = models.ForeignKey(
-        ClinicalHistory,
-        db_column="id_historia",
-        on_delete=models.CASCADE,
-        related_name="revisions",
-    )
-    previous_occupation = models.ForeignKey(
-        "catalogos.Ocupaciones", db_column="id_ocupacion_anterior",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    previous_education_level = models.ForeignKey(
-        "catalogos.Escolaridad", db_column="id_escolaridad_anterior",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    previous_marital_status = models.ForeignKey(
-        "catalogos.EdoCivil", db_column="id_edocivil_anterior",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    previous_religion = models.ForeignKey(
-        "catalogos.Religion", db_column="id_religion_anterior",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    previous_residence_type = models.ForeignKey(
-        "catalogos.TipoResidencia", db_column="id_residencia_anterior",
-        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
-    )
-    previous_phone = models.CharField(
-        max_length=50, db_column="telefono_anterior", null=True, blank=True
-    )
-    previous_family_history = models.TextField(db_column="antecedentes_anterior", null=True, blank=True)
-    previous_current_illness = models.TextField(db_column="padecimiento_actual_anterior", null=True, blank=True)
-    previous_systems_review = models.TextField(db_column="organos_aparatos_sistemas_anterior", null=True, blank=True)
-    previous_head_exam = models.TextField(db_column="exploracion_cabeza_anterior", null=True, blank=True)
-    previous_neck_exam = models.TextField(db_column="exploracion_cuello_anterior", null=True, blank=True)
-    previous_chest_exam = models.TextField(db_column="exploracion_torax_anterior", null=True, blank=True)
-    previous_abdomen_exam = models.TextField(db_column="exploracion_abdomen_anterior", null=True, blank=True)
-    previous_genitals_exam = models.TextField(db_column="exploracion_genitales_anterior", null=True, blank=True)
-    previous_limbs_exam = models.TextField(db_column="exploracion_miembros_anterior", null=True, blank=True)
-    previous_diagnostic_management = models.TextField(db_column="manejo_diagnostico_anterior", null=True, blank=True)
-    previous_therapeutic_management = models.TextField(db_column="manejo_terapeutico_anterior", null=True, blank=True)
-    previous_allergies = models.TextField(db_column="alergias_anterior", null=True, blank=True)
-    changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
-    changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
-
-    class Meta:
-        db_table = "cns_clinical_history_revision"
-        ordering = ["changed_at"]
-
-    def __str__(self) -> str:
-        return f"Historia {self.history_id} — revision {self.changed_at}"
 
 
 class LegacyConsultationRecord(models.Model):
@@ -1056,3 +1004,467 @@ class LegacyConsultationDiagnosis(models.Model):
 
     def __str__(self) -> str:
         return f"[Legado] {self.legacy_folio} — CIE {self.cie_code_legacy}"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Historia clinica unificada (documento "Historia Clinica Unificada" --
+# propuesta de modelo de datos, 2026-09-25). Una historia por paciente con
+# secciones por especialidad; cada dato en su dueno: la persona
+# (ClinicalHistory = ficha), la historia permanente (antecedentes, habitos,
+# alergias -- compartidos por todas las especialidades) o la consulta
+# (exploracion fisica). Filas en lugar de columnas para listas que crecen.
+# Nada se borra: baja logica con motivo + auditoria en AuditoriaEvento.
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class SpecialtySource(models.TextChoices):
+    """Especialidad que capturo el registro -- solo trazabilidad, NUNCA
+    restringe la visibilidad (todo lo permanente se ve en todas)."""
+
+    GENERAL = "general", "Medicina General"
+    STOMATOLOGY = "stomatology", "Estomatologia"
+    LEGACY = "legacy", "Migrado del sistema anterior"
+
+
+class PatientRecordBase(models.Model):
+    """Columnas comunes de los registros permanentes 1:N por paciente."""
+
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    source = models.CharField(
+        max_length=20, db_column="origen", choices=SpecialtySource.choices,
+        default=SpecialtySource.GENERAL,
+    )
+    # Referencia de origen para migraciones idempotentes
+    # (ej. "his_clinicad:1234", "cns_stomatology_history:5").
+    legacy_ref = models.CharField(max_length=60, db_column="ref_origen", null=True, blank=True, db_index=True)
+
+    is_active = models.BooleanField(db_column="est_activo", default=True)
+    deletion_reason = models.CharField(max_length=500, db_column="motivo_baja", null=True, blank=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+    deleted_at = models.DateTimeField(db_column="fch_baja", null=True, blank=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+    updated_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+    deleted_by_id = models.BigIntegerField(db_column="usr_baja", null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class PersonalHistory(PatientRecordBase):
+    """ANTECEDENTE_PERSONAL: padecimientos propios del paciente (CIE-10)."""
+
+    class Status(models.TextChoices):
+        # Documento: A activo, R resuelto.
+        ACTIVE = "A", "Activo"
+        RESOLVED = "R", "Resuelto"
+
+    id_personal_history = models.BigAutoField(primary_key=True, db_column="id_antecedente")
+    cie = models.ForeignKey(
+        "catalogos.CatCies", db_column="cie_codigo", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    description = models.CharField(max_length=500, db_column="descripcion", null=True, blank=True)
+    diagnosis_date = models.DateField(db_column="fe_diagnostico", null=True, blank=True)
+    status = models.CharField(
+        max_length=1, db_column="estado", choices=Status.choices, default=Status.ACTIVE,
+    )
+
+    class Meta:
+        db_table = "cns_antecedente_personal"
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_antpers_patient_idx")]
+
+
+class FamilyHistory(PatientRecordBase):
+    """ANTECEDENTE_FAMILIAR: heredofamiliares, con parentesco (NULL = no especificado)."""
+
+    id_family_history = models.BigAutoField(primary_key=True, db_column="id_antecedente")
+    relationship = models.ForeignKey(
+        "catalogos.Parentesco", db_column="id_parentesco", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    cie = models.ForeignKey(
+        "catalogos.CatCies", db_column="cie_codigo", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    description = models.CharField(max_length=500, db_column="descripcion", null=True, blank=True)
+    is_deceased = models.BooleanField(db_column="sw_finado", default=False)
+    cause_of_death = models.CharField(max_length=255, db_column="causa_muerte", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_antecedente_familiar"
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_antfam_patient_idx")]
+
+
+class SurgicalHistory(PatientRecordBase):
+    """ANTECEDENTE_QUIRURGICO: procedimientos previos (opcional CIE-9-MC)."""
+
+    id_surgical_history = models.BigAutoField(primary_key=True, db_column="id_quirurgico")
+    procedure = models.CharField(max_length=500, db_column="procedimiento")
+    procedure_cie9 = models.ForeignKey(
+        "catalogos.CatCie9Mc", db_column="id_cie9_mc", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    approximate_date = models.DateField(db_column="fe_aproximada", null=True, blank=True)
+    place = models.CharField(max_length=255, db_column="lugar", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_antecedente_quirurgico"
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_antquir_patient_idx")]
+
+
+class Habit(PatientRecordBase):
+    """HABITO: tabaquismo, alcoholismo, toxicomanias, alimentacion..."""
+
+    class Status(models.TextChoices):
+        # Documento: A actual, E ex (ej. exfumador).
+        CURRENT = "A", "Actual"
+        FORMER = "E", "Ex (ya no lo practica)"
+
+    id_habit = models.BigAutoField(primary_key=True, db_column="id_habito_paciente")
+    habit = models.ForeignKey(
+        "catalogos.CatHabito", db_column="id_habito", on_delete=models.PROTECT, related_name="+",
+    )
+    frequency = models.CharField(max_length=100, db_column="frecuencia", null=True, blank=True)
+    quantity = models.CharField(max_length=100, db_column="cantidad", null=True, blank=True)
+    since = models.DateField(db_column="desde", null=True, blank=True)
+    status = models.CharField(
+        max_length=1, db_column="estado", choices=Status.choices, default=Status.CURRENT,
+    )
+    notes = models.TextField(db_column="notas", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_habito"
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_habito_patient_idx")]
+
+
+class HistoricalNote(models.Model):
+    """
+    NOTA_HISTORICA: texto del modelo anterior conservado de SOLO LECTURA.
+    El texto acumulado del legado (`<texto> [dd/mm/aaaa (usuario)] - `) se
+    parte en una nota por anotacion, recuperando fecha y autor. Nunca se
+    edita ni se borra (no tiene endpoint de escritura).
+    """
+
+    class Section(models.TextChoices):
+        BACKGROUND = "antecedentes", "Antecedentes"
+        CURRENT_ILLNESS = "padecimiento", "Padecimiento actual"
+        SYSTEMS_REVIEW = "aparatos_sistemas", "Interrogatorio por aparatos y sistemas"
+        HEAD = "cabeza", "Exploracion: cabeza"
+        NECK = "cuello", "Exploracion: cuello"
+        CHEST = "torax", "Exploracion: torax"
+        ABDOMEN = "abdomen", "Exploracion: abdomen"
+        GENITALS = "genitales", "Exploracion: genitales"
+        LIMBS = "miembros", "Exploracion: miembros"
+        DIAGNOSTIC_MANAGEMENT = "manejo_diagnostico", "Manejo diagnostico"
+        THERAPEUTIC_MANAGEMENT = "manejo_terapeutico", "Manejo terapeutico"
+        ALLERGIES = "alergias", "Alergias (texto original)"
+        HABITS = "habitos", "Habitos"
+        SURGICAL = "quirurgicos", "Antecedentes quirurgicos"
+        TRAUMATIC = "traumaticos", "Antecedentes traumaticos"
+        VITAL_SIGNS = "signos_vitales", "Signos vitales"
+        OTHER = "otro", "Otro"
+
+    class Origin(models.TextChoices):
+        # Documento: "M migrado". V = version anterior de la historia (tambien
+        # migrada, se distingue para mostrarla como tal).
+        LEGACY_TEXT = "M", "Migrado del sistema anterior"
+        REVISION = "V", "Version anterior de la historia"
+
+    id_historical_note = models.BigAutoField(primary_key=True, db_column="id_nota")
+    # HISTORIA_CLINICA ||--o{ NOTA_HISTORICA (documento).
+    clinical_history = models.ForeignKey(
+        "ClinicalHistory", db_column="id_historia", on_delete=models.PROTECT,
+        related_name="historical_notes",
+    )
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    specialty = models.CharField(
+        max_length=20, db_column="especialidad", choices=SpecialtySource.choices,
+        default=SpecialtySource.GENERAL,
+    )
+    section = models.CharField(max_length=30, db_column="apartado", choices=Section.choices)
+    noted_on = models.DateField(db_column="fe_anotacion", null=True, blank=True)
+    author = models.CharField(max_length=100, db_column="usuario", null=True, blank=True)
+    content = models.TextField(db_column="contenido")
+    origin = models.CharField(
+        max_length=1, db_column="origen", choices=Origin.choices, default=Origin.LEGACY_TEXT,
+    )
+    legacy_ref = models.CharField(max_length=60, db_column="ref_origen", null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_nota_historica"
+        ordering = ["noted_on", "id_historical_note"]
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_notahist_patient_idx")]
+
+
+class LegacyVitalSigns(models.Model):
+    """
+    SIGNOS_VITALES del modelo anterior: "sin consulta, fecha desconocida"
+    (documento "Historia Clinica Unificada", seccion 7). Tabla propia y no
+    `smt_visit_vitals` porque esa exige visita y peso/talla/IMC: el legado
+    solo guardaba la ULTIMA medicion (se pisaba en cada edicion) como texto
+    libre. Cada valor numerico queda NULL si no paso el rango de
+    plausibilidad; `raw_text` conserva siempre lo capturado originalmente.
+    Solo lectura: nunca alimenta el cache `smt_patient_latest_vitals`.
+    """
+
+    id_legacy_vitals = models.BigAutoField(primary_key=True, db_column="id_signos")
+    clinical_history = models.ForeignKey(
+        "ClinicalHistory", db_column="id_historia", on_delete=models.PROTECT,
+        related_name="legacy_vital_signs",
+    )
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    specialty = models.CharField(
+        max_length=20, db_column="especialidad", choices=SpecialtySource.choices,
+        default=SpecialtySource.GENERAL,
+    )
+    measured_on = models.DateField(db_column="fe_medicion", null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=6, decimal_places=2, db_column="no_peso", null=True, blank=True)
+    height_cm = models.DecimalField(max_digits=6, decimal_places=2, db_column="no_talla", null=True, blank=True)
+    blood_pressure_systolic = models.PositiveSmallIntegerField(db_column="no_ta_sistolica", null=True, blank=True)
+    blood_pressure_diastolic = models.PositiveSmallIntegerField(db_column="no_ta_diastolica", null=True, blank=True)
+    heart_rate_bpm = models.PositiveSmallIntegerField(db_column="no_pulso", null=True, blank=True)
+    temperature_c = models.DecimalField(max_digits=4, decimal_places=1, db_column="no_temp", null=True, blank=True)
+    respiratory_rate_bpm = models.PositiveSmallIntegerField(db_column="no_resp", null=True, blank=True)
+    bmi = models.DecimalField(max_digits=6, decimal_places=2, db_column="no_imc", null=True, blank=True)
+    raw_text = models.TextField(db_column="ds_texto_original")
+    legacy_ref = models.CharField(max_length=60, db_column="ref_origen", unique=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_signos_vitales_legado"
+        ordering = ["measured_on", "id_legacy_vitals"]
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_sv_legado_patient_idx")]
+
+
+# ── Plan de migracion (documento "Historia Clinica Unificada", seccion 8) ─────
+
+class LegacyMigrationRun(models.Model):
+    """Bitacora de ejecucion: quien corrio que comando de migracion legacy,
+    cuando, con que opciones y como termino (tambien los --dry-run)."""
+
+    class Status(models.TextChoices):
+        RUNNING = "E", "En curso"
+        OK = "O", "Terminada"
+        FAILED = "F", "Fallida"
+
+    id_run = models.BigAutoField(primary_key=True, db_column="id_ejecucion")
+    command = models.CharField(max_length=80, db_column="comando")
+    operator = models.CharField(max_length=100, db_column="operador")
+    host = models.CharField(max_length=100, db_column="equipo", null=True, blank=True)
+    options = models.TextField(db_column="opciones", null=True, blank=True)
+    dry_run = models.BooleanField(db_column="sw_simulacion", default=False)
+    status = models.CharField(max_length=1, db_column="estatus", choices=Status.choices, default=Status.RUNNING)
+    rows_read = models.IntegerField(db_column="filas_leidas", null=True, blank=True)
+    summary = models.TextField(db_column="resumen", null=True, blank=True)
+    started_at = models.DateTimeField(db_column="fch_inicio", auto_now_add=True)
+    finished_at = models.DateTimeField(db_column="fch_fin", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_bitacora_migracion"
+        ordering = ["-started_at"]
+
+
+class LegacyMigrationConflict(models.Model):
+    """Dato de la ficha del paciente en el que dos fuentes no coinciden
+    (his_clinica vs his_clinicad, o legado vs lo editado en SIRES). Queda el
+    valor que gano y el que se descarto, para revision humana."""
+
+    class Winner(models.TextChoices):
+        LEGACY_NEWER = "L", "Legado mas reciente (se aplico)"
+        PREVIOUS_LEGACY = "P", "Se conservo el legado previo (mas reciente o igual)"
+        SIRES = "S", "Se conservo lo editado en SIRES"
+
+    id_conflict = models.BigAutoField(primary_key=True, db_column="id_conflicto")
+    run = models.ForeignKey(
+        LegacyMigrationRun, db_column="id_ejecucion", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="conflicts",
+    )
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    pk_num = models.IntegerField(db_column="tp_paciente", default=0)
+    field = models.CharField(max_length=40, db_column="campo")
+    kept_value = models.CharField(max_length=255, db_column="valor_conservado", null=True, blank=True)
+    discarded_value = models.CharField(max_length=255, db_column="valor_descartado", null=True, blank=True)
+    legacy_ref = models.CharField(max_length=60, db_column="ref_origen")
+    legacy_date = models.DateField(db_column="fe_origen", null=True, blank=True)
+    winner = models.CharField(max_length=1, db_column="ganador", choices=Winner.choices)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_conflicto_migracion"
+        ordering = ["no_exp", "pk_num", "field"]
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_conflicto_patient_idx")]
+
+
+class PatientLegacySource(models.Model):
+    """De que fila del legado (y con que fecha) salio cada dato de la ficha.
+    Hace que la regla "gana el fe_hisclin mas reciente" no dependa del orden
+    en que se corran los comandos, y permite distinguir un valor que vino del
+    legado de uno editado despues en SIRES (que nunca se pisa)."""
+
+    id_source = models.BigAutoField(primary_key=True, db_column="id_origen")
+    patient = models.ForeignKey(
+        Patient, db_column="id_paciente", on_delete=models.CASCADE, related_name="legacy_sources",
+    )
+    field = models.CharField(max_length=40, db_column="campo")
+    value = models.CharField(max_length=255, db_column="valor")
+    legacy_ref = models.CharField(max_length=60, db_column="ref_origen")
+    legacy_date = models.DateField(db_column="fe_origen", null=True, blank=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+
+    class Meta:
+        db_table = "cns_paciente_origen_legado"
+        constraints = [
+            models.UniqueConstraint(fields=["patient", "field"], name="cns_paciente_origen_campo_uq"),
+        ]
+
+
+class PhysicalExamFinding(models.Model):
+    """
+    EXPLORACION_FISICA por region y POR CONSULTA (antes 6 columnas de texto en
+    la historia que se pisaban con cada edicion). Editable solo mientras la
+    visita esta `en_consulta`; despues, aclaraciones via ConsultationAddendum.
+    """
+
+    id_finding = models.BigAutoField(primary_key=True, db_column="id_exploracion")
+    consultation = models.ForeignKey(
+        VisitConsultation, db_column="id_consulta", on_delete=models.CASCADE,
+        related_name="physical_exam_findings",
+    )
+    region = models.ForeignKey(
+        "catalogos.CatRegionCorporal", db_column="id_region", on_delete=models.PROTECT, related_name="+",
+    )
+    is_normal = models.BooleanField(db_column="sw_normal", default=True)
+    finding = models.TextField(db_column="hallazgo", null=True, blank=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+    updated_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_exploracion_fisica"
+        constraints = [
+            models.UniqueConstraint(fields=["consultation", "region"], name="cns_expfis_consulta_region_uniq"),
+        ]
+
+
+class Odontogram(models.Model):
+    """
+    ODONTOGRAMA versionado: cada consulta que modifica el estado dental genera
+    una version nueva (copia de la anterior + cambios), en lugar de pisar el
+    estado previo. El CPOD (cariados/perdidos/obturados) se recalcula al
+    guardar cada pieza.
+    """
+
+    class Dentition(models.TextChoices):
+        PERMANENT = "P", "Permanente"
+        DECIDUOUS = "T", "Temporal"
+        MIXED = "M", "Mixta"
+
+    class Origin(models.TextChoices):
+        CAPTURE = "capture", "Captura"
+        MIGRATED = "migrated", "Migrado del odontograma anterior"
+
+    id_odontogram = models.BigAutoField(primary_key=True, db_column="id_odontograma")
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # HC_ESTOMATOLOGIA ||--o{ ODONTOGRAMA (documento 5.3).
+    stomatology_history = models.ForeignKey(
+        StomatologyHistory, db_column="id_hc_estoma", on_delete=models.PROTECT,
+        related_name="odontograms",
+    )
+    visit = models.ForeignKey(
+        "recepcion.Visit", db_column="id_visit", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+",
+    )
+    dentition = models.CharField(
+        max_length=1, db_column="tp_denticion", choices=Dentition.choices, default=Dentition.PERMANENT,
+    )
+    dmft_decayed = models.PositiveSmallIntegerField(db_column="cpod_cariados", default=0)
+    dmft_missing = models.PositiveSmallIntegerField(db_column="cpod_perdidos", default=0)
+    dmft_filled = models.PositiveSmallIntegerField(db_column="cpod_obturados", default=0)
+    # ODONTOGRAMA.indice_cpod (documento): cariados + perdidos + obturados.
+    dmft_total = models.DecimalField(
+        max_digits=5, decimal_places=2, db_column="indice_cpod", default=0,
+    )
+    origin = models.CharField(
+        max_length=10, db_column="origen", choices=Origin.choices, default=Origin.CAPTURE,
+    )
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_odontograma"
+        ordering = ["-created_at", "-id_odontogram"]
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_odontograma_patient_idx")]
+
+    @property
+    def dmft_index(self):
+        return int(self.dmft_total)
+
+
+class OdontogramToothState(models.Model):
+    """ODONTOGRAMA_PIEZA: estado de una pieza (o cara) en una version.
+    `face` vacio = pieza completa; O/M/D/V/L = cara especifica."""
+
+    class Face(models.TextChoices):
+        WHOLE = "", "Pieza completa"
+        OCCLUSAL = "O", "Oclusal"
+        MESIAL = "M", "Mesial"
+        DISTAL = "D", "Distal"
+        VESTIBULAR = "V", "Vestibular"
+        LINGUAL = "L", "Lingual/Palatina"
+
+    id_tooth_state = models.BigAutoField(primary_key=True, db_column="id_pieza_estado")
+    odontogram = models.ForeignKey(
+        Odontogram, db_column="id_odontograma", on_delete=models.CASCADE, related_name="teeth",
+    )
+    tooth = models.ForeignKey(
+        "catalogos.CatPiezaDental", db_column="pieza_fdi", on_delete=models.PROTECT, related_name="+",
+    )
+    face = models.CharField(max_length=1, db_column="cara", choices=Face.choices, default="", blank=True)
+    state = models.ForeignKey(
+        "catalogos.CatEstadoPieza", db_column="id_estado_pieza", on_delete=models.PROTECT, related_name="+",
+    )
+    observation = models.CharField(max_length=255, db_column="observacion", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_odontograma_pieza"
+        constraints = [
+            models.UniqueConstraint(fields=["odontogram", "tooth", "face"], name="cns_odontpieza_uniq"),
+        ]
+
+
+class DentalTreatment(PatientRecordBase):
+    """TRATAMIENTO_DENTAL: procedimiento planeado/realizado sobre una pieza."""
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planeado"
+        DONE = "done", "Realizado"
+
+    id_dental_treatment = models.BigAutoField(primary_key=True, db_column="id_tratamiento")
+    visit = models.ForeignKey(
+        "recepcion.Visit", db_column="id_visit", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="+",
+    )
+    tooth = models.ForeignKey(
+        "catalogos.CatPiezaDental", db_column="pieza_fdi", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    procedure = models.CharField(max_length=500, db_column="procedimiento")
+    procedure_cie9 = models.ForeignKey(
+        "catalogos.CatCie9Mc", db_column="id_cie9_mc", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    status = models.CharField(
+        max_length=10, db_column="estado", choices=Status.choices, default=Status.PLANNED,
+    )
+    performed_at = models.DateTimeField(db_column="fch_realizado", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_tratamiento_dental"
+        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_tratdent_patient_idx")]

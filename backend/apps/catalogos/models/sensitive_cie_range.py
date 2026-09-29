@@ -43,6 +43,13 @@ class SensitiveCieRange(CatalogBase):
     # en todo el sistema (ver `evaluate_permission_requirement`), no por FK.
     required_permission = models.CharField(max_length=100, db_column="permiso_requerido")
 
+    class Level(models.TextChoices):
+        # CAT_DATO_SENSIBLE.nivel (documento): R restringido, C confidencial.
+        RESTRICTED = "R", "Restringido"
+        CONFIDENTIAL = "C", "Confidencial"
+
+    level = models.CharField(max_length=1, db_column="nivel", choices=Level.choices, default=Level.RESTRICTED)
+
     class Meta:
         db_table = "cat_rango_cie_sensible"
         managed = True
@@ -50,3 +57,31 @@ class SensitiveCieRange(CatalogBase):
 
     def __str__(self):
         return f"{self.code_prefix_start}-{self.code_prefix_end} ({self.category})"
+
+
+class SensitiveAccessProfile(models.Model):
+    """
+    CAT_PERFIL_ACCESO (documento: CAT_DATO_SENSIBLE }o--o{ CAT_PERFIL_ACCESO
+    "visible para"): que perfiles ven un dato sensible sin redaccion. En SIRES
+    los perfiles son los roles (`cat_roles`). Un usuario ve el diagnostico si
+    tiene el permiso del rango (`required_permission`) O si alguno de sus
+    roles esta aqui para ese rango. Se administra con el comando
+    `python manage.py perfil_acceso_sensible`.
+    """
+
+    id = models.BigAutoField(primary_key=True, db_column="id_perfil_acceso")
+    sensitive_range = models.ForeignKey(
+        SensitiveCieRange, db_column="id_rango_sensible", on_delete=models.CASCADE,
+        related_name="access_profiles",
+    )
+    role = models.ForeignKey(
+        "catalogos.Roles", db_column="id_rol", on_delete=models.CASCADE, related_name="+",
+    )
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cat_perfil_acceso_sensible"
+        managed = True
+        constraints = [
+            models.UniqueConstraint(fields=["sensitive_range", "role"], name="cat_perfil_acceso_uniq"),
+        ]

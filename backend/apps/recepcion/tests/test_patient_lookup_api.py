@@ -9,13 +9,9 @@ ver tambien derechohabientes de baja) nunca recibia lo que pedia. Tambien
 cubre que curp/foto (agregados el mismo dia, ver _build_member) lleguen
 hasta la respuesta HTTP real, no solo hasta la funcion lookup_patient().
 
-NOTA (2026-09-17): el campo `curp` se removio temporalmente de
-buscar_expediente()/los modelos CatEmpleado/CatFamiliar (columna
-inexistente en Postgres -- ver docs/continuar-en-trabajo.md). El mock de
-abajo ya no incluye la clave "CURP" en los dicts de origen, para reflejar
-lo que buscar_expediente() realmente devuelve hoy; `_build_member()` sigue
-usando `.get("CURP") or None`, asi que el contrato HTTP sigue exponiendo
-`curp: null` en vez de romper.
+NOTA (2026-09-28): el lookup ya NO expone `curp` -- el CURP del paciente
+vive en la ficha (cns_paciente.curp, historia clinica unificada),
+no en las tablas replicadas de Oracle.
 
 Se mockea `buscar_expediente` -- el alias de BD "expedientes" NO existe
 bajo `manage.py test` (mismo motivo documentado en
@@ -156,23 +152,17 @@ class PatientLookupApiTests(APITestCase):
         self.assertIn("ROMERO VAZQUEZ FELIX", nombres)
         self.assertIn("ROMERO VAZQUEZ SOFIA", nombres)
 
-    def test_titular_includes_photo_and_curp_is_null(self):
-        """
-        `curp` removido temporalmente del origen (buscar_expediente() ya no
-        selecciona esa columna -- ver docs/continuar-en-trabajo.md), asi que
-        ya no puede llegar un valor real hasta la respuesta HTTP. Se verifica
-        que la clave sigue existiendo con `None` (via `.get("CURP") or None`
-        en _build_member) en vez de romper con KeyError.
-        """
+    def test_titular_includes_photo_and_no_curp(self):
+        """El CURP vive en la ficha del paciente, no en el lookup."""
         response = self.client.get(
             f"/api/v1/visits/patient-lookup?noExp={PACIENTE_NO_EXP}&historico=true"
         )
 
         titular = response.data["titular"]
-        self.assertIsNone(titular["curp"])
+        self.assertNotIn("curp", titular)
         self.assertEqual(titular["foto"], "data:image/jpeg;base64,ZmFrZS1qcGVnLWJhc2U2NA==")
 
-    def test_dependiente_sin_curp_ni_foto_queda_en_null(self):
+    def test_dependiente_sin_foto_queda_en_null(self):
         """
         No se inventa un valor cuando la fuente no lo tiene -- mismo
         criterio que el resto del sistema (nunca adivinar).
@@ -184,7 +174,7 @@ class PatientLookupApiTests(APITestCase):
         felix = next(
             d for d in response.data["dependientes"] if d["nombre"] == "ROMERO VAZQUEZ FELIX"
         )
-        self.assertIsNone(felix["curp"])
+        self.assertNotIn("curp", felix)
         self.assertIsNone(felix["foto"])
 
     def test_missing_permission_returns_403(self):

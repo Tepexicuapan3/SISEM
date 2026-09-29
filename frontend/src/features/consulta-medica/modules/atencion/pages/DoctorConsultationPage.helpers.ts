@@ -116,6 +116,10 @@ export const DEFAULT_DIAGNOSIS_FORM_VALUES: SaveDiagnosisFormInput = {
   primaryDiagnosis: "",
   finalNote: "",
   cieCode: "",
+  currentIllness: "",
+  systemsReview: "",
+  diagnosticPlan: "",
+  therapeuticPlan: "",
 };
 
 export const DEFAULT_PRESCRIPTIONS_FORM_VALUES: SavePrescriptionsFormInput = {
@@ -268,8 +272,36 @@ export const buildDiagnosisFingerprint = ({
   primaryDiagnosis,
   finalNote,
   cieCode,
+  currentIllness,
+  systemsReview,
+  diagnosticPlan,
+  therapeuticPlan,
 }: SaveDiagnosisFormValues): string => {
-  return `${primaryDiagnosis.trim()}::${finalNote.trim()}::${cieCode.trim().toUpperCase()}`;
+  return [
+    primaryDiagnosis.trim(),
+    finalNote.trim(),
+    cieCode.trim().toUpperCase(),
+    currentIllness.trim(),
+    systemsReview.trim(),
+    diagnosticPlan.trim(),
+    therapeuticPlan.trim(),
+  ].join("::");
+};
+
+// Payload comun de guardar diagnostico y cerrar consulta. Los campos de
+// his_notas ampliada se envian siempre (vacio -> null en backend) para que
+// borrar un texto ya guardado tambien quede registrado.
+export const buildDiagnosisPayload = (values: SaveDiagnosisFormValues) => {
+  const normalizedCieCode = normalizeCieCode(values.cieCode);
+  return {
+    primaryDiagnosis: values.primaryDiagnosis,
+    finalNote: values.finalNote,
+    ...(normalizedCieCode ? { cieCode: normalizedCieCode } : {}),
+    currentIllness: values.currentIllness,
+    systemsReview: values.systemsReview,
+    diagnosticPlan: values.diagnosticPlan,
+    therapeuticPlan: values.therapeuticPlan,
+  };
 };
 
 export const normalizeCieCode = (value: string): string | undefined => {

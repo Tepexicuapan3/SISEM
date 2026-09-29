@@ -176,3 +176,21 @@ NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:diagnosticos_salud_mental:read", "Ver diagnosticos CIE-10 de salud mental sin redaccion"),
     ("clinico:diagnosticos_sustancias:read", "Ver diagnosticos CIE-10 de consumo de sustancias sin redaccion"),
 ]
+
+# Novena tanda (change `bitacora-acceso-expediente`, 2026-09-28): consulta de
+# la bitacora de LECTURAS del expediente clinico (quien vio que seccion de
+# que paciente, mas los diagnosticos sensibles redactados). Permiso propio de
+# solo lectura para calidad/auditoria -- no se hereda de ningun permiso
+# clinico, a proposito: ver la bitacora no es lo mismo que ver expedientes.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:auditoria:accesos:read", "Ver bitacora de acceso a expedientes clinicos"),
+]
+
+# Decima tanda (change `solicitudes-arco`, 2026-09-28): gestion de
+# solicitudes de derechos ARCO (Acceso/Rectificacion/Cancelacion/Oposicion)
+# por el area de compliance. `write` separado de `read` a proposito: quien
+# consulta el estado de una solicitud no necesariamente puede resolverla.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:arco:read", "Ver solicitudes de derechos ARCO"),
+    ("admin:arco:write", "Registrar y resolver solicitudes de derechos ARCO"),
+]

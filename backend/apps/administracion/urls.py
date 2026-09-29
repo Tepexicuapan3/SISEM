@@ -30,6 +30,12 @@ from .views.user_import_views import (
 )
 from .views.navigation_menu_views import ModuleCatalogView, NavigationMenuView
 from .views.clinicas_views import ClinicasListView
+from .views.access_log_views import AccessLogListView
+from .views.arco_views import (
+    SolicitudArcoDetailView,
+    SolicitudArcoStatusView,
+    SolicitudesArcoView,
+)
 from .views.navigation_module_mutation_views import (
     CreateModuleView,
     ModuleVisibilityView,
@@ -58,6 +64,18 @@ def _modules_collection_view(request, *args, **kwargs):
 urlpatterns = [
     path("navigation-menu", NavigationMenuView.as_view(), name="navigation-menu"),
     path("clinicas", ClinicasListView.as_view(), name="clinicas-list"),
+    path("bitacora-acceso", AccessLogListView.as_view(), name="bitacora-acceso-list"),
+    path("solicitudes-arco", SolicitudesArcoView.as_view(), name="solicitudes-arco"),
+    path(
+        "solicitudes-arco/<int:solicitud_id>",
+        SolicitudArcoDetailView.as_view(),
+        name="solicitud-arco-detail",
+    ),
+    path(
+        "solicitudes-arco/<int:solicitud_id>/status",
+        SolicitudArcoStatusView.as_view(),
+        name="solicitud-arco-status",
+    ),
     path("modules", _modules_collection_view, name="module-catalog"),
     path("modules/reorder", ReorderModulesView.as_view(), name="module-reorder"),
     path("modules/<str:clave>", UpdateModuleView.as_view(), name="module-update"),

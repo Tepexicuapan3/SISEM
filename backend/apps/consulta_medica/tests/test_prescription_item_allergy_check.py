@@ -67,7 +67,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
         visit = self._visit_in_consultation("EXP9202")
         create_allergy(
             "EXP9202", 0, ["DOCTOR"],
-            {"category": "medication", "substance": "Penicilina", "severity": "severe"},
+            {"allergyTypeId": 1, "substance": "Penicilina", "severity": "G"},
             actor_id=self.doctor_id, source="general", audit_hook=_noop_audit_hook,
         )
 
@@ -79,7 +79,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
 
         self.assertTrue(payload.get("requiresAcknowledgment"))
         self.assertEqual(payload["allergyWarning"]["substance"], "Penicilina")
-        self.assertEqual(payload["allergyWarning"]["severity"], "severe")
+        self.assertEqual(payload["allergyWarning"]["severity"], "G")
 
         from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
         prescription = PrescriptionRepository.get_by_visit(visit.id_visit)
@@ -89,7 +89,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
         visit = self._visit_in_consultation("EXP9203")
         create_allergy(
             "EXP9203", 0, ["DOCTOR"],
-            {"category": "medication", "substance": "Penicilina", "severity": "moderate"},
+            {"allergyTypeId": 1, "substance": "Penicilina", "severity": "M"},
             actor_id=self.doctor_id, source="general", audit_hook=_noop_audit_hook,
         )
 

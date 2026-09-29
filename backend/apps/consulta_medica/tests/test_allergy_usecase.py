@@ -25,7 +25,7 @@ class AllergyUseCaseTests(TestCase):
     def test_create_allergy(self):
         payload = create_allergy(
             self.no_exp, self.pk_num, ["DOCTOR"],
-            {"category": "food", "substance": "Nueces", "severity": "severe", "reaction": "Anafilaxia"},
+            {"allergyTypeId": 5, "substance": "Nueces", "severity": "G", "reaction": "Anafilaxia"},
             actor_id=1,
             source="general",
             audit_hook=_noop_audit_hook,
@@ -39,7 +39,7 @@ class AllergyUseCaseTests(TestCase):
     def test_update_allergy_creates_revision(self):
         created = create_allergy(
             self.no_exp, self.pk_num, ["DOCTOR"],
-            {"category": "food", "substance": "Nueces", "severity": "severe"},
+            {"allergyTypeId": 5, "substance": "Nueces", "severity": "G"},
             actor_id=1,
             source="general",
             audit_hook=_noop_audit_hook,
@@ -47,23 +47,23 @@ class AllergyUseCaseTests(TestCase):
 
         update_allergy(
             self.no_exp, self.pk_num, created["id"], ["DOCTOR"],
-            {"severity": "moderate"},
+            {"severity": "M"},
             actor_id=2,
             audit_hook=_noop_audit_hook,
         )
 
         allergy = Allergy.objects.get(pk=created["id"])
-        self.assertEqual(allergy.severity, "moderate")
+        self.assertEqual(allergy.severity, "M")
 
         revisions = AllergyRevision.objects.filter(allergy=allergy)
         self.assertEqual(revisions.count(), 1)
-        self.assertEqual(revisions.first().previous_severity, "severe")
+        self.assertEqual(revisions.first().previous_severity, "G")
         self.assertEqual(revisions.first().changed_by_id, 2)
 
     def test_deactivate_allergy_excludes_it_from_list(self):
         created = create_allergy(
             self.no_exp, self.pk_num, ["DOCTOR"],
-            {"category": "other", "substance": "Latex", "severity": "mild"},
+            {"allergyTypeId": 9, "substance": "Latex", "severity": "L"},
             actor_id=1,
             source="stomatology",
             audit_hook=_noop_audit_hook,
@@ -84,14 +84,14 @@ class AllergyUseCaseTests(TestCase):
     def test_list_allergies_visible_regardless_of_source(self):
         create_allergy(
             self.no_exp, self.pk_num, ["DOCTOR"],
-            {"category": "medication", "substance": "Penicilina", "severity": "severe"},
+            {"allergyTypeId": 1, "substance": "Penicilina", "severity": "G"},
             actor_id=1,
             source="general",
             audit_hook=_noop_audit_hook,
         )
         create_allergy(
             self.no_exp, self.pk_num, ["DOCTOR"],
-            {"category": "anesthesia", "substance": "Lidocaina", "severity": "moderate"},
+            {"allergyTypeId": 2, "substance": "Lidocaina", "severity": "M"},
             actor_id=1,
             source="stomatology",
             audit_hook=_noop_audit_hook,
@@ -104,7 +104,7 @@ class AllergyUseCaseTests(TestCase):
     def test_update_missing_allergy_raises(self):
         with self.assertRaises(VisitDomainError):
             update_allergy(
-                self.no_exp, self.pk_num, 999999, ["DOCTOR"], {"severity": "mild"},
+                self.no_exp, self.pk_num, 999999, ["DOCTOR"], {"severity": "L"},
                 actor_id=1, audit_hook=_noop_audit_hook,
             )
 

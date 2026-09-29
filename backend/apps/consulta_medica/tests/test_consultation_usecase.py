@@ -356,6 +356,64 @@ class ConsultationUseCaseTests(TestCase):
         self.assertEqual(consultation.plan, "Manejo sintomatico, abundantes liquidos.")
         self.assertEqual(consultation.final_note, "Paciente estable.")
 
+    def test_save_diagnosis_note_fields_persist_and_edit_creates_revision(self):
+        # his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+        visit = self._visit("en_consulta")
+
+        payload = save_diagnosis(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Faringitis aguda",
+            final_note="Paciente estable.",
+            doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
+            current_illness="  Odinofagia de 3 dias.  ",
+            systems_review="Respiratorio sin disnea.",
+            diagnostic_plan="",
+            therapeutic_plan="Paracetamol 500 mg c/8h.",
+        )
+
+        self.assertEqual(payload["currentIllness"], "Odinofagia de 3 dias.")
+        self.assertEqual(payload["systemsReview"], "Respiratorio sin disnea.")
+        self.assertIsNone(payload["diagnosticPlan"])
+        self.assertEqual(payload["therapeuticPlan"], "Paracetamol 500 mg c/8h.")
+        consultation = VisitConsultation.objects.get(id_visit=visit)
+        self.assertEqual(consultation.current_illness, "Odinofagia de 3 dias.")
+        self.assertIsNone(consultation.diagnostic_plan)
+
+        save_diagnosis(
+            visit_id=visit.id_visit,
+            roles=["DOCTOR"],
+            primary_diagnosis="Faringitis aguda",
+            final_note="Paciente estable.",
+            doctor_id=self.doctor_id,
+            audit_hook=_noop_audit_hook,
+            current_illness="Odinofagia de 3 dias.",
+            systems_review="Respiratorio sin disnea.",
+            diagnostic_plan="Exudado faringeo.",
+            therapeutic_plan="Paracetamol 500 mg c/8h.",
+        )
+
+        revision = VisitConsultationRevision.objects.get(consultation=consultation)
+        self.assertIsNone(revision.previous_diagnostic_plan)
+        self.assertEqual(revision.previous_current_illness, "Odinofagia de 3 dias.")
+        consultation.refresh_from_db()
+        self.assertEqual(consultation.diagnostic_plan, "Exudado faringeo.")
+
+    def test_save_diagnosis_rejects_unknown_note_field(self):
+        visit = self._visit("en_consulta")
+
+        with self.assertRaises(TypeError):
+            save_diagnosis(
+                visit_id=visit.id_visit,
+                roles=["DOCTOR"],
+                primary_diagnosis="Faringitis aguda",
+                final_note="Paciente estable.",
+                doctor_id=self.doctor_id,
+                audit_hook=_noop_audit_hook,
+                current_ilness="typo",
+            )
+
     def test_save_diagnosis_editing_soap_fields_creates_revision_with_snapshot(self):
         visit = self._visit("en_consulta")
 

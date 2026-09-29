@@ -11,6 +11,7 @@ from apps.consulta_medica.views import (
     PatientMedicalLeavesHistoryView,
     PatientOdontogramToothView,
     PatientOdontogramView,
+    PatientProfileView,
     PatientStomatologyHistoryView,
     PatientStudyResultsHistoryView,
     PrescriptionAuthorizationDecisionView,
@@ -33,6 +34,32 @@ from apps.consulta_medica.views import (
     VisitSecondaryDiagnosisCancelView,
     VisitStudyResultCreateView,
 )
+from apps.consulta_medica.views_unified_history import (
+    ClinicalCatalogsView,
+    DentalTreatmentCollectionView,
+    DentalTreatmentDetailView,
+    FamilyHistoryCollectionView,
+    FamilyHistoryDetailView,
+    HabitCollectionView,
+    HabitDetailView,
+    PatientAllergyStatusView,
+    PatientHistoricalNotesView,
+    PatientOdontogramVersionsView,
+    PersonalHistoryCollectionView,
+    PersonalHistoryDetailView,
+    SurgicalHistoryCollectionView,
+    SurgicalHistoryDetailView,
+    VisitPhysicalExamView,
+)
+
+# Historia clinica unificada: registros permanentes (coleccion + detalle).
+_PATIENT_RECORD_ROUTES = (
+    ("personal-history", PersonalHistoryCollectionView, PersonalHistoryDetailView),
+    ("family-history", FamilyHistoryCollectionView, FamilyHistoryDetailView),
+    ("surgical-history", SurgicalHistoryCollectionView, SurgicalHistoryDetailView),
+    ("habits", HabitCollectionView, HabitDetailView),
+    ("dental-treatments", DentalTreatmentCollectionView, DentalTreatmentDetailView),
+)
 
 
 urlpatterns = [
@@ -45,6 +72,11 @@ urlpatterns = [
         "patients/<str:no_exp>/clinical-history",
         PatientClinicalHistoryView.as_view(),
         name="patient-clinical-history",
+    ),
+    path(
+        "patients/<str:no_exp>/profile",
+        PatientProfileView.as_view(),
+        name="patient-profile",
     ),
     path(
         "patients/<str:no_exp>/stomatology-history",
@@ -62,9 +94,43 @@ urlpatterns = [
         name="patient-allergy-detail",
     ),
     path(
+        "patients/<str:no_exp>/allergies/<int:allergy_id>/status",
+        PatientAllergyStatusView.as_view(),
+        name="patient-allergy-status",
+    ),
+    path(
+        "patients/<str:no_exp>/historical-notes",
+        PatientHistoricalNotesView.as_view(),
+        name="patient-historical-notes",
+    ),
+    path("clinical-catalogs", ClinicalCatalogsView.as_view(), name="clinical-catalogs"),
+    path(
+        "visits/<int:visit_id>/consultation/physical-exam",
+        VisitPhysicalExamView.as_view(),
+        name="visit-physical-exam",
+    ),
+    *[
+        route
+        for slug, collection_view, detail_view in _PATIENT_RECORD_ROUTES
+        for route in (
+            path(f"patients/<str:no_exp>/{slug}", collection_view.as_view(), name=f"patient-{slug}"),
+            path(
+                f"patients/<str:no_exp>/{slug}/<int:record_id>",
+                detail_view.as_view(),
+                name=f"patient-{slug}-detail",
+            ),
+        )
+    ],
+    path(
         "patients/<str:no_exp>/odontogram",
         PatientOdontogramView.as_view(),
         name="patient-odontogram",
+    ),
+    # ANTES que odontogram/<tooth_fdi>: "versions" calzaria como pieza.
+    path(
+        "patients/<str:no_exp>/odontogram/versions",
+        PatientOdontogramVersionsView.as_view(),
+        name="patient-odontogram-versions",
     ),
     path(
         "patients/<str:no_exp>/odontogram/<str:tooth_fdi>",

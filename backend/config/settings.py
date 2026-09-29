@@ -432,3 +432,10 @@ NAVIGATION_MENU_SOURCE = config("NAVIGATION_MENU_SOURCE", default="auto")
 PORTAL_CANCELACION_VENTANA_HORAS = config(
     "PORTAL_CANCELACION_VENTANA_HORAS", default=2, cast=int
 )
+
+# ── Solicitudes ARCO (change `solicitudes-arco`) ──────────────────────────────
+# Plazo de respuesta en dias habiles (lunes a viernes) contado desde la
+# recepcion. 20 es el default de la Ley General de Proteccion de Datos
+# Personales en Posesion de Sujetos Obligados -- PENDIENTE de confirmar con
+# juridico; ajustable sin tocar codigo.
+ARCO_PLAZO_DIAS_HABILES = config("ARCO_PLAZO_DIAS_HABILES", default=20, cast=int)

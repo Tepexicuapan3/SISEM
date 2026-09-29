@@ -33,7 +33,7 @@ from apps.catalogos.models import CatCies, EstudiosMed, Licencias, Medicamentos,
 from apps.consulta_medica.models import (
     ConsultationAddendum,
     MedicalLeave,
-    OdontogramTooth,
+    Odontogram,
     PrescriptionAuthorization,
     StomatologyHistory,
     StudyResult,
@@ -44,6 +44,7 @@ from apps.consulta_medica.models import (
 )
 from apps.consulta_medica.repositories.clinical_history_repository import (
     ClinicalHistoryRepository,
+    PatientRepository,
 )
 from apps.consulta_medica.uses_case.consultation_usecase import (
     add_secondary_diagnosis,
@@ -223,22 +224,22 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         self.assertEqual(event.datos_despues["primaryDiagnosis"], "Gastroenteritis aguda")
         self.assertFalse(event.datos_despues["hasSubjective"])
 
-    def test_clinical_history_updated_writes_audit_event(self):
+    def test_patient_profile_updated_writes_audit_event(self):
         no_exp = "EXPAUDCH1"
         history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, 0)
-        ClinicalHistoryRepository.update(
-            history, fields={"phone": "5555555555"}, updated_by_id=self.doctor_user.id_usuario,
+        PatientRepository.update(
+            history.patient, fields={"phone": "5555555555"}, updated_by_id=self.doctor_user.id_usuario,
         )
         self._login_doctor()
 
         response = self.client.patch(
-            f"/api/v1/patients/{no_exp}/clinical-history?pkNum=0",
+            f"/api/v1/patients/{no_exp}/profile?pkNum=0",
             {"phone": "6666666666"}, format="json",
             HTTP_X_REQUEST_ID=self.request_id, **self._csrf_headers(),
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        event = AuditoriaEvento.objects.get(accion="ClinicalHistoryUpdated", request_id=self.request_id)
+        event = AuditoriaEvento.objects.get(accion="PatientProfileUpdated", request_id=self.request_id)
         self.assertEqual(event.recurso_tipo, "consulta_medica")
         self.assertEqual(event.datos_antes, {"phone": "5555555555"})
         self.assertEqual(event.datos_despues["phone"], "6666666666")
@@ -284,7 +285,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         self.assertEqual(event.datos_antes, {"condition": None, "notesLen": None})
         self.assertEqual(event.datos_despues["toothFdi"], "11")
         self.assertEqual(event.datos_despues["condition"], "caries")
-        self.assertTrue(event.datos_despues["created"])
+        self.assertIn("versionId", event.datos_despues)
 
     def test_stomatology_history_updated_writes_audit_event(self):
         no_exp = "EXPAUDSTO1"
@@ -292,7 +293,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
 
         response = self.client.patch(
             f"/api/v1/patients/{no_exp}/stomatology-history?pkNum=0",
-            {"personalDiabetes": True, "habits": "Fuma ocasionalmente"}, format="json",
+            {"oralHygiene": "good", "softTissues": "Mucosa sin lesiones"}, format="json",
             HTTP_X_REQUEST_ID=self.request_id, **self._csrf_headers(),
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -301,10 +302,10 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
             accion="StomatologyHistoryUpdated", request_id=self.request_id,
         )
         self.assertEqual(event.recurso_tipo, "consulta_medica")
-        self.assertEqual(event.datos_antes, {"personalDiabetes": False, "habitsLen": None})
-        self.assertEqual(event.datos_despues["personalDiabetes"], True)
-        self.assertEqual(event.datos_despues["habitsLen"], len("Fuma ocasionalmente"))
-        self.assertEqual(event.datos_despues["changedFields"], ["habits", "personalDiabetes"])
+        self.assertEqual(event.datos_antes, {"oralHygiene": None, "softTissuesLen": None})
+        self.assertEqual(event.datos_despues["oralHygiene"], "good")
+        self.assertEqual(event.datos_despues["softTissuesLen"], len("Mucosa sin lesiones"))
+        self.assertEqual(event.datos_despues["changedFields"], ["oralHygiene", "softTissues"])
 
     @override_settings(MEDIA_ROOT=_TEST_MEDIA_ROOT)
     def test_study_result_created_writes_audit_event(self):
@@ -546,23 +547,23 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         self.assertEqual(AuditoriaEvento.objects.filter(accion=accion).count(), 0)
         return response
 
-    def test_clinical_history_updated_rolls_back(self):
+    def test_patient_profile_updated_rolls_back(self):
         no_exp = "EXPAUDCH2"
         history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, 0)
-        ClinicalHistoryRepository.update(
-            history, fields={"phone": "5555555555"}, updated_by_id=self.doctor_user.id_usuario,
+        PatientRepository.update(
+            history.patient, fields={"phone": "5555555555"}, updated_by_id=self.doctor_user.id_usuario,
         )
         self._login_doctor()
 
         self._assert_rolls_back(
             lambda: self.client.patch(
-                f"/api/v1/patients/{no_exp}/clinical-history?pkNum=0",
+                f"/api/v1/patients/{no_exp}/profile?pkNum=0",
                 {"phone": "7777777777"}, format="json", **self._csrf_headers(),
             ),
-            accion="ClinicalHistoryUpdated",
+            accion="PatientProfileUpdated",
         )
-        history.refresh_from_db()
-        self.assertEqual(history.phone, "5555555555")
+        history.patient.refresh_from_db()
+        self.assertEqual(history.patient.phone, "5555555555")
 
     def test_odontogram_tooth_updated_rolls_back(self):
         no_exp = "EXPAUDOD2"
@@ -576,7 +577,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
             accion="OdontogramToothUpdated",
         )
         self.assertFalse(
-            OdontogramTooth.objects.filter(no_exp=no_exp, pk_num=0, tooth_fdi="11").exists(),
+            Odontogram.objects.filter(no_exp=no_exp, pk_num=0).exists(),
         )
 
     def test_stomatology_history_updated_rolls_back(self):
@@ -586,7 +587,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         self._assert_rolls_back(
             lambda: self.client.patch(
                 f"/api/v1/patients/{no_exp}/stomatology-history?pkNum=0",
-                {"personalDiabetes": True}, format="json", **self._csrf_headers(),
+                {"oralHygiene": "good"}, format="json", **self._csrf_headers(),
             ),
             accion="StomatologyHistoryUpdated",
         )
@@ -594,7 +595,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         # (fuera de la proteccion) -- la fila base existe, pero la edicion
         # (dentro del atomic) debe haberse revertido.
         history = StomatologyHistory.objects.get(no_exp=no_exp, pk_num=0)
-        self.assertFalse(history.personal_diabetes)
+        self.assertIsNone(history.oral_hygiene)
 
     def test_secondary_diagnosis_cancelled_rolls_back(self):
         visit = self._visit_with_consultation()
@@ -864,7 +865,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
             {"items": ["Paracetamol 500mg"]}, format="json", **self._csrf_headers(),
         )
         self.client.patch(
-            f"/api/v1/patients/{visit.no_exp}/clinical-history?pkNum=0",
+            f"/api/v1/patients/{visit.no_exp}/profile?pkNum=0",
             {"phone": "5555555555"}, format="json", **self._csrf_headers(),
         )
         self.client.patch(
@@ -873,7 +874,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         )
         self.client.patch(
             f"/api/v1/patients/{visit.no_exp}/stomatology-history?pkNum=0",
-            {"personalDiabetes": True}, format="json", **self._csrf_headers(),
+            {"oralHygiene": "good"}, format="json", **self._csrf_headers(),
         )
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
@@ -921,7 +922,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         expected_accions = {
             "ConsultationStarted", "DiagnosisSaved", "MedicalLeaveCreated", "StudyResultCreated",
             "SecondaryDiagnosisAdded", "SecondaryDiagnosisCancelled", "PrescriptionItemAdded",
-            "PrescriptionItemCancelled", "PrescriptionsSaved", "ClinicalHistoryUpdated",
+            "PrescriptionItemCancelled", "PrescriptionsSaved", "PatientProfileUpdated",
             "OdontogramToothUpdated", "StomatologyHistoryUpdated", "ConsultationAddendumAdded",
             "ConsultationClosed", "PrescriptionAuthorizationApproved", "PrescriptionAuthorizationRejected",
         }

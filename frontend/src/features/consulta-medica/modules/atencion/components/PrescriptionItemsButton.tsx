@@ -40,9 +40,9 @@ import { useCancelPrescriptionItem } from "@features/consulta-medica/modules/ate
 import type { AllergyWarning } from "@api/types";
 
 const SEVERITY_LABEL: Record<AllergyWarning["severity"], string> = {
-  mild: "Leve",
-  moderate: "Moderada",
-  severe: "Grave",
+  L: "Leve",
+  M: "Moderada",
+  G: "Grave",
 };
 
 const PRESCRIPTION_ITEM_ERROR_MESSAGE: Record<string, string> = {

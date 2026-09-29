@@ -2,338 +2,243 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
+import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
-import { Checkbox } from "@shared/ui/checkbox";
 import { Textarea } from "@shared/ui/textarea";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@shared/ui/form";
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@shared/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel } from "@shared/ui/form";
 import { useStomatologyHistory } from "@features/expedientes/queries/useStomatologyHistory";
 import { useUpdateStomatologyHistory } from "@features/expedientes/mutations/useUpdateStomatologyHistory";
+import { useClinicalCatalogs, usePatientRecords } from "@features/expedientes/queries/useUnifiedHistory";
+import { usePatientRecordMutations } from "@features/expedientes/mutations/usePatientRecordMutations";
 import { AllergyList } from "@features/expedientes/components/AllergyList";
-import type { UpdateStomatologyHistoryRequest } from "@api/types";
+import { PatientBackgroundSection } from "@features/expedientes/components/PatientBackgroundSection";
+import { HistoricalNotesSection } from "@features/expedientes/components/HistoricalNotesSection";
+import { NONE, RecordListCard } from "@features/expedientes/components/RecordListCard";
+import type { DentalTreatmentItem, OralHygiene, UpdateStomatologyHistoryRequest } from "@api/types";
 
 interface ExpedienteEstomatologiaTabProps {
   noExp: string;
   pkNum?: number;
 }
 
-interface FormValues {
-  familyDiabetes: boolean;
-  familyCancer: boolean;
-  familyHighBloodPressure: boolean;
-  familyLowBloodPressure: boolean;
-  causeOfDeath: string;
-  personalDiabetes: boolean;
-  personalAsthma: boolean;
-  personalHighBloodPressure: boolean;
-  personalLowBloodPressure: boolean;
-  personalHepatitis: boolean;
-  personalHiv: boolean;
-  personalSmoking: boolean;
-  personalAlcoholism: boolean;
-  personalSubstanceAbuse: boolean;
-  habits: string;
-  diet: string;
-  surgicalHistory: string;
-  traumaticHistory: string;
-  currentIllnessHistory: string;
-}
-
-const BOOLEAN_FIELDS = [
-  "familyDiabetes",
-  "familyCancer",
-  "familyHighBloodPressure",
-  "familyLowBloodPressure",
-  "personalDiabetes",
-  "personalAsthma",
-  "personalHighBloodPressure",
-  "personalLowBloodPressure",
-  "personalHepatitis",
-  "personalHiv",
-  "personalSmoking",
-  "personalAlcoholism",
-  "personalSubstanceAbuse",
-] as const;
-
-const TEXT_FIELDS = [
-  "causeOfDeath",
-  "habits",
-  "diet",
-  "surgicalHistory",
-  "traumaticHistory",
-  "currentIllnessHistory",
-] as const;
-
-const EMPTY_VALUES: FormValues = {
-  familyDiabetes: false,
-  familyCancer: false,
-  familyHighBloodPressure: false,
-  familyLowBloodPressure: false,
-  causeOfDeath: "",
-  personalDiabetes: false,
-  personalAsthma: false,
-  personalHighBloodPressure: false,
-  personalLowBloodPressure: false,
-  personalHepatitis: false,
-  personalHiv: false,
-  personalSmoking: false,
-  personalAlcoholism: false,
-  personalSubstanceAbuse: false,
-  habits: "",
-  diet: "",
-  surgicalHistory: "",
-  traumaticHistory: "",
-  currentIllnessHistory: "",
+const ORAL_HYGIENE_LABEL: Record<OralHygiene, string> = {
+  good: "Buena",
+  regular: "Regular",
+  poor: "Mala",
 };
 
-export function ExpedienteEstomatologiaTab({
-  noExp,
-  pkNum = 0,
-}: ExpedienteEstomatologiaTabProps) {
+const FLOSS_OPTIONS = { yes: "Sí", no: "No" } as const;
+
+interface FormValues {
+  oralHygiene: OralHygiene | typeof NONE;
+  brushingsPerDay: string;
+  usesFloss: keyof typeof FLOSS_OPTIONS | typeof NONE;
+  softTissues: string;
+  tmj: string;
+}
+
+const EMPTY_VALUES: FormValues = {
+  oralHygiene: NONE,
+  brushingsPerDay: "",
+  usesFloss: NONE,
+  softTissues: "",
+  tmj: "",
+};
+
+function DentalTreatmentsSection({ noExp, pkNum }: { noExp: string; pkNum: number }) {
+  const { data: catalogs } = useClinicalCatalogs();
+  const query = usePatientRecords<DentalTreatmentItem>("dental-treatments", noExp, pkNum);
+  const { create, update, deactivate } = usePatientRecordMutations({ resource: "dental-treatments", noExp, pkNum });
+
+  return (
+    <RecordListCard<DentalTreatmentItem>
+      title="Tratamientos dentales"
+      emptyText="Sin tratamientos registrados."
+      addLabel="Agregar tratamiento"
+      items={query.data?.items ?? []}
+      isLoading={query.isLoading}
+      isError={query.isError}
+      fields={[
+        {
+          name: "toothFdi", label: "Pieza (FDI)", kind: "select",
+          options: [
+            { value: NONE, label: "Sin pieza específica" },
+            ...(catalogs?.teeth ?? []).map((tooth) => ({ value: tooth.fdi, label: `${tooth.fdi} · ${tooth.name}` })),
+          ],
+        },
+        {
+          name: "status", label: "Estado", kind: "select",
+          options: [{ value: "planned", label: "Planeado" }, { value: "done", label: "Realizado" }],
+        },
+        { name: "procedure", label: "Procedimiento", kind: "text", wide: true, maxLength: 500 },
+      ]}
+      emptyValues={{ toothFdi: NONE, status: "planned", procedure: "" }}
+      toFormValues={(item) => ({ toothFdi: item.toothFdi ?? NONE, status: item.status, procedure: item.procedure })}
+      toPayload={(values) => {
+        const procedure = typeof values.procedure === "string" ? values.procedure.trim() : "";
+        if (!procedure) return "Indica el procedimiento.";
+        return {
+          procedure,
+          status: values.status,
+          toothFdi: values.toothFdi === NONE ? null : values.toothFdi,
+          source: "stomatology",
+        };
+      }}
+      renderItem={(item) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {item.toothFdi ? <Badge variant="outline">Pieza {item.toothFdi}</Badge> : null}
+          <span className="text-sm font-semibold text-txt-body">{item.procedure}</span>
+          <Badge variant={item.status === "done" ? "stable" : "alert"}>
+            {item.status === "done" ? "Realizado" : "Planeado"}
+          </Badge>
+          {item.performedAt ? (
+            <span className="text-xs text-txt-muted">{new Date(item.performedAt).toLocaleDateString("es-MX")}</span>
+          ) : null}
+        </div>
+      )}
+      onCreate={(payload) => create.mutateAsync(payload)}
+      onUpdate={(recordId, payload) => update.mutateAsync({ recordId, data: payload })}
+      onDeactivate={(recordId, reason) => deactivate.mutateAsync({ recordId, reason })}
+      isSaving={create.isPending || update.isPending}
+      isDeactivating={deactivate.isPending}
+    />
+  );
+}
+
+export function ExpedienteEstomatologiaTab({ noExp, pkNum = 0 }: ExpedienteEstomatologiaTabProps) {
   const { data, isLoading, isError } = useStomatologyHistory(noExp, pkNum);
   const updateHistory = useUpdateStomatologyHistory();
-
   const form = useForm<FormValues>({ defaultValues: EMPTY_VALUES });
 
   useEffect(() => {
     if (!data) return;
     form.reset({
-      familyDiabetes: data.familyDiabetes,
-      familyCancer: data.familyCancer,
-      familyHighBloodPressure: data.familyHighBloodPressure,
-      familyLowBloodPressure: data.familyLowBloodPressure,
-      causeOfDeath: data.causeOfDeath ?? "",
-      personalDiabetes: data.personalDiabetes,
-      personalAsthma: data.personalAsthma,
-      personalHighBloodPressure: data.personalHighBloodPressure,
-      personalLowBloodPressure: data.personalLowBloodPressure,
-      personalHepatitis: data.personalHepatitis,
-      personalHiv: data.personalHiv,
-      personalSmoking: data.personalSmoking,
-      personalAlcoholism: data.personalAlcoholism,
-      personalSubstanceAbuse: data.personalSubstanceAbuse,
-      habits: data.habits ?? "",
-      diet: data.diet ?? "",
-      surgicalHistory: data.surgicalHistory ?? "",
-      traumaticHistory: data.traumaticHistory ?? "",
-      currentIllnessHistory: data.currentIllnessHistory ?? "",
+      oralHygiene: data.oralHygiene ?? NONE,
+      brushingsPerDay: data.brushingsPerDay?.toString() ?? "",
+      usesFloss: data.usesFloss === null ? NONE : data.usesFloss ? "yes" : "no",
+      softTissues: data.softTissues ?? "",
+      tmj: data.tmj ?? "",
     });
   }, [data, form]);
 
   const onSubmit = async (values: FormValues) => {
-    const dirtyFields = form.formState.dirtyFields;
+    const dirty = form.formState.dirtyFields;
     const payload: UpdateStomatologyHistoryRequest = {};
-
-    for (const field of BOOLEAN_FIELDS) {
-      if (dirtyFields[field]) {
-        payload[field] = values[field];
+    if (dirty.oralHygiene) payload.oralHygiene = values.oralHygiene === NONE ? null : values.oralHygiene;
+    if (dirty.brushingsPerDay) {
+      const brushings = values.brushingsPerDay.trim();
+      if (brushings && !/^\d{1,2}$/.test(brushings)) {
+        toast.error("Cepillados por día debe ser un número entre 0 y 20.");
+        return;
       }
+      payload.brushingsPerDay = brushings ? Number(brushings) : null;
     }
-    for (const field of TEXT_FIELDS) {
-      if (dirtyFields[field]) {
-        payload[field] = values[field] || null;
-      }
-    }
-
+    if (dirty.usesFloss) payload.usesFloss = values.usesFloss === NONE ? null : values.usesFloss === "yes";
+    if (dirty.softTissues) payload.softTissues = values.softTissues.trim() || null;
+    if (dirty.tmj) payload.tmj = values.tmj.trim() || null;
     if (Object.keys(payload).length === 0) return;
 
     try {
       await updateHistory.mutateAsync({ noExp, pkNum, data: payload });
-      toast.success("Historia clínica de estomatología actualizada");
+      toast.success("Historia de estomatología actualizada");
       form.reset(values);
     } catch {
-      toast.error("No se pudo guardar", {
+      toast.error("No se pudo guardar la historia de estomatología", {
         description: "Intenta nuevamente en unos segundos.",
       });
     }
   };
 
   if (isLoading) {
-    return (
-      <p className="text-txt-muted text-sm py-12 text-center">
-        Cargando historia clínica de estomatología...
-      </p>
-    );
+    return <p className="text-txt-muted text-sm py-12 text-center">Cargando historia de estomatología...</p>;
   }
-
   if (isError) {
     return (
       <p className="text-status-critical text-sm py-12 text-center">
-        No se pudo cargar la historia clínica de estomatología.
+        No se pudo cargar la historia de estomatología de este paciente.
       </p>
     );
   }
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-txt-body">
-          Antecedentes Alérgicos
-        </h3>
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold text-txt-body">Alergias</h3>
         <AllergyList noExp={noExp} pkNum={pkNum} source="stomatology" />
       </section>
 
       <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Antecedentes Heredofamiliares
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <BooleanField control={form.control} name="familyDiabetes" label="Diabetes" />
-            <BooleanField control={form.control} name="familyCancer" label="Cáncer" />
-            <BooleanField control={form.control} name="familyHighBloodPressure" label="Presión Alta" />
-            <BooleanField control={form.control} name="familyLowBloodPressure" label="Presión Baja" />
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <h3 className="text-sm font-semibold text-txt-body">Exploración bucal</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <FormField control={form.control} name="oralHygiene" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Higiene oral</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Sin especificar</SelectItem>
+                    {Object.entries(ORAL_HYGIENE_LABEL).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="brushingsPerDay" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Cepillados por día</FormLabel>
+                <FormControl><Input {...field} inputMode="numeric" maxLength={2} /></FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="usesFloss" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Usa hilo dental</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Sin especificar</SelectItem>
+                    {Object.entries(FLOSS_OPTIONS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
           </div>
-          <TextField control={form.control} name="causeOfDeath" label="Causa de Muerte" />
-        </section>
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Antecedentes Personales Patológicos
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <BooleanField control={form.control} name="personalDiabetes" label="Diabetes" />
-            <BooleanField control={form.control} name="personalAsthma" label="Asma" />
-            <BooleanField control={form.control} name="personalHighBloodPressure" label="Presión Alta" />
-            <BooleanField control={form.control} name="personalLowBloodPressure" label="Presión Baja" />
-            <BooleanField control={form.control} name="personalHepatitis" label="Hepatitis" />
-            <BooleanField control={form.control} name="personalHiv" label="VIH" />
-            <BooleanField control={form.control} name="personalSmoking" label="Tabaquismo" />
-            <BooleanField control={form.control} name="personalAlcoholism" label="Alcoholismo" />
-            <BooleanField control={form.control} name="personalSubstanceAbuse" label="Toxicomanías" />
+          <FormField control={form.control} name="softTissues" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tejidos blandos (mucosa, lengua, paladar)</FormLabel>
+              <FormControl><Textarea {...field} rows={2} /></FormControl>
+            </FormItem>
+          )} />
+          <FormField control={form.control} name="tmj" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Articulación temporomandibular (ATM)</FormLabel>
+              <FormControl><Textarea {...field} rows={2} /></FormControl>
+            </FormItem>
+          )} />
+          <div className="flex justify-end">
+            <Button type="submit" disabled={updateHistory.isPending || !form.formState.isDirty}>
+              {updateHistory.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+              Guardar
+            </Button>
           </div>
-        </section>
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Antecedentes Personales No Patológicos
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TextField control={form.control} name="habits" label="Hábitos" />
-            <TextField control={form.control} name="diet" label="Alimentación" />
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Antecedentes Quirúrgicos y Traumáticos
-          </h3>
-          <TextareaField control={form.control} name="surgicalHistory" label="Antecedentes Quirúrgicos" />
-          <TextareaField control={form.control} name="traumaticHistory" label="Antecedentes Traumáticos" />
-        </section>
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-txt-body">
-            Padecimiento Actual
-          </h3>
-          <TextareaField
-            control={form.control}
-            name="currentIllnessHistory"
-            label="Cronología, Terapias y Resultados"
-          />
-        </section>
-
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            disabled={updateHistory.isPending || !form.formState.isDirty}
-          >
-            {updateHistory.isPending ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 size-4" />
-            )}
-            Guardar
-          </Button>
-        </div>
-      </form>
+        </form>
       </Form>
+
+      <DentalTreatmentsSection noExp={noExp} pkNum={pkNum} />
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold text-txt-body">Antecedentes (compartidos con Medicina General)</h3>
+        <PatientBackgroundSection noExp={noExp} pkNum={pkNum} source="stomatology" />
+      </section>
+
+      <HistoricalNotesSection noExp={noExp} pkNum={pkNum} specialty="stomatology" />
     </div>
-  );
-}
-
-// ── Campos reutilizables ──────────────────────────────────────────
-
-type FormControlType = ReturnType<typeof useForm<FormValues>>["control"];
-
-function BooleanField({
-  control,
-  name,
-  label,
-}: {
-  control: FormControlType;
-  name: (typeof BOOLEAN_FIELDS)[number];
-  label: string;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex items-center gap-2 space-y-0">
-          <FormControl>
-            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-          </FormControl>
-          <FormLabel className="font-normal">{label}</FormLabel>
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function TextField({
-  control,
-  name,
-  label,
-}: {
-  control: FormControlType;
-  name: (typeof TEXT_FIELDS)[number];
-  label: string;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input {...field} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function TextareaField({
-  control,
-  name,
-  label,
-}: {
-  control: FormControlType;
-  name: (typeof TEXT_FIELDS)[number];
-  label: string;
-}) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Textarea {...field} rows={3} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
   );
 }

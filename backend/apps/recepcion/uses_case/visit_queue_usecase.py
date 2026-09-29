@@ -80,7 +80,6 @@ def _build_member(source: dict, pk_num: int, no_exp_key: str) -> dict:
         "parentesco": source.get("CD_PARENTESCO", "TRABAJADOR"),
         "estatus":    source.get("ESTATUS", ""),
         "cdClinica":  source.get("CD_CLINICA"),
-        "curp":       source.get("CURP") or None,
         # buscar_expediente() ya resuelve y optimiza la foto a base64 (JPEG,
         # ver services/imagen_service.py) -- antes se calculaba y se
         # descartaba acá. El prefijo data URI se arma en el backend para que

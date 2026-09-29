@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Textarea } from "@shared/ui/textarea";
@@ -17,33 +17,29 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@shared/ui/fo
 import { useAllergies } from "@features/expedientes/queries/useAllergies";
 import { useCreateAllergy } from "@features/expedientes/mutations/useCreateAllergy";
 import { useUpdateAllergy } from "@features/expedientes/mutations/useUpdateAllergy";
-import { useDeactivateAllergy } from "@features/expedientes/mutations/useDeactivateAllergy";
-import type { Allergy, AllergyCategory, AllergySeverity, AllergySource } from "@api/types";
+import { useChangeAllergyStatus } from "@features/expedientes/mutations/useChangeAllergyStatus";
+import { ReasonDialog } from "@features/expedientes/components/ReasonDialog";
+import { useClinicalCatalogs } from "@features/expedientes/queries/useUnifiedHistory";
+import type { Allergy, AllergySeverity, AllergySource, AllergyStatus } from "@api/types";
 
 // Lista de alergias estructuradas de un paciente (change `alergias-unificadas`):
 // reemplaza el texto libre duplicado de ClinicalHistory.allergies y los 6
 // campos StomatologyHistory.allergy_* -- una sola fuente, visible tanto en
 // la pestana General como en Estomatologia para el mismo paciente.
 
-const CATEGORY_LABEL: Record<AllergyCategory, string> = {
-  medication: "Medicamento",
-  dental_material: "Material dental",
-  anesthesia: "Anestesia",
-  food: "Alimento",
-  environmental: "Ambiental",
-  other: "Otro",
-};
-
+// Documento: L leve, M moderada, G grave. Los tipos (CAT_TIPO_ALERGIA:
+// 1 medicamento, 2 anestesia, 3 material dental, 4 ambiental, 5 alimento,
+// 9 otro) vienen del catalogo via /clinical-catalogs.
 const SEVERITY_LABEL: Record<AllergySeverity, string> = {
-  mild: "Leve",
-  moderate: "Moderada",
-  severe: "Grave",
+  L: "Leve",
+  M: "Moderada",
+  G: "Grave",
 };
 
 const SEVERITY_BADGE_VARIANT: Record<AllergySeverity, "alert" | "critical"> = {
-  mild: "alert",
-  moderate: "alert",
-  severe: "critical",
+  L: "alert",
+  M: "alert",
+  G: "critical",
 };
 
 const SOURCE_LABEL: Record<AllergySource, string> = {
@@ -52,14 +48,14 @@ const SOURCE_LABEL: Record<AllergySource, string> = {
 };
 
 interface FormValues {
-  category: AllergyCategory | "";
+  allergyTypeId: string;
   substance: string;
   severity: AllergySeverity | "";
   reaction: string;
 }
 
 const EMPTY_VALUES: FormValues = {
-  category: "",
+  allergyTypeId: "",
   substance: "",
   severity: "",
   reaction: "",
@@ -76,9 +72,11 @@ interface AllergyListProps {
 
 export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
   const { data, isLoading, isError } = useAllergies(noExp, pkNum);
+  const { data: catalogs } = useClinicalCatalogs();
   const createAllergy = useCreateAllergy();
   const updateAllergy = useUpdateAllergy();
-  const deactivateAllergy = useDeactivateAllergy();
+  const changeStatus = useChangeAllergyStatus();
+  const [statusTarget, setStatusTarget] = useState<{ allergy: Allergy; status: AllergyStatus } | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -94,7 +92,7 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
   const startEdit = (allergy: Allergy) => {
     setEditingId(allergy.id);
     form.reset({
-      category: allergy.category,
+      allergyTypeId: String(allergy.allergyTypeId),
       substance: allergy.substance,
       severity: allergy.severity,
       reaction: allergy.reaction ?? "",
@@ -109,8 +107,8 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
   };
 
   const onSubmit = async (values: FormValues) => {
-    if (!values.category || !values.substance.trim() || !values.severity) {
-      toast.error("Completa categoría, sustancia y severidad.");
+    if (!values.allergyTypeId || !values.substance.trim() || !values.severity) {
+      toast.error("Completa tipo, sustancia y severidad.");
       return;
     }
 
@@ -121,7 +119,7 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
           pkNum,
           allergyId: editingId,
           data: {
-            category: values.category,
+            allergyTypeId: Number(values.allergyTypeId),
             substance: values.substance.trim(),
             severity: values.severity,
             reaction: values.reaction.trim() || null,
@@ -133,7 +131,7 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
           noExp,
           pkNum,
           data: {
-            category: values.category,
+            allergyTypeId: Number(values.allergyTypeId),
             substance: values.substance.trim(),
             severity: values.severity,
             reaction: values.reaction.trim() || undefined,
@@ -150,12 +148,40 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
     }
   };
 
-  const handleDeactivate = async (allergyId: number) => {
+  const STATUS_COPY: Record<AllergyStatus, { title: string; description: string; confirm: string; done: string }> = {
+    R: {
+      title: "Marcar alergia como resuelta",
+      description: "Seguirá visible en la historia, pero ya no alertará al recetar.",
+      confirm: "Marcar resuelta",
+      done: "Alergia marcada como resuelta",
+    },
+    E: {
+      title: "Alergia capturada por error",
+      description: "Se retira de la historia activa. No se borra: queda registrada con el motivo.",
+      confirm: "Retirar alergia",
+      done: "Alergia retirada",
+    },
+    A: {
+      title: "Reactivar alergia",
+      description: "Vuelve a estar activa y a alertar al recetar.",
+      confirm: "Reactivar",
+      done: "Alergia reactivada",
+    },
+  };
+
+  const confirmStatusChange = async (reason: string) => {
+    if (!statusTarget) return;
     try {
-      await deactivateAllergy.mutateAsync({ noExp, pkNum, allergyId });
-      toast.success("Alergia desactivada");
+      await changeStatus.mutateAsync({
+        noExp,
+        pkNum,
+        allergyId: statusTarget.allergy.id,
+        data: { status: statusTarget.status, reason },
+      });
+      toast.success(STATUS_COPY[statusTarget.status].done);
+      setStatusTarget(null);
     } catch {
-      toast.error("No se pudo desactivar la alergia");
+      toast.error("No se pudo actualizar la alergia");
     }
   };
 
@@ -193,11 +219,15 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
                   <Badge variant={SEVERITY_BADGE_VARIANT[allergy.severity]}>
                     {SEVERITY_LABEL[allergy.severity]}
                   </Badge>
-                  <Badge variant="outline">{CATEGORY_LABEL[allergy.category]}</Badge>
+                  <Badge variant="outline">{allergy.allergyTypeName}</Badge>
                   <Badge variant="secondary">{SOURCE_LABEL[allergy.source]}</Badge>
+                  {allergy.status === "R" ? <Badge variant="outline">Resuelta</Badge> : null}
                 </div>
                 {allergy.reaction ? (
                   <p className="text-xs text-txt-muted">{allergy.reaction}</p>
+                ) : null}
+                {allergy.status === "R" && allergy.statusReason ? (
+                  <p className="text-xs text-txt-muted">Motivo: {allergy.statusReason}</p>
                 ) : null}
               </div>
               <div className="flex shrink-0 gap-1">
@@ -210,13 +240,27 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
                 >
                   <Pencil className="size-4" />
                 </Button>
+                {allergy.status === "A" ? (
+                  <Button
+                    type="button" variant="ghost" size="icon" aria-label="Marcar resuelta"
+                    title="Marcar resuelta"
+                    onClick={() => setStatusTarget({ allergy, status: "R" })}
+                  >
+                    <CheckCircle2 className="size-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button" variant="ghost" size="icon" aria-label="Reactivar"
+                    title="Reactivar"
+                    onClick={() => setStatusTarget({ allergy, status: "A" })}
+                  >
+                    <RotateCcw className="size-4" />
+                  </Button>
+                )}
                 <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled={deactivateAllergy.isPending}
-                  onClick={() => handleDeactivate(allergy.id)}
-                  aria-label="Desactivar alergia"
+                  type="button" variant="ghost" size="icon" aria-label="Capturada por error"
+                  title="Capturada por error"
+                  onClick={() => setStatusTarget({ allergy, status: "E" })}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -235,20 +279,20 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="category"
+                name="allergyTypeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Categoría</FormLabel>
+                    <FormLabel>Tipo de alergia</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una categoría" />
+                          <SelectValue placeholder="Selecciona un tipo" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {(Object.keys(CATEGORY_LABEL) as AllergyCategory[]).map((value) => (
-                          <SelectItem key={value} value={value}>
-                            {CATEGORY_LABEL[value]}
+                        {(catalogs?.allergyTypes ?? []).map((type) => (
+                          <SelectItem key={type.id} value={String(type.id)}>
+                            {type.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -325,6 +369,17 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
           Agregar alergia
         </Button>
       )}
+
+      <ReasonDialog
+        open={statusTarget !== null}
+        title={statusTarget ? STATUS_COPY[statusTarget.status].title : ""}
+        description={statusTarget ? STATUS_COPY[statusTarget.status].description : ""}
+        confirmLabel={statusTarget ? STATUS_COPY[statusTarget.status].confirm : ""}
+        destructive={statusTarget?.status === "E"}
+        isPending={changeStatus.isPending}
+        onOpenChange={(open) => { if (!open) setStatusTarget(null); }}
+        onConfirm={confirmStatusChange}
+      />
     </div>
   );
 }

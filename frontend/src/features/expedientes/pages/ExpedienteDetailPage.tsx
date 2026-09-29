@@ -3,7 +3,7 @@
  * Expediente clínico completo del paciente
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   FileText,
@@ -39,6 +39,8 @@ import { ExpedienteLicenciasTab } from "@features/expedientes/components/Expedie
 import { ExpedienteEstudiosTab } from "@features/expedientes/components/ExpedienteEstudiosTab";
 import { usePatientGeneralInfo } from "@features/expedientes/queries/usePatientGeneralInfo";
 import { useAllergies } from "@features/expedientes/queries/useAllergies";
+import { usePatientProfile } from "@features/expedientes/queries/useClinicalHistory";
+import { PATIENT_SEX_LABELS } from "@features/expedientes/domain/patient-identity";
 
 const SIN_DATO = "No disponible";
 
@@ -56,13 +58,12 @@ export const ExpedienteDetailPage = () => {
   // licencias, etc. de un derechohabiente son datos DISTINTOS a los del
   // titular, por eso hay que poder elegir a quien se esta consultando en
   // vez de fijarlo siempre en el titular.
-  const [pkNum, setPkNum] = useState(0);
-
-  // Si se navega de un expediente a otro, no arrastrar el derechohabiente
-  // seleccionado del expediente anterior -- siempre arranca en el titular.
-  useEffect(() => {
-    setPkNum(0);
-  }, [folioReal]);
+  // La seleccion recuerda A QUE expediente pertenece: si se navega a otro
+  // folio, se deriva el titular (0) sin arrastrar el derechohabiente del
+  // expediente anterior -- sin un useEffect que haga setState en cascada.
+  const [selection, setSelection] = useState({ folio: folioReal, pkNum: 0 });
+  const pkNum = selection.folio === folioReal ? selection.pkNum : 0;
+  const setPkNum = (next: number) => setSelection({ folio: folioReal, pkNum: next });
 
   const members = useMemo(() => {
     if (!lookup) return [];
@@ -80,22 +81,24 @@ export const ExpedienteDetailPage = () => {
   const { data: allergiesData } = useAllergies(folioReal, pkNum);
   const alergias = (allergiesData?.items ?? []).map((allergy) => allergy.substance);
 
-  // Datos reales via /visits/patient-lookup (mismo endpoint que Recepcion).
-  // CURP ya se expone (ver buscar_expediente.py / _build_member); sexo/tipo
-  // de sangre/telefono/email/direccion siguen sin existir en ningun modelo
-  // del backend hoy -- se muestran como SIN_DATO en vez de inventar un
-  // valor. `padecimientos_cronicos`/`medicamentos_habituales` tampoco
-  // tienen fuente estructurada todavia, siguen vacios.
+  // CURP/sexo/telefono salen de la ficha del paciente (PACIENTE, GET /profile) --
+  // misma query key que el tab Generales (tab por defecto), asi que comparte
+  // cache: no agrega requests. Tipo de sangre/email/direccion siguen sin existir en ningun
+  // modelo del backend -- SIN_DATO en vez de inventar un valor.
+  // `padecimientos_cronicos`/`medicamentos_habituales` tampoco tienen fuente
+  // estructurada todavia, siguen vacios.
+  const { data: ficha } = usePatientProfile(folioReal, pkNum);
+
   const expediente = {
     folio: folioReal || SIN_DATO,
     paciente: selectedMember?.nombre ?? SIN_DATO,
     parentesco: pkNum === 0 ? "Titular" : (selectedMember?.parentesco ?? "Familiar"),
-    curp: selectedMember?.curp ?? SIN_DATO,
+    curp: ficha?.curp ?? SIN_DATO,
     fecha_nacimiento: selectedMember?.fechaNac ?? SIN_DATO,
     edad: selectedMember?.edad ?? null,
-    sexo: SIN_DATO,
+    sexo: ficha?.sex ? PATIENT_SEX_LABELS[ficha.sex] : SIN_DATO,
     tipo_sangre: SIN_DATO,
-    telefono: SIN_DATO,
+    telefono: ficha?.phone || SIN_DATO,
     email: SIN_DATO,
     direccion: SIN_DATO,
     status: selectedMember?.estatus ?? SIN_DATO,

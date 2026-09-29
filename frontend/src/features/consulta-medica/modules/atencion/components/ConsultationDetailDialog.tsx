@@ -15,6 +15,7 @@ import { EmitirIncapacidadButton } from "@features/consulta-medica/modules/atenc
 import { SubirResultadoEstudioButton } from "@features/consulta-medica/modules/atencion/components/SubirResultadoEstudioButton";
 import { EmitirPaseButton } from "@features/consulta-medica/modules/atencion/components/EmitirPaseButton";
 import { SecondaryDiagnosesButton } from "@features/consulta-medica/modules/atencion/components/SecondaryDiagnosesButton";
+import { PhysicalExamButton } from "@features/consulta-medica/modules/atencion/components/PhysicalExamButton";
 import { PrescriptionItemsButton } from "@features/consulta-medica/modules/atencion/components/PrescriptionItemsButton";
 import {
   VISIT_STATUS,
@@ -42,6 +43,16 @@ import {
   formatStatusLabel,
   hasVitalValue,
 } from "../pages/DoctorConsultationPage.helpers";
+
+const CONSULTATION_NOTE_FIELDS = [
+  { name: "currentIllness", label: "Padecimiento actual" },
+  { name: "systemsReview", label: "Interrogatorio por aparatos y sistemas" },
+  { name: "diagnosticPlan", label: "Plan diagnostico" },
+  { name: "therapeuticPlan", label: "Plan terapeutico" },
+] as const satisfies readonly {
+  name: keyof SaveDiagnosisFormInput;
+  label: string;
+}[];
 
 interface Props {
   isDetailRoute:                     boolean;
@@ -535,6 +546,19 @@ export function ConsultationDetailDialog({
               ) : null}
             </div>
 
+            {/* his_notas ampliada (documento "Historia Clinica Unificada", 5.2): opcionales. */}
+            {CONSULTATION_NOTE_FIELDS.map(({ name, label }) => (
+              <div key={name} className="space-y-2">
+                <Label htmlFor={name}>{label}</Label>
+                <Textarea
+                  id={name}
+                  rows={3}
+                  disabled={!canSaveClinicalData || saveDiagnosis.isPending}
+                  {...diagnosisForm.register(name)}
+                />
+              </div>
+            ))}
+
             <div className="space-y-2">
               <Label htmlFor="prescriptions">
                 Receta (una indicacion por linea)
@@ -591,6 +615,13 @@ export function ConsultationDetailDialog({
 
               {selectedVisit ? (
                 <SecondaryDiagnosesButton
+                  visitId={selectedVisit.id}
+                  disabled={!canSaveClinicalData}
+                />
+              ) : null}
+
+              {selectedVisit ? (
+                <PhysicalExamButton
                   visitId={selectedVisit.id}
                   disabled={!canSaveClinicalData}
                 />

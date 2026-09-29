@@ -1,69 +1,90 @@
-from apps.consulta_medica.models import ClinicalHistory, ClinicalHistoryRevision
+from django.db import transaction
+from django.utils import timezone
 
-# Campos editables via upsert_clinical_history -- mismo set que
-# CLINICAL_HISTORY_FIELD_MAP en clinical_history_usecase.py. Se usa para
-# saber que "previous_<campo>" snapshotear en ClinicalHistoryRevision.
+from apps.consulta_medica.models import ClinicalHistory, Patient, PatientRevision
+
+# Campos editables de PACIENTE -- mismo set que PATIENT_FIELD_MAP en
+# clinical_history_usecase.py. Se usa para saber que "previous_<campo>"
+# snapshotear en PatientRevision.
 _VERSIONED_FIELDS = (
+    "curp",
+    "sex",
     "occupation_id",
     "education_level_id",
     "marital_status_id",
     "religion_id",
     "residence_type_id",
     "phone",
-    "family_history",
-    "current_illness",
-    "systems_review",
-    "head_exam",
-    "neck_exam",
-    "chest_exam",
-    "abdomen_exam",
-    "genitals_exam",
-    "limbs_exam",
-    "diagnostic_management",
-    "therapeutic_management",
-    "allergies",
 )
 
 
-class ClinicalHistoryRepository:
-    @staticmethod
-    def get_or_create_for_patient(no_exp, pk_num):
-        history, created = ClinicalHistory.objects.get_or_create(
-            no_exp=no_exp,
-            pk_num=pk_num,
-        )
-        return history, created
+class PatientRepository:
+    """PACIENTE: datos de la persona (1 por no_exp + tp_paciente)."""
 
     @staticmethod
-    def update(history, *, fields, updated_by_id=None):
-        # ClinicalHistory se captura de forma incremental (ver docstring del
-        # modelo): rellenar un campo vacio por primera vez no es una
-        # alteracion de un dato clinico, es captura normal -- solo versiona
-        # cuando YA habia un valor concreto y se sobreescribe con otro.
+    def get_or_create(no_exp, pk_num):
+        return Patient.objects.get_or_create(no_exp=no_exp, pk_num=pk_num)
+
+    @staticmethod
+    def update(patient, *, fields, updated_by_id=None):
+        # Captura incremental: rellenar un campo vacio por primera vez no es
+        # alterar un dato -- solo versiona cuando YA habia un valor concreto
+        # y se sobreescribe con otro (NOM-024: nada se pisa sin rastro).
         changed = any(
-            field_name in fields
-            and getattr(history, field_name) not in (None, "")
-            and getattr(history, field_name) != value
+            getattr(patient, field_name) not in (None, "") and getattr(patient, field_name) != value
             for field_name, value in fields.items()
         )
         if changed:
-            # Versionado real (NOM-024): se guarda un snapshot del valor
-            # anterior ANTES de pisarlo -- nunca se sobrescribe sin dejar
-            # rastro, mismo patron que VisitConsultation/VisitConsultationRevision.
-            ClinicalHistoryRevision.objects.create(
-                history=history,
+            PatientRevision.objects.create(
+                patient=patient,
                 changed_by_id=updated_by_id,
-                **{
-                    f"previous_{field_name}": getattr(history, field_name)
-                    for field_name in _VERSIONED_FIELDS
+                **{f"previous_{field_name}": getattr(patient, field_name) for field_name in _VERSIONED_FIELDS},
+            )
+        for field_name, value in fields.items():
+            setattr(patient, field_name, value)
+        patient.updated_by_id = updated_by_id
+        patient.save()
+        return patient
+
+    @staticmethod
+    def to_contract(patient):
+        return {
+            "id": patient.id_patient,
+            "noExp": patient.no_exp,
+            "pkNum": patient.pk_num,
+            "curp": patient.curp,
+            "sex": patient.sex,
+            "occupationId": patient.occupation_id,
+            "educationLevelId": patient.education_level_id,
+            "maritalStatusId": patient.marital_status_id,
+            "religionId": patient.religion_id,
+            "residenceTypeId": patient.residence_type_id,
+            "phone": patient.phone,
+            "createdAt": patient.created_at,
+            "updatedAt": patient.updated_at,
+        }
+
+
+class ClinicalHistoryRepository:
+    """HISTORIA_CLINICA: cabecera unica por paciente, 1:1 con PACIENTE."""
+
+    @staticmethod
+    def get_or_create_for_patient(no_exp, pk_num, *, opened_on=None, clinic_code=None,
+                                  doctor_code=None, created_by_id=None):
+        with transaction.atomic():
+            patient, _ = PatientRepository.get_or_create(no_exp, pk_num)
+            history, created = ClinicalHistory.objects.get_or_create(
+                no_exp=no_exp,
+                pk_num=pk_num,
+                defaults={
+                    "patient": patient,
+                    "opened_on": opened_on or timezone.localdate(),
+                    "opening_clinic_code": clinic_code,
+                    "opening_doctor_code": doctor_code,
+                    "created_by_id": created_by_id,
                 },
             )
-
-        for field_name, value in fields.items():
-            setattr(history, field_name, value)
-        history.updated_by_id = updated_by_id
-        history.save()
-        return history
+        return history, created
 
     @staticmethod
     def to_contract(history):
@@ -71,25 +92,10 @@ class ClinicalHistoryRepository:
             "id": history.id_clinical_history,
             "noExp": history.no_exp,
             "pkNum": history.pk_num,
-            "occupationId": history.occupation_id,
-            "educationLevelId": history.education_level_id,
-            "maritalStatusId": history.marital_status_id,
-            "religionId": history.religion_id,
-            "residenceTypeId": history.residence_type_id,
-            "phone": history.phone,
-            "familyHistory": history.family_history,
-            "currentIllness": history.current_illness,
-            "systemsReview": history.systems_review,
-            "headExam": history.head_exam,
-            "neckExam": history.neck_exam,
-            "chestExam": history.chest_exam,
-            "abdomenExam": history.abdomen_exam,
-            "genitalsExam": history.genitals_exam,
-            "limbsExam": history.limbs_exam,
-            "diagnosticManagement": history.diagnostic_management,
-            "therapeuticManagement": history.therapeutic_management,
-            "allergies": history.allergies,
+            "patientId": history.patient_id,
+            "openedOn": history.opened_on.isoformat() if history.opened_on else None,
+            "openingClinicCode": history.opening_clinic_code,
+            "openingDoctorCode": history.opening_doctor_code,
             "isActive": history.is_active,
             "createdAt": history.created_at,
-            "updatedAt": history.updated_at,
         }

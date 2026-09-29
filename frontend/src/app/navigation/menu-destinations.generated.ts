@@ -27,6 +27,7 @@ export interface MenuDestination {
 
 export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/autorizacion/estudios","permissions":["admin:autorizacion:estudios:read"]},
+  {"path":"/admin/bitacora-acceso","permissions":["admin:auditoria:accesos:read"]},
   {"path":"/admin/catalogos","permissions":[]},
   {"path":"/admin/catalogos/areas","permissions":["admin:catalogos:areas:read"],"capability":"admin.catalogs.areas.read"},
   {"path":"/admin/catalogos/areas-clinicas","permissions":["admin:catalogos:areas_clinicas:read"]},
@@ -81,6 +82,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/reportes/incapacidades","permissions":["clinico:reportes:read"],"capability":"clinico.reportes.read"},
   {"path":"/admin/reportes/pases","permissions":["clinico:pases:read"],"capability":"clinico.pases.read"},
   {"path":"/admin/roles","permissions":["admin:gestion:roles:read"],"capability":"admin.roles.read"},
+  {"path":"/admin/solicitudes-arco","permissions":["admin:arco:read"]},
   {"path":"/admin/usuarios","permissions":["admin:gestion:usuarios:read"],"capability":"admin.users.read"},
   {"path":"/almacen/almacenes","permissions":["almacen:inventario:read"]},
   {"path":"/almacen/categorias","permissions":["almacen:inventario:read"]},
