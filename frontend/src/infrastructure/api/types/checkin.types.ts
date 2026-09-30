@@ -37,7 +37,3 @@ export type CheckinCandidatosParams =
 export interface CheckinCandidatosResponse {
   candidatos: CheckinCandidato[];
 }
-
-export interface ConfirmarCheckinFolioRequest {
-  folio: string;
-}

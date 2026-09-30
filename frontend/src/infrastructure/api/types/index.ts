@@ -14,7 +14,6 @@ export type {
   PaginationParams,
   ListResponse,
   SuccessResponse,
-  ErrorResponse,
 } from "@api/types/common.types";
 
 // =============================================================================
@@ -52,8 +51,6 @@ export type {
 export type {
   // Objetos anidados (relaciones)
   UserRef,
-  BaseUser,
-  CedulaTipo,
   CedulaItem,
   EmpleadoSermedResult,
   EmpleadoSermedResponse,
@@ -132,11 +129,9 @@ export type {
   CreateRoleRequest,
   UpdateRoleRequest,
   AssignPermissionsRequest,
-  RevokePermissionsRequest,
   // Responses
   CreateRoleResponse,
   UpdateRoleResponse,
-  DeleteRoleResponse,
   AssignPermissionsResponse,
   RevokePermissionsResponse,
   // Listados
@@ -246,7 +241,6 @@ export type {
 
 export type {
   // Entidades
-  AreaRef,
   AreaListItem,
   AreaDetail,
   // CRUD Requests
@@ -265,7 +259,6 @@ export type {
 
 export type {
   // Entidades
-  ConsultorioRef,
   ConsultorioCatalogRef,
   ConsultorioListItem,
   ConsultorioDetail,
@@ -560,11 +553,6 @@ export type {
   HabitItem,
   DentalTreatmentItem,
   RecordListResponse,
-  PersonalHistoryRequest,
-  FamilyHistoryRequest,
-  SurgicalHistoryRequest,
-  HabitRequest,
-  DentalTreatmentRequest,
   PatientRecordResource,
   HistoricalNote,
   HistoricalNotesResponse,
@@ -1225,7 +1213,6 @@ export type {
 } from "@api/types/farmacia/dispensacion.types";
 export {
   DISPENSATION_STATUS,
-  DISPENSATION_STATUS_LABELS,
 } from "@api/types/farmacia/dispensacion.types";
 export type { DispensationStatus } from "@api/types/farmacia/dispensacion.types";
 
@@ -1308,7 +1295,6 @@ export type {
   SlotsParams,
   CitasListResponse,
   SlotsResponse,
-  VerificarQRRequest,
   FichaQRResponse,
   ConfirmarQRCheckinResponse,
 } from "@api/types/citas.types";
@@ -1321,7 +1307,6 @@ export type {
   CheckinCandidato,
   CheckinCandidatosParams,
   CheckinCandidatosResponse,
-  ConfirmarCheckinFolioRequest,
 } from "@api/types/checkin.types";
 
 export {

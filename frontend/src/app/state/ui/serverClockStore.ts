@@ -13,7 +13,3 @@ export const useServerClockStore = create<ServerClockState>()((set) => ({
   setOffset: (serverTimeMs) =>
     set({ offsetMs: serverTimeMs - Date.now(), isSynced: true }),
 }));
-
-/** Hora actual corregida con el offset del servidor. Usar fuera de React (fecha puntual, no reactiva). */
-export const getServerNow = (): Date =>
-  new Date(Date.now() + useServerClockStore.getState().offsetMs);

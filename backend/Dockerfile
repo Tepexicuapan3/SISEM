@@ -19,7 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     pkg-config \
     libpq-dev \
-    default-libmysqlclient-dev \
     postgresql-client \
     libaio1 \
     unzip \

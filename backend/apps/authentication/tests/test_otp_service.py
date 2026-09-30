@@ -1,15 +1,9 @@
-import time
-from unittest.mock import patch
-
-from apps.authentication.services.otp_service import (OTP_REQUEST_LIMIT,
-                                                      clear_code,
-                                                      generate_code, get_code,
-                                                      increment_attempts,
-                                                      rate_limit_request,
-                                                      store_code)
+from apps.authentication.services.otp_service import generate_code, get_code, store_code
 from django.test import TestCase, override_settings
 
 
+# Los limites de solicitudes/intentos del OTP los aplica AuthPolicyService y
+# se prueban en sus propios tests; aca solo el guardado/lectura del codigo.
 @override_settings(
     CACHES={
         "default": {
@@ -28,42 +22,3 @@ class OtpServiceTests(TestCase):
         self.assertIsNotNone(data)
         data = data or {}
         self.assertEqual(data["code"], code)
-
-    def test_increment_attempts(self):
-        email = "user@example.com"
-        store_code(email, "123456")
-
-        data = increment_attempts(email)
-        self.assertIsNotNone(data)
-        data = data or {}
-        self.assertEqual(data["attempts"], 1)
-
-        data = increment_attempts(email)
-        self.assertIsNotNone(data)
-        data = data or {}
-        self.assertEqual(data["attempts"], 2)
-
-        clear_code(email)
-
-    def test_increment_attempts_returns_none_when_code_missing(self):
-        data = increment_attempts("missing@example.com")
-        self.assertIsNone(data)
-
-    def test_rate_limit_request(self):
-        email = "rate-limit@example.com"
-
-        limited = False
-        for _ in range(OTP_REQUEST_LIMIT + 1):
-            limited = rate_limit_request(email)
-
-        self.assertTrue(limited)
-
-    def test_rate_limit_request_resets(self):
-        email = "rate-limit-reset@example.com"
-        with patch("apps.authentication.services.otp_service.OTP_REQUEST_LIMIT", 1), patch(
-            "apps.authentication.services.otp_service.OTP_REQUEST_TTL_SECONDS", 1
-        ):
-            self.assertFalse(rate_limit_request(email))
-            self.assertTrue(rate_limit_request(email))
-            time.sleep(1.1)
-            self.assertFalse(rate_limit_request(email))

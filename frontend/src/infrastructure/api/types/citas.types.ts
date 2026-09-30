@@ -102,18 +102,6 @@ export interface SlotsResponse {
   slots: SlotDisponible[];
 }
 
-// ─── Check-in por QR (Fase 7 "Citas en Línea") ─────────────────────────────────
-
-/**
- * Payload crudo leído del código QR del comprobante de cita (formato
- * ``"{folio}:{firma}"``, opaco para el frontend). Se re-envía TAL CUAL en
- * ambos pasos (verificar y confirmar) — nunca se extrae/reenvía un folio
- * suelto, porque el backend re-valida la firma HMAC en cada llamada.
- */
-export interface VerificarQRRequest {
-  payload: string;
-}
-
 /** Ficha resuelta por `POST /citas/verificar-qr` — solo lectura, sin efectos secundarios. */
 export interface FichaQRResponse {
   folio:        string;

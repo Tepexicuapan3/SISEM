@@ -1,26 +1,6 @@
-import type {
-  CentroAtencionDetail,
-  CreateCentroAtencionRequest,
-  UpdateCentroAtencionRequest,
-  CentroAtencionHorarioDetail,
-  CreateCentroAtencionHorarioRequest,
-  UpdateCentroAtencionHorarioRequest,
-  DiaSemana,
-  CentroAtencionExcepcionDetail,
-  CreateCentroAtencionExcepcionRequest,
-  UpdateCentroAtencionExcepcionRequest,
-  TipoExcepcion,
-} from "@api/types";
+import type { CentroAtencionDetail, CreateCentroAtencionRequest, UpdateCentroAtencionRequest, CentroAtencionExcepcionDetail, CreateCentroAtencionExcepcionRequest, UpdateCentroAtencionExcepcionRequest, TipoExcepcion } from "@api/types";
 
-import type {
-  CentroAtencionDetailsFormValues,
-  CreateCentroAtencionFormValues,
-  UpdateCentroAtencionFormValues,
-  CentroAtencionHorarioFormValues,
-  CreateCentroAtencionHorarioFormValues,
-  CentroAtencionExcepcionFormValues,
-  CreateCentroAtencionExcepcionFormValues,
-} from "@features/admin/modules/catalogos/centros-atencion/domain/centros-atencion.schemas";
+import type { CentroAtencionDetailsFormValues, CreateCentroAtencionFormValues, UpdateCentroAtencionFormValues, CentroAtencionExcepcionFormValues, CreateCentroAtencionExcepcionFormValues } from "@features/admin/modules/catalogos/centros-atencion/domain/centros-atencion.schemas";
 
 // =============================================================================
 // HELPERS
@@ -148,91 +128,6 @@ export const buildUpdateCentroAtencionPayload = (
 
   if (dirtyFields.phone) {
     payload.phone = normalizeNullableText(values.phone);
-  }
-
-  if (dirtyFields.isActive && values.isActive !== undefined) {
-    payload.isActive = values.isActive;
-  }
-
-  return payload;
-};
-
-// =============================================================================
-// HORARIOS - API -> FORM
-// =============================================================================
-
-export const mapCentroAtencionHorarioDetailToFormValues = (
-  detail?: CentroAtencionHorarioDetail | null,
-): CentroAtencionHorarioFormValues => ({
-  centerId: detail?.center?.id ?? 0,
-  shiftId: detail?.shift?.id ?? 0,
-  weekDay: (detail?.weekDay ?? 1) as DiaSemana,
-  isOpen: detail?.isOpen ?? true,
-  is24Hours: detail?.is24Hours ?? false,
-  openingTime: detail?.openingTime ? detail.openingTime.slice(0, 5) : null,
-  closingTime: detail?.closingTime ? detail.closingTime.slice(0, 5) : null,
-  observations: detail?.observations ?? null,
-  isActive: detail?.isActive ?? true,
-});
-
-// =============================================================================
-// HORARIOS - FORM -> API
-// =============================================================================
-
-export const buildCreateCentroAtencionHorarioPayload = (
-  values: CreateCentroAtencionHorarioFormValues,
-): CreateCentroAtencionHorarioRequest => ({
-  centerId: values.centerId,
-  shiftId: values.shiftId,
-  weekDay: values.weekDay as DiaSemana,
-  isOpen: values.isOpen,
-  is24Hours: values.is24Hours,
-  openingTime: normalizeTime(values.openingTime),
-  closingTime: normalizeTime(values.closingTime),
-  observations: normalizeNullableText(values.observations),
-  isActive: values.isActive,
-});
-
-export const buildUpdateCentroAtencionHorarioPayload = (
-  values: Partial<CentroAtencionHorarioFormValues>,
-  dirtyFields: Partial<Record<keyof CentroAtencionHorarioFormValues, boolean>>,
-): UpdateCentroAtencionHorarioRequest => {
-  const payload: UpdateCentroAtencionHorarioRequest = {};
-
-  if (dirtyFields.centerId && values.centerId !== undefined) {
-    payload.centerId = values.centerId;
-  }
-
-  if (dirtyFields.shiftId && values.shiftId !== undefined) {
-    payload.shiftId = values.shiftId;
-  }
-
-  if (dirtyFields.weekDay && values.weekDay !== undefined) {
-    payload.weekDay = values.weekDay as DiaSemana;
-  }
-
-  if (dirtyFields.isOpen && values.isOpen !== undefined) {
-    payload.isOpen = values.isOpen;
-  }
-
-  if (dirtyFields.is24Hours && values.is24Hours !== undefined) {
-    payload.is24Hours = values.is24Hours;
-  }
-
-  if (values.isOpen && !values.is24Hours) {
-    payload.openingTime = normalizeTime(values.openingTime);
-    payload.closingTime = normalizeTime(values.closingTime);
-  } else {
-    if (dirtyFields.openingTime) {
-      payload.openingTime = normalizeTime(values.openingTime);
-    }
-    if (dirtyFields.closingTime) {
-      payload.closingTime = normalizeTime(values.closingTime);
-    }
-  }
-
-  if (dirtyFields.observations) {
-    payload.observations = normalizeNullableText(values.observations);
   }
 
   if (dirtyFields.isActive && values.isActive !== undefined) {

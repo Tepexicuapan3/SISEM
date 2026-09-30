@@ -60,13 +60,6 @@ export interface PermissionHierarchyExplorerProps<
   showCodeBadge?: boolean;
 }
 
-export interface PermissionsCatalogExplorerProps extends Omit<
-  PermissionHierarchyExplorerProps<Permission>,
-  "permissions" | "isLoading"
-> {
-  enabled?: boolean;
-}
-
 export interface PermissionCodeSegments {
   groupKey: string;
   moduleKey: string;

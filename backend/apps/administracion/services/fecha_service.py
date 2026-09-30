@@ -32,23 +32,3 @@ def calcular_edad(fecha_nacimiento) -> int | None:
         - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
     )
 
-
-def formatear_fecha_es(fecha) -> str:
-    """
-    Formatea una fecha al estilo ``DD mes YYYY`` en español abreviado.
-
-    Ejemplo: ``2024-05-15`` → ``'15 may 2024'``
-
-    Args:
-        fecha: objeto ``date`` / ``datetime`` o ``None``.
-
-    Returns:
-        Cadena formateada o ``'--/--/----'`` si la fecha es nula.
-    """
-    MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
-            'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-
-    if not fecha:
-        return '--/--/----'
-
-    return f"{fecha.day:02d} {MESES[fecha.month - 1]} {fecha.year}"

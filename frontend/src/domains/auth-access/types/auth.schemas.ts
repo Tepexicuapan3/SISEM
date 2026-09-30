@@ -43,8 +43,6 @@ export const verifyResetCodeSchema = z.object({
   }),
 });
 
-export type VerifyResetCodeFormData = z.infer<typeof verifyResetCodeSchema>;
-
 export const authPasswordSchema = z
   .object({
     newPassword: newPasswordSchema,

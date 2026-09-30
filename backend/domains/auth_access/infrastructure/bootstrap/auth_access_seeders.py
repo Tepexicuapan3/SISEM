@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Iterable
 
 from django.contrib.auth.hashers import make_password
@@ -412,5 +411,3 @@ def ensure_base_permissions() -> Iterable[Permisos]:
     return permissions
 
 
-def timestamp_label() -> str:
-    return datetime.now(tz=timezone.get_current_timezone()).strftime("%Y%m%d%H%M%S")

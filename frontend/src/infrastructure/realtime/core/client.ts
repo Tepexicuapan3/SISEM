@@ -563,12 +563,6 @@ export const acquireRealtimeClient = (
   };
 };
 
-export const getOrCreateRealtimeClient = (
-  options: RealtimeClientOptions,
-): RealtimeClient => {
-  return getOrCreateRegistryEntry(options).client;
-};
-
 export const resetRealtimeClientSingletonsForTests = (): void => {
   for (const entry of realtimeClientSingletons.values()) {
     clearDisconnectTimer(entry);

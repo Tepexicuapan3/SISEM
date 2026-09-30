@@ -10,15 +10,6 @@ import type {
 } from "@api/types/common.types";
 import type { UserRef } from "@api/types/users.types";
 
-// =============================================================================
-// ENTIDADES
-// =============================================================================
-
-export interface AreaRef {
-  id: number;
-  name: string;
-}
-
 export interface AreaListItem {
   id: number;
   name: string;

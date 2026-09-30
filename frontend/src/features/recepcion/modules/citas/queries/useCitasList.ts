@@ -20,14 +20,3 @@ export const useCitasList = (
     staleTime: 30_000,
     enabled:   options?.enabled ?? true,
   });
-
-export const useSlotsCita = (
-  medicoId: number | undefined,
-  fecha:    string | undefined,
-) =>
-  useQuery({
-    queryKey: CITAS_KEYS.slots(medicoId!, fecha!),
-    queryFn:  () => citasAPI.getSlots({ medicoId: medicoId!, fecha: fecha! }),
-    staleTime: 60_000,
-    enabled:   !!medicoId && !!fecha,
-  });

@@ -43,8 +43,6 @@ export interface UserRef {
   name: string;
 }
 
-export type CedulaTipo = "PROFESIONAL" | "ESPECIALIDAD" | "SUBESPECIALIDAD";
-
 export interface CedulaItem {
   id?: number;
   numero: string;
@@ -64,20 +62,6 @@ export interface EmpleadoSermedResult {
 
 export interface EmpleadoSermedResponse {
   empleado: EmpleadoSermedResult;
-}
-
-// =============================================================================
-// ENTIDADES PRINCIPALES
-// =============================================================================
-
-/**
- * Datos base para construir nombre completo.
- * Usado en utilidades compartidas de UI.
- */
-export interface BaseUser {
-  firstName: string;
-  paternalName: string;
-  maternalName: string;
 }
 
 /**

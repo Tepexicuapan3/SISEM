@@ -15,26 +15,9 @@ import { Skeleton } from "@shared/ui/skeleton";
 import { TruncatedTooltip } from "@shared/ui/truncated-tooltip";
 import { cn } from "@shared/utils/styling/cn";
 import type { Permission } from "@api/types";
-import { usePermissionsCatalog } from "@/domains/auth-access/hooks/rbac/permissions/usePermissionsCatalog";
 import { PermissionSearchField } from "@/domains/auth-access/components/admin/rbac/shared/PermissionSearchField";
 
-import {
-  buildPermissionTree,
-  buildTreeRows,
-  findStartIndex,
-  PERMISSION_ROW_HEIGHT,
-  PERMISSION_TREE_ROW_TYPE,
-  permissionMatchesSearch,
-  pluralize,
-  renderHighlightedText,
-  rowPaddingLeft,
-  VIRTUALIZATION_OVERSCAN_PX,
-  VIRTUALIZATION_THRESHOLD,
-  type PermissionExplorerItem,
-  type PermissionHierarchyExplorerProps,
-  type PermissionsCatalogExplorerProps,
-  type PermissionTreeRow,
-} from "./permission-hierarchy-explorer.tree";
+import { buildPermissionTree, buildTreeRows, findStartIndex, PERMISSION_ROW_HEIGHT, PERMISSION_TREE_ROW_TYPE, permissionMatchesSearch, pluralize, renderHighlightedText, rowPaddingLeft, VIRTUALIZATION_OVERSCAN_PX, VIRTUALIZATION_THRESHOLD, type PermissionExplorerItem, type PermissionHierarchyExplorerProps, type PermissionTreeRow } from "./permission-hierarchy-explorer.tree";
 
 export function PermissionsHierarchyExplorer<
   TPermission extends PermissionExplorerItem = Permission,
@@ -603,65 +586,5 @@ export function PermissionsHierarchyExplorer<
         </div>
       )}
     </section>
-  );
-}
-
-export function PermissionsCatalogExplorer({
-  enabled = true,
-  className,
-  selectedPermissionCode,
-  onSelectPermission,
-  title,
-  description,
-  searchPlaceholder,
-  emptyMessage,
-  noResultsMessage,
-  viewportHeightClassName,
-  actionLabel,
-  actionIcon,
-  actionVariant,
-  actionDisplay,
-  isActionPending,
-  isActionDisabled,
-  actionAriaLabel,
-  actionClassName,
-  onAction,
-  renderMeta,
-  metaDisplay,
-  showCodeBadge,
-}: PermissionsCatalogExplorerProps) {
-  const permissionsCatalog = usePermissionsCatalog(enabled);
-
-  const items = permissionsCatalog.data?.items ?? [];
-  const isLoading =
-    permissionsCatalog.isLoading ||
-    (permissionsCatalog.isFetching && items.length === 0);
-
-  return (
-    <PermissionsHierarchyExplorer
-      permissions={items}
-      isLoading={isLoading}
-      className={className}
-      selectedPermissionCode={selectedPermissionCode}
-      onSelectPermission={onSelectPermission}
-      title={title}
-      description={description}
-      searchPlaceholder={searchPlaceholder}
-      emptyMessage={emptyMessage}
-      noResultsMessage={noResultsMessage}
-      viewportHeightClassName={viewportHeightClassName}
-      actionLabel={actionLabel}
-      actionIcon={actionIcon}
-      actionVariant={actionVariant}
-      actionDisplay={actionDisplay}
-      isActionPending={isActionPending}
-      isActionDisabled={isActionDisabled}
-      actionAriaLabel={actionAriaLabel}
-      actionClassName={actionClassName}
-      onAction={onAction}
-      renderMeta={renderMeta}
-      metaDisplay={metaDisplay}
-      showCodeBadge={showCodeBadge}
-    />
   );
 }

@@ -27,9 +27,6 @@ export const AUTH_USER_CONTRACT_FIELDS = {
   REQUIRES_ONBOARDING: "requiresOnboarding",
 } as const;
 
-export type AuthUserContractField =
-  (typeof AUTH_USER_CONTRACT_FIELDS)[keyof typeof AUTH_USER_CONTRACT_FIELDS];
-
 export const AUTH_CAPABILITY_STATE_FIELDS = {
   GRANTED: "granted",
   MISSING_ALL_OF: "missingAllOf",

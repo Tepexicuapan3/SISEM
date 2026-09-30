@@ -102,37 +102,6 @@ export const isServiceForcedToWalkIn = (
   );
 };
 
-export const getAllowedArrivalTypesByService = (
-  service: RecepcionKnownService,
-): ArrivalType[] => {
-  const profile = RECEPCION_SERVICE_PROFILES[service];
-
-  if (profile.forceArrivalType) {
-    return [profile.forceArrivalType];
-  }
-
-  return [ARRIVAL_TYPE.APPOINTMENT, ARRIVAL_TYPE.WALK_IN];
-};
-
-export const buildServiceTaggedNotes = (
-  service: RecepcionKnownService,
-  notes?: string,
-): string | undefined => {
-  const trimmedNotes = notes?.trim();
-
-  if (service === RECEPCION_SERVICE.MEDICINA_GENERAL) {
-    return trimmedNotes;
-  }
-
-  const tag = `[svc:${service}]`;
-
-  if (!trimmedNotes) {
-    return tag;
-  }
-
-  return `${tag} ${trimmedNotes}`;
-};
-
 export const extractRecepcionServiceFromNotes = (
   notes?: string | null,
 ): RecepcionService | null => {

@@ -299,42 +299,6 @@ def _calcular_num_ficha() -> tuple[int, str]:
     return count + 1, turno.nombre
 
 
-def _resolver_hora_medico(medico_id: int):
-    """
-    Obtiene la hora_inicio del horario activo del médico para hoy.
-
-    NOTA: sin caller activo en el código actual (verificado, F4-19) -- se
-    corrige igual el nombre del parámetro (espacio médico, FK real de
-    RelMedicoConsultorio.medico) y se deja de tragar errores en silencio,
-    para que si algún día se vuelve a usar, quede resuelto correctamente
-    desde el día uno en vez de reintroducir la conflación doctor_id/medico_id (R1).
-    """
-    from datetime import date
-    from django.db.models import Q
-    try:
-        from apps.medicos.models import RelMedicoConsultorio
-        hoy     = date.today()
-        dia_map = {0: "LUNES", 1: "MARTES", 2: "MIERCOLES", 3: "JUEVES",
-                   4: "VIERNES", 5: "SABADO", 6: "DOMINGO"}
-        dia     = dia_map[hoy.weekday()]
-        rmc = (
-            RelMedicoConsultorio.objects
-            .prefetch_related("horarios")
-            .filter(medico_id=medico_id, is_active=True, fecha_inicio__lte=hoy)
-            .filter(Q(fecha_fin__isnull=True) | Q(fecha_fin__gte=hoy))
-            .first()
-        )
-        if not rmc:
-            return None
-        horario = rmc.horarios.filter(dia_semana=dia).first()
-        return horario.hora_inicio if horario else None
-    except Exception:
-        logger.warning(
-            "Error resolviendo hora de consultorio para medico_id=%s", medico_id, exc_info=True
-        )
-        return None
-
-
 def list_visits(
     page: int,
     page_size: int,

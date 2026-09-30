@@ -24,7 +24,6 @@ traducción de identidades".
 from __future__ import annotations
 
 import logging
-from typing import Iterable
 
 from django.core.cache import cache
 
@@ -95,23 +94,6 @@ def usuario_id_for_medico(medico_id: int | None) -> int | None:
     )
     cache.set(cache_key, usuario_id if usuario_id is not None else 0, _CACHE_TTL_SECONDS)
     return usuario_id
-
-
-def medico_ids_for_usuarios(usuario_ids: Iterable[int]) -> dict[int, int]:
-    """
-    Versión bulk de `medico_id_for_usuario` -- evita N+1 al resolver un lote
-    de usuario_ids (p.ej. `disponibilidad.get_medicos_disponibles`). Solo
-    incluye en el resultado los usuario_ids que SÍ tienen médico asociado.
-    """
-    ids = [uid for uid in usuario_ids if uid is not None]
-    if not ids:
-        return {}
-
-    from apps.medicos.models import CatMedico
-
-    return dict(
-        CatMedico.objects.filter(id_usuario_id__in=ids).values_list("id_usuario_id", "id")
-    )
 
 
 def display_name(medico) -> str:

@@ -20,5 +20,3 @@ def resolve_navigation_menu_source() -> str:
     return _SOURCE_STATIC
 
 
-def is_navigation_menu_db_enabled() -> bool:
-    return resolve_navigation_menu_source() == _SOURCE_DB

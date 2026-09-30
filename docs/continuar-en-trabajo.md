@@ -43,38 +43,52 @@ Checklist rápido de qué tabla del legado ya se migró y cuál sigue pendiente
 "Bloqueado" correspondientes más abajo, esto es solo para no tener que
 releer todo el documento cada vez.
 
+> Actualizado 2026-09-29 contra `Dump20260903.sql` (conteo real de filas).
+
 ### Ya migradas (no repetir trabajo)
-- `his_clinica` → `consulta_medica.ClinicalHistory` (3385 historias reales,
-  comando `migrar_historial_clinico_legacy.py`, ✅).
+- `his_clinica` → `cns_paciente` + `cns_clinical_history` + registros de la
+  historia unificada (3,385 filas, `migrar_historial_clinico_legacy`, ✅).
+- `his_clinicad` → historia unificada de estomatología (24,124 filas,
+  `migrar_historia_estomatologia_legacy`, ✅ comando listo; lo corre el usuario).
+- `cat_usuarios` → `sy_usuarios` (`migrar_usuarios_legacy`, ✅).
 - `his_notas` → `consulta_medica.LegacyConsultationRecord` (604,178 notas,
   archivo de solo lectura, ✅).
 - `det_hisnotcie` → `consulta_medica.LegacyConsultationDiagnosis` (529,315
   diagnósticos CIE-10, ✅).
 
-### Pendientes (necesitan acceso a la red del trabajo / al dump real)
-1. **`his_clinicad`** (historia clínica de ESTOMATOLOGÍA del legado) — tabla
-   aparte de `his_clinica`, **sigue sin explorar**, no existe comando de
-   migración todavía. **Importante, no confundir**: el comando nuevo de
-   esta sesión `backend/apps/consulta_medica/management/commands/
-   migrar_alergias_estructuradas.py` migra DENTRO de Postgres (de
-   `ClinicalHistory.allergies`/`StomatologyHistory.allergy_*`, que ya están
-   en Postgres, hacia la nueva tabla `Allergy`) — **no lee MySQL en
-   absoluto**. `his_clinicad` en el legado sigue intacto, sin tocar en el
-   origen.
-2. **`dbclinicas.cat_medicos`** (médicos) — plan ya cerrado con el usuario
-   (ver "Bloqueado", punto 7), pero el comando `migrar_medicos_legacy.py`
-   **todavía no existe** y falta acceso al dump real de esa tabla. Conteos
-   dados por el usuario (sin verificar contra dump): ~2730 médicos, ~560
-   sin `cd_usuario` asignado.
-3. **`det_cirugia`** / **`det_ambulancias`** — sin backup del legado
-   todavía (ver "Bloqueado", punto 4). Los modelos ya dejan `legacy_folio`
-   listo para cuando llegue el backup, así que en cuanto exista el dump el
-   trabajo de mapeo/comando es rápido.
-4. **`his_hospital`** (~32,000 filas) — único caso donde el modelo/infra en
-   Postgres YA está 100% listo y verificado (`hospitalizacion.
-  HospitalAdmission`, ver "Completado 2026-09-24"); solo falta que el
-   usuario ejecute la migración de datos reales con el mapeo ya
-   documentado en `docs/runbooks/his-hospital-migracion-mapeo.md`.
+### Pendientes — TODAS están en `Dump20260903.sql` (ya no hay bloqueo por dump)
+Historia clínica (completan el documento de reforma):
+1. **`det_clinicad`** (36,700) — anotaciones POR PIEZA dental ligadas a
+   `his_clinicad.no_hisclin` (`no_diente`, `ds_datos`, fecha, médico). Destino
+   natural: `cns_tratamiento_dental` / historial del odontograma. Sin comando.
+2. **`det_cronicodeg`** (27,720) — registro de crónico-degenerativos
+   (`cd_enfermedad` → `cat_enfermedades`, 36 filas; estado A/B). Destino
+   natural: `cns_antecedente_personal` (A activo / B → inactivo). Sin comando.
+
+Otros módulos (modelo en SIRES ya existe o casi):
+3. **`his_hospital`** — **2,772 filas reales** (los "~32,000" que decía este
+   doc eran el AUTO_INCREMENT 31968, no filas). Modelo listo
+   (`hospitalizacion.HospitalAdmission`, mapeo en
+   `docs/runbooks/his-hospital-migracion-mapeo.md`); falta el comando.
+   Relacionadas: `det_horashosp` 459,501, `det_medicamentohosp` 70,503.
+4. **`det_cirugia`** (13,050) + `det_cirugcie` (13,706) → `cir_surgery`
+   (`legacy_folio` listo). Estaba "bloqueado sin backup": ya NO, está en el dump.
+5. **`det_ambulancias`** (1,433) + `det_ambulanciasfec` (2,626) → ambulancias.
+   Igual: ya está en el dump.
+6. **`det_licencia`** (25,775) → `cns_medical_leave` (incapacidades).
+7. **`cat_medicos`** (2,709, verificado) → médicos; plan cerrado ("Bloqueado",
+   punto 7), falta el comando `migrar_medicos_legacy`.
+
+Volumen grande, decidir si vale la pena (histórico de solo lectura):
+`det_receta` 1,026,819 / `det_impresionrecetas` 2,210,407 (recetas),
+`pas_*`/`det_pas*` (pases a hospital/especialidad/laboratorio/gabinete),
+`det_agenda`/`det_agendafam` (citas), `ope_resultadoslab`/`ope_resultadosolab`
+(resultados), `img_empleados`/`img_familiar` (fotos).
+
+NO migrar: `rep_*` (tablas de reporte derivadas de las operativas),
+`bit_regmedica` (10.9 M filas de bitácora del sistema viejo; se conserva en el
+respaldo del legado), `b_conexionrh`, `bit_consumows`, las 6 copias de
+`cat_medicamentos*` (SIRES tiene su propio catálogo).
 
 ## Completado HOY (historia clínica + NOM-024 + Portal de Citas)
 
@@ -1001,6 +1015,47 @@ Alcance: solo SIRES (SISEM Java/JSP descartado por decisión del usuario).
     vista previa de conflictos, relleno de signos) y revisión en Postgres.
     Medido en el dump: 389 conflictos de ocupación y 335 de estado civil.
 - Runbook de huérfanos actualizado con las 6 tablas nuevas.
+
+### Segunda limpieza de código muerto (2026-09-29)
+Criterio: borrar solo con evidencia (análisis de imports + verificación manual).
+- **Backend**: RBAC viejo sin ruta (`views/role_views.py`,
+  `use_cases/roles/create_role.py`, `use_cases/users/assign_roles.py`,
+  `serializers/role_serializers.py`, `constants/rbac_actions.py`) y sus tests —
+  el RBAC real es `rbac_views`/`rbac_write`. `infrastructure/cache` e
+  `infrastructure/security` (archivos de 0 bytes). `check_rcp_cols.py`
+  (script suelto de diagnóstico).
+- **Raíz**: archivo vacío `git` (commit accidental), `pgadmin_scripts/`
+  (duplicaban `authentication.0004/0005` y exponían la IP del servidor) y
+  `reloj_sisem.png` (sin referencias). `.engram/` pasa a `.gitignore`
+  (memoria local de la herramienta de IA; sacarla del índice con
+  `git rm -r --cached .engram` al commitear). `.opencode/skill/` se conserva
+  versionado a propósito (política del `.gitignore` + tabla de `AGENTS.md`).
+  `RESPONSIVA.docx` se conserva por decisión del usuario.
+- **Dependencias**: `mysqlclient`, `python-dotenv`, `uvicorn`, `h11`
+  (nadie las importa; el legado se lee con PyMySQL y el servidor es daphne) y
+  `default-libmysqlclient-dev` de los Dockerfiles (solo compilaba mysqlclient).
+  Frontend: `@radix-ui/react-accordion` (su componente se borró) y
+  `@tanstack/react-query-devtools`.
+- **Código muerto dentro de archivos vivos** (sin ningún llamador, ni tests):
+  backend — `formatear_fecha_es`, `is_navigation_menu_db_enabled`,
+  `get_existencia`/`recompute_existencia` (kardex), `RolesDetailView` (sin
+  ruta), `CatalogRef`, `medico_ids_for_usuarios`, `_resolver_hora_medico`,
+  `timestamp_label`, y en `rbac_views.py` `_ensure_read_dependencies`,
+  `_validate_role_permission_scope`, `_validate_user_override_scope`,
+  `_scope_error` (duplicados viejos: las 6 reglas anti-escalada viven en
+  `policies/rbac_write_policy.py` y los tests de API las cubren). OTP:
+  `increment_attempts`/`clear_code`/`rate_limit_request` y sus constantes (los
+  límites los aplica `AuthPolicyService`). Frontend — 60 exports que nadie
+  importaba (hooks `useCreateCita`, `useSlotsCita`, `useEntradaDetail`,
+  `useConteoDetail`; transformadores de catálogos; schemas y tipos de request
+  huérfanos), quitados con el parser de TypeScript en rondas hasta estabilizar.
+- **Se conservan a propósito**: `VisitFlowService` (Protocol/interfaz),
+  `update_admission` (caso de uso de edición de hospitalización con revisión,
+  probado, aún sin endpoint), `resolve_read_source` (envoltorio del flag);
+  `infrastructure/realtime/*` y los
+  `services/realtime_events.py` (capa de compatibilidad de `apps/realtime` que
+  cubren los tests de contrato WebSocket); `backend/vendor/instantclient-linux.zip`
+  (lo copia el Dockerfile); `codigos_postales.txt` (catálogo de CP).
 
 ### Checklist de deploy (historia clínica unificada) — ORDEN IMPORTANTE
 1. **Respaldo completo de la BD de SIRES antes de migrar**: `consulta_medica.0030`,

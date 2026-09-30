@@ -5,11 +5,6 @@ import type {
 } from "@api/types/common.types";
 import type { UserRef } from "@api/types/users.types";
 
-export interface ConsultorioRef {
-  id: number;
-  name: string;
-}
-
 export interface ConsultorioCatalogRef {
   id: number;
   name: string;

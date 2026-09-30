@@ -70,50 +70,6 @@ export interface RecordListResponse<T> {
   items: T[];
 }
 
-export interface PersonalHistoryRequest {
-  cieCode?: string | null;
-  description?: string | null;
-  diagnosisDate?: string | null;
-  status?: "A" | "R";
-  source?: "general" | "stomatology";
-}
-
-export interface FamilyHistoryRequest {
-  relationshipId?: string | null;
-  cieCode?: string | null;
-  description?: string | null;
-  isDeceased?: boolean;
-  causeOfDeath?: string | null;
-  source?: "general" | "stomatology";
-}
-
-export interface SurgicalHistoryRequest {
-  procedure: string;
-  procedureCie9Id?: number | null;
-  approximateDate?: string | null;
-  place?: string | null;
-  source?: "general" | "stomatology";
-}
-
-export interface HabitRequest {
-  habitId: number;
-  frequency?: string | null;
-  quantity?: string | null;
-  since?: string | null;
-  status?: "A" | "E";
-  notes?: string | null;
-  source?: "general" | "stomatology";
-}
-
-export interface DentalTreatmentRequest {
-  toothFdi?: string | null;
-  procedure: string;
-  procedureCie9Id?: number | null;
-  status?: "planned" | "done";
-  visitId?: number | null;
-  source?: "general" | "stomatology";
-}
-
 export type PatientRecordResource =
   | "personal-history"
   | "family-history"

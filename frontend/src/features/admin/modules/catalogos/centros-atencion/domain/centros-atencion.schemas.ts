@@ -160,10 +160,6 @@ export const centroAtencionHorarioSchema = z
     }
   });
 
-export const createCentroAtencionHorarioSchema = centroAtencionHorarioSchema;
-export const updateCentroAtencionHorarioSchema =
-  centroAtencionHorarioSchema.partial();
-
 // =============================================================================
 // EXCEPCION DE CENTRO
 // =============================================================================
@@ -236,8 +232,6 @@ export const centroAtencionExcepcionSchema = z
   });
 
 export const createCentroAtencionExcepcionSchema = centroAtencionExcepcionSchema;
-export const updateCentroAtencionExcepcionSchema =
-  centroAtencionExcepcionSchema.partial();
 
 // =============================================================================
 // TYPES
@@ -259,24 +253,12 @@ export type CentroAtencionHorarioFormValues = z.input<
   typeof centroAtencionHorarioSchema
 >;
 
-export type CreateCentroAtencionHorarioFormValues = z.input<
-  typeof createCentroAtencionHorarioSchema
->;
-
-export type UpdateCentroAtencionHorarioFormValues = z.input<
-  typeof updateCentroAtencionHorarioSchema
->;
-
 export type CentroAtencionExcepcionFormValues = z.input<
   typeof centroAtencionExcepcionSchema
 >;
 
 export type CreateCentroAtencionExcepcionFormValues = z.input<
   typeof createCentroAtencionExcepcionSchema
->;
-
-export type UpdateCentroAtencionExcepcionFormValues = z.input<
-  typeof updateCentroAtencionExcepcionSchema
 >;
 
 // =============================================================================

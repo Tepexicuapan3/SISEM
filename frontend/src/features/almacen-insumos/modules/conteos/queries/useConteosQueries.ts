@@ -9,11 +9,3 @@ export function useConteosList(params: ConteosListParams) {
     queryFn:  () => conteosAPI.list(params),
   });
 }
-
-export function useConteoDetail(id: number) {
-  return useQuery({
-    queryKey: conteosKeys.detail(id),
-    queryFn:  () => conteosAPI.get(id),
-    enabled:  !!id,
-  });
-}

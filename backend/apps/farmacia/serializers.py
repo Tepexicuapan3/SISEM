@@ -6,11 +6,6 @@ from apps.catalogos.models import CatCentroAtencion, Vacunas
 from .models import VacInventario
 
 
-class CatalogRef(serializers.Serializer):
-    id = serializers.IntegerField()
-    name = serializers.CharField()
-
-
 class VacInventarioListSerializer(serializers.ModelSerializer):
     vaccine = serializers.SerializerMethodField()
     center = serializers.SerializerMethodField()

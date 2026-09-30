@@ -11,11 +11,7 @@
  * - RoleDetail: Para detalle/edición (con auditoría completa)
  */
 
-import type {
-  PaginationParams,
-  ListResponse,
-  SuccessResponse,
-} from "@api/types/common.types";
+import type { PaginationParams, ListResponse } from "@api/types/common.types";
 import type { UserRef } from "@api/types/users.types";
 
 // =============================================================================
@@ -115,14 +111,6 @@ export interface AssignPermissionsRequest {
   permission_ids?: number[];
 }
 
-/**
- * Request para revocar permisos de un rol.
- * DELETE /api/v1/roles/:id/permissions
- */
-export interface RevokePermissionsRequest {
-  permissionIds: number[];
-}
-
 // =============================================================================
 // RESPONSES
 // =============================================================================
@@ -158,12 +146,6 @@ export interface CreateRoleResponse {
 export interface UpdateRoleResponse {
   role: RoleDetail;
 }
-
-/**
- * Response de eliminación de rol.
- * DELETE /api/v1/roles/:id
- */
-export type DeleteRoleResponse = SuccessResponse;
 
 /**
  * Response de asignación de permisos a rol.

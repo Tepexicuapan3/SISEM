@@ -1,23 +1,10 @@
-import type {
-  AreaClinicaDetail,
-  CreateAreaClinicaRequest,
-  UpdateAreaClinicaRequest,
-} from "@api/types";
-import type {
-  AreaClinicaDetailsFormValues,
-  CreateAreaClinicaFormValues,
-} from "@features/admin/modules/catalogos/areas-clinicas/domain/areas-clinicas.schemas";
+import type { AreaClinicaDetail, UpdateAreaClinicaRequest } from "@api/types";
+import type { AreaClinicaDetailsFormValues } from "@features/admin/modules/catalogos/areas-clinicas/domain/areas-clinicas.schemas";
 
 export const mapAreaClinicaDetailToFormValues = (
   detail?: AreaClinicaDetail | null,
 ): AreaClinicaDetailsFormValues => ({
   name: detail?.name ?? "",
-});
-
-export const buildCreateAreaClinicaPayload = (
-  values: CreateAreaClinicaFormValues,
-): CreateAreaClinicaRequest => ({
-  name: values.name.trim(),
 });
 
 export const buildUpdateAreaClinicaPayload = (

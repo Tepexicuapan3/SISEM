@@ -18,12 +18,6 @@ export const DISPENSATION_STATUS = {
 
 export type DispensationStatus = (typeof DISPENSATION_STATUS)[keyof typeof DISPENSATION_STATUS];
 
-export const DISPENSATION_STATUS_LABELS: Record<DispensationStatus, string> = {
-  pendiente: "Pendiente",
-  parcial: "Parcial",
-  dispensado: "Dispensado",
-};
-
 // =============================================================================
 // ENTIDADES
 // =============================================================================

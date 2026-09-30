@@ -46,16 +46,3 @@ export interface SuccessResponse {
   success: boolean;
   message?: string;
 }
-
-/**
- * Respuesta estándar de error de la API.
- * Estructura consistente para todos los errores del backend.
- */
-export interface ErrorResponse {
-  code: string;
-  message: string;
-  status: number;
-  details?: Record<string, string[]>;
-  requestId?: string;
-  timestamp?: string;
-}

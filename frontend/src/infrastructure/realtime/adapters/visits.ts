@@ -23,9 +23,6 @@ export const VISITS_REALTIME_EVENT_TYPE = {
   VISIT_CLOSED: "visit.closed",
 } as const;
 
-export type VisitsRealtimeEventType =
-  (typeof VISITS_REALTIME_EVENT_TYPE)[keyof typeof VISITS_REALTIME_EVENT_TYPE];
-
 const VISIT_STATUS_SET = new Set<VisitStatus>(Object.values(VISIT_STATUS));
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {

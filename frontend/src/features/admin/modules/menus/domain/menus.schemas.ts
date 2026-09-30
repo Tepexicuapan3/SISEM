@@ -15,7 +15,6 @@ const requiredText = (label: string, maxLength = 120) =>
  * (una carpeta no pasa por `MenuDestinationSelect`).
  */
 export const moduleKindSchema = z.enum(["folder", "shortcut"]);
-export type ModuleKind = z.infer<typeof moduleKindSchema>;
 
 /**
  * Paso 1 del wizard: tipo + titulo + icono. Comun a carpetas y accesos
@@ -31,7 +30,6 @@ export const moduleBasicsSchema = z.object({
   title: requiredText("Título"),
   icon: z.string().trim().min(1).nullable(),
 });
-export type ModuleBasicsFormValues = z.infer<typeof moduleBasicsSchema>;
 
 /**
  * Paso 2 del wizard (solo `kind === "shortcut"`): destino elegido en
@@ -49,9 +47,6 @@ export const moduleDestinationSchema = z.object({
   url: z.string().trim().min(1, { error: "Selecciona un destino" }).nullable(),
   permissionCodes: z.array(z.string()),
 });
-export type ModuleDestinationFormValues = z.infer<
-  typeof moduleDestinationSchema
->;
 
 /**
  * Paso 3 del wizard: ubicacion en el arbol. `parentKey: null` = raiz.
@@ -59,7 +54,6 @@ export type ModuleDestinationFormValues = z.infer<
 export const modulePlacementSchema = z.object({
   parentKey: z.string().trim().min(1).nullable(),
 });
-export type ModulePlacementFormValues = z.infer<typeof modulePlacementSchema>;
 
 /**
  * Payload completo que arma `ModuleCreateWizard` al confirmar el paso 3 --
@@ -83,28 +77,3 @@ export const createModuleFormSchema = moduleBasicsSchema
     }
   });
 export type CreateModuleFormValues = z.infer<typeof createModuleFormSchema>;
-
-/**
- * Formulario de edicion "simple" de un modulo existente (tipo + titulo +,
- * si es un acceso directo, su destino). Deliberadamente NO incluye
- * `parentKey` -- mover de padre es responsabilidad exclusiva de
- * `MoveToFolderDialog` (mismo criterio que el backend: `UpdateModuleUseCase`
- * nunca toca `parentKey`, ver `move_module.py`).
- *
- * Reutiliza `moduleBasicsSchema`/`moduleDestinationSchema` (mismos campos
- * que los pasos 1-2 del wizard de creacion) porque `ModuleCreateWizard`
- * hace doble uso: crea modulos nuevos Y edita los existentes (pasando
- * `editingNode`), asi que comparten exactamente la misma forma de datos.
- */
-export const updateModuleFormSchema = moduleBasicsSchema
-  .extend(moduleDestinationSchema.shape)
-  .superRefine((data, ctx) => {
-    if (data.kind === "shortcut" && !data.url) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Selecciona un destino",
-        path: ["url"],
-      });
-    }
-  });
-export type UpdateModuleFormValues = z.infer<typeof updateModuleFormSchema>;

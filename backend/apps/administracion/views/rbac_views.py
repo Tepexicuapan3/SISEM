@@ -25,10 +25,7 @@ from apps.personal.models import (
     DetUsuarioMedico,
 )
 from apps.authentication.repositories.user_repository import UserRepository
-from apps.authentication.services.auth_revision import (
-    touch_user_auth_revision,
-    touch_users_auth_revision,
-)
+from apps.authentication.services.auth_revision import touch_users_auth_revision
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.email_service import send_notification_email_batch
 from apps.authentication.services.errors import AuthServiceError
@@ -613,114 +610,6 @@ def _split_permission_code(code):
     if len(parts) < 2:
         return None, None
     return ":".join(parts[:-1]), parts[-1]
-
-
-def _ensure_read_dependencies(permission_ids):
-    permissions = {
-        permission.id_permiso: permission
-        for permission in Permisos.objects.filter(
-            id_permiso__in=permission_ids, is_active=True
-        )
-    }
-    expanded = set(permission_ids)
-
-    by_code = {permission.codigo: permission for permission in permissions.values()}
-
-    for permission in list(permissions.values()):
-        resource, action = _split_permission_code(permission.codigo)
-        if action in {"create", "update", "delete"} and resource:
-            read_code = f"{resource}:read"
-            read_permission = by_code.get(read_code)
-            if read_permission:
-                expanded.add(read_permission.id_permiso)
-
-    return expanded
-
-
-def _scope_error(request, code, message, details=None):
-    return error_response(
-        code,
-        message,
-        status.HTTP_403_FORBIDDEN,
-        details=details,
-        request_id=_request_id(request),
-    )
-
-
-def _validate_role_permission_scope(
-    request, actor, role, actor_permissions, requested_codes=None
-):
-    has_wildcard = "*" in actor_permissions
-
-    if role.es_sistema and not has_wildcard:
-        return _scope_error(
-            request,
-            "ROLE_SYSTEM_PROTECTED",
-            "No puedes modificar permisos de un rol de sistema",
-        )
-
-    if role.is_admin and not has_wildcard:
-        return _scope_error(
-            request,
-            "ROLE_ADMIN_PROTECTED",
-            "No puedes modificar permisos de un rol administrador",
-        )
-
-    has_role_assigned = RelUsuarioRol.objects.filter(
-        id_usuario=actor,
-        id_rol=role,
-        fch_baja__isnull=True,
-    ).exists()
-    if has_role_assigned and not has_wildcard:
-        return _scope_error(
-            request,
-            "SELF_ROLE_PERMISSION_ASSIGNMENT_FORBIDDEN",
-            "No puedes modificar permisos de tus propios roles",
-        )
-
-    if requested_codes and not has_wildcard:
-        disallowed_codes = sorted(
-            code for code in requested_codes if code not in actor_permissions
-        )
-        if disallowed_codes:
-            return _scope_error(
-                request,
-                "PERMISSION_GRANT_NOT_ALLOWED",
-                "No puedes asignar permisos que no tienes",
-                details={"permissionCodes": disallowed_codes},
-            )
-
-    return None
-
-
-def _validate_user_override_scope(
-    request, actor, target_user, permission, actor_permissions
-):
-    has_wildcard = "*" in actor_permissions
-
-    if permission.es_sistema and not has_wildcard:
-        return _scope_error(
-            request,
-            "PERMISSION_SYSTEM_PROTECTED",
-            "No puedes gestionar overrides para un permiso de sistema",
-        )
-
-    if target_user.id_usuario == actor.id_usuario and not has_wildcard:
-        return _scope_error(
-            request,
-            "SELF_OVERRIDE_FORBIDDEN",
-            "No puedes gestionar overrides sobre tu propio usuario",
-        )
-
-    if permission.codigo not in actor_permissions and not has_wildcard:
-        return _scope_error(
-            request,
-            "PERMISSION_GRANT_NOT_ALLOWED",
-            "No puedes gestionar overrides para permisos que no tienes",
-            details={"permissionCodes": [permission.codigo]},
-        )
-
-    return None
 
 
 def _authorize(request, permission_code=None, require_csrf=False):

@@ -238,7 +238,7 @@ WHERE t.table_schema = 'public'
 ORDER BY t.table_name;
 
 -- A5. Columna `curp` en tablas REPLICADAS de Oracle (DDL 002 viejo). El CURP
---     ahora vive en cns_clinical_history (base principal). Si la columna
+--     ahora vive en cns_paciente (base principal). Si la columna
 --     existe aqui, sync_service.py la busca en Oracle (descubre columnas por
 --     information_schema) y rompe el sync donde Oracle no la tiene.
 SELECT table_name, column_name

@@ -9,9 +9,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIRequestFactory
 
-from apps.administracion.constants.rbac_actions import RBACActions
 from apps.administracion.exceptions import custom_exception_handler
 from apps.administracion.middleware.request_id import RequestIDMiddleware
 from apps.administracion.models import (
@@ -20,15 +19,12 @@ from apps.administracion.models import (
     RelUsuarioOverride,
     RelUsuarioRol,
 )
-from apps.administracion.serializers.role_serializers import RoleDetailSerializer
 from apps.administracion.services.audit_service import AuditService
 from apps.administracion.services.rbac_resolver import RBACResolver
 from apps.administracion.services.rbac_feature_flags import (
     is_rbac_read_s1_enabled,
     resolve_rbac_read_source,
 )
-from apps.administracion.use_cases.roles.create_role import CreateRoleUseCase
-from apps.administracion.use_cases.users.assign_roles import AssignRolesUseCase
 from apps.administracion.use_cases.rbac_write.assign_user_roles import (
     AssignUserRolesUseCase,
 )
@@ -54,7 +50,6 @@ from apps.administracion.services.rbac_read_serializers import (
     serialize_role_list,
 )
 from apps.administracion.views.rbac_read_views import resolve_read_source
-from apps.administracion.views.role_views import RoleCreateView
 from apps.administracion.views import rbac_views
 from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import Permisos, Roles
@@ -223,45 +218,6 @@ class RbacResolverTests(TestCase):
         self.assertIn("expedientes:read", permissions)
         self.assertNotIn("expedientes:update", permissions)
         self.assertIn("farmacia:read", permissions)
-
-
-class AssignRolesUseCaseTests(TestCase):
-    def setUp(self):
-        self.user = SyUsuario.objects.create(
-            usuario="assign_user",
-            correo="assign.user@example.com",
-            clave_hash="hash",
-            est_activo=True,
-            cambiar_clave=False,
-            terminos_acept=True,
-        )
-        self.actor = SyUsuario.objects.create(
-            usuario="assign_actor",
-            correo="assign.actor@example.com",
-            clave_hash="hash",
-            est_activo=True,
-            cambiar_clave=False,
-            terminos_acept=True,
-        )
-        self.role = Roles.objects.create(
-            rol="ASSIGN_ROLE",
-            desc_rol="Role assign",
-            landing_route="/assign",
-            is_active=True,
-        )
-
-    def test_creates_and_reactivates_user_role_relation(self):
-        AssignRolesUseCase.execute(self.user, [self.role], self.actor)
-        relation = RelUsuarioRol.objects.get(id_usuario=self.user, id_rol=self.role)
-        self.assertIsNone(relation.fch_baja)
-
-        relation.fch_baja = timezone.now() - timedelta(days=1)
-        relation.usr_baja = self.actor
-        relation.save(update_fields=["fch_baja", "usr_baja"])
-
-        AssignRolesUseCase.execute(self.user, [self.role], self.actor)
-        relation.refresh_from_db()
-        self.assertIsNone(relation.fch_baja)
 
 
 class SetUserPrimaryRoleUseCaseTests(TestCase):
@@ -511,78 +467,6 @@ class RbacWriteConcurrencyHardeningUseCaseTests(TestCase):
         self.assertEqual(override.efecto, "DENY")
         self.assertIsNone(override.fch_baja)
         touch_revision_mock.assert_called_once()
-
-
-class CreateRoleUseCaseAndSerializerTests(TestCase):
-    def setUp(self):
-        self.actor = SyUsuario.objects.create(
-            usuario="create_role_actor",
-            correo="create.role.actor@example.com",
-            clave_hash="hash",
-            est_activo=True,
-            cambiar_clave=False,
-            terminos_acept=True,
-        )
-        self.factory = APIRequestFactory()
-
-    def test_create_role_use_case_creates_role_and_audit(self):
-        request = self.factory.post("/api/v1/roles")
-        request.user = self.actor
-        request.request_id = "req-create-role"
-        request.META["REMOTE_ADDR"] = "127.0.0.1"
-        request.META["HTTP_USER_AGENT"] = "test-agent"
-
-        role = CreateRoleUseCase.execute(
-            request,
-            {
-                "name": "ROLE_FROM_USECASE",
-                "description": "Rol desde use case",
-                "landingRoute": "/usecase",
-            },
-        )
-
-        self.assertEqual(role.rol, "ROLE_FROM_USECASE")
-        self.assertTrue(
-            AuditoriaEvento.objects.filter(
-                accion=RBACActions.ROLE_CREATE,
-                recurso_id=role.id_rol,
-            ).exists()
-        )
-
-    def test_role_detail_serializer_shape(self):
-        role = Roles.objects.create(
-            rol="SERIALIZER_ROLE",
-            desc_rol="Rol serializer",
-            landing_route="/serializer",
-            is_active=True,
-        )
-
-        data = RoleDetailSerializer(role).data
-
-        self.assertEqual(data["id"], role.id_rol)
-        self.assertEqual(data["name"], "SERIALIZER_ROLE")
-        self.assertEqual(data["description"], "Rol serializer")
-        self.assertEqual(data["landingRoute"], "/serializer")
-
-    def test_role_create_view_uses_use_case_and_returns_response(self):
-        request = self.factory.post(
-            "/api/v1/roles",
-            {
-                "name": "ROLE_FROM_VIEW",
-                "description": "Rol desde view",
-                "landingRoute": "/view",
-            },
-            format="json",
-        )
-        force_authenticate(request, user=self.actor)
-        request.request_id = "req-create-role-view"
-        request.META["REMOTE_ADDR"] = "127.0.0.1"
-        request.META["HTTP_USER_AGENT"] = "test-agent"
-
-        response = RoleCreateView.as_view()(request)
-
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["name"], "ROLE_FROM_VIEW")
 
 
 class AuditServiceTests(TestCase):

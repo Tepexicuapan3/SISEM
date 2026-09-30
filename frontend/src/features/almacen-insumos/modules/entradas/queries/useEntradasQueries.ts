@@ -10,12 +10,3 @@ export function useEntradasList(params: EntradasListParams) {
     staleTime: 60_000,
   });
 }
-
-export function useEntradaDetail(id: number) {
-  return useQuery({
-    queryKey: entradasKeys.detail(id),
-    queryFn:  () => entradasAPI.get(id),
-    enabled:  Boolean(id),
-    staleTime: 60_000,
-  });
-}

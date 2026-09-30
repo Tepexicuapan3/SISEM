@@ -101,3 +101,6 @@ backup_*.sql
 .opencode/bun.lock
 .opencode/pnpm-lock.yaml
 .opencode/yarn.lock
+
+# Memoria local de Engram (herramienta de IA, no del sistema)
+.engram/

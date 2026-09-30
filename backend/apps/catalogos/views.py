@@ -9,7 +9,6 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.catalogos.imports.registry import CATALOG_IMPORT_REGISTRY
 from apps.catalogos.models.cies import CatCies
 from apps.catalogos.serializers import CatCiesSerializer
 from apps.catalogos.services.catalog_import_service import ImportFileError
@@ -509,8 +508,6 @@ class CentrosAtencionListCreateView(CatalogBaseListCreateView):
 
 
     
-
-
 
 
 class CentrosAtencionDetailView(CatalogBaseDetailView):
@@ -1246,16 +1243,6 @@ class RolesListCreateView(CatalogBaseListCreateView):
     name_field = "rol"
     sort_map = MappingProxyType({"name": "rol", "isActive": "is_active"})
     error_codes = MappingProxyType({"exists": "ROLE_EXISTS"})
-
-class RolesDetailView(CatalogBaseDetailView):
-    catalog = "roles"
-    model = Roles
-    detail_serializer = RolesDetailSerializer
-    write_serializer = RolesWriteSerializer
-    name_field = "rol"
-    pk_field = "id_rol"
-    wrapper_key = "role"
-    error_codes = MappingProxyType({"not_found": "ROLE_NOT_FOUND", "exists": "ROLE_EXISTS"})
 
 
 class TiposAreasListCreateView(CatalogBaseListCreateView):

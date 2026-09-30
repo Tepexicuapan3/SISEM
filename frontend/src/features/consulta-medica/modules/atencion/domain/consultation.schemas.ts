@@ -35,8 +35,3 @@ export type SavePrescriptionsFormValues = z.infer<
 export type SavePrescriptionsFormInput = z.input<
   typeof savePrescriptionsFormSchema
 >;
-
-export const closeVisitFormSchema = diagnosisFieldsSchema;
-
-export type CloseVisitFormValues = z.infer<typeof closeVisitFormSchema>;
-export type CloseVisitFormInput = z.input<typeof closeVisitFormSchema>;

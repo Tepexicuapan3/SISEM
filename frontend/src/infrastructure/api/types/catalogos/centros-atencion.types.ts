@@ -284,30 +284,6 @@ export interface CentrosAtencionHorariosListParams extends PaginationParams {
   sortOrder?: "asc" | "desc";
 }
 
-// =============================================================================
-// UI HELPERS
-// =============================================================================
-
-/**
- * Modelo útil para formularios de centro.
- * Mantiene el shape desacoplado de la API si luego agregas transforms.
- */
-export interface CentroAtencionFormValues {
-  name: string;
-  code: string;
-  centerType: CentroAtencionType;
-  legacyFolio: string | null;
-  isExternal: boolean;
-  address: string | null;
-  postalCode: string | null;
-  neighborhood: string | null;
-  municipality: string | null;
-  state: string | null;
-  city: string | null;
-  phone: string | null;
-  isActive: boolean;
-}
-
 /**
  * Modelo útil para formularios de horario.
  */
