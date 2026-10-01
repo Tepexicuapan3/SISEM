@@ -10,6 +10,9 @@ const createInterceptorHarness = (): RejectionHandler => {
 
   const client = {
     interceptors: {
+      request: {
+        use: () => 0,
+      },
       response: {
         use: (_onFulfilled: unknown, rejected: RejectionHandler) => {
           onRejected = rejected;

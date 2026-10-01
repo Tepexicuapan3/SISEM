@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { authAPI } from "@api/resources/auth.api";
 import type { LoginRequest } from "@api/types";
@@ -10,6 +10,7 @@ import {
 } from "@/domains/auth-access/types/auth.messages";
 import { invalidateAuthSessionAndCapabilities } from "@/domains/auth-access/adapters/auth-query-invalidation";
 import { setAuthSession } from "@/domains/auth-access/adapters/auth-cache";
+import { resolvePostLoginRedirect } from "@/domains/auth-access/adapters/login-redirect";
 
 type LoginMutationVariables = LoginRequest & { rememberMe: boolean };
 
@@ -34,6 +35,7 @@ const getLoginMessage = (code?: string) =>
  */
 export const useLogin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -66,7 +68,11 @@ export const useLogin = () => {
         description: "Has iniciado sesion correctamente",
       });
 
-      const landingRoute = data.user.landingRoute || "/dashboard";
+      // Si la sesion expiro estando en una ruta, volvemos ahi.
+      const landingRoute =
+        resolvePostLoginRedirect(location.state) ||
+        data.user.landingRoute ||
+        "/dashboard";
       navigate(landingRoute);
     },
     onError: (error) => {

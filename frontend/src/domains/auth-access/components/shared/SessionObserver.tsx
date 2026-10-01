@@ -4,7 +4,10 @@ import { toast } from "sonner";
 import { authAPI } from "@api/resources/auth.api";
 import { queryClient } from "@app/config/query-client";
 
-import { clearAuthSession } from "@/domains/auth-access/adapters/auth-cache";
+import {
+  applySessionExpiredState,
+  expireSession,
+} from "@/domains/auth-access/adapters/session-expiration";
 import { subscribeSessionExpired } from "@/domains/auth-access/adapters/session-events";
 import { authKeys } from "@/domains/auth-access/state/auth.keys";
 
@@ -19,6 +22,11 @@ const SESSION_HEARTBEAT_INTERVAL_MS = 60_000;
 // tener la pestaña abierta).
 const ACTIVITY_EVENTS = ["mousemove", "keydown", "click", "scroll", "touchstart"] as const;
 
+const SESSION_EXPIRED_MESSAGE =
+  "Tu sesión ha expirado. Por seguridad, inicia sesión nuevamente.";
+// Id fijo: varias señales de expiracion casi simultaneas muestran un solo aviso.
+const SESSION_EXPIRED_TOAST_ID = "session-expired";
+
 export const SessionObserver = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,39 +36,64 @@ export const SessionObserver = () => {
     const handleSessionExpired = () => {
       const isAlreadyOnLogin = location.pathname === "/login";
 
-      clearAuthSession(queryClient);
+      // Idempotente: cubre tambien la expiracion avisada por otra pestaña.
+      applySessionExpiredState();
 
-      if (!isAlreadyOnLogin) {
-        toast.error("Tu sesión ha expirado. Por favor ingresa nuevamente.");
-      }
+      if (isAlreadyOnLogin) return;
 
-      if (!isAlreadyOnLogin) {
-        navigate("/login", { replace: true });
-      }
+      toast.error(SESSION_EXPIRED_MESSAGE, { id: SESSION_EXPIRED_TOAST_ID });
+      // `from` permite volver a esta ruta despues de iniciar sesion.
+      navigate("/login", { replace: true, state: { from: location } });
     };
 
     return subscribeSessionExpired(handleSessionExpired);
-  }, [location.pathname, navigate]);
+  }, [location, navigate]);
 
   useEffect(() => {
+    let checkInFlight = false;
+
+    // /auth/verify pasa por el interceptor: ante 401 ya intenta /auth/refresh
+    // y, si la sesion no es renovable, dispara la expiracion. Un `valid:false`
+    // que llegue hasta aca es un 401/403 definitivo.
+    const checkSession = async () => {
+      if (checkInFlight || !queryClient.getQueryData(authKeys.session())) return;
+      checkInFlight = true;
+
+      try {
+        const result = await authAPI.verifyToken();
+        if (result && !result.valid) {
+          expireSession();
+        }
+      } catch {
+        // Red caida, timeout o 5xx: no es evidencia de sesion expirada.
+      } finally {
+        checkInFlight = false;
+      }
+    };
+
     // Heartbeat: mantiene viva la sesion activa (control de sesion unica),
     // pero SOLO si hubo actividad real del usuario en la ultima ventana.
     // Si el usuario deja la pestaña abierta sin tocar nada, dejamos de
     // renovar el TTL a proposito para que la sesion expire por inactividad
     // real (antes solo se liberaba cerrando la pestaña o apagando el equipo).
     const markActivity = () => {
-      lastActivityRef.current = Date.now();
+      const now = Date.now();
+      const wasIdle = now - lastActivityRef.current > SESSION_HEARTBEAT_INTERVAL_MS;
+      lastActivityRef.current = now;
+
+      // Al volver de un periodo inactivo validamos de inmediato: si la sesion
+      // murio mientras tanto, el usuario no debe seguir viendo la app hasta
+      // el proximo tick.
+      if (wasIdle) void checkSession();
     };
     ACTIVITY_EVENTS.forEach((event) =>
       window.addEventListener(event, markActivity, { passive: true }),
     );
 
     const interval = setInterval(() => {
-      const user = queryClient.getQueryData(authKeys.session());
-      if (!user) return;
       const idleFor = Date.now() - lastActivityRef.current;
       if (idleFor > SESSION_HEARTBEAT_INTERVAL_MS) return;
-      void authAPI.verifyToken();
+      void checkSession();
     }, SESSION_HEARTBEAT_INTERVAL_MS);
 
     return () => {

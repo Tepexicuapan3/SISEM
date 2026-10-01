@@ -49,7 +49,10 @@ export const useAuthSession = () => {
   }, [location.pathname, navigate, query.data]);
 
   useEffect(() => {
-    if (!query.error || query.data) return;
+    // React Query conserva el `data` previo cuando falla un refetch: un
+    // 401/403 debe limpiar igual (fail-closed), si no la UI queda "logueada"
+    // con un usuario obsoleto. Errores de red/5xx no entran aca.
+    if (!query.error) return;
     if (query.error.status === 401 || query.error.status === 403) {
       clearAuthSession(queryClient);
     }

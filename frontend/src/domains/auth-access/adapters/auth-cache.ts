@@ -33,3 +33,20 @@ export const clearAuthSession = (queryClient: QueryClient) => {
   queryClient.setQueryData(authKeys.session(), null);
   queryClient.setQueryData(authKeys.capabilities(), null);
 };
+
+/**
+ * Limpia todo dato cacheado bajo la sesion que expiro.
+ *
+ * Razon empresarial:
+ * - Datos clinicos de la sesion anterior no deben quedar en memoria para el
+ *   siguiente usuario de la misma estacion (igual que el logout manual).
+ * - Las queries de auth se marcan como "no autenticado" en vez de removerse
+ *   (ver clearAuthSession) para no provocar refetch en bucle.
+ */
+export const clearAuthenticatedCache = (queryClient: QueryClient) => {
+  // removeQueries cancela en silencio los fetch en vuelo de cada query.
+  queryClient.removeQueries({
+    predicate: (query) => query.queryKey[0] !== authKeys.all[0],
+  });
+  clearAuthSession(queryClient);
+};

@@ -39,6 +39,7 @@ vi.mock("@tanstack/react-query", async () => {
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ pathname: "/login", state: null }),
 }));
 
 vi.mock("sonner", () => ({

@@ -881,7 +881,7 @@ de escribir esto.
 
 Implementado el modelo del documento "Historia Clínica Unificada"
 (artifact `XMxgUTzoxU6mdPMgr2xDDN`, 25-sep-2026) completo, quitando lo que
-el modelo nuevo reemplaza. **Sin commitear.**
+el modelo nuevo reemplaza. Commiteado en `e097aed` (2026-09-29).
 
 | Documento | SIRES |
 |---|---|
@@ -890,7 +890,7 @@ el modelo nuevo reemplaza. **Sin commitear.**
 | ANTECEDENTE_PERSONAL / _FAMILIAR / _QUIRURGICO, HABITO | `cns_antecedente_personal`/`_familiar`/`_quirurgico`, `cns_habito` (baja lógica con motivo, CIE sensible redactado) |
 | NOTA_HISTORICA | `cns_nota_historica` (solo lectura; texto acumulado partido por `[dd/mm/aaaa (usuario)]`) |
 | EXPLORACION_FISICA | `cns_exploracion_fisica` por consulta (solo editable `en_consulta`) |
-| SIGNOS_VITALES | ya existía (`smt_visit_vitals`); del legado → nota histórica (SIRES liga signos a visita) |
+| SIGNOS_VITALES | con consulta: `smt_visit_vitals` (ya existía); del legado, sin consulta: `cns_signos_vitales_legado` (numérico, `consulta_medica.0038/0039`) |
 | HC_ESTOMATOLOGIA | `cns_stomatology_history` reestructurada (higiene, cepillados, hilo, tejidos blandos, ATM) |
 | ODONTOGRAMA / _PIEZA | `cns_odontograma` versionado por consulta + CPOD, `cns_odontograma_pieza` con caras |
 | TRATAMIENTO_DENTAL | `cns_tratamiento_dental` |
