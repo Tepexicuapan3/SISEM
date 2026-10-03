@@ -19,8 +19,11 @@ class CatEmpleado(models.Model):
     fec_vig             = models.DateField(null=True, blank=True, db_column='fec_vig')
     no_edad             = models.IntegerField(null=True, blank=True, db_column='no_edad')
     cd_clinica          = models.CharField(max_length=10,  null=True, blank=True, db_column='cd_clinica')
-    # Sin curp A PROPOSITO: tabla replicada de Oracle (agregar columnas rompe el
-    # sync, incidente 2026-09-17). El CURP del paciente vive en cns_paciente.curp (historia clinica unificada).
+    # CURP y CD_SEXO existen en Oracle CAT_EMPLEADOS (storage/expedientes-ddl/003). Copia EXACTA
+    # de Oracle: cd_sexo usa F = Femenino y M = Masculino (al reves de la CURP) y hay CURP con
+    # el texto 'SIN CURP'. No leerlas como dato limpio: el valor validado vive en cns_paciente.
+    curp                = models.CharField(max_length=18, null=True, blank=True, db_column='curp')
+    cd_sexo             = models.CharField(max_length=1,  null=True, blank=True, db_column='cd_sexo')
     fec_ult_actualizacion = models.DateTimeField(null=True, blank=True, db_column='fec_ult_actualizacion')
 
     class Meta:

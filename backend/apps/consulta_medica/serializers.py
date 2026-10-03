@@ -1,5 +1,4 @@
 import os
-import re
 
 from rest_framework import serializers
 
@@ -13,15 +12,7 @@ from apps.consulta_medica.models import (
     SpecialtySource,
     StomatologyHistory,
 )
-
-# Estructura oficial RENAPO: 4 letras, fecha AAMMDD valida en rango, sexo
-# (H/M/X), entidad federativa (incluye NE = nacido en el extranjero), 3
-# consonantes internas, homoclave y digito verificador.
-CURP_REGEX = re.compile(
-    r"^[A-Z][AEIOUX][A-Z]{2}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[HMX]"
-    r"(AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)"
-    r"[B-DF-HJ-NP-TV-Z]{3}[A-Z\d]\d$"
-)
+from apps.consulta_medica.services.curp_rules import CURP_REGEX
 
 STUDY_RESULT_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 _ALLOWED_STUDY_RESULT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}

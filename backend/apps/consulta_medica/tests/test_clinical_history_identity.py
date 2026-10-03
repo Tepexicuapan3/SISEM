@@ -46,11 +46,12 @@ class ClinicalHistoryIdentityApiTests(_ConsultationAuditApiTestBase):
         self.assertEqual(read.data["sex"], "H")
 
     def test_normalizes_curp_to_uppercase_and_blank_to_null(self):
-        normalized = self._patch({"curp": f"  {VALID_CURP.lower()} ", "sex": "X"})
+        # VALID_CURP es de hombre: el sexo tiene que coincidir con su letra 11 (5.1).
+        normalized = self._patch({"curp": f"  {VALID_CURP.lower()} ", "sex": "H"})
         cleared = self._patch({"curp": "", "sex": ""})
 
         self.assertEqual(normalized.data["curp"], VALID_CURP)
-        self.assertEqual(normalized.data["sex"], "X")
+        self.assertEqual(normalized.data["sex"], "H")
         self.assertIsNone(cleared.data["curp"])
         self.assertIsNone(cleared.data["sex"])
 

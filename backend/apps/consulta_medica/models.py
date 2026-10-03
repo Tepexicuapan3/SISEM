@@ -1,3 +1,6 @@
+import uuid
+
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.utils import timezone
 
@@ -738,27 +741,48 @@ class Sex(models.TextChoices):
 
 class Patient(models.Model):
     """
-    PACIENTE (documento "Historia Clinica Unificada", 5.1 Nucleo del
-    paciente): datos de la persona que se capturan UNA sola vez y comparten
-    todas las especialidades -- ocupacion, escolaridad, estado civil,
-    religion, residencia, telefono (+ CURP y sexo, identidad NOM-024).
+    PACIENTE (documento "Historia Clinica Unificada", 5.1 "SERMED como
+    fuente, PACIENTE como tabla propia"): identidad estable del paciente a la
+    que apuntan las tablas clinicas, aunque SERMED lo de de baja o lo borre.
 
-    El documento la define como "lo que ya existe (expediente), ampliado".
-    En SIRES la identidad base (nombre, fecha de nacimiento) vive en
-    `cat_empleados`/`cat_familiar`, replicadas de Oracle, que NO se pueden
-    ampliar (agregarles columnas rompe el sync -- incidente 2026-09-17). Por
-    eso la ampliacion vive en esta tabla propia, 1:1 con el paciente
-    (no_exp + tp_paciente/pk_num). Las ediciones se versionan en
-    PatientRevision (NOM-024).
+    - Datos que manda SERMED (nombre, fecha de nacimiento, sexo y CURP de
+      titulares): se copian de las replicas cat_empleados/cat_familiar en
+      cada sincronizacion; no se capturan en SIRES.
+    - Datos que captura SIRES: ocupacion, escolaridad, estado civil,
+      religion, residencia, telefono y la CURP de familiares. Sus ediciones
+      se versionan en PatientRevision (NOM-024).
+
+    Identificadores del familiar: pk_num (PK_NUM de SERMED) y cd_familiar
+    (cd_familiar de dbclinicas, el tp_paciente del legado). Hay familiares
+    del legado sin PK_NUM: se identifican solo por cd_familiar.
     """
 
-    id_patient = models.BigAutoField(primary_key=True, db_column="id_paciente")
-    no_exp = models.CharField(max_length=20, db_column="no_exp")
-    pk_num = models.IntegerField(db_column="tp_paciente", default=0)
+    class CurpSource(models.TextChoices):
+        SERMED = "O", "Oracle (SERMED)"
+        CAPTURED = "C", "Capturada en SIRES"
 
-    # Identidad (NOM-024). Sin unique: el legado puede tener expedientes
-    # duplicados (ajusta_dh) que comparten persona.
+    id_patient = models.BigAutoField(primary_key=True, db_column="id_paciente")
+    # Identificador para compartir con otras instituciones (NOM-024). Nunca cambia.
+    uuid = models.UUIDField(db_column="uuid", default=uuid.uuid4, unique=True, editable=False)
+    no_exp = models.CharField(max_length=20, db_column="no_exp")
+    # 0 = titular. NULL = familiar sin PK_NUM en SERMED (solo cd_familiar).
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
+    legacy_family_code = models.IntegerField(db_column="cd_familiar", null=True, blank=True)
+
+    # Copiados de SERMED (cat_empleados / cat_familiar). "RN" en ds_nombre
+    # mientras un recien nacido no este registrado en Capital Humano.
+    paternal_surname = models.CharField(max_length=100, db_column="ds_paterno", null=True, blank=True)
+    maternal_surname = models.CharField(max_length=100, db_column="ds_materno", null=True, blank=True)
+    first_name = models.CharField(max_length=100, db_column="ds_nombre", null=True, blank=True)
+    birth_date = models.DateField(db_column="fe_nacimiento", null=True, blank=True)
+
+    # Identidad (NOM-024). Todavia sin unique: SERMED tiene CURP repetidas
+    # (una persona con varios NO_EXP) que se resuelven fusionando pacientes.
+    # Ver el comando reporte_curp_duplicadas.
     curp = models.CharField(max_length=18, db_column="curp", null=True, blank=True, db_index=True)
+    curp_source = models.CharField(
+        max_length=1, db_column="curp_origen", choices=CurpSource.choices, null=True, blank=True,
+    )
     sex = models.CharField(max_length=1, db_column="sexo", choices=Sex.choices, null=True, blank=True)
 
     occupation = models.ForeignKey(
@@ -793,7 +817,20 @@ class Patient(models.Model):
     class Meta:
         db_table = "cns_paciente"
         constraints = [
-            models.UniqueConstraint(fields=["no_exp", "pk_num"], name="cns_paciente_uniq"),
+            models.UniqueConstraint(
+                fields=["no_exp", "pk_num"], condition=models.Q(pk_num__isnull=False),
+                name="cns_paciente_exp_pknum_uq",
+            ),
+            models.UniqueConstraint(
+                fields=["legacy_family_code"], condition=models.Q(legacy_family_code__isnull=False),
+                name="cns_paciente_cd_familiar_uq",
+            ),
+            # Nadie queda sin identificador: titular (pk_num 0), familiar con
+            # PK_NUM, o familiar del legado con solo cd_familiar.
+            models.CheckConstraint(
+                condition=models.Q(pk_num__isnull=False) | models.Q(legacy_family_code__isnull=False),
+                name="cns_paciente_con_identificador",
+            ),
         ]
 
 
@@ -1468,3 +1505,66 @@ class DentalTreatment(PatientRecordBase):
     class Meta:
         db_table = "cns_tratamiento_dental"
         indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_tratdent_patient_idx")]
+
+
+# ── Bitacora de cambios (documento "Historia Clinica Unificada", seccion 6) ──
+
+class ChangeLog(models.Model):
+    """
+    BITACORA_CAMBIOS: por que se dio de alta, se modifico o se dio de baja un
+    registro de cualquier tabla del modelo, con el valor anterior y el nuevo
+    (solo las columnas que cambiaron). Asi ninguna tabla necesita columnas de
+    motivo propias.
+
+    Reglas del documento para que no crezca de mas:
+      - El motivo lo escribe la aplicacion (services/change_log_service.py),
+        nunca un trigger: la base sabe que cambio, pero no por que.
+      - Altas solo donde el motivo varia (identificador_paciente, fusiones);
+        en las demas tablas el alta ya queda en usr_alta/fch_alta.
+      - Sin autoguardados de borradores ni lecturas (las lecturas van en
+        bitacora_acceso).
+
+    No se edita ni se borra: es evidencia (NOM-024).
+    """
+
+    class Action(models.TextChoices):
+        CREATE = "A", "Alta"
+        UPDATE = "M", "Modificacion"
+        DELETE = "B", "Baja"
+
+    class Reason(models.TextChoices):
+        SERMED_SYNC = "SINCRONIZACION SERMED", "Sincronizacion con SERMED"
+        NEWBORN_REGISTRATION = "REGISTRO RN", "Registro de recien nacido"
+        NEWBORN_LINK = "LIGA RN", "Liga de recien nacido con SERMED"
+        MERGE = "FUSION", "Fusion de pacientes"
+        CAPTURE = "CAPTURA", "Captura de un dato vacio"
+        CORRECTION = "CORRECCION", "Correccion"
+        MIGRATION_CONFLICT = "CONFLICTO MIGRACION", "Conflicto de migracion"
+        MIGRATION = "MIGRACION", "Migracion del legado"
+        CLINIC_CHANGE = "CAMBIO DE CLINICA EN SERMED", "Cambio de clinica en SERMED"
+
+    id_change = models.BigAutoField(primary_key=True, db_column="id")
+    table = models.CharField(max_length=40, db_column="tabla")
+    # Llave legible del registro, p. ej. "PK_NUM|88731" o "id_paciente|15".
+    key = models.CharField(max_length=80, db_column="llave")
+    action = models.CharField(max_length=1, db_column="accion", choices=Action.choices)
+    # Texto libre acotado: los valores de Reason son los conocidos, pero el
+    # documento deja la lista abierta ("...").
+    reason = models.CharField(max_length=60, db_column="motivo")
+    previous_value = models.JSONField(
+        db_column="valor_anterior", null=True, blank=True, encoder=DjangoJSONEncoder,
+    )
+    new_value = models.JSONField(
+        db_column="valor_nuevo", null=True, blank=True, encoder=DjangoJSONEncoder,
+    )
+    # Usuario (id de SyUsuario como texto) o proceso (SYNC_SERMED, MIGRACION).
+    user = models.CharField(max_length=40, db_column="usuario")
+    occurred_at = models.DateTimeField(db_column="fecha_hora", default=timezone.now)
+
+    class Meta:
+        db_table = "cns_bitacora_cambios"
+        ordering = ["occurred_at", "id_change"]
+        indexes = [
+            models.Index(fields=["table", "key", "occurred_at"], name="cns_bitacora_registro_idx"),
+            models.Index(fields=["reason", "occurred_at"], name="cns_bitacora_motivo_idx"),
+        ]

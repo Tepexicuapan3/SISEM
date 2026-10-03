@@ -1,0 +1,341 @@
+{
+  "CAT_EMPLEADOS": {
+    "existe": true,
+    "columnas": [
+      {
+        "nombre": "NO_EXP",
+        "tipo": "NUMBER",
+        "longitud": 22,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_PATERNO",
+        "tipo": "VARCHAR2",
+        "longitud": 40,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_MATERNO",
+        "tipo": "VARCHAR2",
+        "longitud": 40,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_NOMBRE",
+        "tipo": "VARCHAR2",
+        "longitud": 40,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CVE_CD_LABORAL",
+        "tipo": "VARCHAR2",
+        "longitud": 2,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CD_LABORAL",
+        "tipo": "VARCHAR2",
+        "longitud": 2022,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_CATEGORIA",
+        "tipo": "VARCHAR2",
+        "longitud": 1009,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CVE_DIR",
+        "tipo": "VARCHAR2",
+        "longitud": 6,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DIR",
+        "tipo": "VARCHAR2",
+        "longitud": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CVE_GER",
+        "tipo": "VARCHAR2",
+        "longitud": 6,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "GERENCIA",
+        "tipo": "VARCHAR2",
+        "longitud": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CVE_SUBGER",
+        "tipo": "VARCHAR2",
+        "longitud": 6,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "SUBGERENCIA",
+        "tipo": "VARCHAR2",
+        "longitud": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CVE_COORD",
+        "tipo": "VARCHAR2",
+        "longitud": 6,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "COORDINACION",
+        "tipo": "VARCHAR2",
+        "longitud": 100,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FE_NAC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CD_SEXO",
+        "tipo": "CHAR",
+        "longitud": 1,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "NO_EDAD",
+        "tipo": "NUMBER",
+        "longitud": 22,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FE_ING",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FEC_VIG",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CD_CLINICA",
+        "tipo": "NUMBER",
+        "longitud": 22,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FEC_BAJA",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CVE_BAJA",
+        "tipo": "VARCHAR2",
+        "longitud": 4,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "MOT_BAJA",
+        "tipo": "VARCHAR2",
+        "longitud": 80,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "ALTA_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "HEP_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "HPP_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "HPA_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "HPTN_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "HPTS_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "EMP_AC",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "RFC",
+        "tipo": "VARCHAR2",
+        "longitud": 13,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CURP",
+        "tipo": "VARCHAR2",
+        "longitud": 18,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FEC_ULT_ACTUALIZACION",
+        "tipo": "DATE",
+        "longitud": 7,
+        "nullable": true,
+        "default": null
+      }
+    ]
+  },
+  "CAT_FAMILIAR": {
+    "existe": true,
+    "columnas": [
+      {
+        "nombre": "CD_FAMILIAR",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "NO_EXPF",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "TP_DER",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_PATERNO",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_MATERNO",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "DS_NOMBRE",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CD_PARENTESCO",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FE_NAC",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CD_SEXO",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "NO_EDAD",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FE_ING",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "FEC_VIG",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      },
+      {
+        "nombre": "CD_CLINICA",
+        "tipo": "UNDEFINED",
+        "longitud": 0,
+        "nullable": true,
+        "default": null
+      }
+    ]
+  }
+}

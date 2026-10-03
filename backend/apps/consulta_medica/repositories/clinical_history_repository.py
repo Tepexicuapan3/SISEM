@@ -19,7 +19,7 @@ _VERSIONED_FIELDS = (
 
 
 class PatientRepository:
-    """PACIENTE: datos de la persona (1 por no_exp + tp_paciente)."""
+    """PACIENTE: datos de la persona (1 por no_exp + pk_num, o por cd_familiar)."""
 
     @staticmethod
     def get_or_create(no_exp, pk_num):
@@ -50,9 +50,18 @@ class PatientRepository:
     def to_contract(patient):
         return {
             "id": patient.id_patient,
+            "uuid": str(patient.uuid),
             "noExp": patient.no_exp,
             "pkNum": patient.pk_num,
+            "legacyFamilyCode": patient.legacy_family_code,
+            # Copiados de SERMED: solo lectura en SIRES.
+            "paternalSurname": patient.paternal_surname,
+            "maternalSurname": patient.maternal_surname,
+            "firstName": patient.first_name,
+            "birthDate": patient.birth_date.isoformat() if patient.birth_date else None,
             "curp": patient.curp,
+            # "O" = viene de SERMED (no editable), "C" = capturada en SIRES.
+            "curpSource": patient.curp_source,
             "sex": patient.sex,
             "occupationId": patient.occupation_id,
             "educationLevelId": patient.education_level_id,

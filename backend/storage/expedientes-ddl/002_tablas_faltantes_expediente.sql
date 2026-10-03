@@ -16,6 +16,7 @@
 -- Son replicas de Oracle y sync_service.py descubre columnas via information_schema: una
 -- columna que Oracle no tiene rompe el sync (incidente 2026-09-17). El CURP del paciente vive
 -- en la base principal de SIRES, en cns_paciente.curp (historia clinica unificada).
+-- Excepcion: cat_empleados SI la tiene en Oracle; se agrega en 003_curp_sexo_cat_empleados.sql.
 
 -- ── cat_empleados_sis ────────────────────────────────────────────────────────────────────────
 -- Mismo shape que cat_empleados (el nombre "_sis" sugiere la misma entidad desde otra fuente/
