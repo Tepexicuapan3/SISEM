@@ -4,3 +4,9 @@ from django.apps import AppConfig
 class ConsultaMedicaConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.consulta_medica"
+
+    def ready(self):
+        # 5.1 paso 7c: todo registro clinico nuevo se guarda con su id_paciente.
+        from apps.consulta_medica.services.patient_link_service import connect_signals
+
+        connect_signals()

@@ -377,6 +377,7 @@ export type {
 // =============================================================================
 export type {
   ClinicalHistory,
+  CurpSource,
   PatientProfile,
   PatientSex,
   UpdatePatientProfileRequest,

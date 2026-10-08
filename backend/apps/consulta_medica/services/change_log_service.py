@@ -26,6 +26,8 @@ from apps.consulta_medica.models import ChangeLog
 # Usuario de la bitacora cuando el cambio lo hace un proceso y no una persona.
 PROCESS_SERMED_SYNC = "SYNC_SERMED"
 PROCESS_MIGRATION = "MIGRACION"
+# Alta automatica desde SIRES sin usuario conocido (p. ej. al abrir la historia).
+PROCESS_SIRES = "SIRES"
 
 
 def build_key(*parts: Any) -> str:
@@ -50,7 +52,7 @@ def changed_values(
     return {key: previous.get(key) for key in keys}, {key: new.get(key) for key in keys}
 
 
-def _user_text(user: Any) -> str:
+def user_text(user: Any) -> str:
     """Acepta un SyUsuario, su id o el nombre de un proceso."""
     if user is None or user == "":
         raise ValueError("La bitacora necesita usuario o proceso: nunca se registra un cambio anonimo.")
@@ -67,6 +69,7 @@ def record_change(
     user: Any,
     previous: dict[str, Any] | None = None,
     new: dict[str, Any] | None = None,
+    occurred_at=None,
 ) -> ChangeLog | None:
     """
     Registra un alta (A), modificacion (M) o baja (B) con su motivo.
@@ -98,5 +101,8 @@ def record_change(
         reason=reason.strip()[:60],
         previous_value=previous or None,
         new_value=new or None,
-        user=_user_text(user),
+        user=user_text(user),
+        # Por defecto, ahora. Se pasa al registrar un hecho del pasado (p. ej.
+        # un conflicto de migracion que ya existia antes de la bitacora).
+        **({"occurred_at": occurred_at} if occurred_at is not None else {}),
     )

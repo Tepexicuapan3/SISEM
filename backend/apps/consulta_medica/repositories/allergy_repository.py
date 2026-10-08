@@ -1,5 +1,6 @@
 from apps.catalogos.models import CatTipoAlergia
 from apps.consulta_medica.models import Allergy, AllergyRevision
+from apps.consulta_medica.services.patient_link_service import for_patient
 
 # Campos editables via update() -- se usa para saber que "previous_<campo>"
 # snapshotear en AllergyRevision. No incluye no_exp/pk_num/source/is_active
@@ -16,14 +17,14 @@ _VERSIONED_FIELDS = (
 class AllergyRepository:
     @staticmethod
     def list_for_patient(no_exp, pk_num):
-        return Allergy.objects.select_related("allergy_type").filter(
-            no_exp=no_exp, pk_num=pk_num, is_active=True,
+        return for_patient(
+            Allergy.objects.select_related("allergy_type").filter(is_active=True), no_exp, pk_num,
         ).order_by("created_at")
 
     @staticmethod
     def get_active_by_id(allergy_id, no_exp, pk_num):
-        return Allergy.objects.filter(
-            pk=allergy_id, no_exp=no_exp, pk_num=pk_num, is_active=True,
+        return for_patient(
+            Allergy.objects.filter(pk=allergy_id, is_active=True), no_exp, pk_num,
         ).first()
 
     @staticmethod
@@ -31,12 +32,13 @@ class AllergyRepository:
         """Alergias activas de categoria MEDICATION -- usado por el cruce
         receta<->alergia (ver `prescription_item_usecase.add_prescription_item`).
         Una alergia RESUELTA sigue visible como historia pero ya no alerta."""
-        return Allergy.objects.filter(
-            no_exp=no_exp,
-            pk_num=pk_num,
-            is_active=True,
-            status=Allergy.Status.ACTIVE,
-            allergy_type_id=CatTipoAlergia.MEDICATION,
+        return for_patient(
+            Allergy.objects.filter(
+                is_active=True,
+                status=Allergy.Status.ACTIVE,
+                allergy_type_id=CatTipoAlergia.MEDICATION,
+            ),
+            no_exp, pk_num,
         )
 
     @staticmethod

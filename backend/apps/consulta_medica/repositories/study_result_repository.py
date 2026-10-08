@@ -1,4 +1,5 @@
 from apps.consulta_medica.models import StudyResult
+from apps.consulta_medica.services.patient_link_service import for_patient
 
 
 class StudyResultRepository:
@@ -30,7 +31,7 @@ class StudyResultRepository:
     @staticmethod
     def list_for_patient(no_exp, pk_num):
         return (
-            StudyResult.objects.filter(no_exp=no_exp, pk_num=pk_num, is_active=True)
+            for_patient(StudyResult.objects.filter(is_active=True), no_exp, pk_num)
             .select_related("study_type")
             .order_by("-result_date")
         )

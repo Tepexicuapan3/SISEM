@@ -25,35 +25,41 @@ const columns: DataTableColumn<AccessLogItem>[] = [
   {
     key: "occurredAt",
     header: "Fecha y hora",
+    className: "w-[170px]",
     render: (row) => <span className="whitespace-nowrap">{formatAccessLogDate(row.occurredAt)}</span>,
   },
   {
     key: "actor",
     header: "Usuario",
+    className: "w-[280px]",
+    truncate: false,
     render: (row) => (
-      <div className="flex flex-col">
-        <span>{row.actorName ?? "—"}</span>
-        <span className="text-xs text-txt-muted">{row.actorUsername ?? "Sin usuario"}</span>
+      <div className="flex min-w-0 flex-col">
+        <span className="whitespace-normal break-words leading-snug">{row.actorName ?? "—"}</span>
+        <span className="truncate text-xs text-txt-muted">{row.actorUsername ?? "Sin usuario"}</span>
       </div>
     ),
   },
   {
     key: "patient",
     header: "Expediente",
+    className: "w-[140px]",
     render: (row) => (row.noExp ? `${row.noExp} / ${row.pkNum ?? 0}` : "—"),
   },
   {
     key: "action",
     header: "Acción",
+    className: "w-[120px]",
     render: (row) => ACCESS_LOG_ACTION_LABELS[row.action] ?? row.action,
   },
   {
     key: "eventType",
     header: "Evento",
+    className: "w-[220px]",
     render: (row) => (
       <Badge
         variant={row.eventType === "diagnostico_restringido" ? "critical" : "outline"}
-        className="text-xs"
+        className="h-auto whitespace-normal text-left text-xs"
       >
         {ACCESS_LOG_EVENT_TYPE_LABELS[row.eventType] ?? row.eventType}
         {row.redactedCount ? ` (${row.redactedCount})` : ""}
@@ -63,9 +69,10 @@ const columns: DataTableColumn<AccessLogItem>[] = [
   {
     key: "section",
     header: "Sección",
+    className: "w-[170px]",
     render: (row) => (row.section ? ACCESS_LOG_SECTION_LABELS[row.section] ?? row.section : "—"),
   },
-  { key: "ipAddress", header: "IP", render: (row) => row.ipAddress ?? "—" },
+  { key: "ipAddress", header: "IP", className: "w-[140px]", render: (row) => row.ipAddress ?? "—" },
 ];
 
 export function BitacoraAccesoPage() {
@@ -226,7 +233,7 @@ export function BitacoraAccesoPage() {
         emptyTitle="Sin registros"
         emptyDescription="Cuando el personal consulte expedientes, los accesos se listarán aquí."
         footerNote={isFetching ? "Actualizando…" : `${total} registro(s)`}
-        minWidthClassName="min-w-[900px]"
+        minWidthClassName="min-w-[1240px]"
       />
     </div>
   );

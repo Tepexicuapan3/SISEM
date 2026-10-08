@@ -1,7 +1,17 @@
+import logging
+
 from django.db import transaction
 from django.utils import timezone
 
-from apps.consulta_medica.models import ClinicalHistory, Patient, PatientRevision
+from apps.consulta_medica.models import ChangeLog, ClinicalHistory, Patient, PatientRevision
+from apps.consulta_medica.services.change_log_service import PROCESS_SIRES
+from apps.consulta_medica.services.patient_identifier_service import (
+    IdentifierConflict,
+    register_column_identifiers,
+)
+from apps.consulta_medica.services.patient_link_service import find_patient_by_record_key
+
+logger = logging.getLogger(__name__)
 
 # Campos editables de PACIENTE -- mismo set que PATIENT_FIELD_MAP en
 # clinical_history_usecase.py. Se usa para saber que "previous_<campo>"
@@ -22,8 +32,33 @@ class PatientRepository:
     """PACIENTE: datos de la persona (1 por no_exp + pk_num, o por cd_familiar)."""
 
     @staticmethod
-    def get_or_create(no_exp, pk_num):
-        return Patient.objects.get_or_create(no_exp=no_exp, pk_num=pk_num)
+    def get_or_create(no_exp, pk_num, *, created_by_id=None):
+        with transaction.atomic():
+            # Incluye al familiar del legado sin PK_NUM (pk_num NULL, registros
+            # con el cd_familiar como llave): ver find_patient_by_record_key.
+            existing = find_patient_by_record_key(no_exp, pk_num)
+            if existing:
+                return existing, False
+            patient, created = Patient.objects.get_or_create(no_exp=no_exp, pk_num=pk_num)
+            if created:
+                PatientRepository._register_identifiers(patient, created_by_id)
+        return patient, created
+
+    @staticmethod
+    def _register_identifiers(patient, created_by_id):
+        """Alta del NO_EXP del titular nuevo. Los familiares NO: por aqui
+        tambien entra la importacion del legado, que hoy pasa cd_familiar como
+        pk_num (bug documentado); sus identificadores se registran al corregir
+        ese mapeo y en la sincronizacion con SERMED, donde el valor se verifica.
+        Un conflicto no frena la atencion: se registra para revisarlo."""
+        try:
+            register_column_identifiers(
+                patient, reason=ChangeLog.Reason.PATIENT_OPENED,
+                user=created_by_id if created_by_id is not None else PROCESS_SIRES,
+                include_family=False,
+            )
+        except IdentifierConflict as exc:
+            logger.warning("Identificador en conflicto al abrir paciente %s: %s", patient.pk, exc)
 
     @staticmethod
     def update(patient, *, fields, updated_by_id=None):
@@ -81,7 +116,7 @@ class ClinicalHistoryRepository:
     def get_or_create_for_patient(no_exp, pk_num, *, opened_on=None, clinic_code=None,
                                   doctor_code=None, created_by_id=None):
         with transaction.atomic():
-            patient, _ = PatientRepository.get_or_create(no_exp, pk_num)
+            patient, _ = PatientRepository.get_or_create(no_exp, pk_num, created_by_id=created_by_id)
             history, created = ClinicalHistory.objects.get_or_create(
                 no_exp=no_exp,
                 pk_num=pk_num,

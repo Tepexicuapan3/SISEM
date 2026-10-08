@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from apps.authentication.management.commands._legacy_mysql_base import LegacyMysqlCommandMixin
 from apps.consulta_medica.models import LegacyConsultationRecord
+from apps.consulta_medica.services.legacy_family_map import LegacyFamilyMap
 from django.core.management.base import BaseCommand
 
 _BATCH_SIZE = 5000
@@ -96,6 +97,9 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                     query += f" LIMIT {int(options['limit'])}"
                 cursor.execute(query)
                 rows = cursor.fetchall()
+            # tp_paciente del legado es cat_familiar.cd_familiar, NO el PK_NUM de
+            # SERMED: se traduce con el cat_familiar del legado (legacy_family_map).
+            family_map = LegacyFamilyMap.from_legacy_connection(conn)
         finally:
             conn.close()
 
@@ -127,7 +131,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                 continue
 
             try:
-                pk_num = int(row.get("tp_paciente") or 0)
+                pk_num = family_map.record_key(no_exp, int(row.get("tp_paciente") or 0))[0]
             except (TypeError, ValueError):
                 errores.append(
                     f"folio={legacy_folio}: tp_paciente invalido "

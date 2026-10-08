@@ -20,10 +20,12 @@ import socket
 from django.utils import timezone
 
 from apps.consulta_medica.models import (
+    ChangeLog,
     LegacyMigrationConflict,
     LegacyMigrationRun,
     PatientLegacySource,
 )
+from apps.consulta_medica.services.change_log_service import PROCESS_MIGRATION, build_key, record_change
 
 
 def _operator(explicit):
@@ -80,11 +82,15 @@ def apply_patient_fields(patient, values, *, legacy_ref, legacy_date, run=None):
         )
 
     def conflict(field, kept, discarded, winner):
-        conflicts.append(LegacyMigrationConflict.objects.create(
+        item = LegacyMigrationConflict.objects.create(
             run=run, no_exp=patient.no_exp, pk_num=patient.pk_num, field=field,
             kept_value=kept, discarded_value=discarded, legacy_ref=legacy_ref,
             legacy_date=legacy_date, winner=winner,
-        ))
+        )
+        conflicts.append(item)
+        # Documento 6/7: el valor descartado queda en la bitacora unica, con
+        # la misma fecha que el conflicto (asi el relleno no lo duplica).
+        log_conflict(patient, field, kept=kept, discarded=discarded, occurred_at=item.created_at)
 
     for field, raw in values.items():
         incoming = _as_text(raw)
@@ -130,3 +136,46 @@ def _is_newer(candidate, previous):
     if candidate is None:
         return False
     return previous is None or candidate > previous
+
+
+def log_conflict(patient, field, *, kept, discarded, occurred_at=None):
+    """Conflicto de migracion en cns_bitacora_cambios (motivo CONFLICTO
+    MIGRACION): valor_anterior = el descartado, valor_nuevo = el que quedo.
+    cns_conflicto_migracion se conserva para la revision humana (ganador,
+    ejecucion y fila de origen)."""
+    return record_change(
+        table="cns_paciente", key=build_key("id_paciente", patient.pk),
+        action=ChangeLog.Action.UPDATE, reason=ChangeLog.Reason.MIGRATION_CONFLICT,
+        user=PROCESS_MIGRATION, previous={field: discarded}, new={field: kept},
+        occurred_at=occurred_at,
+    )
+
+
+def backfill_conflicts_to_change_log(*, dry_run=False):
+    """
+    Paso 11: pasa a la bitacora los conflictos que ya existian. Idempotente:
+    un conflicto ya pasado tiene una entrada con su misma fecha y llave.
+    Devuelve {"pasados": n, "ya_estaban": n, "sin_paciente": n}.
+    """
+    from apps.consulta_medica.services.patient_link_service import find_patient_by_record_key
+
+    counts = {"pasados": 0, "ya_estaban": 0, "sin_paciente": 0}
+    for item in LegacyMigrationConflict.objects.order_by("id_conflict").iterator(chunk_size=2000):
+        patient = find_patient_by_record_key(item.no_exp, item.pk_num)
+        if patient is None:
+            counts["sin_paciente"] += 1
+            continue
+        exists = ChangeLog.objects.filter(
+            reason=ChangeLog.Reason.MIGRATION_CONFLICT,
+            key=build_key("id_paciente", patient.pk),
+            occurred_at=item.created_at,
+            previous_value__has_key=item.field,
+        ).exists()
+        if exists:
+            counts["ya_estaban"] += 1
+            continue
+        if not dry_run:
+            log_conflict(patient, item.field, kept=item.kept_value, discarded=item.discarded_value,
+                         occurred_at=item.created_at)
+        counts["pasados"] += 1
+    return counts

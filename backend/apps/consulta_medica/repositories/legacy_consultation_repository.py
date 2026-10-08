@@ -1,4 +1,5 @@
 from apps.consulta_medica.models import LegacyConsultationRecord
+from apps.consulta_medica.services.patient_link_service import for_patient
 
 # Un paciente puede acumular cientos de notas en 1.7 anios de legado --
 # se limita a las mas recientes en vez de paginar completo (alcance
@@ -9,15 +10,11 @@ _MAX_RESULTS = 200
 class LegacyConsultationRepository:
     @staticmethod
     def list_for_patient(no_exp, pk_num):
-        return LegacyConsultationRecord.objects.filter(
-            no_exp=no_exp, pk_num=pk_num,
-        )[:_MAX_RESULTS]
+        return for_patient(LegacyConsultationRecord.objects.all(), no_exp, pk_num)[:_MAX_RESULTS]
 
     @staticmethod
     def count_for_patient(no_exp, pk_num):
-        return LegacyConsultationRecord.objects.filter(
-            no_exp=no_exp, pk_num=pk_num,
-        ).count()
+        return for_patient(LegacyConsultationRecord.objects.all(), no_exp, pk_num).count()
 
     @staticmethod
     def to_contract(record):

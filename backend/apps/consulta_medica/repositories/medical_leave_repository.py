@@ -1,4 +1,5 @@
 from apps.consulta_medica.models import MedicalLeave
+from apps.consulta_medica.services.patient_link_service import for_patient
 
 
 class MedicalLeaveRepository:
@@ -11,8 +12,8 @@ class MedicalLeaveRepository:
     @staticmethod
     def get_active_overlap_for_patient(no_exp, pk_num, on_date):
         return (
-            MedicalLeave.objects.filter(
-                no_exp=no_exp, pk_num=pk_num, is_active=True, end_date__gte=on_date,
+            for_patient(
+                MedicalLeave.objects.filter(is_active=True, end_date__gte=on_date), no_exp, pk_num,
             )
             .order_by("-end_date")
             .first()
@@ -50,7 +51,7 @@ class MedicalLeaveRepository:
     @staticmethod
     def list_for_patient(no_exp, pk_num):
         return (
-            MedicalLeave.objects.filter(no_exp=no_exp, pk_num=pk_num, is_active=True)
+            for_patient(MedicalLeave.objects.filter(is_active=True), no_exp, pk_num)
             .select_related("leave_type")
             .order_by("-start_date")
         )

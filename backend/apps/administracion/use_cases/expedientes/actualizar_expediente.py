@@ -77,4 +77,17 @@ def actualizar_expediente(expediente: str) -> dict:
             except Exception:
                 pass
 
+    # Historia clinica unificada 5.1, paso 6: con la replica al dia, los
+    # pacientes de SIRES de este expediente toman nombre, fecha de nacimiento,
+    # sexo y CURP de SERMED. Un error aqui no invalida la actualizacion.
+    try:
+        from apps.consulta_medica.services.sermed_sync_service import sync_no_exp
+
+        sync = sync_no_exp(expediente)
+        resultado['pacientes'] = sync.counts
+    except Exception as exc:
+        msg = f"Error al sincronizar pacientes con SERMED: {exc}"
+        logger.error(msg)
+        resultado['errores'].append(msg)
+
     return resultado

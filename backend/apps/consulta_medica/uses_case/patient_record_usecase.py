@@ -24,6 +24,7 @@ from apps.consulta_medica.models import (
     SurgicalHistory,
 )
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
+from apps.consulta_medica.services.patient_link_service import for_patient
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -297,11 +298,10 @@ def _model_fields(spec, validated_data, no_exp):
 
 
 def _get_active(spec, no_exp, pk_num, record_id):
-    record = (
-        spec.model.objects.select_related(*spec.select_related)
-        .filter(pk=record_id, no_exp=no_exp, pk_num=pk_num, is_active=True)
-        .first()
-    )
+    record = for_patient(
+        spec.model.objects.select_related(*spec.select_related).filter(pk=record_id, is_active=True),
+        no_exp, pk_num,
+    ).first()
     if record is None:
         raise VisitDomainError("RECORD_NOT_FOUND", "Registro no encontrado.", 404)
     return record
@@ -309,11 +309,10 @@ def _get_active(spec, no_exp, pk_num, record_id):
 
 def list_records(spec, no_exp, pk_num, roles, permissions=None):
     ensure_doctor_role(roles, permissions)
-    records = (
-        spec.model.objects.select_related(*spec.select_related)
-        .filter(no_exp=no_exp, pk_num=pk_num, is_active=True)
-        .order_by(*spec.ordering)
-    )
+    records = for_patient(
+        spec.model.objects.select_related(*spec.select_related).filter(is_active=True),
+        no_exp, pk_num,
+    ).order_by(*spec.ordering)
     items = [spec.contract(record, permissions, roles) for record in records]
     return {"items": items, "restrictedCount": sum(1 for item in items if item.get("isRestricted"))}
 

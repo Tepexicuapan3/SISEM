@@ -18,12 +18,25 @@ export interface ClinicalHistory {
   createdAt: string;
 }
 
+/** Origen de la CURP: O = Capital Humano (SERMED, no editable), C = capturada en SIRES. */
+export type CurpSource = "O" | "C";
+
 /** PACIENTE: identidad y datos sociodemograficos (editable, versionado). */
 export interface PatientProfile {
   id: number;
+  /** Identificador estable para compartir con otras instituciones (NOM-024). */
+  uuid: string;
   noExp: string;
-  pkNum: number;
+  /** 0 = titular. null = familiar del legado sin PK_NUM (solo cd_familiar). */
+  pkNum: number | null;
+  legacyFamilyCode: number | null;
+  /** Copiados de SERMED en cada sincronizacion: solo lectura en SIRES. */
+  paternalSurname: string | null;
+  maternalSurname: string | null;
+  firstName: string | null;
+  birthDate: string | null;
   curp: string | null;
+  curpSource: CurpSource | null;
   sex: PatientSex | null;
   occupationId: number | null;
   educationLevelId: number | null;

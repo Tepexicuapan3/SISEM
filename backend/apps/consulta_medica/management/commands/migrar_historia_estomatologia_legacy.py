@@ -31,6 +31,7 @@ from apps.catalogos.models import EdoCivil, Ocupaciones
 from apps.consulta_medica.management.commands.migrar_historial_clinico_legacy import _norm
 from apps.consulta_medica.services.legacy_history_import_service import LegacyHistoryImporter
 from apps.consulta_medica.services.legacy_migration_control_service import track_run
+from apps.consulta_medica.services.legacy_family_map import LegacyFamilyMap
 
 _QUERY = """
     SELECT a.*, b.ds_ocupacion, d.ds_edocivil
@@ -73,6 +74,9 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                     query += f" LIMIT {int(options['limit'])}"
                 cursor.execute(query)
                 rows = cursor.fetchall()
+            # tp_paciente del legado es cat_familiar.cd_familiar, NO el PK_NUM de
+            # SERMED: se traduce con el cat_familiar del legado (legacy_family_map).
+            family_map = LegacyFamilyMap.from_legacy_connection(conn)
         finally:
             conn.close()
 
@@ -94,7 +98,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                 errores.append(f"his_clinicad {row.get('no_hisclin')}: sin no_exp, omitida.")
                 continue
             try:
-                pk_num = int(row.get("tp_paciente") or 0)
+                pk_num = family_map.record_key(no_exp, int(row.get("tp_paciente") or 0))[0]
             except (TypeError, ValueError):
                 errores.append(f"no_exp={no_exp}: tp_paciente invalido ({row.get('tp_paciente')!r}), omitida.")
                 continue

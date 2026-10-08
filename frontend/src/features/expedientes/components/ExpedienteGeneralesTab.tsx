@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
+import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import {
@@ -31,9 +32,15 @@ import { AllergyList } from "@features/expedientes/components/AllergyList";
 import { PatientBackgroundSection } from "@features/expedientes/components/PatientBackgroundSection";
 import { HistoricalNotesSection } from "@features/expedientes/components/HistoricalNotesSection";
 import {
+  CURP_SOURCE_LABELS,
   PATIENT_SEX_LABELS,
+  curpMismatches,
+  describeProfileSaveError,
+  formatBirthDate,
+  isCurpFromSermed,
   isValidCurp,
   normalizeCurp,
+  patientFullName,
 } from "@features/expedientes/domain/patient-identity";
 import { ApiError } from "@api/utils/errors";
 import type { PatientSex, UpdatePatientProfileRequest } from "@api/types";
@@ -127,6 +134,11 @@ export function ExpedienteGeneralesTab({
     });
   }, [data, form]);
 
+  // 5.1: nombre, fecha de nacimiento, CURP del titular y su sexo los manda
+  // Capital Humano (SERMED); SIRES los muestra pero no los edita.
+  const curpLocked = data ? isCurpFromSermed(data) : false;
+  const sexFromSermed = pkNum === 0 && Boolean(data?.firstName || data?.birthDate);
+
   const onSubmit = async (values: FormValues) => {
     const dirtyFields = form.formState.dirtyFields;
     const payload: UpdatePatientProfileRequest = {};
@@ -157,21 +169,31 @@ export function ExpedienteGeneralesTab({
 
     if (Object.keys(payload).length === 0) return;
 
+    // Mismo criterio que el backend: la CURP tiene que coincidir con el sexo
+    // (posicion 11) y con la fecha de nacimiento (posiciones 5 a 10).
+    const curpToCheck = dirtyFields.curp ? payload.curp : data?.curp;
+    const sexToCheck = dirtyFields.sex ? payload.sex : data?.sex;
+    if (curpToCheck && (dirtyFields.curp || dirtyFields.sex)) {
+      const mismatches = curpMismatches(curpToCheck, { sex: sexToCheck, birthDate: data?.birthDate });
+      if (mismatches.sex) form.setError("sex", { message: mismatches.sex });
+      if (mismatches.birthDate) form.setError("curp", { message: mismatches.birthDate });
+      if (mismatches.sex || mismatches.birthDate) return;
+    }
+
     try {
       await updateClinicalHistory.mutateAsync({ noExp, pkNum, data: payload });
       toast.success("Ficha del paciente actualizada");
       form.reset(values);
     } catch (error) {
-      const details = error instanceof ApiError ? error.details : undefined;
-      const curpError = details && typeof details === "object" && "curp" in details;
-      if (curpError) {
-        form.setError("curp", { message: "CURP con formato inválido" });
+      const described = describeProfileSaveError(
+        error instanceof ApiError
+          ? { code: error.code, message: error.message, details: error.details }
+          : {},
+      );
+      if (described.field && described.fieldMessage) {
+        form.setError(described.field, { message: described.fieldMessage });
       }
-      toast.error("No se pudo guardar la ficha del paciente", {
-        description: curpError
-          ? "Revisa el CURP capturado."
-          : "Intenta nuevamente en unos segundos.",
-      });
+      toast.error(described.title, { description: described.description });
     }
   };
 
@@ -209,6 +231,22 @@ export function ExpedienteGeneralesTab({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <section className="space-y-4">
           <h3 className="text-sm font-semibold text-txt-body">Identificación</h3>
+          <dl className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1 md:col-span-2">
+              <dt className="text-xs text-txt-muted">Nombre (Capital Humano)</dt>
+              <dd className="text-sm text-txt-body">
+                {(data && patientFullName(data)) ?? (
+                  <span className="text-txt-muted">Sin sincronizar con Capital Humano</span>
+                )}
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-txt-muted">Fecha de nacimiento</dt>
+              <dd className="text-sm text-txt-body tabular-nums">
+                {formatBirthDate(data?.birthDate ?? null) ?? <span className="text-txt-muted">Sin dato</span>}
+              </dd>
+            </div>
+          </dl>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField
               control={form.control}
@@ -220,10 +258,23 @@ export function ExpedienteGeneralesTab({
                     <Input
                       {...field}
                       maxLength={18}
-                      className="font-mono uppercase"
+                      readOnly={curpLocked}
+                      aria-readonly={curpLocked}
+                      className="font-mono uppercase read-only:bg-subtle read-only:cursor-not-allowed"
                       onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                     />
                   </FormControl>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {data?.curpSource ? (
+                      <Badge variant={curpLocked ? "info" : "secondary"}>
+                        {CURP_SOURCE_LABELS[data.curpSource]}
+                      </Badge>
+                    ) : null}
+                    {!data?.curp ? <Badge variant="alert">Falta CURP</Badge> : null}
+                  </div>
+                  {curpLocked ? (
+                    <p className="text-xs text-txt-muted">Solo Capital Humano puede corregirla.</p>
+                  ) : null}
                   <FormMessage />
                 </FormItem>
               )}
@@ -234,7 +285,7 @@ export function ExpedienteGeneralesTab({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Sexo</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value} onValueChange={field.onChange} disabled={sexFromSermed}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
@@ -249,6 +300,10 @@ export function ExpedienteGeneralesTab({
                       ))}
                     </SelectContent>
                   </Select>
+                  {sexFromSermed ? (
+                    <p className="text-xs text-txt-muted">Se actualiza desde Capital Humano.</p>
+                  ) : null}
+                  <FormMessage />
                 </FormItem>
               )}
             />

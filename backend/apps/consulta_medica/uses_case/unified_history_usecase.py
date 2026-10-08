@@ -22,6 +22,7 @@ from apps.consulta_medica.models import (
     VisitConsultation,
 )
 from apps.consulta_medica.repositories.allergy_repository import AllergyRepository
+from apps.consulta_medica.services.patient_link_service import for_patient
 from apps.recepcion.services.errors import VisitDomainError
 
 from .consultation_usecase import ensure_doctor_role
@@ -52,7 +53,7 @@ def _legacy_vitals_contract(vitals):
 
 def list_historical_notes(no_exp, pk_num, roles, permissions=None, *, section=None, specialty=None):
     ensure_doctor_role(roles, permissions)
-    notes = HistoricalNote.objects.filter(no_exp=no_exp, pk_num=pk_num)
+    notes = for_patient(HistoricalNote.objects.all(), no_exp, pk_num)
     if section:
         notes = notes.filter(section=section)
     if specialty:
@@ -60,7 +61,7 @@ def list_historical_notes(no_exp, pk_num, roles, permissions=None, *, section=No
     notes = notes.order_by("section", "noted_on", "id_historical_note")
     legacy_vitals = LegacyVitalSigns.objects.none()
     if section in (None, HistoricalNote.Section.VITAL_SIGNS):
-        legacy_vitals = LegacyVitalSigns.objects.filter(no_exp=no_exp, pk_num=pk_num)
+        legacy_vitals = for_patient(LegacyVitalSigns.objects.all(), no_exp, pk_num)
         if specialty:
             legacy_vitals = legacy_vitals.filter(specialty=specialty)
     return {
@@ -219,7 +220,7 @@ def change_allergy_status(no_exp, pk_num, allergy_id, roles, *, status, reason, 
     "resuelta" la deja visible como historia pero fuera del cruce con recetas.
     """
     ensure_doctor_role(roles, permissions)
-    allergy = Allergy.objects.filter(pk=allergy_id, no_exp=no_exp, pk_num=pk_num).first()
+    allergy = for_patient(Allergy.objects.filter(pk=allergy_id), no_exp, pk_num).first()
     if allergy is None or allergy.status == Allergy.Status.ENTERED_IN_ERROR:
         raise VisitDomainError("ALLERGY_NOT_FOUND", "Alergia no encontrada.", 404)
     if allergy.status == status:

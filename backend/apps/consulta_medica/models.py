@@ -409,6 +409,12 @@ class MedicalLeave(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     leave_type = models.ForeignKey(
         "catalogos.Licencias",
         db_column="id_tipo_licencia",
@@ -456,6 +462,12 @@ class StudyResult(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     study_type = models.ForeignKey(
         "catalogos.EstudiosMed",
         db_column="id_estudio",
@@ -516,6 +528,12 @@ class StomatologyHistory(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     # HISTORIA_CLINICA ||--o| HC_ESTOMATOLOGIA (documento 5.3).
     clinical_history = models.OneToOneField(
         "ClinicalHistory", db_column="id_historia", on_delete=models.PROTECT,
@@ -621,6 +639,12 @@ class Allergy(models.Model):
     id_allergy = models.BigAutoField(primary_key=True, db_column="id_alergia")
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
 
     # ALERGIA.cd_tipo_alergia -> CAT_TIPO_ALERGIA (documento).
     allergy_type = models.ForeignKey(
@@ -834,6 +858,98 @@ class Patient(models.Model):
         ]
 
 
+class PatientIdentifier(models.Model):
+    """
+    IDENTIFICADOR_PACIENTE (documento "Historia Clinica Unificada", 5.1):
+    los numeros con los que se conoce a un paciente. Es la fuente oficial;
+    las columnas no_exp / pk_num / cd_familiar de cns_paciente son copias
+    para consultar rapido.
+
+    - NO_EXP: solo titulares (el NO_EXP de un familiar es el de su titular).
+    - PK_NUM: familiares, el de SERMED.
+    - CD_FAMILIAR: familiares del legado (tp_paciente de dbclinicas). Nunca
+      se asigna a un paciente nuevo.
+    - PROVISIONAL: recien nacido aun sin registro en Capital Humano.
+    - CURP: reservado. Mientras haya CURP repetidas en SERMED, la CURP vive
+      solo en cns_paciente.curp.
+
+    Un mismo numero no puede ser de dos personas: unico entre los vigentes.
+    Un identificador dado de baja (sw_status B) se conserva como evidencia,
+    por ejemplo despues de corregir una liga equivocada. Por que se dio de
+    alta o de baja: cns_bitacora_cambios.
+    """
+
+    class IdType(models.TextChoices):
+        NO_EXP = "NO_EXP", "Expediente del titular"
+        PK_NUM = "PK_NUM", "PK_NUM de SERMED"
+        CD_FAMILIAR = "CD_FAMILIAR", "cd_familiar del legado"
+        PROVISIONAL = "PROVISIONAL", "Recien nacido provisional"
+        CURP = "CURP", "CURP"
+
+    class Status(models.TextChoices):
+        ACTIVE = "A", "Vigente"
+        RETIRED = "B", "Ya no se usa"
+
+    id_identifier = models.BigAutoField(primary_key=True, db_column="id")
+    patient = models.ForeignKey(
+        Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="identifiers",
+    )
+    id_type = models.CharField(max_length=20, db_column="tp_identificador", choices=IdType.choices)
+    value = models.CharField(max_length=40, db_column="valor")
+    status = models.CharField(
+        max_length=1, db_column="sw_status", choices=Status.choices, default=Status.ACTIVE,
+    )
+
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+    created_by = models.CharField(max_length=40, db_column="usr_alta")
+    updated_by = models.CharField(max_length=40, db_column="usr_modf", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_identificador_paciente"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id_type", "value"], condition=models.Q(status="A"),
+                name="cns_identificador_vigente_uq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["patient", "status"], name="cns_identificador_pac_idx"),
+        ]
+
+
+class PatientSermedState(models.Model):
+    """
+    Ultimo estado de derechohabiencia visto en SERMED para un paciente (5.1).
+
+    El documento dice que titular, parentesco, vigencia, baja y clinica "se
+    leen de SERMED cuando se necesitan". Dos razones obligan a guardar una
+    copia del ultimo valor visto:
+      - Detectar cambios: la sincronizacion registra en la bitacora el valor
+        anterior y el nuevo, y la replica solo tiene el actual.
+      - La replica vive en otra conexion (expedientes): no hay JOIN posible
+        con cns_paciente.
+    Lo escribe solo la sincronizacion; SERMED sigue siendo la fuente.
+    """
+
+    patient = models.OneToOneField(
+        Patient, db_column="id_paciente", on_delete=models.CASCADE,
+        primary_key=True, related_name="sermed_state",
+    )
+    found = models.BooleanField(db_column="sw_en_sermed", default=True)
+    holder_no_exp = models.CharField(max_length=20, db_column="no_exp_titular", null=True, blank=True)
+    relationship_code = models.CharField(max_length=50, db_column="cd_parentesco", null=True, blank=True)
+    beneficiary_type = models.CharField(max_length=4, db_column="tp_der", null=True, blank=True)
+    valid_until = models.DateField(db_column="fe_vigencia", null=True, blank=True)
+    leave_date = models.DateField(db_column="fe_baja", null=True, blank=True)
+    leave_code = models.CharField(max_length=10, db_column="cve_baja", null=True, blank=True)
+    clinic_code = models.CharField(max_length=10, db_column="cd_clinica", null=True, blank=True)
+    synced_at = models.DateTimeField(db_column="fch_sincronizacion", auto_now=True)
+
+    class Meta:
+        db_table = "cns_paciente_sermed"
+
+
 class PatientRevision(models.Model):
     """Snapshot de ``Patient`` justo ANTES de sobrescribirse (NOM-024)."""
 
@@ -943,6 +1059,12 @@ class LegacyConsultationRecord(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
 
     consultation_date = models.DateField(db_column="fecha_consulta")
     consultation_time = models.CharField(
@@ -1068,6 +1190,12 @@ class PatientRecordBase(models.Model):
 
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     source = models.CharField(
         max_length=20, db_column="origen", choices=SpecialtySource.choices,
         default=SpecialtySource.GENERAL,
@@ -1217,6 +1345,12 @@ class HistoricalNote(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     specialty = models.CharField(
         max_length=20, db_column="especialidad", choices=SpecialtySource.choices,
         default=SpecialtySource.GENERAL,
@@ -1255,6 +1389,12 @@ class LegacyVitalSigns(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     specialty = models.CharField(
         max_length=20, db_column="especialidad", choices=SpecialtySource.choices,
         default=SpecialtySource.GENERAL,
@@ -1409,6 +1549,12 @@ class Odontogram(models.Model):
     id_odontogram = models.BigAutoField(primary_key=True, db_column="id_odontograma")
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
+    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    patient = models.ForeignKey(
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
     # HC_ESTOMATOLOGIA ||--o{ ODONTOGRAMA (documento 5.3).
     stomatology_history = models.ForeignKey(
         StomatologyHistory, db_column="id_hc_estoma", on_delete=models.PROTECT,
@@ -1534,6 +1680,7 @@ class ChangeLog(models.Model):
 
     class Reason(models.TextChoices):
         SERMED_SYNC = "SINCRONIZACION SERMED", "Sincronizacion con SERMED"
+        PATIENT_OPENED = "ALTA PACIENTE", "Primera vez que el paciente se atiende en SIRES"
         NEWBORN_REGISTRATION = "REGISTRO RN", "Registro de recien nacido"
         NEWBORN_LINK = "LIGA RN", "Liga de recien nacido con SERMED"
         MERGE = "FUSION", "Fusion de pacientes"
@@ -1541,6 +1688,7 @@ class ChangeLog(models.Model):
         CORRECTION = "CORRECCION", "Correccion"
         MIGRATION_CONFLICT = "CONFLICTO MIGRACION", "Conflicto de migracion"
         MIGRATION = "MIGRACION", "Migracion del legado"
+        LEGACY_KEY_FIX = "CORRECCION CD_FAMILIAR", "Correccion de la llave del familiar migrado"
         CLINIC_CHANGE = "CAMBIO DE CLINICA EN SERMED", "Cambio de clinica en SERMED"
 
     id_change = models.BigAutoField(primary_key=True, db_column="id")

@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from apps.catalogos.models import CatEstadoPieza
 from apps.consulta_medica.models import Odontogram, OdontogramToothState
+from apps.consulta_medica.services.patient_link_service import for_patient
 
 _DECIDUOUS_QUADRANTS = "5678"
 
@@ -10,20 +11,20 @@ class OdontogramRepository:
     @staticmethod
     def latest_for_patient(no_exp, pk_num):
         return (
-            Odontogram.objects.filter(no_exp=no_exp, pk_num=pk_num)
+            for_patient(Odontogram.objects.all(), no_exp, pk_num)
             .order_by("-created_at", "-id_odontogram")
             .first()
         )
 
     @staticmethod
     def get_version(no_exp, pk_num, version_id):
-        return Odontogram.objects.filter(
-            no_exp=no_exp, pk_num=pk_num, id_odontogram=version_id,
+        return for_patient(
+            Odontogram.objects.filter(id_odontogram=version_id), no_exp, pk_num,
         ).first()
 
     @staticmethod
     def list_versions(no_exp, pk_num):
-        return Odontogram.objects.filter(no_exp=no_exp, pk_num=pk_num).order_by(
+        return for_patient(Odontogram.objects.all(), no_exp, pk_num).order_by(
             "-created_at", "-id_odontogram",
         )
 
