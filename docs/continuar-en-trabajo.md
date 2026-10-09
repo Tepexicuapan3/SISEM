@@ -1385,6 +1385,47 @@ solo código.
 Falta revisarla en el navegador y desplegarla: migraciones `0046`–`0049` y
 `catalogos.0036`, con **respaldo obligatorio** por la `0048`.
 
+## 2026-10-09 — 5.3 (nota de consulta): análisis y paso 1
+
+**Análisis contra el documento.** SIRES tiene la nota en dos tablas:
+`cns_visit_consultation` para las consultas nuevas y
+`cns_legacy_consultation_record` como archivo de solo lectura de las 604 mil
+de `his_notas`. Es una decisión a propósito (no inventar 604 mil visitas). El
+documento pide una sola `nota_consulta`; se recomienda **mantener las dos**.
+
+- Ya cubierto: folio (`Visit.folio`), fecha y hora, médico, SOAP más
+  padecimiento, aparatos y sistemas y los dos planes, diagnóstico y CIE más
+  secundarios, adendas (mejor que `sw_complemento`), exploración física,
+  signos de la consulta (`smt_visit_vitals`). `no_cie` es 0 en el 100% de las
+  notas: nada que hacer.
+- **No aplica:** la vista de compatibilidad `his_notas`. Sirve para las JSP
+  de SISEM, que leen su propio MySQL; SIRES es otra base y el legado no se
+  toca.
+- Pendiente (pasos 2 a 5):
+  2. Folio de receta (`no_freceta` único, consecutivo y tipo N/T).
+  3. Primera vez / subsecuente (`sw_morbi`) y fecha de seguimiento
+     (`fe_cita` → `fe_seguimiento`).
+  4. `id_paciente` en visita, consulta, signos y receta (pendiente del 5.1,
+     paso 7 en otras apps).
+  5. Signos de las notas del legado pasados a números.
+- A definir con el negocio: modalidad C/M/H/V/E/T, unidad de captura,
+  transcriptor, consecutivo por clínica y año, y los candados de pases e
+  incapacidad (los pases no tienen motor de autorización en SIRES).
+
+**Paso 1 hecho: candado de receta.** Corrige un bug de seguridad clínica: el
+médico podía cancelar un medicamento que farmacia ya había surtido.
+- `cancel_prescription_item` bloquea la fila (`SELECT ... FOR UPDATE`, igual
+  que `lock_items_for_dispense`, así que cancelar y surtir al mismo tiempo se
+  ordenan solos) y responde **409 `PRESCRIPTION_ITEM_DISPENSED`** si
+  `cantidad_dispensada > 0`. El candado se calcula del renglón, no de una
+  bandera copiada.
+- El contrato del medicamento agrega `dispensedQuantity`,
+  `dispensationStatus` y `canCancel`. En el frontend, el botón de quitar se
+  deshabilita y aparece "Surtido" o "Surtido n de m".
+- Tests: `test_candado_receta.py` (4). Suites `consulta_medica` + `catalogos`:
+  480 OK. Frontend: `tsc` (app y tests) y ESLint limpios; en flujo clínico la
+  única falla es la previa "Folio VST-2002". Sin migración.
+
 ## Convenciones y Reglas Operacionales
 
 ### Regla: nunca probar directo contra bases de datos externas/legado

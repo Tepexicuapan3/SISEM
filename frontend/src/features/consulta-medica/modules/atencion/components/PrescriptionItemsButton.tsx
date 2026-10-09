@@ -245,12 +245,22 @@ export function PrescriptionItemsButton({
                       <strong>{item.medicationName}</strong>
                       {item.dose ? ` — ${item.dose}` : ""} — {item.indications} (
                       {item.quantity})
+                      {item.dispensedQuantity > 0 ? (
+                        <Badge variant="info" className="ml-2">
+                          {item.dispensationStatus === "dispensado"
+                            ? "Surtido"
+                            : `Surtido ${item.dispensedQuantity} de ${item.quantity}`}
+                        </Badge>
+                      ) : null}
                     </span>
+                    {/* Candado de receta (5.3): lo surtido ya no se quita. */}
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      disabled={cancelItem.isPending}
+                      aria-label={item.canCancel ? "Quitar de la receta" : "Ya surtido: no se puede quitar"}
+                      title={item.canCancel ? undefined : "Farmacia ya lo surtió: no se puede quitar"}
+                      disabled={cancelItem.isPending || !item.canCancel}
                       onClick={() => handleCancel(item.id)}
                     >
                       <X className="size-4" />

@@ -68,5 +68,9 @@ class PrescriptionItemRepository:
             "indications": item.indications,
             "quantity": item.quantity,
             "status": item.status,
+            # Candado de receta (5.3): lo surtido ya no se quita.
+            "dispensedQuantity": item.dispensed_quantity,
+            "dispensationStatus": item.dispensation_status,
+            "canCancel": item.status == VisitPrescriptionItem.Status.ACTIVO and item.dispensed_quantity == 0,
             "createdAt": item.created_at,
         }

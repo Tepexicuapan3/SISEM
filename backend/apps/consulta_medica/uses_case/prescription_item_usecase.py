@@ -1,7 +1,7 @@
 from django.db import transaction
 
 from apps.catalogos.models import Medicamentos
-from apps.consulta_medica.models import PrescriptionAuthorization
+from apps.consulta_medica.models import PrescriptionAuthorization, VisitPrescriptionItem
 from apps.consulta_medica.repositories.allergy_repository import AllergyRepository
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.repositories.prescription_authorization_repository import (
@@ -270,6 +270,20 @@ def cancel_prescription_item(visit_id, item_id, roles, *, actor_id, permissions=
         )
 
     with transaction.atomic():
+        # Candado de receta (documento 5.3, antes his_notas.sw_receta): lo que
+        # farmacia ya surtio no se quita de la receta. Se CALCULA del propio
+        # renglon, no de una bandera copiada. El lock FOR UPDATE ordena esta
+        # cancelacion contra una dispensacion simultanea, que bloquea la misma
+        # fila (lock_items_for_dispense): gana la primera y la otra ve el
+        # resultado.
+        item = VisitPrescriptionItem.objects.select_for_update().get(pk=item.pk)
+        if item.dispensed_quantity > 0:
+            raise VisitDomainError(
+                "PRESCRIPTION_ITEM_DISPENSED",
+                "Farmacia ya surtio este medicamento: no se puede quitar de la receta.",
+                409,
+                details={"dispensedQuantity": item.dispensed_quantity},
+            )
         # Gotcha A4.4: PrescriptionItemRepository.cancel muta la instancia en
         # memoria y devuelve el MISMO objeto -- datos_antes se captura ANTES.
         datos_antes = {

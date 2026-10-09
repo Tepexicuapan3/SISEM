@@ -11,6 +11,10 @@ export interface PrescriptionItem {
   indications: string;
   quantity: number;
   status: PrescriptionItemStatus;
+  /** Candado de receta (5.3): lo que farmacia ya surtio no se quita. */
+  dispensedQuantity: number;
+  dispensationStatus: "pendiente" | "parcial" | "dispensado";
+  canCancel: boolean;
   createdAt: string;
 }
 
