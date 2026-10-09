@@ -119,7 +119,6 @@ class ConfirmMedicosImportUseCase:
 
             MedicoRepository.create(
                 usuario=usuario,
-                nombre_display=data["nombreDisplay"],
                 tipo_medico=data["tipoMedico"],
                 servicio=data["servicio"],
                 observaciones=data["observaciones"],

@@ -93,9 +93,9 @@ class MedicoImportApiTests(APITestCase):
         before = CatMedico.objects.count()
         file = _medicos_xlsx_upload(
             [
-                ("", valid_user.usuario, "", "", "", "Activo", ""),
-                ("", "", "", "", "", "", ""),
-                ("", "usuario_que_no_existe", "", "", "", "", ""),
+                ("", valid_user.usuario, "", "", "Activo", ""),
+                ("", "", "", "", "", ""),
+                ("", "usuario_que_no_existe", "", "", "", ""),
             ]
         )
 
@@ -119,8 +119,8 @@ class MedicoImportApiTests(APITestCase):
         user_b = self._create_usuario("dup_legacy_b")
         file = _medicos_xlsx_upload(
             [
-                ("E00000", user_a.usuario, "", "", "", "", ""),
-                ("e00000", user_b.usuario, "", "", "", "", ""),
+                ("E00000", user_a.usuario, "", "", "", ""),
+                ("e00000", user_b.usuario, "", "", "", ""),
             ]
         )
 
@@ -137,8 +137,8 @@ class MedicoImportApiTests(APITestCase):
         user_b = self._create_usuario("real_key_b")
         file = _medicos_xlsx_upload(
             [
-                ("E00000", user_a.usuario, "", "", "", "", ""),
-                ("H99999", user_b.usuario, "", "", "", "", ""),
+                ("E00000", user_a.usuario, "", "", "", ""),
+                ("H99999", user_b.usuario, "", "", "", ""),
             ]
         )
 
@@ -155,7 +155,7 @@ class MedicoImportApiTests(APITestCase):
         # notarlo en el preview. Debe quedar visible como error.
         user = self._create_usuario("invalid_tipo_medico")
         file = _medicos_xlsx_upload(
-            [("", user.usuario, "", "Clinca", "", "Activo", "")]
+            [("", user.usuario, "Clinca", "", "Activo", "")]
         )
 
         response = self._post_file(IMPORT_PREVIEW_URL, file)
@@ -175,7 +175,7 @@ class MedicoImportApiTests(APITestCase):
     def test_preview_flags_invalid_estatus_instead_of_silently_defaulting(self):
         user = self._create_usuario("invalid_estatus_medico")
         file = _medicos_xlsx_upload(
-            [("", user.usuario, "", "", "", "Jubilado", "")]
+            [("", user.usuario, "", "", "Jubilado", "")]
         )
 
         response = self._post_file(IMPORT_PREVIEW_URL, file)
@@ -195,7 +195,7 @@ class MedicoImportApiTests(APITestCase):
         # default, sin error de fila (solo un valor NO-vacio e invalido
         # debe marcar error).
         user = self._create_usuario("empty_choice_defaults_silently")
-        file = _medicos_xlsx_upload([("", user.usuario, "", "", "", "", "")])
+        file = _medicos_xlsx_upload([("", user.usuario, "", "", "", "")])
 
         response = self._post_file(IMPORT_PREVIEW_URL, file)
 
@@ -214,7 +214,7 @@ class MedicoImportApiTests(APITestCase):
         # (mismo comportamiento que sufriría el import de usuarios con una
         # fila así) -- no es un bug de este import, así que el archivo de
         # prueba usa una fila con contenido real para forzar el error.
-        file = _medicos_xlsx_upload([("", "usuario_que_no_existe_409", "", "", "", "", "")])
+        file = _medicos_xlsx_upload([("", "usuario_que_no_existe_409", "", "", "", "")])
 
         response = self._post_file(IMPORT_CONFIRM_URL, file)
 
@@ -226,7 +226,7 @@ class MedicoImportApiTests(APITestCase):
     def test_confirm_blocks_all_or_nothing_when_tipo_medico_or_estatus_is_invalid(self):
         user = self._create_usuario("invalid_choice_blocks_confirm")
         before = CatMedico.objects.count()
-        file = _medicos_xlsx_upload([("", user.usuario, "", "Clinca", "", "", "")])
+        file = _medicos_xlsx_upload([("", user.usuario, "Clinca", "", "", "")])
 
         response = self._post_file(IMPORT_CONFIRM_URL, file)
 
@@ -240,8 +240,8 @@ class MedicoImportApiTests(APITestCase):
         user_two = self._create_usuario("bulk_medico_two")
         file = _medicos_xlsx_upload(
             [
-                ("E00000", user_one.usuario, "Dr. Uno", "Hospital", "Cardiología", "Activo", "obs uno"),
-                ("S/C", user_two.usuario, "", "", "", "", ""),
+                ("E00000", user_one.usuario, "Hospital", "Cardiología", "Activo", "obs uno"),
+                ("S/C", user_two.usuario, "", "", "", ""),
             ]
         )
 
@@ -253,7 +253,7 @@ class MedicoImportApiTests(APITestCase):
 
         medico_one = CatMedico.objects.get(id_usuario=user_one)
         self.assertEqual(medico_one.legacy_cd_medico, "E00000")
-        self.assertEqual(medico_one.nombre_display, "Dr. Uno")
+        self.assertIsNone(medico_one.nombre_display)
         self.assertEqual(medico_one.tipo_medico, "HOSPITAL")
         self.assertEqual(medico_one.servicio, "Cardiología")
         self.assertEqual(medico_one.estatus_medico, "ACTIVO")
@@ -267,7 +267,7 @@ class MedicoImportApiTests(APITestCase):
     def test_confirm_rolls_back_everything_if_one_row_fails_mid_transaction(self):
         usuarios = [self._create_usuario(f"rollback_medico_{i}") for i in range(5)]
         file = _medicos_xlsx_upload(
-            [("", u.usuario, "", "", "", "", "") for u in usuarios]
+            [("", u.usuario, "", "", "", "") for u in usuarios]
         )
         before = CatMedico.objects.count()
 
@@ -290,8 +290,8 @@ class MedicoImportApiTests(APITestCase):
         user_a = self._create_usuario("retry_medico_a")
         user_b = self._create_usuario("retry_medico_b")
         rows = [
-            ("", user_a.usuario, "", "", "", "", ""),
-            ("", user_b.usuario, "", "", "", "", ""),
+            ("", user_a.usuario, "", "", "", ""),
+            ("", user_b.usuario, "", "", "", ""),
         ]
 
         first = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))

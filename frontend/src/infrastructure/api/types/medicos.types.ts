@@ -261,14 +261,13 @@ export interface MedicoCoberturasResponse {
 /**
  * Datos normalizados de una fila del Excel de importación.
  * Columnas de origen (en este orden exacto):
- * ID del Médico | Usuario (Login del sistema) | Nombre del Médico |
- * Tipo de Médico | Servicio | Estatus del Médico | Observaciones
+ * ID del Médico | Usuario (Login del sistema) | Tipo de Médico |
+ * Servicio | Estatus del Médico | Observaciones
  */
 export interface MedicoImportRowData {
   legacyCdMedico: string | null;
   usuario: string;
   usuarioId: number | null;
-  nombreDisplay: string | null;
   tipoMedico: TipoMedico;
   servicio: string | null;
   estatusMedico: EstatusMedico;

@@ -29,7 +29,6 @@ from apps.medicos.models import CatMedico, ESTATUS_MEDICO, TIPO_MEDICO
 HEADERS = [
     "ID del Médico",
     "Usuario (Login del sistema)",
-    "Nombre del Médico",
     "Tipo de Médico",
     "Servicio",
     "Estatus del Médico",
@@ -71,12 +70,14 @@ ROW_ERROR_CODES = (
 # antes de crear (mismo criterio que el truncado a 10 chars de
 # `normalize_legacy_cd`) para no dejar un IntegrityError sin manejar a
 # mitad de `_create_all` por una celda de Excel demasiado larga.
-_NOMBRE_DISPLAY_MAX_LEN = 200
+# No hay columna de nombre: el usuario es obligatorio en este import y
+# `identity.display_name()` toma el nombre del usuario vinculado, así que
+# `nombre_display` (respaldo para médicos SIN usuario) no aplica aquí.
 _SERVICIO_MAX_LEN = 100
 
 _SAMPLE_ROWS = (
-    ("E00000", "jperez", "Dr. Juan Pérez", "Clínica", "Cardiología", "Activo", ""),
-    ("", "mgomez", "", "Hospital", "", "Activo", "Médico sin clave legada (alta nativa de SIRES)"),
+    ("E00000", "jperez", "Clínica", "Cardiología", "Activo", ""),
+    ("", "mgomez", "Hospital", "", "Activo", "Médico sin clave legada (alta nativa de SIRES)"),
 )
 
 
@@ -217,7 +218,6 @@ def parse_and_validate(file) -> dict:
             {
                 "legacyCdRaw": _clean_text(df.iloc[row_idx]["ID del Médico"]),
                 "usuario": _clean_text(df.iloc[row_idx]["Usuario (Login del sistema)"]),
-                "nombreDisplayRaw": _clean_text(df.iloc[row_idx]["Nombre del Médico"]),
                 "tipoMedicoRaw": _clean_text(df.iloc[row_idx]["Tipo de Médico"]),
                 "servicioRaw": _clean_text(df.iloc[row_idx]["Servicio"]),
                 "estatusRaw": _clean_text(df.iloc[row_idx]["Estatus del Médico"]),
@@ -295,7 +295,6 @@ def parse_and_validate(file) -> dict:
             "legacyCdMedico": legacy_value,
             "usuario": parsed["usuario"],
             "usuarioId": usuario_obj.id_usuario if usuario_obj else None,
-            "nombreDisplay": _truncate(parsed["nombreDisplayRaw"], _NOMBRE_DISPLAY_MAX_LEN) or None,
             "tipoMedico": tipo_medico_value,
             "servicio": _truncate(parsed["servicioRaw"], _SERVICIO_MAX_LEN) or None,
             "estatusMedico": estatus_value,
