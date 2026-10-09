@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { followUpError } from "./consultation-morbidity";
 
 const diagnosisFieldsSchema = z.object({
   primaryDiagnosis: z
@@ -15,9 +16,19 @@ const diagnosisFieldsSchema = z.object({
   systemsReview: z.string().trim(),
   diagnosticPlan: z.string().trim(),
   therapeuticPlan: z.string().trim(),
+  // Documento 5.3 (sw_morbi y fe_cita). Morbilidad obligatoria solo para
+  // cerrar: la exige canCloseSelectedVisit y el backend, no el guardado de avance.
+  morbidity: z.enum(["", "1", "2"]),
+  followUpEnabled: z.boolean(),
+  followUpDate: z.string(),
 });
 
-export const saveDiagnosisFormSchema = diagnosisFieldsSchema;
+export const saveDiagnosisFormSchema = diagnosisFieldsSchema.superRefine((values, ctx) => {
+  const message = followUpError(values.followUpEnabled, values.followUpDate);
+  if (message) {
+    ctx.addIssue({ code: "custom", path: ["followUpDate"], message });
+  }
+});
 
 export type SaveDiagnosisFormValues = z.infer<typeof saveDiagnosisFormSchema>;
 export type SaveDiagnosisFormInput = z.input<typeof saveDiagnosisFormSchema>;

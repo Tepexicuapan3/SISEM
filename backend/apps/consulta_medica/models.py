@@ -7,6 +7,14 @@ from django.utils import timezone
 from apps.consulta_medica.storage import study_result_upload_to
 
 
+class Morbidity(models.TextChoices):
+    """his_notas.sw_morbi (documento 5.3). Mismos codigos que el legado
+    (body-consultadirectac.jsp): se refiere a la ENFERMEDAD, no a la visita."""
+
+    FIRST = "1", "Primera vez de la enfermedad"
+    SUBSEQUENT = "2", "Subsecuente de la enfermedad"
+
+
 class VisitConsultation(models.Model):
     id_consultation = models.BigAutoField(primary_key=True, db_column="id_consulta")
     id_visit = models.OneToOneField(
@@ -41,6 +49,13 @@ class VisitConsultation(models.Model):
     systems_review = models.TextField(db_column="ds_aparatos_sistemas", null=True, blank=True)
     diagnostic_plan = models.TextField(db_column="ds_plan_diagnostico", null=True, blank=True)
     therapeutic_plan = models.TextField(db_column="ds_plan_terapeutico", null=True, blank=True)
+    # Documento 5.3. Obligatoria para cerrar, como en el legado.
+    morbidity = models.CharField(
+        max_length=1, db_column="sw_morbi", choices=Morbidity.choices, null=True, blank=True,
+    )
+    # Antes his_notas.fe_cita: cuando indica el medico que vuelva. Es una
+    # indicacion, no una cita agendada (la cita real vive en la agenda).
+    follow_up_date = models.DateField(db_column="fe_seguimiento", null=True, blank=True)
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
@@ -98,6 +113,8 @@ class VisitConsultationRevision(models.Model):
     previous_systems_review = models.TextField(db_column="ds_aparatos_sistemas_anterior", null=True, blank=True)
     previous_diagnostic_plan = models.TextField(db_column="ds_plan_diagnostico_anterior", null=True, blank=True)
     previous_therapeutic_plan = models.TextField(db_column="ds_plan_terapeutico_anterior", null=True, blank=True)
+    previous_morbidity = models.CharField(max_length=1, db_column="sw_morbi_anterior", null=True, blank=True)
+    previous_follow_up_date = models.DateField(db_column="fe_seguimiento_anterior", null=True, blank=True)
     changed_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
     changed_at = models.DateTimeField(db_column="fch_modf", auto_now_add=True)
 
@@ -202,6 +219,11 @@ class VisitDiagnosis(models.Model):
 
 
 class VisitPrescription(models.Model):
+    class PrescriptionType(models.TextChoices):
+        # Mismos codigos que el legado (body-consultadirectar.jsp).
+        NORMAL = "N", "Normal"
+        TRANSCRIPTION = "T", "Transcripcion"
+
     id_prescription = models.BigAutoField(primary_key=True, db_column="id_receta")
     id_visit = models.OneToOneField(
         "recepcion.Visit",
@@ -210,6 +232,17 @@ class VisitPrescription(models.Model):
         related_name="prescription",
     )
     items = models.JSONField(db_column="items")
+    # Documento 5.3, cabecera RECETA. Formato propio de SIRES "RX-<anio>-<n>"
+    # (services/prescription_folio_service): distinto del legado
+    # ("<clinica>R<aa>-<n>", genfolios.folioReceta) para que nunca se
+    # confundan mientras los dos sistemas emitan recetas. Lo asigna el
+    # repositorio al crear la receta; no cambia nunca.
+    folio = models.CharField(max_length=20, db_column="no_freceta", unique=True, null=True, blank=True)
+    sequence = models.PositiveIntegerField(db_column="no_receta", null=True, blank=True)
+    prescription_type = models.CharField(
+        max_length=1, db_column="tp_receta", choices=PrescriptionType.choices,
+        default=PrescriptionType.NORMAL,
+    )
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
@@ -224,6 +257,18 @@ class VisitPrescription(models.Model):
             models.Index(fields=["is_active"], name="cns_rx_active_idx"),
             models.Index(fields=["created_at"], name="cns_rx_created_idx"),
         ]
+
+
+class PrescriptionFolioCounter(models.Model):
+    """Consecutivo de folios de receta por anio. Se bloquea la fila
+    (SELECT ... FOR UPDATE) para asignar: dos medicos al mismo tiempo nunca
+    reciben el mismo numero (el legado lo resolvia con reintentos)."""
+
+    year = models.PositiveSmallIntegerField(primary_key=True, db_column="anio")
+    last_value = models.PositiveIntegerField(db_column="ultimo", default=0)
+
+    class Meta:
+        db_table = "cns_consecutivo_receta"
 
 
 class VisitPrescriptionItem(models.Model):

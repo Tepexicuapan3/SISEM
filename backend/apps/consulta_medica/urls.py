@@ -27,6 +27,7 @@ from apps.consulta_medica.views import (
     VisitConsultationStartView,
     VisitDiagnosisSaveView,
     VisitMedicalLeaveCreateView,
+    VisitMorbiditySuggestionView,
     VisitPrescriptionItemCancelView,
     VisitPrescriptionItemsView,
     VisitPrescriptionsSaveView,
@@ -110,6 +111,11 @@ urlpatterns = [
         name="patient-historical-notes",
     ),
     path("clinical-catalogs", ClinicalCatalogsView.as_view(), name="clinical-catalogs"),
+    path(
+        "visits/<int:visit_id>/consultation/morbidity-suggestion",
+        VisitMorbiditySuggestionView.as_view(),
+        name="visit-morbidity-suggestion",
+    ),
     path(
         "visits/<int:visit_id>/consultation/physical-exam",
         VisitPhysicalExamView.as_view(),

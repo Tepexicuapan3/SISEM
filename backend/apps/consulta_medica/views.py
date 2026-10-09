@@ -79,6 +79,7 @@ from .uses_case.consultation_usecase import (
     save_prescriptions,
     search_cies,
     start_consultation,
+    suggest_morbidity,
 )
 from .uses_case.medical_leave_usecase import (
     create_medical_leave,
@@ -444,6 +445,8 @@ class VisitDiagnosisSaveView(APIView):
                 systems_review=serializer.validated_data.get("systemsReview"),
                 diagnostic_plan=serializer.validated_data.get("diagnosticPlan"),
                 therapeutic_plan=serializer.validated_data.get("therapeuticPlan"),
+                morbidity=serializer.validated_data.get("morbidity"),
+                follow_up_date=serializer.validated_data.get("followUpDate"),
                 audit_hook=audit_hook,
             )
         except VisitDomainError as exc:
@@ -2212,6 +2215,25 @@ class VisitCieSearchView(APIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
+class VisitMorbiditySuggestionView(APIView):
+    """Sugerencia de "primera vez / subsecuente de la enfermedad" para el CIE-10
+    elegido (documento 5.3). Solo lectura: el medico confirma en la nota."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        _, roles, permissions = _actor_context(user)
+        try:
+            payload = suggest_morbidity(visit_id, roles, request.query_params.get("cieCode"), permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        return Response(payload, status=status.HTTP_200_OK)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class VisitPrescriptionsSaveView(APIView):
     authentication_classes = []
@@ -2347,6 +2369,8 @@ class VisitConsultationCloseView(APIView):
                 systems_review=validated_data.get("systemsReview"),
                 diagnostic_plan=validated_data.get("diagnosticPlan"),
                 therapeutic_plan=validated_data.get("therapeuticPlan"),
+                morbidity=validated_data.get("morbidity"),
+                follow_up_date=validated_data.get("followUpDate"),
                 audit_hook=audit_hook,
             )
         except VisitDomainError as exc:

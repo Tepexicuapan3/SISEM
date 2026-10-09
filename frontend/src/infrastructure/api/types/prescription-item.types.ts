@@ -3,6 +3,8 @@ export type PrescriptionItemStatus = "activo" | "cancelado";
 export interface PrescriptionItem {
   id: number;
   visitId: number;
+  /** Folio de la receta a la que pertenece ("RX-<anio>-<n>", 5.3). */
+  prescriptionFolio: string | null;
   medicationId: number;
   medicationName: string;
   genericName: string | null;

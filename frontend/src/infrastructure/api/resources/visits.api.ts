@@ -5,6 +5,7 @@ import type {
   AddSecondaryDiagnosisRequest,
   CieSearchParams,
   CieSearchResponse,
+  MorbiditySuggestionResponse,
   PrescriptionItem,
   SecondaryDiagnosisItem,
   VisitPrescriptionItemsResponse,
@@ -98,6 +99,18 @@ export const visitsAPI = {
     const response = await apiClient.post<SaveDiagnosisResponse>(
       `/visits/${visitId}/diagnosis`,
       data,
+    );
+    return response.data;
+  },
+
+  /** 5.3: sugiere "primera vez / subsecuente de la enfermedad" para ese CIE-10. */
+  getMorbiditySuggestion: async (
+    visitId: number,
+    cieCode: string,
+  ): Promise<MorbiditySuggestionResponse> => {
+    const response = await apiClient.get<MorbiditySuggestionResponse>(
+      `/visits/${visitId}/consultation/morbidity-suggestion`,
+      { params: { cieCode } },
     );
     return response.data;
   },

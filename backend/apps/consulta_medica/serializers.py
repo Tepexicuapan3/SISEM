@@ -7,6 +7,7 @@ from apps.consulta_medica.models import (
     BloodType,
     DentalTreatment,
     Habit,
+    Morbidity,
     OdontogramToothState,
     PersonalHistory,
     Presence,
@@ -49,6 +50,12 @@ class SaveDiagnosisSerializer(serializers.Serializer):
     systemsReview = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     diagnosticPlan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     therapeuticPlan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Documento 5.3 (his_notas.sw_morbi y fe_cita). La obligatoriedad al
+    # cerrar y la regla de la fecha las valida el caso de uso.
+    morbidity = serializers.ChoiceField(
+        choices=Morbidity.choices, required=False, allow_blank=True, allow_null=True,
+    )
+    followUpDate = serializers.DateField(required=False, allow_null=True)
 
     def validate_primaryDiagnosis(self, value):
         normalized = value.strip()

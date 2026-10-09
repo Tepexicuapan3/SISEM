@@ -125,6 +125,7 @@ def get_dispensation_preview(prescription_id, roles, permissions=None):
 
     return {
         "prescriptionId": prescription_row["id_prescription"],
+        "folio": prescription_row["folio"],
         "visitId": prescription_row["id_visit_id"],
         "items": contract_items,
     }
@@ -179,6 +180,7 @@ def list_pending_dispensation_queue(roles, permissions=None, *, id_almacen=None)
 
         items.append({
             "prescriptionId": prescription_id,
+            "folio": row["prescription__folio"],
             "visitId": visit_id,
             "noExp": visit["no_exp"],
             "pkNum": visit["pk_num"],

@@ -107,6 +107,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Paciente estable y con tratamiento inicial.",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
 
@@ -132,6 +133,7 @@ class ConsultationUseCaseTests(TestCase):
             doctor_id=self.doctor_id,
             permissions=["clinico:consultas:read"],
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
 
@@ -148,6 +150,7 @@ class ConsultationUseCaseTests(TestCase):
                 final_note="",
                 doctor_id=self.doctor_id,
                 cie_code=self.cie_code,
+                morbidity="1",
                 audit_hook=_noop_audit_hook,
             )
 
@@ -164,6 +167,7 @@ class ConsultationUseCaseTests(TestCase):
                 primary_diagnosis="Dx",
                 final_note="Nota",
                 doctor_id=self.doctor_id,
+                morbidity="1",
                 audit_hook=_noop_audit_hook,
             )
 
@@ -180,6 +184,7 @@ class ConsultationUseCaseTests(TestCase):
             "Nota inicial",
             self.doctor_id,
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
 
@@ -193,6 +198,7 @@ class ConsultationUseCaseTests(TestCase):
             "Nota final",
             self.doctor_id_2,
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
 
@@ -529,6 +535,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota estable",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
 
@@ -539,6 +546,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota estable",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
 
@@ -558,6 +566,7 @@ class ConsultationUseCaseTests(TestCase):
             final_note="Nota original",
             doctor_id=self.doctor_id,
             cie_code=self.cie_code,
+            morbidity="1",
             audit_hook=_noop_audit_hook,
         )
         return visit

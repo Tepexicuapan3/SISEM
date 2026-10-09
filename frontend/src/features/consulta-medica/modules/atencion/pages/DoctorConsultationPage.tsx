@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlarmClock, ClipboardList, Stethoscope } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
@@ -156,6 +156,8 @@ export const DoctorConsultationPage = () => {
     visits.find((visit) => visit.id === selectedVisitId) ?? null;
 
   const selectedCieCode = diagnosisForm.watch("cieCode").trim().toUpperCase();
+  // 5.3: "primera vez / subsecuente de la enfermedad", obligatoria para cerrar.
+  const selectedMorbidity = useWatch({ control: diagnosisForm.control, name: "morbidity" });
   const debouncedCieSearchTerm = useDebounce(cieSearchTerm, 300);
   const normalizedCieSearchTerm = debouncedCieSearchTerm.trim();
   const shouldSearchCies =
@@ -212,7 +214,9 @@ export const DoctorConsultationPage = () => {
     canCloseConsultation(selectedVisitStatus) &&
     // cieCode es obligatorio para CERRAR (NOM-024) aunque siga opcional
     // para el guardado de avance -- ver consultation_usecase.close_consultation.
-    Boolean(selectedCieCode);
+    Boolean(selectedCieCode) &&
+    // Igual que el legado: no se cierra sin "primera vez o subsecuente".
+    Boolean(selectedMorbidity);
 
   const selectedSavedPrescriptions = selectedVisit
     ? (prescriptionsDraftByVisitId[selectedVisit.id] ?? [])

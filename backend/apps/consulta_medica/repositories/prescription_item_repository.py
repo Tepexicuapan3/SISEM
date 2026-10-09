@@ -60,6 +60,7 @@ class PrescriptionItemRepository:
         return {
             "id": item.id_prescription_item,
             "visitId": item.prescription.id_visit_id,
+            "prescriptionFolio": item.prescription.folio,
             "medicationId": item.medication_id,
             "medicationName": item.medication.name,
             "genericName": item.medication.generic_name,

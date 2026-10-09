@@ -120,6 +120,9 @@ export const DEFAULT_DIAGNOSIS_FORM_VALUES: SaveDiagnosisFormInput = {
   systemsReview: "",
   diagnosticPlan: "",
   therapeuticPlan: "",
+  morbidity: "",
+  followUpEnabled: false,
+  followUpDate: "",
 };
 
 export const DEFAULT_PRESCRIPTIONS_FORM_VALUES: SavePrescriptionsFormInput = {
@@ -276,6 +279,9 @@ export const buildDiagnosisFingerprint = ({
   systemsReview,
   diagnosticPlan,
   therapeuticPlan,
+  morbidity,
+  followUpEnabled,
+  followUpDate,
 }: SaveDiagnosisFormValues): string => {
   return [
     primaryDiagnosis.trim(),
@@ -285,6 +291,8 @@ export const buildDiagnosisFingerprint = ({
     systemsReview.trim(),
     diagnosticPlan.trim(),
     therapeuticPlan.trim(),
+    morbidity,
+    followUpEnabled ? followUpDate : "",
   ].join("::");
 };
 
@@ -301,6 +309,9 @@ export const buildDiagnosisPayload = (values: SaveDiagnosisFormValues) => {
     systemsReview: values.systemsReview,
     diagnosticPlan: values.diagnosticPlan,
     therapeuticPlan: values.therapeuticPlan,
+    morbidity: values.morbidity || null,
+    // Sin "cita" marcada no se manda fecha (regla del legado).
+    followUpDate: values.followUpEnabled && values.followUpDate ? values.followUpDate : null,
   };
 };
 

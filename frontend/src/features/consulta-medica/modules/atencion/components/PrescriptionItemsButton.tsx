@@ -219,7 +219,12 @@ export function PrescriptionItemsButton({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Receta estructurada</DialogTitle>
+          <DialogTitle>
+            Receta estructurada
+            {activeItems[0]?.prescriptionFolio ? (
+              <span className="ml-2 font-mono text-base tabular-nums">{activeItems[0].prescriptionFolio}</span>
+            ) : null}
+          </DialogTitle>
           <DialogDescription>
             Medicamentos del catálogo institucional. Complementa las
             indicaciones de texto libre de "Guardar receta".

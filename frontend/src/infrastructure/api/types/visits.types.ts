@@ -287,12 +287,26 @@ export interface LatestVitalsResponse {
   todayCapture: TodayCapturePayload | null;
 }
 
-// his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+/** his_notas.sw_morbi (documento 5.3): 1 primera vez, 2 subsecuente DE LA ENFERMEDAD. */
+export type ConsultationMorbidity = "1" | "2";
+
+// his_notas ampliada (documento "Historia Clinica Unificada", 5.2) y 5.3.
 export interface ConsultationNoteFields {
   currentIllness?: string | null;
   systemsReview?: string | null;
   diagnosticPlan?: string | null;
   therapeuticPlan?: string | null;
+  /** Obligatoria para cerrar la consulta, como en el legado. */
+  morbidity?: ConsultationMorbidity | null;
+  /** Antes fe_cita: cuando indica el medico que vuelva (aaaa-mm-dd). */
+  followUpDate?: string | null;
+}
+
+export interface MorbiditySuggestionResponse {
+  cieCode: string | null;
+  suggestion: ConsultationMorbidity | null;
+  /** Consultas anteriores del paciente con ese CIE-10. */
+  previousConsultations: number;
 }
 
 export interface SaveDiagnosisRequest extends ConsultationNoteFields {
@@ -332,6 +346,8 @@ export interface SavePrescriptionRequest {
 export interface SavePrescriptionResponse {
   visitId: number;
   status: VisitStatus;
+  /** Folio de SIRES "RX-<anio>-<n>" (5.3). */
+  folio: string | null;
   items: string[];
 }
 

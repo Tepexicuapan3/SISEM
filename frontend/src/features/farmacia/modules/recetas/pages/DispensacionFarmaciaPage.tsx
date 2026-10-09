@@ -50,6 +50,11 @@ export function DispensacionFarmaciaPage() {
   }
 
   const columns: DataTableColumn<DispensationQueueItem>[] = [
+    {
+      key: "folio",
+      header: "Folio",
+      render: (row) => <span className="font-mono tabular-nums">{row.folio ?? "Sin folio"}</span>,
+    },
     { key: "noExp", header: "Expediente", accessorKey: "noExp" },
     { key: "pkNum", header: "PK", accessorKey: "pkNum" },
     { key: "patientName", header: "Paciente", accessorKey: "patientName" },

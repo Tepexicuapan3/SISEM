@@ -1,4 +1,5 @@
 from apps.consulta_medica.models import VisitPrescription
+from apps.consulta_medica.services.prescription_folio_service import assign_folio
 
 # `SavePrescriptionsSerializer.items` (serializers.py) no acota la cantidad
 # de indicaciones (ListField sin max_length) -- se acota aca, solo para el
@@ -42,6 +43,8 @@ class PrescriptionRepository:
                 "updated_by_id": updated_by_id,
             },
         )
+        # 5.3: el folio se asigna al crear la receta y no cambia nunca.
+        assign_folio(prescription)
         return prescription, created, previous_snapshot
 
     @staticmethod
@@ -63,13 +66,15 @@ class PrescriptionRepository:
                 "updated_by_id": updated_by_id,
             },
         )
-        return prescription
+        return assign_folio(prescription)
 
     @staticmethod
     def to_contract(prescription):
         return {
             "id": prescription.id_prescription,
             "visitId": prescription.id_visit_id,
+            "folio": prescription.folio,
+            "prescriptionType": prescription.prescription_type,
             "items": list(prescription.items or []),
             "isActive": prescription.is_active,
             "createdAt": prescription.created_at,

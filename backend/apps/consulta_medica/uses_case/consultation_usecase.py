@@ -1,10 +1,18 @@
 from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 
 from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
+from apps.consulta_medica.models import Morbidity, VisitConsultation, VisitDiagnosis
 from apps.consulta_medica.repositories.cies_repository import CiesRepository
-from apps.consulta_medica.repositories.consultation_repository import NOTE_FIELDS, ConsultationRepository
+from apps.consulta_medica.repositories.consultation_repository import (
+    CLINICAL_FIELDS,
+    EXTRA_FIELDS,
+    NOTE_FIELDS,
+    ConsultationRepository,
+)
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.repositories.visit_diagnosis_repository import VisitDiagnosisRepository
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
@@ -173,12 +181,32 @@ def _normalize_soap_field(value):
 
 
 def _normalize_note_fields(note_fields):
-    """his_notas ampliada (documento 5.2). Rechaza claves desconocidas para
-    que un error de tipeo no se pierda en silencio."""
-    unknown = set(note_fields) - set(NOTE_FIELDS)
+    """his_notas ampliada (5.2: texto) y sw_morbi / fe_seguimiento (5.3).
+    Rechaza claves desconocidas para que un error de tipeo no se pierda en
+    silencio."""
+    unknown = set(note_fields) - set(EXTRA_FIELDS)
     if unknown:
         raise TypeError(f"Campos de nota desconocidos: {sorted(unknown)}")
-    return {field: _normalize_soap_field(note_fields.get(field)) for field in NOTE_FIELDS}
+    normalized = {field: _normalize_soap_field(note_fields.get(field)) for field in NOTE_FIELDS}
+    # Codigo y fecha: no se recortan como texto.
+    normalized.update({field: note_fields.get(field) or None for field in CLINICAL_FIELDS})
+    return normalized
+
+
+def _validate_clinical_fields(visit, fields, *, closing):
+    """Reglas del legado (body-consultadirectac.jsp), adaptadas:
+    - sw_morbi es obligatorio para cerrar la nota.
+    - La fecha de seguimiento tiene que ser posterior a la consulta (el
+      legado no lo validaba)."""
+    details = {}
+    if closing and not fields.get("morbidity"):
+        details["morbidity"] = ["Indica si es primera vez o subsecuente de la enfermedad."]
+    follow_up = fields.get("follow_up_date")
+    consultation_day = visit.fecha_consulta or timezone.localdate()
+    if follow_up and follow_up <= consultation_day:
+        details["followUpDate"] = ["La fecha de seguimiento tiene que ser posterior a la consulta."]
+    if details:
+        raise VisitDomainError("VALIDATION_ERROR", "Hay errores en el formulario", 422, details=details)
 
 
 def _note_fields_contract(consultation):
@@ -187,6 +215,39 @@ def _note_fields_contract(consultation):
         "systemsReview": consultation.systems_review,
         "diagnosticPlan": consultation.diagnostic_plan,
         "therapeuticPlan": consultation.therapeutic_plan,
+        "morbidity": consultation.morbidity,
+        "followUpDate": consultation.follow_up_date.isoformat() if consultation.follow_up_date else None,
+    }
+
+
+def suggest_morbidity(visit_id, roles, cie_code, permissions=None):
+    """Sugerencia de sw_morbi (mejora sobre el legado, donde el medico lo
+    elegia sin ayuda): subsecuente si el paciente ya tuvo ese mismo CIE-10
+    (principal o secundario) en otra consulta de SIRES; si no, primera vez.
+    El medico confirma. Las notas del legado no cuentan: sus claves CIE son
+    numericas y no se cruzan con el catalogo actual."""
+    ensure_doctor_role(roles, permissions)
+    visit = _get_visit_or_error(visit_id)
+    code = (cie_code or "").strip().upper()
+    if not code:
+        return {"cieCode": None, "suggestion": None, "previousConsultations": 0}
+
+    previous = (
+        VisitConsultation.objects.filter(
+            id_visit__no_exp=visit.no_exp, id_visit__pk_num=visit.pk_num, is_active=True,
+        )
+        .exclude(id_visit=visit)
+        .filter(
+            Q(cie_id=code)
+            | Q(secondary_diagnoses__cie_id=code, secondary_diagnoses__status=VisitDiagnosis.Status.ACTIVO)
+        )
+        .distinct()
+        .count()
+    )
+    return {
+        "cieCode": code,
+        "suggestion": Morbidity.SUBSEQUENT if previous else Morbidity.FIRST,
+        "previousConsultations": previous,
     }
 
 
@@ -211,6 +272,8 @@ def save_diagnosis(
     visit = _get_visit_or_error(visit_id)
     _ensure_visit_in_consultation(visit)
     normalized_note_fields = _normalize_note_fields(note_fields)
+    # Guardado de avance: la morbilidad todavia puede faltar.
+    _validate_clinical_fields(visit, normalized_note_fields, closing=False)
 
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
     normalized_final_note = (final_note or "").strip()
@@ -315,6 +378,7 @@ def save_prescriptions(
     return {
         "visitId": visit.id_visit,
         "status": visit.status,
+        "folio": prescription.folio,
         "items": list(prescription.items or []),
     }
 
@@ -373,6 +437,8 @@ def close_consultation(
         )
 
     visit = _get_visit_or_error(visit_id)
+    # Legado: no se cierra la nota sin "primera vez o subsecuente".
+    _validate_clinical_fields(visit, normalized_note_fields, closing=True)
 
     if visit.status == "cerrada":
         existing_consultation = ConsultationRepository.get_by_visit(visit)

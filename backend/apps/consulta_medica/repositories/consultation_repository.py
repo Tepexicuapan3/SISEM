@@ -5,8 +5,12 @@ from apps.consulta_medica.models import (
 )
 
 
-# Columnas de his_notas ampliada (documento "Historia Clinica Unificada", 5.2).
+# Columnas de his_notas ampliada (documento "Historia Clinica Unificada", 5.2): texto.
 NOTE_FIELDS = ("current_illness", "systems_review", "diagnostic_plan", "therapeutic_plan")
+# Documento 5.3: sw_morbi (codigo 1/2) y fe_seguimiento (fecha). No son texto.
+CLINICAL_FIELDS = ("morbidity", "follow_up_date")
+# Todo lo que viaja aparte del SOAP: se versiona y compara igual.
+EXTRA_FIELDS = NOTE_FIELDS + CLINICAL_FIELDS
 
 
 class ConsultationRepository:
@@ -70,9 +74,8 @@ class ConsultationRepository:
         updated_by_id=None,
         **note_fields,
     ):
-        # his_notas ampliada (documento 5.2): current_illness, systems_review,
-        # diagnostic_plan, therapeutic_plan -- ver NOTE_FIELDS.
-        note_fields = {field: note_fields.get(field) for field in NOTE_FIELDS}
+        # his_notas ampliada (5.2) y sw_morbi / fe_seguimiento (5.3) -- ver EXTRA_FIELDS.
+        note_fields = {field: note_fields.get(field) for field in EXTRA_FIELDS}
         existing = VisitConsultation.objects.filter(id_visit=visit).first()
 
         # Snapshot JSON-safe del estado previo para auditoria (NOM-024):
@@ -114,7 +117,7 @@ class ConsultationRepository:
                 previous_objective=existing.objective,
                 previous_assessment=existing.assessment,
                 previous_plan=existing.plan,
-                **{f"previous_{field}": getattr(existing, field) for field in NOTE_FIELDS},
+                **{f"previous_{field}": getattr(existing, field) for field in EXTRA_FIELDS},
                 changed_by_id=updated_by_id,
             )
 
@@ -178,6 +181,8 @@ class ConsultationRepository:
             "systemsReview": consultation.systems_review,
             "diagnosticPlan": consultation.diagnostic_plan,
             "therapeuticPlan": consultation.therapeutic_plan,
+            "morbidity": consultation.morbidity,
+            "followUpDate": consultation.follow_up_date.isoformat() if consultation.follow_up_date else None,
             "isActive": consultation.is_active,
             "createdAt": consultation.created_at,
             "updatedAt": consultation.updated_at,

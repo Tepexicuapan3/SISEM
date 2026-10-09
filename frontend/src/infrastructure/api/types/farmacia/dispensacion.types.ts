@@ -24,6 +24,8 @@ export type DispensationStatus = (typeof DISPENSATION_STATUS)[keyof typeof DISPE
 
 export interface DispensationQueueItem {
   prescriptionId: number;
+  /** Folio de SIRES "RX-<anio>-<n>" (5.3); null solo en recetas sin migrar. */
+  folio: string | null;
   visitId: number;
   noExp: string | null;
   pkNum: number;
@@ -78,6 +80,7 @@ export interface DispensationQueueResponse {
 
 export interface DispensationPreviewResponse {
   prescriptionId: number;
+  folio: string | null;
   visitId: number;
   items: DispensationPreviewItem[];
 }

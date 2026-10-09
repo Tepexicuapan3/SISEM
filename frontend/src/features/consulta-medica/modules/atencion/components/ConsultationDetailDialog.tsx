@@ -31,6 +31,7 @@ import type {
   SavePrescriptionsFormValues,
 } from "@features/consulta-medica/modules/atencion/domain/consultation.schemas";
 import { VitalMetric } from "./VitalMetric";
+import { MorbidityAndFollowUpFields } from "./MorbidityAndFollowUpFields";
 import { AppointmentAlertBadge, ConsultationElapsedBadge } from "./ConsultationBadges";
 import {
   formatArrivalTypeLabel,
@@ -545,6 +546,13 @@ export function ConsultationDetailDialog({
                 </p>
               ) : null}
             </div>
+
+            <MorbidityAndFollowUpFields
+              visitId={selectedVisit?.id ?? null}
+              cieCode={selectedCieCode}
+              diagnosisForm={diagnosisForm}
+              disabled={!canSaveClinicalData || saveDiagnosis.isPending}
+            />
 
             {/* his_notas ampliada (documento "Historia Clinica Unificada", 5.2): opcionales. */}
             {CONSULTATION_NOTE_FIELDS.map(({ name, label }) => (

@@ -20,6 +20,7 @@ import {
   formatServiceTypeLabel,
 } from "@features/consulta-medica/modules/atencion/pages/DoctorConsultationPage.helpers";
 import type { VisitQueueItem } from "@api/types";
+import { visitsAPI } from "@api/resources/visits.api";
 
 vi.mock(
   "@features/consulta-medica/modules/atencion/queries/useDoctorQueue",
@@ -69,6 +70,12 @@ vi.mock(
     useCloseVisit: vi.fn(),
   }),
 );
+
+// 5.3: la sugerencia de "primera vez / subsecuente" llama a la API real.
+vi.mock("@api/resources/visits.api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@api/resources/visits.api")>();
+  return { ...actual, visitsAPI: { ...actual.visitsAPI, getMorbiditySuggestion: vi.fn() } };
+});
 
 vi.mock("@/domains/auth-access/hooks/usePermissionDependencies", () => ({
   usePermissionDependencies: vi.fn(),
@@ -129,12 +136,15 @@ const renderDoctorPage = (initialEntry = "/clinico/consultas/doctor") => {
   );
 };
 
-// his_notas ampliada: el formulario siempre envia los 4 campos (vacios si no se capturan).
+// his_notas ampliada: el formulario siempre envia los 4 campos (vacios si no se
+// capturan), mas morbilidad y seguimiento (5.3; null si no se capturan).
 const EMPTY_NOTE_FIELDS = {
   currentIllness: "",
   systemsReview: "",
   diagnosticPlan: "",
   therapeuticPlan: "",
+  morbidity: null,
+  followUpDate: null,
 };
 
 describe("DoctorConsultationPage UI", () => {
@@ -145,6 +155,11 @@ describe("DoctorConsultationPage UI", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(visitsAPI.getMorbiditySuggestion).mockResolvedValue({
+      cieCode: "A090",
+      suggestion: "2",
+      previousConsultations: 1,
+    });
 
     vi.mocked(usePermissionDependencies).mockReturnValue({
       hasCapability: () => true,
@@ -644,9 +659,54 @@ describe("DoctorConsultationPage UI", () => {
     await user.type(screen.getByLabelText(/Buscar CIE/i), "A0");
     await user.click(await screen.findByRole("button", { name: /A090/i }));
 
+    // Legado (sw_morbi): tampoco se cierra sin "primera vez o subsecuente".
+    expect(closeButton).toBeDisabled();
+    await user.click(screen.getByLabelText("Primera vez de la enfermedad"));
+
     await waitFor(() => {
       expect(closeButton).toBeEnabled();
     });
+  });
+
+  it("sugiere primera vez o subsecuente segun el CIE y se puede aplicar", async () => {
+    vi.mocked(useCieSearch).mockReturnValue({
+      data: {
+        items: [
+          { code: "A090", description: "GASTROENTERITIS", version: "CIE-10" },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof useCieSearch>);
+    vi.mocked(useDoctorQueue).mockReturnValue({
+      data: {
+        items: [createVisit({ status: "en_consulta" })],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof useDoctorQueue>);
+
+    const user = userEvent.setup();
+    renderDoctorPage("/clinico/consultas/doctor/1");
+
+    await user.type(screen.getByLabelText(/Buscar CIE/i), "A0");
+    await user.click(await screen.findByRole("button", { name: /A090/i }));
+
+    expect(
+      await screen.findByText("Sugerido: subsecuente (1 consulta anterior con A090)."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Usar sugerencia" }));
+
+    expect(screen.getByLabelText("Subsecuente de la enfermedad")).toBeChecked();
+    expect(visitsAPI.getMorbiditySuggestion).toHaveBeenCalledWith(1, "A090");
   });
 
   it("sincroniza diagnostico antes de cierre y luego cierra consulta", async () => {
@@ -678,6 +738,7 @@ describe("DoctorConsultationPage UI", () => {
     );
     await user.type(screen.getByLabelText(/Buscar CIE/i), "A0");
     await user.click(await screen.findByRole("button", { name: /A090/i }));
+    await user.click(screen.getByLabelText("Subsecuente de la enfermedad"));
 
     await user.click(
       screen.getByRole("button", { name: "Finalizar consulta" }),
@@ -691,6 +752,7 @@ describe("DoctorConsultationPage UI", () => {
           finalNote: "Nota final de egreso",
           cieCode: "A090",
           ...EMPTY_NOTE_FIELDS,
+          morbidity: "2",
         },
       });
     });
@@ -703,6 +765,7 @@ describe("DoctorConsultationPage UI", () => {
           finalNote: "Nota final de egreso",
           cieCode: "A090",
           ...EMPTY_NOTE_FIELDS,
+          morbidity: "2",
         },
       });
     });
@@ -746,6 +809,7 @@ describe("DoctorConsultationPage UI", () => {
     await user.type(screen.getByLabelText("Nota final"), "Nota");
     await user.type(screen.getByLabelText(/Buscar CIE/i), "A0");
     await user.click(await screen.findByRole("button", { name: /A090/i }));
+    await user.click(screen.getByLabelText("Primera vez de la enfermedad"));
     await user.click(
       screen.getByRole("button", { name: "Finalizar consulta" }),
     );

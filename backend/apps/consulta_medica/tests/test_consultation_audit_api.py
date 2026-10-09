@@ -357,7 +357,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         close_consultation(
             visit.id_visit, ["DOCTOR"], "Dx cierre", "Nota cierre",
-            self.doctor_user.id_usuario, cie_code="A090", audit_hook=_noop_audit_hook,
+            self.doctor_user.id_usuario, cie_code="A090", morbidity="1", audit_hook=_noop_audit_hook,
         )
         self._login_doctor()
 
@@ -523,7 +523,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
 
         response = self.client.post(
             f"/api/v1/visits/{visit.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx cierre", "finalNote": "Nota final", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx cierre", "finalNote": "Nota final", "cieCode": "A090", "morbidity": "1"},
             format="json", HTTP_X_REQUEST_ID=self.request_id, **self._csrf_headers(),
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -768,7 +768,7 @@ class ConsultationAuditSimpleTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         close_consultation(
             visit.id_visit, ["DOCTOR"], "Dx cierre", "Nota cierre",
-            self.doctor_user.id_usuario, cie_code="A090", audit_hook=_noop_audit_hook,
+            self.doctor_user.id_usuario, cie_code="A090", morbidity="1", audit_hook=_noop_audit_hook,
         )
         self._login_doctor()
 
@@ -799,7 +799,7 @@ class ConsultationAuditSimpleTests(_ConsultationAuditApiTestBase):
 
         response = self._call_with_audit_down(lambda: self.client.post(
             f"/api/v1/visits/{visit.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx cierre", "finalNote": "Nota final", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx cierre", "finalNote": "Nota final", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         ))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -891,7 +891,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
 
         self.client.post(
             f"/api/v1/visits/{visit.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx cierre", "finalNote": "Nota cierre", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx cierre", "finalNote": "Nota cierre", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         )
         self.client.post(
@@ -935,7 +935,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         visit_main = self._visit_with_consultation()
         response_main = self.client.post(
             f"/api/v1/visits/{visit_main.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         )
         self.assertEqual(response_main.status_code, status.HTTP_200_OK)
@@ -950,7 +950,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         # Path idempotente: mismo payload, visita ya cerrada.
         response_idempotent = self.client.post(
             f"/api/v1/visits/{visit_main.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         )
         self.assertEqual(response_idempotent.status_code, status.HTTP_200_OK)
@@ -966,7 +966,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         visit_no_consultation = self._make_visit(status_="cerrada")
         response_no_consultation = self.client.post(
             f"/api/v1/visits/{visit_no_consultation.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         )
         self.assertEqual(response_no_consultation.status_code, status.HTTP_200_OK)
@@ -984,14 +984,14 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         visit_main = self._visit_with_consultation()
         response_main = self._call_with_audit_down(lambda: self.client.post(
             f"/api/v1/visits/{visit_main.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         ))
         self.assertEqual(response_main.status_code, status.HTTP_200_OK)
 
         response_idempotent = self._call_with_audit_down(lambda: self.client.post(
             f"/api/v1/visits/{visit_main.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         ))
         self.assertEqual(response_idempotent.status_code, status.HTTP_200_OK)
@@ -999,7 +999,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         visit_no_consultation = self._make_visit(status_="cerrada")
         response_no_consultation = self._call_with_audit_down(lambda: self.client.post(
             f"/api/v1/visits/{visit_no_consultation.id_visit}/consultation/close",
-            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090"},
+            {"primaryDiagnosis": "Dx", "finalNote": "Nota", "cieCode": "A090", "morbidity": "1"},
             format="json", **self._csrf_headers(),
         ))
         self.assertEqual(response_no_consultation.status_code, status.HTTP_200_OK)

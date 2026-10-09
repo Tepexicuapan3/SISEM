@@ -46,7 +46,7 @@ class PrescriptionDispensationRepository:
         para validar existencia/estatus antes de abrir la transaccion."""
         return (
             VisitPrescription.objects.filter(pk=prescription_id)
-            .values("id_prescription", "is_active", "id_visit_id")
+            .values("id_prescription", "is_active", "id_visit_id", "folio")
             .first()
         )
 
@@ -122,7 +122,8 @@ class PrescriptionDispensationRepository:
                     VisitPrescriptionItem.DispensationStatus.PARCIAL,
                 ],
             )
-            .values("prescription_id", "prescription__id_visit_id")
+            # prescription__folio es una columna escalar (5.3), no `items`.
+            .values("prescription_id", "prescription__id_visit_id", "prescription__folio")
             .distinct()
             .order_by("prescription_id")
         )

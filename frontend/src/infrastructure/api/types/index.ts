@@ -1278,6 +1278,8 @@ export type {
   CieSearchParams,
   CieSearchItem,
   CieSearchResponse,
+  ConsultationMorbidity,
+  MorbiditySuggestionResponse,
   SavePrescriptionRequest,
   SavePrescriptionResponse,
   StartConsultationResponse,

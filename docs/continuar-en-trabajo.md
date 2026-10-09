@@ -1426,6 +1426,69 @@ médico podía cancelar un medicamento que farmacia ya había surtido.
   480 OK. Frontend: `tsc` (app y tests) y ESLint limpios; en flujo clínico la
   única falla es la previa "Folio VST-2002". Sin migración.
 
+## 2026-10-09 — 5.3 paso 3: primera vez / subsecuente y seguimiento
+
+Reglas tomadas del legado (`java-main/.../clinicam/body-consultadirectac.jsp`),
+que se usa solo como referencia de lectura, y adaptadas:
+
+| Legado | SIRES |
+|---|---|
+| `sw_morbi` 1 = "1era. vez de la enfermedad", 2 = "subsecuente de la enfermedad"; **obligatorio para cerrar** la nota | Igual: `cns_visit_consultation.sw_morbi` con los mismos códigos, obligatorio en `close_consultation` (422 `morbidity`) y en el botón "Finalizar consulta" |
+| Sin ayuda: el médico elige | **Mejora**: `GET /visits/<id>/consultation/morbidity-suggestion?cieCode=` sugiere subsecuente si el paciente ya tuvo ese CIE-10 (principal o secundario) en otra consulta de SIRES. El médico confirma con "Usar sugerencia". Las notas del legado no cuentan: sus claves CIE son numéricas y no cruzan con el catálogo |
+| `fe_cita`: si se marca "cita", la fecha es obligatoria | Igual (`fe_seguimiento`), más una **mejora**: tiene que ser posterior a la consulta |
+
+- `consulta_medica.0050`: `sw_morbi`, `fe_seguimiento` y sus `*_anterior` en
+  la revisión. Viajan con los campos de la nota (`EXTRA_FIELDS` en el
+  repositorio): se versionan y entran en la idempotencia del cierre.
+- Frontend: `MorbidityAndFollowUpFields` en el diálogo de consulta (radios,
+  sugerencia, casilla "Indicar fecha de seguimiento (cita)" y fecha con mínimo
+  mañana). Reglas en `domain/consultation-morbidity.ts`.
+- **Cambio de contrato**: cerrar una consulta sin `morbidity` ahora da 422.
+  Backend y frontend van juntos en el mismo deploy.
+- Tests: `test_nota_morbilidad.py` (11). Se actualizaron 24 llamadas de cierre
+  en tests existentes. `consulta_medica` 382 OK. Las 2 fallas de
+  `realtime/test_visit_stream_events_api` son **previas** (verificado sobre
+  `a049b9b`; una cierra sin CIE). Frontend: `tsc` (app y tests) limpio, vitest
+  556 OK con las mismas 13 fallas previas, más el test nuevo de la
+  sugerencia. No se corrieron los E2E de Playwright (`flujo-clinico-smoke`),
+  que tienen que elegir la morbilidad antes de finalizar.
+
+**Folio de receta (paso 2): el formato está confirmado en el legado**
+(`genfolios.folioReceta`): `<prefijo de la clínica>R<aa>-<consecutivo por
+clínica y año>`, tipo N normal / T transcripción. SIRES no tiene el prefijo:
+`cat_centros_atencion` guarda la CLUES, no la abreviatura corta del legado
+(columna 8 de `cat_clinicas`).
+
+**Folio de receta: hecho (5.3 paso 2), con formato propio de SIRES.** Se
+decidió no copiar el formato del legado: mientras los dos sistemas emitan
+recetas de la misma clínica y año, los folios idénticos chocarían en farmacia.
+- Formato `RX-<año>-<consecutivo de 6 dígitos>` (`RX-2026-000123`). Después de
+  la R el legado siempre pone el año de 2 dígitos o una F, así que nunca se
+  confunde con un folio histórico. Además, los folios del legado no están en
+  SIRES: `det_receta` no se migró y las notas se migraron sin folio de receta.
+- `consulta_medica.0051`: `cns_visit_prescription.no_freceta` (único),
+  `no_receta` (consecutivo), `tp_receta` (N/T, códigos del legado, por ahora
+  siempre N) y el contador por año `cns_consecutivo_receta`. La fila del
+  contador se bloquea (el legado reintentaba hasta 50 veces). Relleno: las
+  recetas existentes reciben folio por orden de creación y por año, y el
+  contador continúa la serie.
+- Lo asigna `PrescriptionRepository` en sus dos puntos de creación, con
+  `update()`: `items` es jsonb y no se re-serializa. Farmacia lo lee como
+  columna escalar (`prescription__folio`), respetando la regla de no cargar la
+  receta completa.
+- Se ve en "Receta (catálogo)" del médico, en la cola de farmacia (columna
+  Folio) y en el diálogo "Dispensar receta".
+- Tests: `test_folio_receta.py` (8, incluida la migración real 0050→0051).
+  Backend 589: solo las 10 fallas previas de recepción. Frontend sin cambios
+  en las fallas previas.
+- Pendiente después del 15: pasar los folios `LIC-`, `REF-`, `CIR-` y `AMB-`
+  (fecha y hora al segundo + expediente) al mismo estilo. Pueden chocar en el
+  mismo segundo y exponen el expediente.
+
+**Transcripción: existe en el legado** (`body-consultatrans*.jsp`, modalidad
+T, ficha `DT`, exige IDx y folio de referencia, guarda quién capturó). Va
+después del 15.
+
 ## Convenciones y Reglas Operacionales
 
 ### Regla: nunca probar directo contra bases de datos externas/legado

@@ -87,7 +87,12 @@ export function DispensePrescriptionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-none rounded-3xl bg-paper sm:w-[85vw] lg:w-200">
         <DialogHeader>
-          <DialogTitle>Dispensar receta</DialogTitle>
+          <DialogTitle>
+            Dispensar receta
+            {previewQuery.data?.folio ? (
+              <span className="ml-2 font-mono text-base tabular-nums">{previewQuery.data.folio}</span>
+            ) : null}
+          </DialogTitle>
           <DialogDescription>
             Confirma la cantidad a dispensar de cada item. Los items sin insumo mapeado
             quedan bloqueados hasta que farmacia complete el mapeo.
