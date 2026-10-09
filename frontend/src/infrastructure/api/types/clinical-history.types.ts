@@ -14,6 +14,9 @@ export interface ClinicalHistory {
   openedOn: string | null;
   openingClinicCode: number | null;
   openingDoctorCode: string | null;
+  /** De que fila del legado salio; null = abierta en SIRES. */
+  legacySourceTable: "his_clinica" | "his_clinicad" | null;
+  legacySourceId: number | null;
   isActive: boolean;
   createdAt: string;
 }

@@ -1,10 +1,12 @@
 import apiClient from "@api/client";
 import type {
+  BloodTypeResponse,
   ClinicalCatalogs,
   HistoricalNotesResponse,
   PatientRecordResource,
   PhysicalExamResponse,
   RecordListResponse,
+  SaveBloodTypeRequest,
   SavePhysicalExamRequest,
 } from "@api/types/unified-history.types";
 
@@ -74,6 +76,23 @@ export const physicalExamAPI = {
       `/visits/${visitId}/consultation/physical-exam`,
       data,
     );
+    return response.data;
+  },
+};
+
+/** GRUPO_SANGUINEO (5.2): vigente + historial; PUT captura o corrige. */
+export const bloodTypeAPI = {
+  get: async (noExp: string, pkNum = 0): Promise<BloodTypeResponse> => {
+    const response = await apiClient.get<BloodTypeResponse>(`/patients/${noExp}/blood-type`, {
+      params: { pkNum },
+    });
+    return response.data;
+  },
+
+  save: async (noExp: string, pkNum: number, data: SaveBloodTypeRequest): Promise<BloodTypeResponse> => {
+    const response = await apiClient.put<BloodTypeResponse>(`/patients/${noExp}/blood-type`, data, {
+      params: { pkNum },
+    });
     return response.data;
   },
 };

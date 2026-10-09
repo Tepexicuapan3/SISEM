@@ -22,6 +22,8 @@ export interface Allergy {
   medicationId: number | null;
   severity: AllergySeverity;
   reaction: string | null;
+  /** Texto del legado del que salio (solo lectura); null si se capturo en SIRES. */
+  originalText: string | null;
   source: AllergySource;
   status: AllergyStatus;
   statusReason: string | null;

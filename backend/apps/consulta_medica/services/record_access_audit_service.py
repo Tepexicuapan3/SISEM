@@ -40,6 +40,7 @@ class RecordSection:
     FAMILY_HISTORY = "antecedentes_familiares"
     SURGICAL_HISTORY = "antecedentes_quirurgicos"
     HABITS = "habitos"
+    BLOOD_TYPE = "grupo_sanguineo"
     DENTAL_TREATMENTS = "tratamientos_dentales"
     HISTORICAL_NOTES = "notas_historicas"
     DAILY_REPORT = "reporte_consultas_diario"

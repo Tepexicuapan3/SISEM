@@ -1,5 +1,13 @@
 # Continuar en la PC del trabajo — estado al 2026-09-14 (actualizado, misma fecha)
 
+> **Actualización 2026-10-08 — identidad del paciente (5.1)**: nueva
+> estructura del paciente (identificadores, bitácora única de cambios, estado
+> SERMED, `id_paciente` en 13 tablas clínicas), CURP/sexo de trabajadores
+> desde SERMED y ficha del frontend. Desplegado en el servidor `sma1`. Ver la
+> sección "Completado 2026-10-08 — Identidad del paciente (5.1)". Decisión
+> nueva: usuarios y médicos del legado se cargan **a mano por Excel** (ver
+> "Tablas de MySQL").
+
 > TL;DR: esta sesión migró la **historia clínica real del legado** (3385
 > pacientes), corrigió catálogos mal cargados, versionó `ClinicalHistory` y
 > agregó **nota de aclaración post-cierre** de consultas (dos gaps de
@@ -44,6 +52,26 @@ Checklist rápido de qué tabla del legado ya se migró y cuál sigue pendiente
 releer todo el documento cada vez.
 
 > Actualizado 2026-09-29 contra `Dump20260903.sql` (conteo real de filas).
+>
+> **2026-10-08**: "Ya migradas" se refiere a la base de **desarrollo**. En el
+> servidor `sma1` todavía NO se migró ninguna tabla del legado (7 pacientes,
+> 0 con `cd_familiar`). Usuarios y médicos se cargan **a mano** con los
+> import Excel de SIRES (no con comando): ver "Orden de carga en un servidor".
+
+### Orden de carga en un servidor (2026-10-08)
+| # | Tabla del legado | Destino | Cómo | Depende de |
+|---|---|---|---|---|
+| 1 | `cat_usuarios` (+ usuarios nuevos para médicos sin `cd_usuario`) | `sy_usuarios` | Excel de usuarios (Administración). NO mezclar con `migrar_usuarios_legacy`: chocan por "usuario ya existe". Con correo, SIRES manda credenciales al confirmar. | — |
+| 2 | `cat_medicos` (2,709) | `cat_medicos` | Excel de médicos (Médicos → Importar). "ID del Médico" = `cd_medico` del legado, columna en formato Texto. "Usuario" obligatorio y debe existir. Todo o nada. | 1 |
+| 3 | `his_clinica` | `cns_paciente` + historia | `migrar_historial_clinico_legacy` | catálogos sembrados |
+| 4 | `his_clinicad` | estomatología | `migrar_historia_estomatologia_legacy` | 3 |
+| 5 | `his_notas` | `cns_legacy_consultation_record` | `migrar_notas_clinicas_legacy` | — |
+| 6 | `det_hisnotcie` | `cns_legacy_consultation_diagnosis` | `migrar_diagnosticos_cie_legacy` | 5 |
+| 7 | — | identidad 5.1 | `corregir_llave_familiares_legacy` → `pasar_conflictos_a_bitacora` → `vincular_id_paciente` → `sincronizar_pacientes_sermed` | 3–6 |
+
+Siempre `--dry-run` primero y respaldo (`pg_dump`) antes. El legado se lee de
+un MySQL temporal con el dump restaurado, nunca de la MySQL de producción de
+SISEM (`LEGACY_MYSQL_*` por `docker compose exec -e`).
 
 ### Ya migradas (no repetir trabajo)
 - `his_clinica` → `cns_paciente` + `cns_clinical_history` + registros de la
@@ -76,8 +104,9 @@ Otros módulos (modelo en SIRES ya existe o casi):
 5. **`det_ambulancias`** (1,433) + `det_ambulanciasfec` (2,626) → ambulancias.
    Igual: ya está en el dump.
 6. **`det_licencia`** (25,775) → `cns_medical_leave` (incapacidades).
-7. **`cat_medicos`** (2,709, verificado) → médicos; plan cerrado ("Bloqueado",
-   punto 7), falta el comando `migrar_medicos_legacy`.
+7. **`cat_medicos`** (2,709, verificado) → médicos. **2026-10-08: ya NO hace
+   falta `migrar_medicos_legacy`**, se carga con el Excel de médicos (ver
+   "Orden de carga en un servidor").
 
 Volumen grande, decidir si vale la pena (histórico de solo lectura):
 `det_receta` 1,026,819 / `det_impresionrecetas` 2,210,407 (recetas),
@@ -328,7 +357,11 @@ especialidades), quedó así:
    **No retomar implementación sin luz verde explícita y fresca del
    usuario.**
 7. **Migración de médicos desde el legado** (`dbclinicas.cat_medicos` →
-   `medicos.CatMedico`) — plan cerrado con el usuario en esta sesión,
+   `medicos.CatMedico`) — **REEMPLAZADO 2026-10-08**: decisión nueva del
+   usuario, los médicos se cargan a mano con el Excel de médicos y los que no
+   tienen `cd_usuario` **reciben un usuario nuevo** (Excel de usuarios
+   primero). El plan de abajo (comando, "solo historial" sin login) queda
+   solo como referencia. Plan original, cerrado con el usuario en esta sesión,
    **nada implementado todavía**. Conteos reales dados por el usuario (no
    verificados contra el dump, solo contra su propia consulta al legado):
    ~2730 médicos, ~560 sin `cd_usuario` asignado — de esos 560, algunos
@@ -1087,6 +1120,270 @@ Criterio: borrar solo con evidencia (análisis de imports + verificación manual
    2 pantallas quedan invisibles.
 4. Opcional: `ARCO_PLAZO_DIAS_HABILES` en `.env` si jurídico define otro plazo.
 5. Rebuild del frontend.
+
+## Completado 2026-10-08 — Identidad del paciente (5.1)
+
+Punto 5.1 del documento "Historia Clínica Unificada" (artifact
+`XMxgUTzoxU6mdPMgr2xDDN`): **SERMED es la fuente de la identidad, PACIENTE es
+tabla propia de SIRES**. Plan completo: artifact `QDiiUZn7NGuaJFf4YYheqt`;
+runbook de verificación: artifact `Qitp2Q9DffSF4wEdZRKkw3` y
+`docs/runbooks/verificacion-identidad-5-1.sql`. Oracle se sigue leyendo solo
+con SELECT; nada de esto escribe en Oracle.
+
+### Nueva estructura
+
+```
+Oracle SERMED (solo lectura)
+   │ sync por expediente (sync_service)
+   ▼
+Postgres expedientes (réplica):  cat_empleados (+ curp, cd_sexo)   cat_familiar
+   │ sincronizar_pacientes_sermed / botón "Actualizar" de Expedientes
+   ▼
+Postgres SIRES (default):
+   cns_paciente ──────────────┬── cns_identificador_paciente (NO_EXP / PK_NUM / CD_FAMILIAR / PROVISIONAL)
+   (id_paciente, uuid)        ├── cns_paciente_sermed (1:1, último estado visto en SERMED)
+                              ├── cns_paciente_revision (versionado NOM-024, ya existía)
+                              └── id_paciente en 13 tablas clínicas
+   cns_bitacora_cambios  ← un solo lugar para el "por qué" de altas/cambios/bajas
+```
+
+| Tabla | Qué es | Migración |
+|---|---|---|
+| `cns_paciente` | Identidad estable. Ganó `uuid` (no cambia nunca, para intercambio NOM-024), `pk_num` nullable, `cd_familiar` (llave del legado), `ds_paterno`/`ds_materno`/`ds_nombre`/`fe_nacimiento` (copiados de SERMED), `curp_origen` (`O` = SERMED, `C` = capturada). Restricciones: único `(no_exp, pk_num)`, único `cd_familiar`, y nadie sin identificador. | `consulta_medica.0041`/`0042` |
+| `cns_identificador_paciente` | Fuente oficial de los números del paciente: `NO_EXP` (titulares), `PK_NUM` (familiares SERMED), `CD_FAMILIAR` (familiares del legado), `PROVISIONAL` (recién nacido). Único entre los vigentes; los dados de baja (`B`) se conservan como evidencia. | `0043` |
+| FK `id_paciente` | En `cns_allergy`, `cns_tratamiento_dental`, `cns_antecedente_familiar`, `cns_habito`, `cns_nota_historica`, `cns_legacy_consultation_record`, `cns_signos_vitales_legado`, `cns_medical_leave`, `cns_odontograma`, `cns_antecedente_personal`, `cns_stomatology_history`, `cns_study_result`, `cns_antecedente_quirurgico`. Nullable hasta la etapa 7e. | `0044` |
+| `cns_paciente_sermed` | Último estado de derechohabiencia visto (titular, parentesco, `tp_der`, vigencia, baja, clínica). Lo escribe solo la sincronización; sirve para detectar cambios porque la réplica está en otra conexión (sin JOIN). | `0045` |
+| `cns_bitacora_cambios` | Bitácora única: tabla, llave, acción A/M/B, motivo, valor anterior y nuevo, usuario o proceso. Motivos: `SINCRONIZACION SERMED`, `ALTA PACIENTE`, `REGISTRO RN`, `LIGA RN`, `FUSION`, `CAPTURA`, `CORRECCION`, `MIGRACION`, `CONFLICTO MIGRACION`, `CORRECCION CD_FAMILIAR`, `CAMBIO DE CLINICA EN SERMED`. No se edita ni se borra. | `0041` |
+| `cat_empleados` (réplica) | + `curp` varchar(18), `cd_sexo` varchar(1), índice por CURP. Es DDL manual: `storage/expedientes-ddl/003_curp_sexo_cat_empleados.sql`. | `administracion.0011` (solo estado) |
+
+**Corrige lo anotado antes en este documento**: en 2026-09-28 se dijo "NO se
+tocó `cat_empleados`" y se quitó `curp` de la DDL `002`. Sigue valiendo para
+`cat_familiar` (Oracle no tiene CURP de familiares). Para `cat_empleados` sí
+se agregó, porque Oracle `CAT_EMPLEADOS` tiene `CURP` y `CD_SEXO` (verificado
+2026-10-01). Agregar columnas que Oracle tiene no rompe el sync; lo que lo
+rompió el 2026-09-17 fue una columna que Oracle NO tiene.
+
+### Qué cambió por tipo de persona
+
+| Quién | Antes | Ahora |
+|---|---|---|
+| **Trabajador (titular)** | CURP y sexo capturados a mano en la ficha. | Nombre, fecha de nacimiento, sexo y CURP vienen de SERMED. En la ficha se ven **solo lectura**, con la CURP bloqueada (badge "SERMED"). Identificador `NO_EXP`. |
+| **Familiar** | Identificado por `pk_num`; los migrados del legado tenían por error el `cd_familiar` de dbclinicas en ese campo. | `pk_num` = PK_NUM de SERMED; `cd_familiar` en su propia columna (`corregir_llave_familiares_legacy` corrige la llave mal puesta). La CURP se captura en recepción, con advertencia que no bloquea. Los familiares del legado sin PK_NUM quedan identificados solo por `cd_familiar` (riesgo aceptado hasta la 7e). |
+| **Recién nacido** | Sin flujo. | **Solo definido, sin implementar**: el modelo ya tiene el identificador `PROVISIONAL` y los motivos `REGISTRO RN`/`LIGA RN`. Lo acordado es una cola "pendiente de ligar" que se confirma con un clic cuando Capital Humano lo registra. Va en un paso posterior del plan. |
+| **Cambio de clínica en SERMED** | No se detectaba. | La sincronización guarda la clínica en `cns_paciente_sermed` y registra el valor anterior y el nuevo en la bitácora (motivo `SINCRONIZACION SERMED`). **Falta** lo acordado (opción B): motivo propio `CAMBIO DE CLINICA EN SERMED` y pendiente para recepción. |
+| **Médicos y usuarios del legado** | Plan de comando `migrar_medicos_legacy`, "solo historial" sin login. | Carga manual por Excel. Los médicos sin `cd_usuario` reciben usuario nuevo. Ver "Orden de carga en un servidor". |
+
+Reglas confirmadas con el usuario:
+- **CURP contra sexo**: SERMED usa `F`/`M` (Femenino/Masculino); la CURP y
+  SIRES usan `H`/`M` (Hombre/Mujer). Se mapea `M→H`, `F→M`. Si la fecha de
+  la CURP coincide con `FE_NAC`, gana el sexo de la CURP y se registra; si
+  no, la CURP no se carga y va al reporte (`CURP_FECHA`).
+- La CURP **todavía no es única**: SERMED tiene CURP repetidas (una persona
+  con varios NO_EXP) que se resuelven fusionando pacientes
+  (`reporte_curp_duplicadas`).
+- Bug del legado documentado: el `tp_paciente` de dbclinicas es
+  `cd_familiar`, no PK_NUM.
+
+### Comandos nuevos (todos idempotentes, con `--dry-run`)
+
+| Comando | Qué hace |
+|---|---|
+| `llenar_curp_empleados` | Copia CURP y `CD_SEXO` de Oracle (SELECT) a la réplica `cat_empleados`. |
+| `poblar_identificadores_titulares` | Da de alta `NO_EXP` en `cns_identificador_paciente`. |
+| `corregir_llave_familiares_legacy` | Mueve el `cd_familiar` mal guardado como `pk_num` a su columna. Lee el `cat_familiar` del legado (`LEGACY_MYSQL_*`). `--reporte` genera CSV con `MERGE_NEEDED`/`UNKNOWN`/`AMBIGUOUS`. |
+| `pasar_conflictos_a_bitacora` | Pasa `cns_conflicto_migracion` a la bitácora única. Los conflictos nuevos ya entran solos. |
+| `vincular_id_paciente` | Llena `id_paciente` en las 13 tablas. Se vuelve a correr después de cualquier importación masiva del legado. |
+| `sincronizar_pacientes_sermed` | Copia nombre, fecha, sexo y CURP desde la réplica; `--reporte` genera CSV para Capital Humano. El botón "Actualizar" de Administración → Expedientes hace lo mismo por expediente. |
+| `reporte_curp_duplicadas` | Lista los candidatos a fusión. |
+
+Orden: DDL `003` → código + `migrate` → `llenar_curp_empleados` →
+`poblar_identificadores_titulares` → `corregir_llave_familiares_legacy` (solo
+si hubo migración del legado) → `pasar_conflictos_a_bitacora` →
+`vincular_id_paciente` → `sincronizar_pacientes_sermed` →
+`reporte_curp_duplicadas`.
+
+Frontend: tab Generales del expediente (`ExpedienteGeneralesTab.tsx`) y
+`features/expedientes/domain/patient-identity.ts`. Valida CURP contra sexo y
+fecha antes de guardar; los textos de la UI van en "tú" (usuarios de México).
+Tests: backend 607 OK, `makemigrations --check` limpio; frontend `tsc`,
+ESLint y vitest OK. **Falta revisarlo en el navegador** en tres casos:
+titular sincronizado, titular sin sincronizar y familiar.
+
+### Deploy en `sma1` (2026-10-08)
+
+Resultado: migraciones `0041`–`0045` y `administracion.0011` aplicadas, 27
+CURP cargadas, 6 identificadores, 5 filas vinculadas (0 sin resolver), 7
+pacientes sincronizados sin discrepancias y sin CURP repetidas. El paso de
+`corregir_llave_familiares_legacy` no se corrió porque no hacía falta: no hay
+migración del legado en ese servidor. Se hizo **sin respaldo** por decisión
+del usuario.
+
+Lo que se aprendió:
+- **El DDL `003` va ANTES de levantar el código.** Se aplicó después y
+  `cat_empleados` dio `column "curp" does not exist` hasta correrlo.
+  `docker-entrypoint-initdb.d` solo se ejecuta con el volumen vacío: en una
+  base existente el DDL es manual.
+- **En `sma1` las tablas están en el schema `public`** de `sisem_auth`, no en
+  `sires` (ese schema no existe ahí y el `search_path` cae a `public`). En
+  SQL a mano no usar el prefijo `sires.`.
+- Las variables del `.env` no están cargadas en la shell del host. Para `psql`
+  usar las del contenedor:
+  `docker exec -i sisem_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
+- `start-docker.sh` corre `migrate` en cada arranque: el respaldo va antes
+  de `docker compose up -d`. Nunca usar `docker compose down -v`.
+- `sisem_postgres` está publicado en `0.0.0.0:5432`: deuda de seguridad
+  pendiente (el compose dice que no se expone, pero sí declara `ports:`).
+
+### Pendiente
+- **Etapa 7e** (`id_paciente` NOT NULL por tabla) y después simplificar
+  `for_patient` (hoy lee con OR). La migración corre en todos los servidores
+  al arrancar: solo entra una tabla si da 0 filas sin `id_paciente` en
+  **todos** los entornos, o el backend no arranca (`set -eu`).
+- Restricción UNIQUE de CURP: esperar a tener datos reales migrados.
+- Cola de recién nacidos "pendiente de ligar" y pendiente de recepción por
+  cambio de clínica en SERMED (acordados, sin código).
+- Pasos 8, 9, 10 y 12 del plan, y `id_paciente` en las otras apps (fuera del 15).
+
+## Completado 2026-10-08 — 5.2 paso 1: grupo sanguíneo
+
+Análisis de la 5.2 contra SIRES: casi todo existía desde el 28/09. Faltaba
+**`GRUPO_SANGUINEO` completo**. Además hay huecos menores: `sw_presente`
+("niega") en antecedentes personales y familiares; hábitos sin N, sin `hasta`
+y sin historial de una fila vigente; bitácora de cambios en las tablas 5.2; y
+`texto_original`/origen en alergia e historia. Esos quedan como pasos 2 a 5.
+
+- `catalogos.0036`: siembra `cat_tpsanguineo` con los **códigos del legado**
+  (1 A+, 2 B-, 3 A-, 4 B+, 5 AB+, 6 AB-, 7 O+, 8 O-). No duplica nombres que ya
+  existan y reinicia la secuencia de Postgres si usó ids explícitos.
+- `consulta_medica.0046`: `cns_grupo_sanguineo` (`id_paciente` NOT NULL desde
+  el inicio, `cd_tpsanguineo`, `fuente` L/D, `id_resultado_lab` opcional a
+  `cns_study_result`, `sw_status` A/B). Una sola fila vigente por paciente
+  (índice único parcial).
+- API `GET/PUT /patients/<no_exp>/blood-type?pkNum=`: devuelve el vigente y el
+  historial. La primera captura no va a la bitácora. Un cambio deja la
+  anterior en B y registra `CORRECCION` en `cns_bitacora_cambios`, con el
+  motivo **obligatorio** en `valor_nuevo.motivo`. El resultado de laboratorio
+  tiene que ser del mismo paciente. `/clinical-catalogs` incluye `bloodTypes`.
+- Frontend: sección "Tipo de sangre" en el tab Generales (badge
+  Laboratorio/Declarado; corregir pide motivo con `ReasonDialog`; muestra los
+  valores anteriores). El header del expediente muestra el tipo real, con
+  "(declarado)" si no viene de laboratorio.
+- Tests: backend `test_blood_type.py` (14) y suites `consulta_medica` +
+  `catalogos` 432 OK; `makemigrations --check` limpio. Frontend: `tsc` y
+  ESLint limpios, vitest `blood-type.test.ts` (7). **Falta revisarlo en el
+  navegador.**
+- Deploy: solo migraciones de Django, sin DDL manual. `git pull` y
+  `docker compose build backend frontend && docker compose up -d` (el
+  `migrate` corre al arrancar).
+
+## Completado 2026-10-08 — 5.2 paso 2: antecedentes "lo niega"
+
+- `consulta_medica.0047`: `sw_presente` (S lo tiene / N lo niega, default S)
+  en `cns_antecedente_personal` y `cns_antecedente_familiar`. Los registros
+  existentes quedan en S, porque el legado solo migraba las casillas marcadas
+  y la captura siempre era positiva.
+- Reglas (`RecordSpec.validate`, evaluadas sobre el registro completo también
+  en una edición parcial): personal N sin fecha de diagnóstico; familiar N sin
+  finado ni causa de muerte, y con un CIE-10 o una descripción del padecimiento.
+- API: `presence` en el contrato y en los serializers de los dos recursos.
+- Frontend: campo "¿Lo tiene o lo niega?" y etiqueta "Lo niega" en la lista.
+  Las mismas reglas avisan antes de enviar (`domain/record-presence.ts`).
+- Tests: backend `test_antecedentes_niega.py` (10), suites 442 OK; frontend
+  `record-presence.test.ts` (7), `tsc` y ESLint limpios.
+- Deploy: solo `migrate`, sin DDL manual.
+
+## Completado 2026-10-09 — 5.2 paso 3: hábitos con historial
+
+- `consulta_medica.0048` (escrita a mano, probada con migración real
+  0047→0048):
+  - `desde` pasa de fecha a **año** (smallint). Va por columna temporal: se
+    copia el año, se borra la fecha y se renombra. **Destructiva**: el día y
+    el mes se pierden a propósito (el documento pide año). Respaldo obligatorio
+    antes del deploy.
+  - Columna nueva `hasta` (año en que lo dejó). El estado gana **N** (lo niega).
+  - `sw_status` A vigente / B anterior. Antes del índice único
+    `cns_habito_vigente_uq` (no_exp, pk_num, hábito, vigente y activo), los
+    duplicados que ya existían se resuelven: queda vigente el más reciente y
+    los demás pasan a B, sin borrar ninguno.
+- `RecordSpec.versioned_by`: en hábitos, **editar crea una versión nueva**.
+  La anterior pasa a B y el cambio va a `cns_bitacora_cambios` con el motivo
+  nuevo `ACTUALIZACION` (evolución del dato, no error), los valores anterior y
+  nuevo, `id_version_nueva` y el motivo escrito si lo hay (opcional). No se
+  cambia el tipo de hábito al editar (se da de baja y se agrega otro). Agregar
+  un segundo vigente del mismo hábito da 409. La lista devuelve solo los
+  vigentes, cada uno con `history`.
+- Reglas: años entre 1900 y el actual; "lo niega" sin frecuencia, cantidad ni
+  años; `hasta` solo con "lo dejó" y no antes de `desde`.
+- Importador del legado: si ya hay un hábito vigente del mismo tipo con otro
+  texto, el del legado entra como B (no se pierde, no pisa lo capturado). El
+  mismo contenido sigue deduplicándose como antes.
+- Frontend: estado Actual / Lo dejó / Lo niega, años como texto de 4 dígitos
+  y los valores anteriores debajo de cada hábito
+  (`domain/habit-rules.ts`).
+- Tests: backend `test_habitos_historial.py` (18), suites 458 OK,
+  `makemigrations --check` limpio; frontend `habit-rules.test.ts` (8), `tsc`
+  y ESLint limpios.
+
+## Completado 2026-10-09 — 5.2 paso 5: trazabilidad del legado
+
+(El paso 4, bitácora en ediciones y bajas del resto de las tablas 5.2, quedó
+pendiente: el usuario pidió seguir con el 5.)
+
+- `consulta_medica.0049`: `cns_allergy.texto_original` y
+  `cns_clinical_history.tabla_origen` / `no_hisclin_origen`.
+- Importadores: `his_clinica` fija el origen siempre, igual que la apertura;
+  `his_clinicad` solo lo llena si está vacío. Cada alergia guarda el texto del
+  que salió: la anotación completa en `his_clinica` y la columna en
+  `his_clinicad`.
+- Relleno de lo ya migrado, **solo con evidencia**:
+  - Origen de la historia: sale del `ref_origen` de sus notas y signos del
+    legado. Gana `his_clinica`.
+  - Texto original de la alergia: solo las de medicina general sin usuario
+    (las importadas), cuando la nota "alergias" del mismo paciente contiene la
+    sustancia.
+  - Lo demás queda NULL; el texto sigue en la nota histórica.
+- API: `originalText` en alergias; `legacySourceTable` y `legacySourceId` en
+  la historia. Frontend: "Texto original (sistema anterior)" bajo la alergia y
+  "migrada del sistema anterior (tabla #n)" junto a la apertura.
+- Tests: backend `test_trazabilidad_legado.py` (4, incluida la migración real
+  0048→0049), suites 462 OK, `makemigrations --check` limpio. Frontend: `tsc`
+  y ESLint limpios. Vitest completo 548 OK y 13 fallas **previas, sin
+  relación**: las mismas 6 de siempre, que incluyen el guard TS5042 del
+  entorno y "Folio VST-2002" en `DoctorConsultationPage`.
+- Gotcha: importar una clase de test (aunque sea para leer una constante) hace
+  que el runner la descubra otra vez y repita sus tests. Hay que importar el
+  módulo.
+
+## Completado 2026-10-09 — 5.2 paso 4: bitácora de cambios (5.2 cerrada)
+
+El documento pide que las modificaciones y bajas de los datos clínicos
+permanentes se registren siempre en `cns_bitacora_cambios`. Sin migración:
+solo código.
+
+| Tabla | Edición | Baja |
+|---|---|---|
+| `cns_antecedente_personal` / `_familiar` / `_quirurgico` | Solo cambia `status` → `ACTUALIZACION`; cualquier otro campo → `CORRECCION` | `BAJA: <motivo>` |
+| `cns_habito` | Versión nueva → `ACTUALIZACION` (paso 3) | `BAJA: <motivo>` |
+| `cns_allergy` | Campos → `CORRECCION`. Estado R o A → `ACTUALIZACION` con `motivo`; E (error) → `CORRECCION` | Endpoint anterior sin motivo → `BAJA` |
+| `cns_grupo_sanguineo` | `CORRECCION` con motivo obligatorio (paso 1) | — |
+
+- Solo se guardan las columnas que cambiaron. Si no cambió nada, no se
+  escribe nada. El alta no va a la bitácora (regla 3: ya queda en
+  `usr_alta`/`fch_alta`).
+- Una baja no guarda valor nuevo (regla de `record_change`, con test). Por eso
+  el motivo va en `motivo` como `"BAJA: <texto>"` (hasta 60 caracteres,
+  filtrable por prefijo). El texto completo sigue en `motivo_baja` del
+  registro.
+- Reglas centralizadas en `change_log_service.edit_reason` y
+  `deactivation_reason`. `RecordSpec.table` vacío deja fuera lo que no es de
+  la 5.2 (tratamientos dentales, que son de la 5.4).
+- Tests: `test_bitacora_5_2.py` (14). Suites `consulta_medica` + `catalogos` +
+  `recepcion`: 552, todo OK salvo las 10 fallas previas y ya conocidas de
+  `recepcion/test_checkin_manual_api.py`. `makemigrations --check` limpio.
+
+**La sección 5.2 del documento queda implementada completa** (pasos 1 a 5).
+Falta revisarla en el navegador y desplegarla: migraciones `0046`–`0049` y
+`catalogos.0036`, con **respaldo obligatorio** por la `0048`.
 
 ## Convenciones y Reglas Operacionales
 

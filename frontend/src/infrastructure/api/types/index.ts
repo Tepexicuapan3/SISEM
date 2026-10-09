@@ -548,10 +548,12 @@ export type {
 // =============================================================================
 export type {
   RecordSource,
+  RecordPresence,
   PersonalHistoryItem,
   FamilyHistoryItem,
   SurgicalHistoryItem,
   HabitItem,
+  HabitStatus,
   DentalTreatmentItem,
   RecordListResponse,
   PatientRecordResource,
@@ -562,6 +564,10 @@ export type {
   PhysicalExamResponse,
   SavePhysicalExamRequest,
   ClinicalCatalogs,
+  BloodTypeSource,
+  BloodTypeRecord,
+  BloodTypeResponse,
+  SaveBloodTypeRequest,
 } from "@api/types/unified-history.types";
 
 // =============================================================================

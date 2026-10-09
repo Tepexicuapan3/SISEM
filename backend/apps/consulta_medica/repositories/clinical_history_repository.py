@@ -140,6 +140,9 @@ class ClinicalHistoryRepository:
             "openedOn": history.opened_on.isoformat() if history.opened_on else None,
             "openingClinicCode": history.opening_clinic_code,
             "openingDoctorCode": history.opening_doctor_code,
+            # De que fila del legado salio (his_clinica / his_clinicad); null = abierta en SIRES.
+            "legacySourceTable": history.legacy_source_table,
+            "legacySourceId": history.legacy_source_id,
             "isActive": history.is_active,
             "createdAt": history.created_at,
         }

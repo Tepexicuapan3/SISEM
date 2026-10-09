@@ -23,7 +23,11 @@ interface CieRedactable {
   isRestricted: boolean;
 }
 
+/** sw_presente (5.2): S lo tiene, N lo niega ("niega diabetes" != "no se pregunto"). */
+export type RecordPresence = "S" | "N";
+
 export interface PersonalHistoryItem extends PatientRecordBase, CieRedactable {
+  presence: RecordPresence;
   diagnosisDate: string | null;
   /** A activo, R resuelto. */
   status: "A" | "R";
@@ -32,6 +36,7 @@ export interface PersonalHistoryItem extends PatientRecordBase, CieRedactable {
 export interface FamilyHistoryItem extends PatientRecordBase, CieRedactable {
   relationshipId: string | null;
   relationshipName: string | null;
+  presence: RecordPresence;
   isDeceased: boolean;
   causeOfDeath: string | null;
 }
@@ -50,11 +55,20 @@ export interface HabitItem extends PatientRecordBase {
   habitName: string;
   frequency: string | null;
   quantity: string | null;
-  since: string | null;
-  /** A actual, E ex. */
-  status: "A" | "E";
+  /** Anio en que empezo (documento 5.2: anios, no fechas). */
+  since: number | null;
+  /** Anio en que lo dejo; solo con estado E. */
+  until: number | null;
+  /** N lo niega, A actual, E lo dejo. */
+  status: HabitStatus;
+  /** A vigente, B version anterior. */
+  recordStatus: "A" | "B";
   notes: string | null;
+  /** Solo en la lista: versiones anteriores de este habito, la mas reciente primero. */
+  history?: HabitItem[];
 }
+
+export type HabitStatus = "N" | "A" | "E";
 
 export interface DentalTreatmentItem extends PatientRecordBase {
   visitId: number | null;
@@ -141,4 +155,38 @@ export interface ClinicalCatalogs {
   toothStates: { id: number; code: string; name: string; dmftComponent: "C" | "P" | "O" | null }[];
   teeth: { fdi: string; name: string; dentition: "P" | "T"; quadrant: number }[];
   relationships: { id: string; name: string }[];
+  /** cat_tpsanguineo, con los codigos del legado (1 A+ ... 8 O-). */
+  bloodTypes: { id: number; name: string }[];
+}
+
+// ── Grupo sanguineo (5.2) ────────────────────────────────────────────────────
+
+/** L = laboratorio, D = declarado por el paciente. */
+export type BloodTypeSource = "L" | "D";
+
+export interface BloodTypeRecord {
+  id: number;
+  bloodTypeId: number;
+  bloodTypeName: string;
+  source: BloodTypeSource;
+  labResultId: number | null;
+  /** A vigente, B corregido. */
+  status: "A" | "B";
+  createdAt: string;
+  createdById: number | null;
+  updatedAt: string;
+}
+
+export interface BloodTypeResponse {
+  current: BloodTypeRecord | null;
+  /** Las corregidas, de la mas reciente a la mas vieja. */
+  history: BloodTypeRecord[];
+}
+
+export interface SaveBloodTypeRequest {
+  bloodTypeId: number;
+  source: BloodTypeSource;
+  labResultId?: number | null;
+  /** Obligatorio al cambiar uno vigente: queda en la bitacora. */
+  reason?: string | null;
 }

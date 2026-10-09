@@ -226,6 +226,11 @@ export function AllergyList({ noExp, pkNum = 0, source }: AllergyListProps) {
                 {allergy.reaction ? (
                   <p className="text-xs text-txt-muted">{allergy.reaction}</p>
                 ) : null}
+                {allergy.originalText && allergy.originalText !== allergy.substance ? (
+                  <p className="text-xs text-txt-muted">
+                    Texto original (sistema anterior): «{allergy.originalText}»
+                  </p>
+                ) : null}
                 {allergy.status === "R" && allergy.statusReason ? (
                   <p className="text-xs text-txt-muted">Motivo: {allergy.statusReason}</p>
                 ) : null}

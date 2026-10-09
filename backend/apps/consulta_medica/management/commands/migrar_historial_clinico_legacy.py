@@ -177,6 +177,9 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
             header_fields = {
                 "opening_clinic_code": row.get("cd_clinica"),
                 "opening_doctor_code": (str(row.get("cd_medico") or "").strip() or None),
+                # Origen (5.2): igual que la apertura, his_clinica manda.
+                "legacy_source_table": "his_clinica",
+                "legacy_source_id": row.get("no_hisclin"),
             }
             if fe_hisclin:
                 header_fields["opened_on"] = fe_hisclin

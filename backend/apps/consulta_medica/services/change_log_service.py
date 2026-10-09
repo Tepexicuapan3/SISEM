@@ -60,6 +60,26 @@ def user_text(user: Any) -> str:
     return str(value)[:40]
 
 
+def edit_reason(previous: dict[str, Any], new: dict[str, Any], *, evolution_fields: Iterable[str]) -> str:
+    """Motivo de una edicion de un dato clinico permanente (documento 5.2).
+
+    Si solo cambio el estado clinico (activo -> resuelto...), el dato evoluciono:
+    ACTUALIZACION. Si cambio cualquier otra cosa (sustancia, CIE, fecha), se
+    corrigio como se capturo: CORRECCION."""
+    changed = {key for key in {**previous, **new} if previous.get(key) != new.get(key)}
+    if changed and changed <= set(evolution_fields):
+        return ChangeLog.Reason.CLINICAL_UPDATE
+    return ChangeLog.Reason.CORRECTION
+
+
+def deactivation_reason(motive: str | None) -> str:
+    """Motivo de una baja: "BAJA: <texto del usuario>" (filtrable por prefijo).
+    Una baja no guarda valor nuevo; el texto completo queda en la columna de
+    motivo del propio registro (motivo_baja)."""
+    motive = (motive or "").strip()
+    return f"BAJA: {motive}"[:60] if motive else "BAJA"
+
+
 def record_change(
     *,
     table: str,

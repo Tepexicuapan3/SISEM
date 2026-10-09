@@ -43,6 +43,7 @@ from apps.consulta_medica.views_unified_history import (
     HabitCollectionView,
     HabitDetailView,
     PatientAllergyStatusView,
+    PatientBloodTypeView,
     PatientHistoricalNotesView,
     PatientOdontogramVersionsView,
     PersonalHistoryCollectionView,
@@ -97,6 +98,11 @@ urlpatterns = [
         "patients/<str:no_exp>/allergies/<int:allergy_id>/status",
         PatientAllergyStatusView.as_view(),
         name="patient-allergy-status",
+    ),
+    path(
+        "patients/<str:no_exp>/blood-type",
+        PatientBloodTypeView.as_view(),
+        name="patient-blood-type",
     ),
     path(
         "patients/<str:no_exp>/historical-notes",

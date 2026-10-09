@@ -29,6 +29,7 @@ import { tiposResidenciaAPI } from "@api/resources/catalogos/tipos-residencia.ap
 import { useClinicalHistory, usePatientProfile } from "@features/expedientes/queries/useClinicalHistory";
 import { useUpdatePatientProfile } from "@features/expedientes/mutations/useUpdatePatientProfile";
 import { AllergyList } from "@features/expedientes/components/AllergyList";
+import { BloodTypeSection } from "@features/expedientes/components/BloodTypeSection";
 import { PatientBackgroundSection } from "@features/expedientes/components/PatientBackgroundSection";
 import { HistoricalNotesSection } from "@features/expedientes/components/HistoricalNotesSection";
 import {
@@ -220,11 +221,20 @@ export function ExpedienteGeneralesTab({
           Historia clínica abierta el {history.openedOn}
           {history.openingClinicCode ? ` · clínica ${history.openingClinicCode}` : ""}
           {history.openingDoctorCode ? ` · médico ${history.openingDoctorCode}` : ""}
+          {history.legacySourceTable
+            ? ` · migrada del sistema anterior (${history.legacySourceTable} #${history.legacySourceId})`
+            : ""}
         </p>
       ) : null}
       <section className="space-y-4">
         <h3 className="text-sm font-semibold text-txt-body">Alergias</h3>
         <AllergyList noExp={noExp} pkNum={pkNum} source="general" />
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold text-txt-body">Tipo de sangre</h3>
+        {/* key: el borrador no se arrastra al cambiar de derechohabiente. */}
+        <BloodTypeSection key={`${noExp}-${pkNum}`} noExp={noExp} pkNum={pkNum} />
       </section>
 
       <Form {...form}>

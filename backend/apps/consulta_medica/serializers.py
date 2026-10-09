@@ -4,10 +4,12 @@ from rest_framework import serializers
 
 from apps.consulta_medica.models import (
     Allergy,
+    BloodType,
     DentalTreatment,
     Habit,
     OdontogramToothState,
     PersonalHistory,
+    Presence,
     Sex,
     SpecialtySource,
     StomatologyHistory,
@@ -177,6 +179,8 @@ class _RecordWriteSerializer(serializers.Serializer):
 class PersonalHistoryWriteSerializer(_RecordWriteSerializer):
     cieCode = serializers.CharField(max_length=8, required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    # S lo tiene (default) / N lo niega.
+    presence = serializers.ChoiceField(choices=Presence.choices, required=False)
     diagnosisDate = serializers.DateField(required=False, allow_null=True)
     status = serializers.ChoiceField(choices=PersonalHistory.Status.choices, required=False)
 
@@ -192,6 +196,7 @@ class FamilyHistoryWriteSerializer(_RecordWriteSerializer):
     relationshipId = serializers.CharField(max_length=2, required=False, allow_blank=True, allow_null=True)
     cieCode = serializers.CharField(max_length=8, required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    presence = serializers.ChoiceField(choices=Presence.choices, required=False)
     isDeceased = serializers.BooleanField(required=False)
     causeOfDeath = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
 
@@ -215,9 +220,14 @@ class HabitWriteSerializer(_RecordWriteSerializer):
     habitId = serializers.IntegerField()
     frequency = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     quantity = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
-    since = serializers.DateField(required=False, allow_null=True)
+    # Anios (documento 5.2). El tope real (anio actual) lo valida el caso de uso.
+    since = serializers.IntegerField(min_value=1900, max_value=2100, required=False, allow_null=True)
+    until = serializers.IntegerField(min_value=1900, max_value=2100, required=False, allow_null=True)
     status = serializers.ChoiceField(choices=Habit.Status.choices, required=False)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Solo al editar: por que cambio (va a la bitacora). Opcional: dejar de
+    # fumar es una evolucion, no un error que haya que justificar.
+    reason = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
 
 
 class DentalTreatmentWriteSerializer(_RecordWriteSerializer):
@@ -270,6 +280,16 @@ class AllergyWriteSerializer(serializers.Serializer):
     # registro, unicamente para trazabilidad (la alergia es visible para
     # ambas especialidades siempre). Default GENERAL si no se manda.
     source = serializers.ChoiceField(choices=Allergy.Source.choices, required=False)
+
+
+class BloodTypeWriteSerializer(serializers.Serializer):
+    """GRUPO_SANGUINEO (5.2): captura o correccion del tipo de sangre.
+    `reason` solo es obligatorio al cambiar uno vigente (lo valida el caso de uso)."""
+
+    bloodTypeId = serializers.IntegerField()
+    source = serializers.ChoiceField(choices=BloodType.Source.choices)
+    labResultId = serializers.IntegerField(required=False, allow_null=True)
+    reason = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
 
 
 class CreateMedicalLeaveSerializer(serializers.Serializer):

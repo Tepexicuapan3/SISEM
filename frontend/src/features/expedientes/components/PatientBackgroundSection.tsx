@@ -6,11 +6,25 @@ import {
   RecordListCard,
   type RecordFieldDef,
 } from "@features/expedientes/components/RecordListCard";
+import {
+  PRESENCE_OPTIONS,
+  familyPresenceError,
+  personalPresenceError,
+} from "@features/expedientes/domain/record-presence";
+import {
+  HABIT_STATUS_LABELS,
+  HABIT_STATUS_OPTIONS,
+  habitError,
+  habitYears,
+  parseYear,
+} from "@features/expedientes/domain/habit-rules";
 import type {
   FamilyHistoryItem,
   HabitItem,
+  HabitStatus,
   PatientRecordResource,
   PersonalHistoryItem,
+  RecordPresence,
   SurgicalHistoryItem,
 } from "@api/types";
 
@@ -34,6 +48,8 @@ const nullable = (value: string | boolean) => {
   const trimmed = text(value);
   return trimmed && trimmed !== NONE ? trimmed : null;
 };
+
+const presenceOf = (value: string | boolean): RecordPresence => (text(value) === "N" ? "N" : "S");
 
 function SourceBadge({ source }: { source: string }) {
   return <Badge variant="secondary">{SOURCE_LABEL[source] ?? source}</Badge>;
@@ -66,6 +82,7 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
   const habits = useResource<HabitItem>("habits", noExp, pkNum);
 
   const personalFields: RecordFieldDef[] = [
+    { name: "presence", label: "¿Lo tiene o lo niega?", kind: "select", options: PRESENCE_OPTIONS },
     { name: "cieCode", label: "CIE-10 (opcional)", kind: "text", maxLength: 8, placeholder: "Ej. E11" },
     {
       name: "status", label: "Estado", kind: "select",
@@ -76,6 +93,7 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
   ];
 
   const familyFields: RecordFieldDef[] = [
+    { name: "presence", label: "¿Lo tiene o lo niega?", kind: "select", options: PRESENCE_OPTIONS },
     {
       name: "relationshipId", label: "Parentesco", kind: "select",
       options: [
@@ -100,13 +118,11 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
       name: "habitId", label: "Hábito", kind: "select", placeholder: "Selecciona un hábito",
       options: (catalogs?.habits ?? []).map((item) => ({ value: String(item.id), label: item.name })),
     },
-    {
-      name: "status", label: "Estado", kind: "select",
-      options: [{ value: "A", label: "Actual" }, { value: "E", label: "Ex (ya no lo practica)" }],
-    },
+    { name: "status", label: "Estado", kind: "select", options: HABIT_STATUS_OPTIONS },
     { name: "frequency", label: "Frecuencia", kind: "text", maxLength: 100 },
     { name: "quantity", label: "Cantidad", kind: "text", maxLength: 100 },
-    { name: "since", label: "Desde", kind: "date" },
+    { name: "since", label: "Desde (año)", kind: "text", maxLength: 4, placeholder: "Ej. 2010" },
+    { name: "until", label: "Hasta (año, si lo dejó)", kind: "text", maxLength: 4, placeholder: "Ej. 2020" },
     { name: "notes", label: "Notas", kind: "textarea" },
   ];
 
@@ -118,9 +134,10 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
         addLabel="Agregar antecedente"
         {...personal}
         fields={personalFields}
-        emptyValues={{ cieCode: "", status: "A", description: "", diagnosisDate: "" }}
+        emptyValues={{ presence: "S", cieCode: "", status: "A", description: "", diagnosisDate: "" }}
         canEdit={(item) => !item.isRestricted}
         toFormValues={(item) => ({
+          presence: item.presence,
           cieCode: item.cieCode ?? "",
           status: item.status,
           description: item.description ?? "",
@@ -128,13 +145,15 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
         })}
         toPayload={(values) => {
           const payload = {
+            presence: presenceOf(values.presence),
             cieCode: nullable(values.cieCode),
             description: nullable(values.description),
             diagnosisDate: nullable(values.diagnosisDate),
             status: text(values.status) || "A",
             source,
           };
-          return payload.cieCode || payload.description ? payload : "Indica un CIE-10 o una descripción.";
+          if (!payload.cieCode && !payload.description) return "Indica un CIE-10 o una descripción.";
+          return personalPresenceError(payload) ?? payload;
         }}
         renderItem={(item) =>
           item.isRestricted ? <RestrictedLabel /> : (
@@ -144,9 +163,13 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
                   {item.cieDescription ?? item.description}
                 </span>
                 {item.cieCode ? <Badge variant="outline">{item.cieCode}</Badge> : null}
-                <Badge variant={item.status === "A" ? "alert" : "secondary"}>
-                  {item.status === "A" ? "Activo" : "Resuelto"}
-                </Badge>
+                {item.presence === "N" ? (
+                  <Badge variant="info">Lo niega</Badge>
+                ) : (
+                  <Badge variant={item.status === "A" ? "alert" : "secondary"}>
+                    {item.status === "A" ? "Activo" : "Resuelto"}
+                  </Badge>
+                )}
                 <SourceBadge source={item.source} />
               </div>
               {item.cieDescription && item.description ? (
@@ -163,9 +186,12 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
         addLabel="Agregar antecedente familiar"
         {...family}
         fields={familyFields}
-        emptyValues={{ relationshipId: NONE, cieCode: "", description: "", isDeceased: false, causeOfDeath: "" }}
+        emptyValues={{
+          presence: "S", relationshipId: NONE, cieCode: "", description: "", isDeceased: false, causeOfDeath: "",
+        }}
         canEdit={(item) => !item.isRestricted}
         toFormValues={(item) => ({
+          presence: item.presence,
           relationshipId: item.relationshipId ?? NONE,
           cieCode: item.cieCode ?? "",
           description: item.description ?? "",
@@ -174,6 +200,7 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
         })}
         toPayload={(values) => {
           const payload = {
+            presence: presenceOf(values.presence),
             relationshipId: nullable(values.relationshipId),
             cieCode: nullable(values.cieCode),
             description: nullable(values.description),
@@ -181,9 +208,10 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
             causeOfDeath: nullable(values.causeOfDeath),
             source,
           };
-          return payload.cieCode || payload.description || payload.causeOfDeath
-            ? payload
-            : "Indica un CIE-10, un padecimiento o la causa de muerte.";
+          if (!payload.cieCode && !payload.description && !payload.causeOfDeath) {
+            return "Indica un CIE-10, un padecimiento o la causa de muerte.";
+          }
+          return familyPresenceError(payload) ?? payload;
         }}
         renderItem={(item) =>
           item.isRestricted ? <RestrictedLabel /> : (
@@ -191,6 +219,7 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
               <span className="text-sm font-semibold text-txt-body">
                 {item.cieDescription ?? item.description ?? "Familiar"}
               </span>
+              {item.presence === "N" ? <Badge variant="info">Lo niega</Badge> : null}
               <Badge variant="outline">{item.relationshipName ?? "Parentesco no especificado"}</Badge>
               {item.isDeceased ? (
                 <Badge variant="secondary">Finado{item.causeOfDeath ? `: ${item.causeOfDeath}` : ""}</Badge>
@@ -239,43 +268,59 @@ export function PatientBackgroundSection({ noExp, pkNum, source }: Props) {
         addLabel="Agregar hábito"
         {...habits}
         fields={habitFields}
-        emptyValues={{ habitId: "", status: "A", frequency: "", quantity: "", since: "", notes: "" }}
+        emptyValues={{ habitId: "", status: "A", frequency: "", quantity: "", since: "", until: "", notes: "" }}
         toFormValues={(item) => ({
           habitId: String(item.habitId),
           status: item.status,
           frequency: item.frequency ?? "",
           quantity: item.quantity ?? "",
-          since: item.since ?? "",
+          since: item.since !== null ? String(item.since) : "",
+          until: item.until !== null ? String(item.until) : "",
           notes: item.notes ?? "",
         })}
         toPayload={(values) => {
           const habitId = Number(text(values.habitId));
           if (!habitId) return "Selecciona el hábito.";
-          return {
+          const payload = {
             habitId,
-            status: text(values.status) || "A",
+            status: (text(values.status) || "A") as HabitStatus,
             frequency: nullable(values.frequency),
             quantity: nullable(values.quantity),
-            since: nullable(values.since),
+            since: parseYear(text(values.since)),
+            until: parseYear(text(values.until)),
             notes: nullable(values.notes),
             source,
           };
+          return habitError(payload) ?? payload;
         }}
         renderItem={(item) => (
           <>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-semibold text-txt-body">{item.habitName}</span>
-              <Badge variant={item.status === "A" ? "alert" : "secondary"}>
-                {item.status === "A" ? "Actual" : "Ex"}
+              <Badge variant={item.status === "A" ? "alert" : item.status === "N" ? "info" : "secondary"}>
+                {HABIT_STATUS_LABELS[item.status]}
               </Badge>
-              {[item.quantity, item.frequency].filter(Boolean).length ? (
+              {[item.quantity, item.frequency, habitYears(item)].filter(Boolean).length ? (
                 <span className="text-xs text-txt-muted">
-                  {[item.quantity, item.frequency].filter(Boolean).join(" · ")}
+                  {[item.quantity, item.frequency, habitYears(item)].filter(Boolean).join(" · ")}
                 </span>
               ) : null}
               <SourceBadge source={item.source} />
             </div>
             {item.notes ? <p className="text-xs text-txt-muted">{item.notes}</p> : null}
+            {item.history?.length ? (
+              <ul className="space-y-0.5 pt-1">
+                {item.history.map((old) => (
+                  <li key={old.id} className="text-xs text-txt-muted">
+                    Antes: {HABIT_STATUS_LABELS[old.status]}
+                    {[old.quantity, old.frequency, habitYears(old)].filter(Boolean).length
+                      ? ` · ${[old.quantity, old.frequency, habitYears(old)].filter(Boolean).join(" · ")}`
+                      : ""}
+                    {" "}(hasta el {new Date(old.updatedAt ?? old.createdAt).toLocaleDateString("es-MX")})
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </>
         )}
       />

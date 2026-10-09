@@ -667,6 +667,10 @@ class Allergy(models.Model):
         max_length=1, db_column="severidad", choices=Severity.choices,
     )
     reaction = models.TextField(db_column="reaccion", null=True, blank=True)
+    # ALERGIA.texto_original (documento 5.2): el texto tal como venia en la
+    # historia del legado, antes de partirlo en una alergia por elemento.
+    # NULL = capturada en SIRES.
+    original_text = models.TextField(db_column="texto_original", null=True, blank=True)
     # ALERGIA.cd_servicio_origen (documento): cat_servicios del legado,
     # 1 = Medicina General, 5 = Odontologia (confirmado en el dump). Solo
     # trazabilidad: la alergia es visible para todas las especialidades.
@@ -1009,6 +1013,10 @@ class ClinicalHistory(models.Model):
     # Del legado: his_clinica.cd_clinica / cd_medico.
     opening_clinic_code = models.IntegerField(db_column="cd_clinica_apertura", null=True, blank=True)
     opening_doctor_code = models.CharField(max_length=10, db_column="cd_medico_apertura", null=True, blank=True)
+    # Trazabilidad (documento 5.2): de que fila del legado salio la historia.
+    # NULL = abierta en SIRES. his_clinica manda sobre his_clinicad.
+    legacy_source_table = models.CharField(max_length=20, db_column="tabla_origen", null=True, blank=True)
+    legacy_source_id = models.IntegerField(db_column="no_hisclin_origen", null=True, blank=True)
 
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
@@ -1185,6 +1193,14 @@ class SpecialtySource(models.TextChoices):
     LEGACY = "legacy", "Migrado del sistema anterior"
 
 
+class Presence(models.TextChoices):
+    """ANTECEDENTE_*.sw_presente (documento 5.2): distingue "niega diabetes"
+    de "no se pregunto" (que simplemente no tiene registro)."""
+
+    PRESENT = "S", "Lo tiene"
+    DENIED = "N", "Lo niega"
+
+
 class PatientRecordBase(models.Model):
     """Columnas comunes de los registros permanentes 1:N por paciente."""
 
@@ -1231,6 +1247,11 @@ class PersonalHistory(PatientRecordBase):
         null=True, blank=True, related_name="+",
     )
     description = models.CharField(max_length=500, db_column="descripcion", null=True, blank=True)
+    # S tiene / N niega. Lo que existia antes de la columna es S: el legado
+    # solo migraba las casillas marcadas y la captura era siempre positiva.
+    presence = models.CharField(
+        max_length=1, db_column="sw_presente", choices=Presence.choices, default=Presence.PRESENT,
+    )
     diagnosis_date = models.DateField(db_column="fe_diagnostico", null=True, blank=True)
     status = models.CharField(
         max_length=1, db_column="estado", choices=Status.choices, default=Status.ACTIVE,
@@ -1254,6 +1275,9 @@ class FamilyHistory(PatientRecordBase):
         null=True, blank=True, related_name="+",
     )
     description = models.CharField(max_length=500, db_column="descripcion", null=True, blank=True)
+    presence = models.CharField(
+        max_length=1, db_column="sw_presente", choices=Presence.choices, default=Presence.PRESENT,
+    )
     is_deceased = models.BooleanField(db_column="sw_finado", default=False)
     cause_of_death = models.CharField(max_length=255, db_column="causa_muerte", null=True, blank=True)
 
@@ -1280,12 +1304,26 @@ class SurgicalHistory(PatientRecordBase):
 
 
 class Habit(PatientRecordBase):
-    """HABITO: tabaquismo, alcoholismo, toxicomanias, alimentacion..."""
+    """
+    HABITO (documento 5.2): tabaquismo, alcoholismo, toxicomanias,
+    alimentacion...
+
+    Una sola fila vigente (sw_status A) por paciente y habito. Si cambia
+    (empezo, lo dejo, cambio la cantidad), la vigente pasa a B y se crea una
+    nueva; el porque va en cns_bitacora_cambios. Asi la pantalla muestra un
+    solo valor sin contradicciones y queda el historial. La baja logica
+    (est_activo, con motivo) sigue siendo para lo capturado por error.
+    """
 
     class Status(models.TextChoices):
-        # Documento: A actual, E ex (ej. exfumador).
+        # Documento: N niega, A actual, E lo dejo (ej. exfumador).
+        DENIED = "N", "Lo niega"
         CURRENT = "A", "Actual"
-        FORMER = "E", "Ex (ya no lo practica)"
+        FORMER = "E", "Lo dejo"
+
+    class RecordStatus(models.TextChoices):
+        CURRENT = "A", "Vigente"
+        PREVIOUS = "B", "Anterior"
 
     id_habit = models.BigAutoField(primary_key=True, db_column="id_habito_paciente")
     habit = models.ForeignKey(
@@ -1293,15 +1331,81 @@ class Habit(PatientRecordBase):
     )
     frequency = models.CharField(max_length=100, db_column="frecuencia", null=True, blank=True)
     quantity = models.CharField(max_length=100, db_column="cantidad", null=True, blank=True)
-    since = models.DateField(db_column="desde", null=True, blank=True)
+    # Anios, no fechas: es lo que el paciente recuerda (documento: smallint).
+    since = models.PositiveSmallIntegerField(db_column="desde", null=True, blank=True)
+    until = models.PositiveSmallIntegerField(db_column="hasta", null=True, blank=True)
     status = models.CharField(
         max_length=1, db_column="estado", choices=Status.choices, default=Status.CURRENT,
     )
     notes = models.TextField(db_column="notas", null=True, blank=True)
+    record_status = models.CharField(
+        max_length=1, db_column="sw_status", choices=RecordStatus.choices, default=RecordStatus.CURRENT,
+    )
 
     class Meta:
         db_table = "cns_habito"
         indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_habito_patient_idx")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["no_exp", "pk_num", "habit"],
+                condition=models.Q(record_status="A", is_active=True),
+                name="cns_habito_vigente_uq",
+            ),
+        ]
+
+
+class BloodType(models.Model):
+    """
+    GRUPO_SANGUINEO (documento "Historia Clinica Unificada", 5.2): tipo de
+    sangre del paciente, con su fuente y su historial. Tabla nueva: nace con
+    id_paciente obligatorio (sin no_exp/pk_num de compatibilidad).
+
+    Una sola fila vigente (A) por paciente. Una correccion no borra: la
+    anterior pasa a B y el porque queda en cns_bitacora_cambios (motivo
+    CORRECCION). El alta ya queda en usr_alta/fch_alta.
+    """
+
+    class Source(models.TextChoices):
+        LAB = "L", "Laboratorio"
+        DECLARED = "D", "Declarado por el paciente"
+
+    class Status(models.TextChoices):
+        ACTIVE = "A", "Vigente"
+        CORRECTED = "B", "Corregido"
+
+    id_blood_type = models.BigAutoField(primary_key=True, db_column="id")
+    patient = models.ForeignKey(
+        Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="blood_types",
+    )
+    # cat_tpsanguineo: grupo y Rh, con los codigos del legado (catalogos.0036).
+    blood_type = models.ForeignKey(
+        "catalogos.TiposSanguineo", db_column="cd_tpsanguineo", on_delete=models.PROTECT,
+        related_name="+",
+    )
+    source = models.CharField(max_length=1, db_column="fuente", choices=Source.choices)
+    # Opcional, solo con fuente L: el resultado de laboratorio que lo respalda.
+    lab_result = models.ForeignKey(
+        StudyResult, db_column="id_resultado_lab", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    status = models.CharField(
+        max_length=1, db_column="sw_status", choices=Status.choices, default=Status.ACTIVE,
+    )
+
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+    updated_by_id = models.BigIntegerField(db_column="usr_modf", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_grupo_sanguineo"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["patient"], condition=models.Q(status="A"),
+                name="cns_grupo_sanguineo_vigente_uq",
+            ),
+        ]
+        indexes = [models.Index(fields=["patient", "status"], name="cns_grupo_sang_pac_idx")]
 
 
 class HistoricalNote(models.Model):
@@ -1689,6 +1793,8 @@ class ChangeLog(models.Model):
         MIGRATION_CONFLICT = "CONFLICTO MIGRACION", "Conflicto de migracion"
         MIGRATION = "MIGRACION", "Migracion del legado"
         LEGACY_KEY_FIX = "CORRECCION CD_FAMILIAR", "Correccion de la llave del familiar migrado"
+        # El dato clinico evoluciona (dejo de fumar, cambio la cantidad): no es un error.
+        CLINICAL_UPDATE = "ACTUALIZACION", "Actualizacion del dato clinico"
         CLINIC_CHANGE = "CAMBIO DE CLINICA EN SERMED", "Cambio de clinica en SERMED"
 
     id_change = models.BigAutoField(primary_key=True, db_column="id")

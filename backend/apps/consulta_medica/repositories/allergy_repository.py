@@ -105,6 +105,8 @@ class AllergyRepository:
             "medicationId": allergy.medication_id,
             "severity": allergy.severity,
             "reaction": allergy.reaction,
+            # Texto del legado del que salio (solo lectura); null si se capturo en SIRES.
+            "originalText": allergy.original_text,
             "source": allergy.source,
             "status": allergy.status,
             "statusReason": allergy.status_reason,

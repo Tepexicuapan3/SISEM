@@ -1,7 +1,14 @@
 from django.db import transaction
 
 from apps.catalogos.models import CatTipoAlergia, Medicamentos
+from apps.consulta_medica.models import ChangeLog
 from apps.consulta_medica.repositories.allergy_repository import AllergyRepository
+from apps.consulta_medica.services.change_log_service import (
+    PROCESS_SIRES,
+    build_key,
+    deactivation_reason,
+    record_change,
+)
 from apps.recepcion.services.errors import VisitDomainError
 
 from .consultation_usecase import ensure_doctor_role
@@ -17,6 +24,9 @@ ALLERGY_FIELD_MAP = {
 }
 
 _SNAKE_TO_CAMEL = {snake: camel for camel, snake in ALLERGY_FIELD_MAP.items()}
+
+# cns_bitacora_cambios.tabla de las alergias (documento 5.2).
+ALLERGY_TABLE = "cns_allergy"
 
 
 def _allergy_field_snapshot(field_values):
@@ -131,6 +141,18 @@ def update_allergy(
 
         allergy = AllergyRepository.update(allergy, fields=model_fields, updated_by_id=actor_id)
 
+        # Bitacora (5.2): editar sustancia/tipo/severidad/reaccion es corregir
+        # como se capturo. El cambio de estado va por change_allergy_status.
+        record_change(
+            table=ALLERGY_TABLE,
+            key=build_key("id_alergia", allergy.id_allergy),
+            action=ChangeLog.Action.UPDATE,
+            reason=ChangeLog.Reason.CORRECTION,
+            user=actor_id if actor_id is not None else PROCESS_SIRES,
+            previous=previous_values,
+            new=model_fields,
+        )
+
         datos_despues = _allergy_field_snapshot(model_fields)
         datos_despues["changedFields"] = sorted(
             _SNAKE_TO_CAMEL[field_name]
@@ -157,6 +179,15 @@ def deactivate_allergy(no_exp, pk_num, allergy_id, roles, actor_id, permissions=
 
     with transaction.atomic():
         allergy = AllergyRepository.deactivate(allergy, updated_by_id=actor_id)
+        # Este endpoint (anterior al estado A/R/E) no pide motivo.
+        record_change(
+            table=ALLERGY_TABLE,
+            key=build_key("id_alergia", allergy.id_allergy),
+            action=ChangeLog.Action.DELETE,
+            reason=deactivation_reason(None),
+            user=actor_id if actor_id is not None else PROCESS_SIRES,
+            previous={"is_active": True, "substance": allergy.substance, "status": allergy.status},
+        )
 
         audit_hook(
             resource_id=allergy.id_allergy,

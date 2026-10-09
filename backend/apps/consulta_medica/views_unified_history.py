@@ -18,6 +18,7 @@ from apps.recepcion.services.errors import VisitDomainError
 from .models import HistoricalNote, SpecialtySource
 from .serializers import (
     AllergyStatusSerializer,
+    BloodTypeWriteSerializer,
     DentalTreatmentWriteSerializer,
     FamilyHistoryWriteSerializer,
     HabitWriteSerializer,
@@ -31,6 +32,7 @@ from .services.record_access_audit_service import (
     log_patient_record_access,
     log_patient_record_change,
 )
+from .uses_case.blood_type_usecase import get_blood_type, set_blood_type
 from .uses_case.odontogram_usecase import list_odontogram_versions
 from .uses_case.patient_record_usecase import (
     DENTAL_TREATMENT,
@@ -396,6 +398,67 @@ class PatientAllergyStatusView(APIView):
             return _domain_error_response(request, exc)
         log_patient_record_change(
             request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.ALLERGIES,
+        )
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PatientBloodTypeView(APIView):
+    """GRUPO_SANGUINEO (5.2): GET vigente + historial; PUT captura o corrige."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, no_exp):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        pk_num, error = _pk_num_or_error(request)
+        if error:
+            return error
+
+        actor_id, roles, permissions = _actor_context(user)
+        try:
+            payload = get_blood_type(no_exp, pk_num, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        log_patient_record_access(
+            request, user, actor_id=actor_id, no_exp=no_exp, pk_num=pk_num,
+            section=RecordSection.BLOOD_TYPE,
+        )
+        return Response(payload, status=status.HTTP_200_OK)
+
+    def put(self, request, no_exp):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+        pk_num, error = _pk_num_or_error(request)
+        if error:
+            return error
+
+        serializer = BloodTypeWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(request, serializer.errors)
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        def audit_hook(*, resource_id, datos_antes, datos_despues):
+            _audit(request, user, action="PatientBloodTypeSaved", resource_id=resource_id,
+                   datos_antes=datos_antes, datos_despues=datos_despues,
+                   meta={"noExp": no_exp, "pkNum": pk_num, "actorId": actor_id})
+
+        try:
+            payload = set_blood_type(
+                no_exp, pk_num, roles, serializer.validated_data, actor_id, permissions,
+                audit_hook=audit_hook,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        log_patient_record_change(
+            request, user, no_exp=no_exp, pk_num=pk_num, section=RecordSection.BLOOD_TYPE,
         )
         return Response(payload, status=status.HTTP_200_OK)
 

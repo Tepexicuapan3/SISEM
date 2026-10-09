@@ -17,6 +17,7 @@ from django.db.models import Q
 from apps.catalogos.models import CatCies, CatHabito
 from apps.consulta_medica.models import (
     Allergy,
+    ClinicalHistory,
     FamilyHistory,
     Habit,
     HistoricalNote,
@@ -166,11 +167,19 @@ class LegacyHistoryImporter:
         identity = {"no_exp": base["no_exp"], "pk_num": base["pk_num"], **fields}
         if model.objects.filter(**identity).exists():
             return None
+        if model is Habit and Habit.objects.filter(
+            no_exp=base["no_exp"], pk_num=base["pk_num"], habit_id=fields["habit_id"],
+            record_status=Habit.RecordStatus.CURRENT, is_active=True,
+        ).exists():
+            # Una sola fila vigente por habito (5.2): si ya hay una (capturada
+            # en SIRES u otra fila del legado), esta entra como anterior. No se
+            # pierde y no pisa lo vigente.
+            fields = {**fields, "record_status": Habit.RecordStatus.PREVIOUS}
         created = model.objects.create(**base, **fields)
         self.counters["records"] += 1
         return created
 
-    def allergy(self, *, no_exp, pk_num, substance, allergy_type_id, source):
+    def allergy(self, *, no_exp, pk_num, substance, allergy_type_id, source, original_text=None):
         substance = substance.strip()[:255]
         if not substance or is_negative_allergy(substance):
             return
@@ -179,6 +188,8 @@ class LegacyHistoryImporter:
         Allergy.objects.create(
             no_exp=no_exp, pk_num=pk_num, allergy_type_id=allergy_type_id, substance=substance,
             severity=Allergy.Severity.MODERATE, service_origin_code=Allergy.SERVICE_BY_SOURCE[source],
+            # Documento 5.2: el texto tal como venia, antes de partirlo.
+            original_text=(original_text or "").strip() or None,
         )
         self.counters["allergies"] += 1
 
@@ -217,7 +228,8 @@ class LegacyHistoryImporter:
                 for content, _date, _author in annotations:
                     for item in split_allergy_items(content):
                         self.allergy(no_exp=no_exp, pk_num=pk_num, substance=item,
-                                     allergy_type_id=OTHER_ALLERGY_TYPE, source=Allergy.Source.GENERAL)
+                                     allergy_type_id=OTHER_ALLERGY_TYPE, source=Allergy.Source.GENERAL,
+                                     original_text=content)
         self.vitals(no_exp=no_exp, pk_num=pk_num, specialty=SpecialtySource.GENERAL, row=row, ref=ref)
         return True
 
@@ -238,6 +250,10 @@ class LegacyHistoryImporter:
             opened_on=row.get("fe_hisclin"),
             clinic_code=row.get("cd_clinica"),
             doctor_code=_text(row.get("cd_medico")) or None,
+        )
+        # Origen (5.2): his_clinica manda; esta fila solo lo llena si esta vacio.
+        ClinicalHistory.objects.filter(pk=history.pk, legacy_source_table__isnull=True).update(
+            legacy_source_table="his_clinicad", legacy_source_id=row.get("no_hisclin"),
         )
         self.patient_fields(history.patient, catalog_ids, legacy_ref=ref, legacy_date=row.get("fe_hisclin"))
         StomatologyHistory.objects.get_or_create(
@@ -281,7 +297,8 @@ class LegacyHistoryImporter:
             text = _text(row.get(column))
             if text:
                 self.allergy(no_exp=no_exp, pk_num=pk_num, substance=text,
-                             allergy_type_id=allergy_type_id, source=Allergy.Source.STOMATOLOGY)
+                             allergy_type_id=allergy_type_id, source=Allergy.Source.STOMATOLOGY,
+                             original_text=text)
 
         self.vitals(no_exp=no_exp, pk_num=pk_num, specialty=SpecialtySource.STOMATOLOGY, row=row, ref=ref)
         return True

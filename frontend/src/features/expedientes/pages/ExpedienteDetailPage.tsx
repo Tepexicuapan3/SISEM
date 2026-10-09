@@ -41,6 +41,8 @@ import { usePatientGeneralInfo } from "@features/expedientes/queries/usePatientG
 import { useAllergies } from "@features/expedientes/queries/useAllergies";
 import { usePatientProfile } from "@features/expedientes/queries/useClinicalHistory";
 import { PATIENT_SEX_LABELS } from "@features/expedientes/domain/patient-identity";
+import { usePatientBloodType } from "@features/expedientes/queries/useUnifiedHistory";
+import { bloodTypeSummary } from "@features/expedientes/domain/blood-type";
 
 const SIN_DATO = "No disponible";
 
@@ -83,11 +85,13 @@ export const ExpedienteDetailPage = () => {
 
   // CURP/sexo/telefono salen de la ficha del paciente (PACIENTE, GET /profile) --
   // misma query key que el tab Generales (tab por defecto), asi que comparte
-  // cache: no agrega requests. Tipo de sangre/email/direccion siguen sin existir en ningun
+  // cache: no agrega requests. Email/direccion siguen sin existir en ningun
   // modelo del backend -- SIN_DATO en vez de inventar un valor.
   // `padecimientos_cronicos`/`medicamentos_habituales` tampoco tienen fuente
   // estructurada todavia, siguen vacios.
   const { data: ficha } = usePatientProfile(folioReal, pkNum);
+  // Tipo de sangre (5.2): misma query key que el tab Generales.
+  const { data: bloodType } = usePatientBloodType(folioReal, pkNum);
 
   const expediente = {
     folio: folioReal || SIN_DATO,
@@ -97,7 +101,7 @@ export const ExpedienteDetailPage = () => {
     fecha_nacimiento: selectedMember?.fechaNac ?? SIN_DATO,
     edad: selectedMember?.edad ?? null,
     sexo: ficha?.sex ? PATIENT_SEX_LABELS[ficha.sex] : SIN_DATO,
-    tipo_sangre: SIN_DATO,
+    tipo_sangre: bloodTypeSummary(bloodType?.current) ?? SIN_DATO,
     telefono: ficha?.phone || SIN_DATO,
     email: SIN_DATO,
     direccion: SIN_DATO,

@@ -13,18 +13,22 @@ from apps.catalogos.models import (
     CatRegionCorporal,
     CatTipoAlergia,
     Parentesco,
+    TiposSanguineo,
 )
 from apps.consulta_medica.models import (
     Allergy,
+    ChangeLog,
     HistoricalNote,
     LegacyVitalSigns,
     PhysicalExamFinding,
     VisitConsultation,
 )
 from apps.consulta_medica.repositories.allergy_repository import AllergyRepository
+from apps.consulta_medica.services.change_log_service import PROCESS_SIRES, build_key, record_change
 from apps.consulta_medica.services.patient_link_service import for_patient
 from apps.recepcion.services.errors import VisitDomainError
 
+from .allergy_usecase import ALLERGY_TABLE
 from .consultation_usecase import ensure_doctor_role
 
 
@@ -206,6 +210,10 @@ def get_clinical_catalogs(roles, permissions=None):
             {"id": item.id, "name": item.name}
             for item in Parentesco.objects.filter(is_active=True).order_by("name")
         ],
+        "bloodTypes": [
+            {"id": item.id, "name": item.name}
+            for item in TiposSanguineo.objects.filter(is_active=True).order_by("name")
+        ],
     }
 
 
@@ -236,6 +244,20 @@ def change_allergy_status(no_exp, pk_num, allergy_id, roles, *, status, reason, 
             allergy.deleted_at = timezone.now()
             allergy.deleted_by_id = actor_id
         allergy.save()
+        # Bitacora (5.2): resolver o reactivar es evolucion del dato
+        # (ACTUALIZACION); "capturada por error" es CORRECCION.
+        record_change(
+            table=ALLERGY_TABLE,
+            key=build_key("id_alergia", allergy.id_allergy),
+            action=ChangeLog.Action.UPDATE,
+            reason=(
+                ChangeLog.Reason.CORRECTION if status == Allergy.Status.ENTERED_IN_ERROR
+                else ChangeLog.Reason.CLINICAL_UPDATE
+            ),
+            user=actor_id if actor_id is not None else PROCESS_SIRES,
+            previous={"status": previous, "is_active": True},
+            new={"status": status, "is_active": allergy.is_active, "motivo": allergy.status_reason},
+        )
         audit_hook(
             resource_id=allergy.id_allergy,
             datos_antes={"status": previous},
