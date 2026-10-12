@@ -80,7 +80,7 @@ export interface MedicoListItem {
   email: string;
   telefono: string | null;
   direccion: string | null;
-  sexo: "M" | "F" | null;
+  sexo: "M" | "F" | "O" | null;
   fechaNac: string | null;
   isActive: boolean;
   tipoMedico: TipoMedico;

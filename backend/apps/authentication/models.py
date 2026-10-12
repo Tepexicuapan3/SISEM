@@ -159,7 +159,7 @@ class DetUsuario(models.Model):
     telefono  = models.CharField(max_length=20,  null=True, blank=True, db_column="telefono")
     direccion = models.CharField(max_length=255, null=True, blank=True, db_column="direccion")
     sexo      = models.CharField(max_length=1,   null=True, blank=True, db_column="sexo",
-                                  choices=[("M","Masculino"),("F","Femenino")])
+                                  choices=[("M","Masculino"),("F","Femenino"),("O","Otro")])
     fecha_nac = models.DateField(null=True, blank=True, db_column="fecha_nac")
     id_tipo_personal = models.ForeignKey(
         "catalogos.CatTipoPersonal",

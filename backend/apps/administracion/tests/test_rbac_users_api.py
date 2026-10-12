@@ -19,7 +19,7 @@ from apps.administracion.models import (
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
 from apps.authentication.services.token_service import CSRF_COOKIE
-from apps.catalogos.models import CatCentroAtencion, CatPermiso, CatRol, Permisos, Roles
+from apps.catalogos.models import CatCentroAtencion, CatPermiso, CatRol, Escuelas, Permisos, Roles
 
 
 class RbacUsersApiTests(APITestCase):
@@ -1916,6 +1916,70 @@ class RbacUsersImportApiTests(APITestCase):
         wb = openpyxl.load_workbook(io.BytesIO(response.content))
         headers = [cell.value for cell in wb.active[1]]
         self.assertEqual(headers, USER_IMPORT_HEADERS)
+
+    def test_template_includes_active_schools_catalog_sheet(self):
+        escuela = Escuelas.objects.create(code="ESC-IMP", name="Escuela Import", is_active=True)
+        Escuelas.objects.create(code="ESC-OFF", name="Escuela Inactiva", is_active=False)
+
+        response = self.client.get(IMPORT_TEMPLATE_URL)
+
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+        self.assertEqual(wb.active.title, "Usuarios")
+        rows = list(wb["Catálogo Escuelas"].iter_rows(values_only=True))
+        self.assertEqual(rows[0], ("ID", "Siglas", "Escuela"))
+        self.assertIn((escuela.id, "ESC-IMP", "Escuela Import"), rows[1:])
+        self.assertNotIn("Escuela Inactiva", [row[2] for row in rows[1:]])
+
+    def test_preview_resolves_school_by_id_and_rejects_names(self):
+        escuela = Escuelas.objects.create(code="ESC-IMP", name="Escuela Import", is_active=True)
+        file = _users_xlsx_upload(
+            [
+                (
+                    "import_esc_ok", "Ana", "Lopez", "", "", "", self.role_medico.rol,
+                    "", "", str(escuela.id), "", "", "Activo",
+                ),
+                (
+                    "import_esc_name", "Luis", "Lopez", "", "", "", self.role_medico.rol,
+                    "", "", "Escuela Import", "", "", "Activo",
+                ),
+                (
+                    "import_esc_missing", "Eva", "Lopez", "", "", "", self.role_medico.rol,
+                    "", "", "999999", "", "", "Activo",
+                ),
+            ]
+        )
+
+        response = self._post_file(IMPORT_PREVIEW_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.data["rows"]
+        self.assertEqual(rows[0]["errors"], [])
+        self.assertEqual(rows[0]["data"]["escuelaId"], escuela.id)
+        self.assertEqual(rows[0]["data"]["escuelaName"], "Escuela Import")
+        self.assertTrue(any("ID numérico" in e for e in rows[1]["errors"]))
+        self.assertTrue(any("999999" in e for e in rows[2]["errors"]))
+
+    def test_preview_accepts_sexo_otro(self):
+        file = _users_xlsx_upload(
+            [
+                (
+                    "import_sexo_o", "Alex", "Rojas", "", "", "", self.role_medico.rol,
+                    "", "", "", "", "Otro", "Activo",
+                ),
+                (
+                    "import_sexo_bad", "Alex", "Ruiz", "", "", "", self.role_medico.rol,
+                    "", "", "", "", "No binario", "Activo",
+                ),
+            ]
+        )
+
+        response = self._post_file(IMPORT_PREVIEW_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.data["rows"]
+        self.assertEqual(rows[0]["errors"], [])
+        self.assertEqual(rows[0]["data"]["sexo"], "O")
+        self.assertTrue(any("Sexo" in e for e in rows[1]["errors"]))
 
     def test_preview_reports_valid_and_invalid_rows_without_writing(self):
         before = SyUsuario.objects.count()

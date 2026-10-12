@@ -134,7 +134,7 @@ export const buildUsersTableColumns = ({
       align: "center" as const,
       className: "w-[70px]",
       render: (row) => row.sexo ? (
-        <span className="text-xs">{row.sexo === "M" ? "Masc." : "Fem."}</span>
+        <span className="text-xs">{row.sexo === "M" ? "Masc." : row.sexo === "F" ? "Fem." : "Otro"}</span>
       ) : (
         <span className="text-txt-muted">—</span>
       ),

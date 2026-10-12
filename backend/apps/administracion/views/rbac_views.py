@@ -2789,7 +2789,7 @@ class UserExportView(APIView):
                     return f"{c.numero} ({c.tipo})"
                 return ""
 
-            SEXO_LABELS = {"M": "Masculino", "F": "Femenino"}
+            SEXO_LABELS = {"M": "Masculino", "F": "Femenino", "O": "Otro"}
             row_data = [
                 user.usuario,
                 detail.id_tipo_personal.name if detail and detail.id_tipo_personal else "",

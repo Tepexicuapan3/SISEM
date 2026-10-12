@@ -48,14 +48,18 @@ ESTADO_BAJA = "Dado de baja"
 ESTADOS_VALIDOS = {ESTADO_ACTIVO, ESTADO_BAJA}
 
 # Mismos códigos que `DetUsuario.sexo` (`apps/authentication/models.py`): CharField
-# de 1 caracter con choices [("M","Masculino"),("F","Femenino")].
+# de 1 caracter con choices M = Masculino, F = Femenino, O = Otro. La celda
+# vacia es "no especificado" (NULL).
 SEXO_M = "M"
 SEXO_F = "F"
+SEXO_O = "O"
 _SEXO_LOOKUP = {
     "m": SEXO_M,
     "masculino": SEXO_M,
     "f": SEXO_F,
     "femenino": SEXO_F,
+    "o": SEXO_O,
+    "otro": SEXO_O,
 }
 
 # Formatos aceptados para "Fecha de Nacimiento": Excel puede entregar la celda
@@ -68,9 +72,13 @@ MAX_ROWS = 5000
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _SAMPLE_ROWS = (
-    ("jperez", "Juan", "Pérez", "López", "juan.perez@example.com", "12345", "Médico", "Médico", "1234567", "UNAM", "15/05/1990", "M", "Activo"),
+    ("jperez", "Juan", "Pérez", "López", "juan.perez@example.com", "12345", "Médico", "Médico", "1234567", "1", "15/05/1990", "M", "Activo"),
     ("mgomez", "María", "Gómez", "", "", "", "Recepción", "", "", "", "", "F", "Activo"),
+    ("arojas", "Alex", "Rojas", "", "", "", "Recepción", "", "", "", "", "O", "Activo"),
 )
+
+ESCUELAS_SHEET_TITLE = "Catálogo Escuelas"
+ESCUELAS_SHEET_HEADERS = ("ID", "Siglas", "Escuela")
 
 
 class ImportFileError(Exception):
@@ -112,6 +120,27 @@ def build_template() -> bytes:
         max_len = max(len(header), *(len(str(row[col_idx - 1])) for row in _SAMPLE_ROWS))
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max(max_len + 4, 12), 40)
 
+    # La columna "Escuela" de la hoja principal lleva el ID; esta hoja es la
+    # referencia para buscarlo. El import solo lee la hoja activa (la primera).
+    ws_escuelas = wb.create_sheet(ESCUELAS_SHEET_TITLE)
+    for col_idx, header in enumerate(ESCUELAS_SHEET_HEADERS, start=1):
+        cell = ws_escuelas.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+    ws_escuelas.row_dimensions[1].height = 30
+    ws_escuelas.freeze_panes = "A2"
+
+    escuelas = Escuelas.objects.filter(is_active=True).order_by("name")
+    for row_idx, escuela in enumerate(escuelas, start=2):
+        ws_escuelas.cell(row=row_idx, column=1, value=escuela.id)
+        ws_escuelas.cell(row=row_idx, column=2, value=escuela.code)
+        ws_escuelas.cell(row=row_idx, column=3, value=escuela.name)
+
+    ws_escuelas.column_dimensions["A"].width = 10
+    ws_escuelas.column_dimensions["B"].width = 18
+    ws_escuelas.column_dimensions["C"].width = 60
+
     output = io.BytesIO()
     wb.save(output)
     return output.getvalue()
@@ -140,6 +169,15 @@ def _parse_fecha_nacimiento(text: str) -> Optional[date]:
         except ValueError:
             continue
     raise ValueError(text)
+
+
+def _parse_escuela_id(text: str) -> Optional[int]:
+    """ID de `cat_escuelas` escrito en la celda. Acepta "12" y "12.0" (celda
+    numerica leida como texto). ``None`` si esta vacio o no es un entero."""
+    if not text:
+        return None
+    match = re.fullmatch(r"(\d+)(?:\.0+)?", text)
+    return int(match.group(1)) if match else None
 
 
 def _read_dataframe(file) -> pd.DataFrame:
@@ -216,7 +254,7 @@ def parse_and_validate(file) -> dict:
                 "roleName": _clean_text(df.iloc[row_idx]["Rol"]),
                 "tipoPersonalName": _clean_text(df.iloc[row_idx]["Tipo de Personal"]),
                 "cedula": _clean_text(df.iloc[row_idx]["Cédula"]),
-                "escuelaName": _clean_text(df.iloc[row_idx]["Escuela"]),
+                "escuelaRaw": _clean_text(df.iloc[row_idx]["Escuela"]),
                 "fechaNacimientoRaw": _clean_text(df.iloc[row_idx]["Fecha de Nacimiento"]),
                 "sexoRaw": _clean_text(df.iloc[row_idx]["Sexo"]),
                 "estado": _clean_text(df.iloc[row_idx]["Estado"]),
@@ -255,10 +293,12 @@ def parse_and_validate(file) -> dict:
             name__in=tipo_personal_names, is_active=True
         )
     }
-    escuela_names = {p["escuelaName"] for p in raw_rows if p["escuelaName"]}
-    escuela_by_name = {
-        escuela.name: escuela
-        for escuela in Escuelas.objects.filter(name__in=escuela_names, is_active=True)
+    for parsed in raw_rows:
+        parsed["escuelaId"] = _parse_escuela_id(parsed["escuelaRaw"])
+    escuela_ids = {p["escuelaId"] for p in raw_rows if p["escuelaId"] is not None}
+    escuela_by_id = {
+        escuela.id: escuela
+        for escuela in Escuelas.objects.filter(id__in=escuela_ids, is_active=True)
     }
 
     result_rows = []
@@ -309,12 +349,17 @@ def parse_and_validate(file) -> dict:
             errors.append("Cédula demasiado larga (máx. 30 caracteres).")
 
         escuela = None
-        if parsed["escuelaName"]:
-            escuela = escuela_by_name.get(parsed["escuelaName"])
-            if escuela is None:
+        if parsed["escuelaRaw"]:
+            if parsed["escuelaId"] is None:
                 errors.append(
-                    f"Escuela '{parsed['escuelaName']}' no existe o no está activa."
+                    f"Escuela '{parsed['escuelaRaw']}' debe ser el ID numérico del catálogo de escuelas."
                 )
+            else:
+                escuela = escuela_by_id.get(parsed["escuelaId"])
+                if escuela is None:
+                    errors.append(
+                        f"Escuela con ID {parsed['escuelaId']} no existe o no está activa."
+                    )
 
         fecha_nacimiento = None
         if parsed["fechaNacimientoRaw"]:
@@ -333,7 +378,7 @@ def parse_and_validate(file) -> dict:
         if parsed["sexoRaw"]:
             sexo = _SEXO_LOOKUP.get(_strip_accents(parsed["sexoRaw"]).lower())
             if sexo is None:
-                errors.append("Sexo debe ser 'Masculino' o 'Femenino'.")
+                errors.append("Sexo debe ser 'Masculino', 'Femenino' u 'Otro' (M, F u O).")
 
         estado_normalized = parsed["estado"] or ESTADO_ACTIVO
         estado_lookup = {
@@ -359,7 +404,7 @@ def parse_and_validate(file) -> dict:
             "tipoPersonalName": parsed["tipoPersonalName"],
             "tipoPersonalId": tipo_personal.id if tipo_personal else None,
             "cedula": parsed["cedula"] or None,
-            "escuelaName": parsed["escuelaName"],
+            "escuelaName": escuela.name if escuela else "",
             "escuelaId": escuela.id if escuela else None,
             "fechaNacimiento": fecha_nacimiento,
             "sexo": sexo,

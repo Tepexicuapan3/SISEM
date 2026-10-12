@@ -70,7 +70,7 @@ export const mapUserDetailToFormValues = (
   noExp: detail?.noExp ?? null,
   cdLaboral: detail?.cdLaboral ?? null,
   telefono: detail?.telefono ?? null,
-  sexo: (detail?.sexo as "M" | "F" | null) ?? null,
+  sexo: (detail?.sexo as "M" | "F" | "O" | null) ?? null,
   fechaNac: detail?.fechaNac ?? null,
   areaClinicaId:
     typeof detail?.areaClinica?.id === "number" && detail.areaClinica.id > 0

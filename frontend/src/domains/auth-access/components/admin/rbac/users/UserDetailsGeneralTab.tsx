@@ -295,6 +295,7 @@ export function UserDetailsGeneralTab({
                   <SelectContent>
                     <SelectItem value="M">Masculino</SelectItem>
                     <SelectItem value="F">Femenino</SelectItem>
+                    <SelectItem value="O">Otro</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

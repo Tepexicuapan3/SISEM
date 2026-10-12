@@ -79,7 +79,7 @@ export interface UserListItem {
   areaClinica: AreaClinicaRef | null;
   cdLaboral: string | null;
   telefono: string | null;
-  sexo: "M" | "F" | null;
+  sexo: "M" | "F" | "O" | null;
   fechaNac: string | null;
   escolaridad: EscolaridadRef | null;
   escuela: EscuelaRef | null;
@@ -198,7 +198,7 @@ export interface CreateUserRequest {
   noExp?: string | null;
   cdLaboral?: string | null;
   telefono?: string | null;
-  sexo?: "M" | "F" | null;
+  sexo?: "M" | "F" | "O" | null;
   fechaNac?: string | null;
   areaClinicaId?: number | null;
   escolaridadId?: number | null;
@@ -220,7 +220,7 @@ export interface UpdateUserRequest {
   noExp?: string | null;
   cdLaboral?: string | null;
   telefono?: string | null;
-  sexo?: "M" | "F" | null;
+  sexo?: "M" | "F" | "O" | null;
   fechaNac?: string | null;
   areaClinicaId?: number | null;
   escolaridadId?: number | null;

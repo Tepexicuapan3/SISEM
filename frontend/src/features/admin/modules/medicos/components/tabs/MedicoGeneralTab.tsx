@@ -43,7 +43,7 @@ export function MedicoGeneralTab({ medico, isEditable }: Props) {
     }
   };
 
-  const sexoLabel = medico.sexo === "M" ? "Masculino" : medico.sexo === "F" ? "Femenino" : null;
+  const sexoLabel = medico.sexo === "M" ? "Masculino" : medico.sexo === "F" ? "Femenino" : medico.sexo === "O" ? "Otro" : null;
 
   return (
     <div className="space-y-6">
