@@ -74,9 +74,11 @@ class ConfirmMedicosImportUseCase:
 
     NO reusa `medico_usecase.create_medico`: ese use case exige
     `usuarioId` numérico, valida `tipo_personal == "Médico"` y depende del
-    flag `MEDICOS_ALLOW_SIN_USUARIO`. Acá `Usuario` es texto obligatorio
-    (resuelto por `parse_and_validate` contra `SyUsuario.usuario`) y se
-    llama a `MedicoRepository.create` directo.
+    flag `MEDICOS_ALLOW_SIN_USUARIO`. Acá `Usuario` es texto OPCIONAL
+    (resuelto por `parse_and_validate` contra `SyUsuario.usuario`): sin
+    usuario se crea con `id_usuario=NULL` + `nombre_display`, sin pasar por
+    el flag -- el flag sigue gobernando solo el alta manual (formulario).
+    Se llama a `MedicoRepository.create` directo.
     """
 
     def execute(self, file, actor) -> dict:
@@ -107,18 +109,21 @@ class ConfirmMedicosImportUseCase:
         for row in rows:
             data = row["data"]
 
-            usuario = SyUsuario.objects.filter(usuario=data["usuario"]).first()
-            # `usuario` ya se validó en parse_and_validate; si desapareció
-            # o quedó vinculado a otro médico entre preview/confirm y este
-            # instante (carrera improbable), fallamos duro en vez de crear
-            # un médico inconsistente.
-            if usuario is None:
-                raise MedicoImportRaceError(row["row"], data["usuario"])
-            if MedicoRepository.exists_for_usuario(usuario):
-                raise MedicoImportRaceError(row["row"], data["usuario"])
+            usuario = None
+            if data["usuario"]:
+                usuario = SyUsuario.objects.filter(usuario=data["usuario"]).first()
+                # `usuario` ya se validó en parse_and_validate; si desapareció
+                # o quedó vinculado a otro médico entre preview/confirm y este
+                # instante (carrera improbable), fallamos duro en vez de crear
+                # un médico inconsistente.
+                if usuario is None:
+                    raise MedicoImportRaceError(row["row"], data["usuario"])
+                if MedicoRepository.exists_for_usuario(usuario):
+                    raise MedicoImportRaceError(row["row"], data["usuario"])
 
             MedicoRepository.create(
                 usuario=usuario,
+                nombre_display=data["nombreDisplay"],
                 tipo_medico=data["tipoMedico"],
                 servicio=data["servicio"],
                 observaciones=data["observaciones"],

@@ -29,6 +29,7 @@ from apps.medicos.models import CatMedico, ESTATUS_MEDICO, TIPO_MEDICO
 HEADERS = [
     "ID del Médico",
     "Usuario (Login del sistema)",
+    "Nombre del Médico",
     "Tipo de Médico",
     "Servicio",
     "Estatus del Médico",
@@ -59,6 +60,8 @@ _SENTINELAS = {
 # (typo) caía al default en silencio, sin marcar error de fila.
 ROW_ERROR_CODES = (
     "ROW_USER_NOT_FOUND",
+    "ROW_NOMBRE_REQUIRED_SIN_USUARIO",
+    "ROW_MEDICO_SIN_USUARIO_DUPLICATE",
     "ROW_MEDICO_ALREADY_EXISTS",
     "ROW_LEGACY_ALREADY_EXISTS",
     "ROW_LEGACY_DUPLICATE_IN_FILE",
@@ -70,14 +73,18 @@ ROW_ERROR_CODES = (
 # antes de crear (mismo criterio que el truncado a 10 chars de
 # `normalize_legacy_cd`) para no dejar un IntegrityError sin manejar a
 # mitad de `_create_all` por una celda de Excel demasiado larga.
-# No hay columna de nombre: el usuario es obligatorio en este import y
-# `identity.display_name()` toma el nombre del usuario vinculado, así que
-# `nombre_display` (respaldo para médicos SIN usuario) no aplica aquí.
+# Usuario es OPCIONAL en este import (a diferencia del alta manual, que lo
+# sigue exigiendo vía `MEDICOS_ALLOW_SIN_USUARIO`): sin usuario el médico se
+# crea con `id_usuario=NULL` y "Nombre del Médico" (obligatorio en ese caso)
+# va a `nombre_display`. Con usuario, el nombre se ignora porque
+# `identity.display_name()` lo toma del usuario vinculado.
 _SERVICIO_MAX_LEN = 100
+_NOMBRE_DISPLAY_MAX_LEN = 200
 
 _SAMPLE_ROWS = (
-    ("E00000", "jperez", "Clínica", "Cardiología", "Activo", ""),
-    ("", "mgomez", "Hospital", "", "Activo", "Médico sin clave legada (alta nativa de SIRES)"),
+    ("E00000", "jperez", "", "Clínica", "Cardiología", "Activo", ""),
+    ("", "mgomez", "", "Hospital", "", "Activo", "Médico sin clave legada (alta nativa de SIRES)"),
+    ("H00001", "", "JUAN LÓPEZ RAMÍREZ", "Clínica", "", "Activo", "Médico sin usuario del sistema"),
 )
 
 
@@ -137,6 +144,11 @@ def _strip_accents(text: str) -> str:
 
 def _truncate(text: str, max_length: int) -> str:
     return text[:max_length] if text else text
+
+
+def _nombre_key(value) -> str:
+    """Clave de comparación de nombres: sin acentos, mayúsculas, espacios colapsados."""
+    return _strip_accents(_clean_text(value)).upper()
 
 
 def normalize_legacy_cd(value) -> Optional[str]:
@@ -218,6 +230,7 @@ def parse_and_validate(file) -> dict:
             {
                 "legacyCdRaw": _clean_text(df.iloc[row_idx]["ID del Médico"]),
                 "usuario": _clean_text(df.iloc[row_idx]["Usuario (Login del sistema)"]),
+                "nombreRaw": _clean_text(df.iloc[row_idx]["Nombre del Médico"]),
                 "tipoMedicoRaw": _clean_text(df.iloc[row_idx]["Tipo de Médico"]),
                 "servicioRaw": _clean_text(df.iloc[row_idx]["Servicio"]),
                 "estatusRaw": _clean_text(df.iloc[row_idx]["Estatus del Médico"]),
@@ -246,6 +259,25 @@ def parse_and_validate(file) -> dict:
         ).values_list("legacy_cd_medico", flat=True)
     )
 
+    # Médicos SIN usuario no tienen otra llave natural que el nombre (el ID
+    # legado es opcional): sin este chequeo, re-subir el mismo archivo
+    # duplicaría cada fila sin usuario, rompiendo el reintento seguro que sí
+    # tienen las filas con usuario ("Este usuario ya tiene un perfil...").
+    nombre_keys = [
+        _nombre_key(r["nombreRaw"]) if not r["usuario"] and r["nombreRaw"] else None
+        for r in raw_rows
+    ]
+    nombre_seen: dict = {}
+    for key in nombre_keys:
+        if key:
+            nombre_seen[key] = nombre_seen.get(key, 0) + 1
+    existing_nombre_keys = {
+        _nombre_key(nombre)
+        for nombre in CatMedico.objects.filter(
+            id_usuario__isnull=True, nombre_display__isnull=False
+        ).values_list("nombre_display", flat=True)
+    } if any(nombre_keys) else set()
+
     result_rows = []
     total_errores = 0
 
@@ -254,7 +286,17 @@ def parse_and_validate(file) -> dict:
 
         usuario_obj = None
         if not parsed["usuario"]:
-            errors.append("Usuario (Login del sistema) es obligatorio.")
+            nombre_key = nombre_keys[row_idx]
+            if not nombre_key:
+                errors.append(
+                    "Nombre del Médico es obligatorio cuando no se captura Usuario."
+                )
+            elif nombre_seen.get(nombre_key, 0) > 1:
+                errors.append("Nombre del Médico (sin usuario) duplicado en el archivo.")
+            elif nombre_key in existing_nombre_keys:
+                errors.append(
+                    f"Ya existe un médico sin usuario con el nombre '{parsed['nombreRaw']}'."
+                )
         else:
             usuario_obj = usuarios_by_username.get(parsed["usuario"])
             if usuario_obj is None:
@@ -295,6 +337,12 @@ def parse_and_validate(file) -> dict:
             "legacyCdMedico": legacy_value,
             "usuario": parsed["usuario"],
             "usuarioId": usuario_obj.id_usuario if usuario_obj else None,
+            # Solo se persiste para médicos sin usuario (ver `_create_all`).
+            "nombreDisplay": (
+                None
+                if parsed["usuario"]
+                else _truncate(parsed["nombreRaw"], _NOMBRE_DISPLAY_MAX_LEN) or None
+            ),
             "tipoMedico": tipo_medico_value,
             "servicio": _truncate(parsed["servicioRaw"], _SERVICIO_MAX_LEN) or None,
             "estatusMedico": estatus_value,

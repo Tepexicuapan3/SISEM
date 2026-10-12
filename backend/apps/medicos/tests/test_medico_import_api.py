@@ -93,9 +93,9 @@ class MedicoImportApiTests(APITestCase):
         before = CatMedico.objects.count()
         file = _medicos_xlsx_upload(
             [
-                ("", valid_user.usuario, "", "", "Activo", ""),
-                ("", "", "", "", "", ""),
-                ("", "usuario_que_no_existe", "", "", "", ""),
+                ("", valid_user.usuario, "", "", "", "Activo", ""),
+                ("", "", "", "", "", "", ""),
+                ("", "usuario_que_no_existe", "", "", "", "", ""),
             ]
         )
 
@@ -109,7 +109,10 @@ class MedicoImportApiTests(APITestCase):
 
         rows = response.data["rows"]
         self.assertEqual(rows[0]["errors"], [])
-        self.assertIn("Usuario (Login del sistema) es obligatorio.", rows[1]["errors"])
+        self.assertIn(
+            "Nombre del Médico es obligatorio cuando no se captura Usuario.",
+            rows[1]["errors"],
+        )
         self.assertTrue(
             any("no existe un usuario" in e.lower() for e in rows[2]["errors"])
         )
@@ -119,8 +122,8 @@ class MedicoImportApiTests(APITestCase):
         user_b = self._create_usuario("dup_legacy_b")
         file = _medicos_xlsx_upload(
             [
-                ("E00000", user_a.usuario, "", "", "", ""),
-                ("e00000", user_b.usuario, "", "", "", ""),
+                ("E00000", user_a.usuario, "", "", "", "", ""),
+                ("e00000", user_b.usuario, "", "", "", "", ""),
             ]
         )
 
@@ -137,8 +140,8 @@ class MedicoImportApiTests(APITestCase):
         user_b = self._create_usuario("real_key_b")
         file = _medicos_xlsx_upload(
             [
-                ("E00000", user_a.usuario, "", "", "", ""),
-                ("H99999", user_b.usuario, "", "", "", ""),
+                ("E00000", user_a.usuario, "", "", "", "", ""),
+                ("H99999", user_b.usuario, "", "", "", "", ""),
             ]
         )
 
@@ -155,7 +158,7 @@ class MedicoImportApiTests(APITestCase):
         # notarlo en el preview. Debe quedar visible como error.
         user = self._create_usuario("invalid_tipo_medico")
         file = _medicos_xlsx_upload(
-            [("", user.usuario, "Clinca", "", "Activo", "")]
+            [("", user.usuario, "", "Clinca", "", "Activo", "")]
         )
 
         response = self._post_file(IMPORT_PREVIEW_URL, file)
@@ -175,7 +178,7 @@ class MedicoImportApiTests(APITestCase):
     def test_preview_flags_invalid_estatus_instead_of_silently_defaulting(self):
         user = self._create_usuario("invalid_estatus_medico")
         file = _medicos_xlsx_upload(
-            [("", user.usuario, "", "", "Jubilado", "")]
+            [("", user.usuario, "", "", "", "Jubilado", "")]
         )
 
         response = self._post_file(IMPORT_PREVIEW_URL, file)
@@ -195,7 +198,7 @@ class MedicoImportApiTests(APITestCase):
         # default, sin error de fila (solo un valor NO-vacio e invalido
         # debe marcar error).
         user = self._create_usuario("empty_choice_defaults_silently")
-        file = _medicos_xlsx_upload([("", user.usuario, "", "", "", "")])
+        file = _medicos_xlsx_upload([("", user.usuario, "", "", "", "", "")])
 
         response = self._post_file(IMPORT_PREVIEW_URL, file)
 
@@ -214,7 +217,7 @@ class MedicoImportApiTests(APITestCase):
         # (mismo comportamiento que sufriría el import de usuarios con una
         # fila así) -- no es un bug de este import, así que el archivo de
         # prueba usa una fila con contenido real para forzar el error.
-        file = _medicos_xlsx_upload([("", "usuario_que_no_existe_409", "", "", "", "")])
+        file = _medicos_xlsx_upload([("", "usuario_que_no_existe_409", "", "", "", "", "")])
 
         response = self._post_file(IMPORT_CONFIRM_URL, file)
 
@@ -226,7 +229,7 @@ class MedicoImportApiTests(APITestCase):
     def test_confirm_blocks_all_or_nothing_when_tipo_medico_or_estatus_is_invalid(self):
         user = self._create_usuario("invalid_choice_blocks_confirm")
         before = CatMedico.objects.count()
-        file = _medicos_xlsx_upload([("", user.usuario, "Clinca", "", "", "")])
+        file = _medicos_xlsx_upload([("", user.usuario, "", "Clinca", "", "", "")])
 
         response = self._post_file(IMPORT_CONFIRM_URL, file)
 
@@ -240,8 +243,8 @@ class MedicoImportApiTests(APITestCase):
         user_two = self._create_usuario("bulk_medico_two")
         file = _medicos_xlsx_upload(
             [
-                ("E00000", user_one.usuario, "Hospital", "Cardiología", "Activo", "obs uno"),
-                ("S/C", user_two.usuario, "", "", "", ""),
+                ("E00000", user_one.usuario, "", "Hospital", "Cardiología", "Activo", "obs uno"),
+                ("S/C", user_two.usuario, "", "", "", "", ""),
             ]
         )
 
@@ -267,7 +270,7 @@ class MedicoImportApiTests(APITestCase):
     def test_confirm_rolls_back_everything_if_one_row_fails_mid_transaction(self):
         usuarios = [self._create_usuario(f"rollback_medico_{i}") for i in range(5)]
         file = _medicos_xlsx_upload(
-            [("", u.usuario, "", "", "", "") for u in usuarios]
+            [("", u.usuario, "", "", "", "", "") for u in usuarios]
         )
         before = CatMedico.objects.count()
 
@@ -286,12 +289,69 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(response.data["code"], "MEDICO_IMPORT_RACE")
         self.assertEqual(CatMedico.objects.count(), before)
 
+    # ── Médicos sin usuario (id_usuario NULL) ───────────────────────────────
+
+    def test_confirm_creates_medico_sin_usuario_with_nombre_display(self):
+        file = _medicos_xlsx_upload(
+            [("H00001", "", "Juan López Ramírez", "Clínica", "", "Activo", "")]
+        )
+
+        response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["inserted"], 1)
+        medico = CatMedico.objects.get(legacy_cd_medico="H00001")
+        self.assertIsNone(medico.id_usuario_id)
+        self.assertEqual(medico.nombre_display, "Juan López Ramírez")
+
+    def test_confirm_ignores_nombre_when_usuario_is_present(self):
+        user = self._create_usuario("con_usuario_ignora_nombre")
+        file = _medicos_xlsx_upload(
+            [("", user.usuario, "Nombre Que Se Ignora", "", "", "", "")]
+        )
+
+        response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(CatMedico.objects.get(id_usuario=user).nombre_display)
+
+    def test_preview_flags_duplicate_nombre_sin_usuario_in_file(self):
+        file = _medicos_xlsx_upload(
+            [
+                ("", "", "Juan López", "", "", "", ""),
+                ("", "", "JUAN  LOPEZ", "", "", "", ""),
+            ]
+        )
+
+        response = self._post_file(IMPORT_PREVIEW_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        for row in response.data["rows"]:
+            self.assertIn(
+                "Nombre del Médico (sin usuario) duplicado en el archivo.", row["errors"]
+            )
+
+    def test_confirm_retry_sin_usuario_does_not_duplicate(self):
+        rows = [("", "", "Ana Pérez", "", "", "", "")]
+
+        first = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+
+        retry = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
+
+        self.assertEqual(retry.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn(
+            "Ya existe un médico sin usuario con el nombre 'Ana Pérez'.",
+            retry.data["rows"][0]["errors"],
+        )
+        self.assertEqual(CatMedico.objects.filter(id_usuario__isnull=True).count(), 1)
+
     def test_confirm_retry_after_success_flags_existing_rows_without_duplicating(self):
         user_a = self._create_usuario("retry_medico_a")
         user_b = self._create_usuario("retry_medico_b")
         rows = [
-            ("", user_a.usuario, "", "", "", ""),
-            ("", user_b.usuario, "", "", "", ""),
+            ("", user_a.usuario, "", "", "", "", ""),
+            ("", user_b.usuario, "", "", "", "", ""),
         ]
 
         first = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))

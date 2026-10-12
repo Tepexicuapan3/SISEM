@@ -49,6 +49,7 @@ const buildResult = (
         legacyCdMedico: "E00000",
         usuario: "jperez",
         usuarioId: 1,
+        nombreDisplay: null,
         tipoMedico: "CLINICA",
         servicio: "Cardiología",
         estatusMedico: "ACTIVO",
@@ -62,6 +63,7 @@ const buildResult = (
         legacyCdMedico: null,
         usuario: "mgomez",
         usuarioId: 2,
+        nombreDisplay: null,
         tipoMedico: "HOSPITAL",
         servicio: null,
         estatusMedico: "ACTIVO",
@@ -160,12 +162,13 @@ describe("MedicoImportDialog UI", () => {
               legacyCdMedico: null,
               usuario: "",
               usuarioId: null,
+              nombreDisplay: null,
               tipoMedico: "CLINICA",
               servicio: null,
               estatusMedico: "ACTIVO",
               observaciones: null,
             },
-            errors: ["Usuario (Login del sistema) es obligatorio."],
+            errors: ["Nombre del Médico es obligatorio cuando no se captura Usuario."],
           },
         ],
       }),
@@ -178,7 +181,7 @@ describe("MedicoImportDialog UI", () => {
     await user.click(screen.getByRole("button", { name: /validar archivo/i }));
 
     expect(
-      await screen.findByText("Usuario (Login del sistema) es obligatorio."),
+      await screen.findByText("Nombre del Médico es obligatorio cuando no se captura Usuario."),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: /confirmar e importar/i }),
@@ -200,6 +203,7 @@ describe("MedicoImportDialog UI", () => {
               legacyCdMedico: null,
               usuario: "jperez",
               usuarioId: 1,
+              nombreDisplay: null,
               tipoMedico: "CLINICA",
               servicio: null,
               estatusMedico: "ACTIVO",
@@ -241,6 +245,7 @@ describe("MedicoImportDialog UI", () => {
               legacyCdMedico: null,
               usuario: "jperez",
               usuarioId: 1,
+              nombreDisplay: null,
               tipoMedico: "CLINICA",
               servicio: null,
               estatusMedico: "ACTIVO",

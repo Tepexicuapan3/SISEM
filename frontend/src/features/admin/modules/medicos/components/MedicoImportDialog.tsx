@@ -182,9 +182,11 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   Observaciones.
                 </p>
                 <p>
-                  Obligatorio: <strong>Usuario (Login del sistema)</strong>{" "}
-                  (debe existir en el sistema y no tener ya un perfil de
-                  médico). El resto es opcional.
+                  <strong>Usuario (Login del sistema)</strong> es opcional:
+                  si se captura, debe existir en el sistema y no tener ya un
+                  perfil de médico. Si se deja vacío, el médico se registra
+                  sin usuario y <strong>Nombre del Médico</strong> pasa a ser
+                  obligatorio. El resto es opcional.
                 </p>
                 <p>
                   ID del Médico identifica al médico en el sistema

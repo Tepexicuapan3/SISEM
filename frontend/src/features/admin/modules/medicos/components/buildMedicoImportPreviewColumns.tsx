@@ -27,8 +27,8 @@ const ESTATUS_MEDICO_LABELS: Record<EstatusMedico, string> = {
 /**
  * Columnas de la tabla de vista previa de importación masiva de médicos.
  * Refleja el orden de la plantilla: ID del Médico | Usuario (Login del
- * sistema) | Tipo de Médico | Servicio | Estatus del Médico |
- * Observaciones.
+ * sistema) | Nombre del Médico | Tipo de Médico | Servicio | Estatus del
+ * Médico | Observaciones.
  */
 export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportRow>[] {
   return [
@@ -50,6 +50,12 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       header: "Usuario (Login del sistema)",
       className: "w-[140px]",
       render: (row) => row.data.usuario || "—",
+    },
+    {
+      key: "nombreDisplay",
+      header: "Nombre del Médico",
+      className: "w-[180px]",
+      render: (row) => row.data.nombreDisplay || "—",
     },
     {
       key: "tipoMedico",
