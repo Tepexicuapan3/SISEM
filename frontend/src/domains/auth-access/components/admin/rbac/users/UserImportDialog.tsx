@@ -22,7 +22,11 @@ import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
 import { cn } from "@shared/utils/styling/cn";
 import { DataTable } from "@features/admin/shared/components/DataTable";
-import type { UserImportResult } from "@api/types";
+import type {
+  UserImportJob,
+  UserImportJobPhase,
+  UserImportResult,
+} from "@api/types";
 import { useUserImportPreview } from "@/domains/auth-access/hooks/rbac/users/useUserImportPreview";
 import { useUserImportConfirm } from "@/domains/auth-access/hooks/rbac/users/useUserImportConfirm";
 import { useUserImportTemplateDownload } from "@/domains/auth-access/hooks/rbac/users/useUserImportTemplateDownload";
@@ -37,6 +41,60 @@ interface UserImportDialogProps {
 const ACCEPTED_FILE = ".xlsx";
 const DEFAULT_PAGE_SIZE = 10;
 
+const PHASE_LABELS: Record<UserImportJobPhase, string> = {
+  QUEUED: "En cola, esperando al servidor...",
+  VALIDATING: "Validando archivo...",
+  PREPARING: "Generando credenciales",
+  SAVING: "Guardando usuarios en la base de datos...",
+  SENDING_EMAILS: "Enviando correos de credenciales",
+  DONE: "Terminando...",
+};
+
+function ImportProgress({ job }: { job: UserImportJob | null }) {
+  const phase = job?.phase ?? "QUEUED";
+  const hasCount = job !== null && job.phaseTotal > 0;
+  const percent = hasCount
+    ? Math.min(100, Math.round((job.processed / job.phaseTotal) * 100))
+    : null;
+
+  return (
+    <section
+      className="space-y-3 rounded-2xl border border-line-struct bg-subtle/40 p-4 sm:p-5"
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <p className="font-medium text-txt-body">{PHASE_LABELS[phase]}</p>
+        {hasCount ? (
+          <p className="tabular-nums text-txt-muted">
+            {job.processed} / {job.phaseTotal}
+          </p>
+        ) : null}
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Avance de la importacion"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent ?? undefined}
+        className="h-2 w-full overflow-hidden rounded-full bg-line-struct"
+      >
+        <div
+          className={cn(
+            "h-full rounded-full bg-brand transition-[width] duration-500",
+            percent === null && "w-1/3 animate-pulse",
+          )}
+          style={percent === null ? undefined : { width: `${percent}%` }}
+        />
+      </div>
+      <p className="text-xs text-txt-muted">
+        La importacion corre en el servidor y puede tardar varios minutos con
+        archivos grandes. No es necesario mantener esta ventana abierta: los
+        usuarios se crean igual.
+      </p>
+    </section>
+  );
+}
+
 export function UserImportDialog({ open, onOpenChange }: UserImportDialogProps) {
   const fileInputId = useId();
   const preview = useUserImportPreview();
@@ -49,6 +107,7 @@ export function UserImportDialog({ open, onOpenChange }: UserImportDialogProps) 
   );
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [importJob, setImportJob] = useState<UserImportJob | null>(null);
 
   const columns = useMemo(() => buildUserImportPreviewColumns(), []);
 
@@ -104,8 +163,12 @@ export function UserImportDialog({ open, onOpenChange }: UserImportDialogProps) 
   const handleConfirm = async () => {
     if (!file || !canConfirm || confirmImport.isPending) return;
 
+    setImportJob(null);
     try {
-      const result = await confirmImport.mutateAsync({ file });
+      const result = await confirmImport.mutateAsync({
+        file,
+        onProgress: setImportJob,
+      });
       setPreviewResult(result);
       setPage(1);
 
@@ -236,6 +299,8 @@ export function UserImportDialog({ open, onOpenChange }: UserImportDialogProps) 
                 ) : null}
               </div>
             </section>
+
+            {confirmImport.isPending ? <ImportProgress job={importJob} /> : null}
 
             {previewResult ? (
               <section className="space-y-4">

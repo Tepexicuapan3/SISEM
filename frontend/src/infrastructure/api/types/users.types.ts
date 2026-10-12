@@ -97,27 +97,6 @@ export interface UserListItem {
  *
  * GET /api/v1/users/:id
  */
-export type TipoAdscripcionMedico = "CLINICA" | "HOSPITAL";
-export type NivelEnfermeria = "GENERAL" | "ESPECIALISTA" | "JEFE_PISO";
-
-export interface PerfilMedico {
-  cedulaProfesional: string | null;
-  cedulaEspecialidad: string | null;
-  especialidad: { id: number; name: string } | null;
-  tipoAdscripcion: TipoAdscripcionMedico | null;
-}
-
-export interface PerfilEnfermeria {
-  cedulaEnfermeria: string | null;
-  nivel: NivelEnfermeria | null;
-  areaClinica: { id: number; name: string } | null;
-}
-
-export interface PerfilAdministrativo {
-  puesto: string | null;
-  areaAdministrativa: string | null;
-}
-
 export interface UserDetail extends UserListItem {
   // --- Datos personales (para edición) ---
   // telefono, sexo, fechaNac heredados de UserListItem
@@ -144,11 +123,6 @@ export interface UserDetail extends UserListItem {
   createdBy: UserRef;
   updatedAt: string | null;
   updatedBy: UserRef | null;
-
-  // --- Perfiles por tipo de personal (opcionales, no ligados 1:1 a tipoPersonal) ---
-  perfilMedico: PerfilMedico | null;
-  perfilEnfermeria: PerfilEnfermeria | null;
-  perfilAdministrativo: PerfilAdministrativo | null;
 }
 
 /**
@@ -227,21 +201,6 @@ export interface UpdateUserRequest {
   escuelaId?: number | null;
   tipoPersonalId?: number | null;
   cedulas?: Omit<CedulaItem, "orden">[];
-  perfilMedico?: {
-    cedulaProfesional?: string | null;
-    cedulaEspecialidad?: string | null;
-    idEspecialidad?: number | null;
-    tipoAdscripcion?: TipoAdscripcionMedico | null;
-  } | null;
-  perfilEnfermeria?: {
-    cedulaEnfermeria?: string | null;
-    nivel?: NivelEnfermeria | null;
-    idAreaClinica?: number | null;
-  } | null;
-  perfilAdministrativo?: {
-    puesto?: string | null;
-    areaAdministrativa?: string | null;
-  } | null;
 }
 
 // =============================================================================
@@ -460,6 +419,45 @@ export interface UserImportResult {
   inserted: number;
   rows: UserImportRow[];
   emailFailures?: UserImportEmailFailure[];
+}
+
+export type UserImportJobStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCESS"
+  | "VALIDATION_FAILED"
+  | "ERROR";
+
+export type UserImportJobPhase =
+  | "QUEUED"
+  | "VALIDATING"
+  | "PREPARING"
+  | "SAVING"
+  | "SENDING_EMAILS"
+  | "DONE";
+
+/**
+ * Estado de un import en segundo plano (Celery).
+ * POST /api/v1/users/import/confirm      -> 202 con este payload
+ * GET  /api/v1/users/import/jobs/:jobId  -> polling hasta status final
+ *
+ * `processed`/`phaseTotal` son el avance DENTRO de la fase actual.
+ * `result` solo viene cuando el status es final (SUCCESS/VALIDATION_FAILED/ERROR).
+ */
+export interface UserImportJob {
+  jobId: string;
+  status: UserImportJobStatus;
+  phase: UserImportJobPhase;
+  processed: number;
+  phaseTotal: number;
+  totalRecords: number;
+  inserted: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: UserImportResult | null;
 }
 
 // =============================================================================

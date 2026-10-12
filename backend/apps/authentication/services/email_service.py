@@ -150,14 +150,19 @@ def send_user_credentials_email(
     return True
 
 
-def send_user_credentials_email_batch(users):
+def send_user_credentials_email_batch(users, on_progress=None):
     """
     Envia credenciales de alta a varios usuarios reusando una sola conexion
     SMTP (en vez de abrir/cerrar una por usuario como `send_mail`) -- pensado
     para el import masivo, donde el alta ya se hizo y confirmo en la BD, y
     esto corre despues, fuera de esa transaccion.
     users: [{"email": str, "username": str, "temporary_password": str, "user_name": str}, ...]
+    on_progress: callable opcional `(procesados: int)` llamado tras cada usuario.
     Devuelve {"sent": N, "failed": [{"username": ..., "email": ...}]}
+
+    Si un envio falla se reabre la conexion y se reintenta UNA vez: muchos
+    servidores SMTP cortan la conexion tras N mensajes, y sin esto en un
+    lote de miles todos los correos posteriores al corte fallarian.
     """
     if not users:
         return {"sent": 0, "failed": []}
@@ -187,11 +192,21 @@ def send_user_credentials_email_batch(users):
 
     sent = 0
     failed = []
+    conn = None
 
-    try:
+    def _reopen():
+        nonlocal conn
+        try:
+            if conn is not None:
+                conn.close()
+        except Exception:
+            pass
         conn = get_connection()
         conn.open()
-        for u in users:
+
+    try:
+        _reopen()
+        for processed, u in enumerate(users, start=1):
             safe_name = u.get("user_name") or u["username"] or u["email"]
             try:
                 message = (
@@ -230,18 +245,34 @@ def send_user_credentials_email_batch(users):
                     connection=conn,
                 )
                 email_msg.attach_alternative(html, "text/html")
-                email_msg.send()
+                try:
+                    email_msg.send()
+                except Exception:
+                    logger.warning(
+                        "Fallo envio a %s; reabriendo conexion SMTP y reintentando",
+                        u.get("email"),
+                    )
+                    _reopen()
+                    email_msg.connection = conn
+                    email_msg.send()
                 sent += 1
             except Exception:
                 logger.exception("Fallo al enviar credenciales a %s", u.get("email"))
                 failed.append({"username": u["username"], "email": u["email"]})
+            if on_progress is not None:
+                on_progress(processed)
     except Exception:
         logger.exception("Fallo al abrir conexión SMTP para credenciales (batch)")
-        if sent == 0 and not failed:
-            failed = [{"username": u["username"], "email": u["email"]} for u in users]
+        # Todo usuario que no llego a enviarse ni a fallar queda como fallido
+        # (antes solo se cubria el caso "fallo antes del primer envio").
+        handled = sent + len(failed)
+        failed.extend(
+            {"username": u["username"], "email": u["email"]} for u in users[handled:]
+        )
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 

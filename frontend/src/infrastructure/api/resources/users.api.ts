@@ -37,6 +37,8 @@ import type {
   NotifyUsersResponse,
   NotifyUsersPreviewResponse,
   UserImportResult,
+  UserImportJob,
+  UserImportJobStatus,
 } from "@api/types";
 
 const waitForTokenRefresh = (): Promise<void> =>
@@ -50,6 +52,25 @@ const buildImportFormData = (file: File): FormData => {
   formData.append("file", file);
   return formData;
 };
+
+const IMPORT_POLL_INTERVAL_MS = 2000;
+// Errores de red seguidos tolerados durante el polling: el job sigue
+// corriendo en el worker aunque se caiga un request de consulta.
+const IMPORT_POLL_MAX_CONSECUTIVE_FAILURES = 15;
+const FINAL_IMPORT_STATUSES: ReadonlyArray<UserImportJobStatus> = [
+  "SUCCESS",
+  "VALIDATION_FAILED",
+  "ERROR",
+];
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+export interface UserImportConfirmOptions {
+  /** Se llama con cada estado consultado del job (para la barra de avance). */
+  onProgress?: (job: UserImportJob) => void;
+  pollIntervalMs?: number;
+}
 
 export const usersAPI = {
   // ==========================================
@@ -284,43 +305,90 @@ export const usersAPI = {
     },
 
     /**
-     * PASO 2 - Confirm: crea todos los usuarios SOLO SI no hay ningun error
-     * (todo-o-nada). Reenvia el MISMO archivo; el servidor re-valida como
-     * unica autoridad.
+     * PASO 2 - Confirm ASINCRONO: encola el import en el backend (202 +
+     * `jobId`) y consulta el job hasta que termina. Devuelve el mismo
+     * `UserImportResult` que el confirm sincrono de antes, asi el dialogo
+     * no cambia su manejo de resultado:
+     * - SUCCESS            -> resultado con `inserted` y `emailFailures`.
+     * - VALIDATION_FAILED  -> resultado con `totalErrores > 0` y las filas
+     *                         (todo-o-nada: no se creo ningun usuario).
+     * - ERROR              -> lanza `ApiError` con el mensaje del backend.
      *
-     * NOTA SOBRE CONFIRM Y 409:
-     * El backend responde 409 con `{ totalRecords, totalErrores, inserted: 0,
-     * rows, code: "IMPORT_HAS_ERRORS" }` cuando el todo-o-nada rechaza el
-     * lote. El interceptor global normaliza cualquier error 4xx/5xx a
-     * `ApiError` (solo conserva code/message/status/details) y ese cuerpo
-     * (rows) se pierde. Como preview y confirm validan el MISMO archivo,
-     * ante un 409 reconstruimos las filas re-llamando a `preview` en vez de
-     * propagar un error vacio de contenido (mismo patron que
-     * `catalog-import.api.ts`).
+     * Por que asincrono: cada alta hashea su contrasena (~0.5 s) y un lote
+     * de miles de filas excede cualquier timeout HTTP.
      *
      * @endpoint POST /api/v1/users/import/confirm
+     * @endpoint GET  /api/v1/users/import/jobs/:jobId
      * @permission admin:gestion:usuarios:create
      */
-    confirm: async (file: File, _retry = false): Promise<UserImportResult> => {
+    confirm: async (
+      file: File,
+      options: UserImportConfirmOptions = {},
+    ): Promise<UserImportResult> => {
+      const { onProgress, pollIntervalMs = IMPORT_POLL_INTERVAL_MS } = options;
+
+      let job = await usersAPI.import.enqueue(file);
+      onProgress?.(job);
+
+      let consecutiveFailures = 0;
+      while (!FINAL_IMPORT_STATUSES.includes(job.status)) {
+        await sleep(pollIntervalMs);
+        try {
+          job = await usersAPI.import.getJob(job.jobId);
+          consecutiveFailures = 0;
+          onProgress?.(job);
+        } catch (err: unknown) {
+          consecutiveFailures += 1;
+          if (consecutiveFailures >= IMPORT_POLL_MAX_CONSECUTIVE_FAILURES) {
+            throw err;
+          }
+        }
+      }
+
+      if (job.status === "ERROR" || !job.result) {
+        throw new ApiError(
+          job.errorCode ?? "IMPORT_FAILED",
+          job.errorMessage ?? "No se pudo completar la importacion.",
+          500,
+        );
+      }
+      return job.result;
+    },
+
+    /**
+     * Encola el import (sin esperar). 409 IMPORT_IN_PROGRESS si ya hay otro
+     * import corriendo.
+     * @endpoint POST /api/v1/users/import/confirm
+     */
+    enqueue: async (file: File, _retry = false): Promise<UserImportJob> => {
       try {
-        const response = await apiClient.post<UserImportResult>(
+        const response = await apiClient.post<UserImportJob>(
           "/users/import/confirm",
           buildImportFormData(file),
           {
             headers: { "Content-Type": undefined },
+            timeout: 60000,
           },
         );
         return response.data;
       } catch (err: unknown) {
         if (!_retry && isApiError(err) && err.status === 401) {
           await waitForTokenRefresh();
-          return usersAPI.import.confirm(file, true);
-        }
-        if (isApiError(err) && err.status === 409) {
-          return usersAPI.import.preview(file);
+          return usersAPI.import.enqueue(file, true);
         }
         throw err;
       }
+    },
+
+    /**
+     * Estado/avance de un import en segundo plano.
+     * @endpoint GET /api/v1/users/import/jobs/:jobId
+     */
+    getJob: async (jobId: string): Promise<UserImportJob> => {
+      const response = await apiClient.get<UserImportJob>(
+        `/users/import/jobs/${jobId}`,
+      );
+      return response.data;
     },
   },
 

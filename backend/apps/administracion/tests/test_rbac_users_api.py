@@ -594,166 +594,6 @@ class RbacUsersApiTests(APITestCase):
             ).exists()
         )
 
-    def test_patch_user_creates_perfil_medico(self):
-        from apps.catalogos.models import Especialidades
-        from apps.personal.models import DetUsuarioMedico
-
-        especialidad = Especialidades.objects.create(name="Cardiología")
-
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {
-                "perfilMedico": {
-                    "cedulaProfesional": "12345678",
-                    "idEspecialidad": especialidad.id,
-                    "tipoAdscripcion": "CLINICA",
-                },
-            },
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        perfil = response.data["user"]["perfilMedico"]
-        self.assertEqual(perfil["cedulaProfesional"], "12345678")
-        self.assertEqual(perfil["especialidad"]["id"], especialidad.id)
-        self.assertEqual(perfil["tipoAdscripcion"], "CLINICA")
-        self.assertTrue(
-            DetUsuarioMedico.objects.filter(id_usuario=self.target_user).exists()
-        )
-
-    def test_patch_user_perfil_medico_invalid_tipo_adscripcion(self):
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {"perfilMedico": {"tipoAdscripcion": "NO_EXISTE"}},
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "VALIDATION_ERROR")
-
-    def test_patch_user_perfil_medico_especialidad_not_found(self):
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {"perfilMedico": {"idEspecialidad": 999999}},
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "ESPECIALIDAD_NOT_FOUND")
-
-    def test_patch_user_updates_existing_perfil_medico(self):
-        from apps.personal.models import DetUsuarioMedico
-
-        DetUsuarioMedico.objects.create(
-            id_usuario=self.target_user,
-            cedula_profesional="00000000",
-            created_by_id=self.admin.id_usuario,
-        )
-
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {"perfilMedico": {"cedulaProfesional": "99999999"}},
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            response.data["user"]["perfilMedico"]["cedulaProfesional"], "99999999"
-        )
-        self.assertEqual(
-            DetUsuarioMedico.objects.filter(id_usuario=self.target_user).count(), 1
-        )
-
-    def test_patch_user_removes_perfil_medico_with_null(self):
-        from apps.personal.models import DetUsuarioMedico
-
-        DetUsuarioMedico.objects.create(
-            id_usuario=self.target_user,
-            cedula_profesional="00000000",
-            created_by_id=self.admin.id_usuario,
-        )
-
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {"perfilMedico": None},
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsNone(response.data["user"]["perfilMedico"])
-        self.assertFalse(
-            DetUsuarioMedico.objects.filter(id_usuario=self.target_user).exists()
-        )
-
-    def test_patch_user_creates_perfil_enfermeria(self):
-        from apps.catalogos.models import CatAreaClinica
-        from apps.personal.models import DetUsuarioEnfermeria
-
-        area = CatAreaClinica.objects.create(name="Urgencias")
-
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {
-                "perfilEnfermeria": {
-                    "cedulaEnfermeria": "87654321",
-                    "nivel": "GENERAL",
-                    "idAreaClinica": area.id,
-                },
-            },
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        perfil = response.data["user"]["perfilEnfermeria"]
-        self.assertEqual(perfil["cedulaEnfermeria"], "87654321")
-        self.assertEqual(perfil["nivel"], "GENERAL")
-        self.assertEqual(perfil["areaClinica"]["id"], area.id)
-        self.assertTrue(
-            DetUsuarioEnfermeria.objects.filter(id_usuario=self.target_user).exists()
-        )
-
-    def test_patch_user_perfil_enfermeria_invalid_nivel(self):
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {"perfilEnfermeria": {"nivel": "NO_EXISTE"}},
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "VALIDATION_ERROR")
-
-    def test_patch_user_creates_perfil_administrativo(self):
-        from apps.personal.models import DetUsuarioAdministrativo
-
-        response = self.client.patch(
-            f"/api/v1/users/{self.target_user.id_usuario}",
-            {
-                "perfilAdministrativo": {
-                    "puesto": "Jefe de piso",
-                    "areaAdministrativa": "Recursos Humanos",
-                },
-            },
-            format="json",
-            HTTP_X_CSRF_TOKEN=self.csrf_token,
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        perfil = response.data["user"]["perfilAdministrativo"]
-        self.assertEqual(perfil["puesto"], "Jefe de piso")
-        self.assertEqual(perfil["areaAdministrativa"], "Recursos Humanos")
-        self.assertTrue(
-            DetUsuarioAdministrativo.objects.filter(
-                id_usuario=self.target_user
-            ).exists()
-        )
-
     def test_activate_and_deactivate_user(self):
         deactivate_response = self.client.patch(
             f"/api/v1/users/{self.target_user.id_usuario}/deactivate",
@@ -1836,6 +1676,7 @@ USER_IMPORT_HEADERS = [
 IMPORT_TEMPLATE_URL = "/api/v1/users/import/template"
 IMPORT_PREVIEW_URL = "/api/v1/users/import/preview"
 IMPORT_CONFIRM_URL = "/api/v1/users/import/confirm"
+IMPORT_JOB_URL = "/api/v1/users/import/jobs/"
 
 
 def _users_xlsx_upload(rows, filename="import.xlsx"):
@@ -1908,6 +1749,27 @@ class RbacUsersImportApiTests(APITestCase):
             {"file": file},
             HTTP_X_CSRF_TOKEN=self.csrf_token,
         )
+
+    def _confirm_and_wait(self, file):
+        """
+        Confirm asincrono: POST encola (202) y la tarea Celery corre al hacer
+        commit. En el test se ejecuta la tarea en linea (sin broker) y se
+        devuelve el estado final del job tal como lo ve el polling.
+        """
+        from apps.administracion.tasks import procesar_import_usuarios
+
+        with patch(
+            "apps.administracion.views.user_import_views.procesar_import_usuarios"
+        ) as task_mock:
+            task_mock.delay.side_effect = lambda job_id: procesar_import_usuarios(job_id)
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        job_id = response.data["jobId"]
+        status_response = self.client.get(f"{IMPORT_JOB_URL}{job_id}")
+        self.assertEqual(status_response.status_code, status.HTTP_200_OK)
+        return status_response.data
 
     def test_template_download_has_expected_headers(self):
         response = self.client.get(IMPORT_TEMPLATE_URL)
@@ -2040,12 +1902,12 @@ class RbacUsersImportApiTests(APITestCase):
             ]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["inserted"], 2)
-        self.assertEqual(response.data["totalErrores"], 0)
-        self.assertEqual(response.data["emailFailures"], [])
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertEqual(job["inserted"], 2)
+        self.assertEqual(job["result"]["totalErrores"], 0)
+        self.assertEqual(job["result"]["emailFailures"], [])
 
         user_one = SyUsuario.objects.get(usuario="bulk_one")
         self.assertEqual(user_one.correo, "bulk.one@example.com")
@@ -2077,12 +1939,12 @@ class RbacUsersImportApiTests(APITestCase):
             ]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["inserted"], 1)
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertEqual(job["inserted"], 1)
         self.assertEqual(
-            response.data["emailFailures"],
+            job["result"]["emailFailures"],
             [{"username": "bulk_one", "email": "bulk.one@example.com"}],
         )
         # El usuario se crea igual aunque el envio de correo haya fallado.
@@ -2103,9 +1965,53 @@ class RbacUsersImportApiTests(APITestCase):
             ]
         )
 
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "VALIDATION_FAILED")
+        self.assertEqual(job["inserted"], 0)
+        self.assertGreater(job["result"]["totalErrores"], 0)
+        self.assertEqual(SyUsuario.objects.count(), before)
+
+    def test_confirm_rejects_new_import_while_one_is_running(self):
+        from apps.administracion.models import UserImportJob
+
+        running = UserImportJob.objects.create(
+            actor=self.admin,
+            file_name="otro.xlsx",
+            status=UserImportJob.Status.RUNNING,
+        )
+        file = _users_xlsx_upload(
+            [("bulk_wait", "Ok", "Bulk", "", "", "", self.role_medico.rol, "", "", "", "", "", "Activo")]
+        )
+
         response = self._post_file(IMPORT_CONFIRM_URL, file)
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(response.data["code"], "IMPORT_HAS_ERRORS")
-        self.assertEqual(response.data["inserted"], 0)
-        self.assertEqual(SyUsuario.objects.count(), before)
+        self.assertEqual(response.data["code"], "IMPORT_IN_PROGRESS")
+        self.assertEqual(UserImportJob.objects.count(), 1)
+        self.assertEqual(str(running.id), response.data["details"]["jobId"])
+
+    def test_confirm_job_records_progress_and_clears_file(self):
+        from apps.administracion.models import UserImportJob
+
+        file = _users_xlsx_upload(
+            [
+                (f"bulk_prog_{i}", "Prog", "Bulk", "", "", "", self.role_medico.rol,
+                 "", "", "", "", "", "Activo")
+                for i in range(3)
+            ]
+        )
+
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertEqual(job["phase"], "DONE")
+        self.assertEqual(job["totalRecords"], 3)
+        self.assertIsNotNone(job["finishedAt"])
+        # El Excel no queda guardado en la BD una vez terminado el job.
+        self.assertIsNone(UserImportJob.objects.get(id=job["jobId"]).file_content)
+
+    def test_job_status_unknown_id_returns_404(self):
+        response = self.client.get(f"{IMPORT_JOB_URL}00000000-0000-0000-0000-000000000000")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

@@ -92,16 +92,13 @@ export type {
   UserImportRow,
   UserImportResult,
   UserImportEmailFailure,
+  UserImportJob,
+  UserImportJobStatus,
+  UserImportJobPhase,
   // Refs
   EscolaridadRef,
   EscuelaRef,
   TipoPersonalRef,
-  // Perfiles por tipo de personal
-  TipoAdscripcionMedico,
-  NivelEnfermeria,
-  PerfilMedico,
-  PerfilEnfermeria,
-  PerfilAdministrativo,
 } from "@api/types/users.types";
 
 // =============================================================================

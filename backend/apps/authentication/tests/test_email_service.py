@@ -175,3 +175,76 @@ class EmailServiceTests(SimpleTestCase):
         _, message = send_mail_mock.call_args.args[0:2]
         self.assertIn("https://sisem.example.com/login", message)
         self.assertIn("soporte@sisem.example.com", message)
+
+
+class _FlakyConnection:
+    """Conexion SMTP falsa que se cae tras `fail_after` mensajes enviados."""
+
+    instances = []
+
+    def __init__(self, fail_after=None):
+        self.fail_after = fail_after
+        self.sent = 0
+        _FlakyConnection.instances.append(self)
+
+    def open(self):
+        return True
+
+    def close(self):
+        return None
+
+    def send_messages(self, messages):
+        if self.fail_after is not None and self.sent >= self.fail_after:
+            raise ConnectionError("SMTP server disconnected")
+        self.sent += len(messages)
+        return len(messages)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+@patch("apps.authentication.services.email_service.render_to_string", return_value="<p>x</p>")
+class CredentialsBatchTests(SimpleTestCase):
+    USERS = [
+        {"email": f"u{i}@example.com", "username": f"u{i}", "temporary_password": "T", "user_name": "U"}
+        for i in range(5)
+    ]
+
+    def setUp(self):
+        _FlakyConnection.instances = []
+
+    def test_reconnects_when_smtp_drops_mid_batch(self, _render_mock):
+        # Primera conexion se cae tras 2 mensajes; la reconexion manda el resto.
+        factory = iter([_FlakyConnection(fail_after=2), _FlakyConnection()])
+        with patch(
+            "apps.authentication.services.email_service.get_connection",
+            side_effect=lambda: next(factory),
+        ):
+            from apps.authentication.services.email_service import send_user_credentials_email_batch
+
+            result = send_user_credentials_email_batch(self.USERS)
+
+        self.assertEqual(result, {"sent": 5, "failed": []})
+        self.assertEqual(_FlakyConnection.instances[1].sent, 3)
+
+    def test_reports_progress_for_every_user(self, _render_mock):
+        progress = []
+        with patch(
+            "apps.authentication.services.email_service.get_connection",
+            side_effect=lambda: _FlakyConnection(),
+        ):
+            from apps.authentication.services.email_service import send_user_credentials_email_batch
+
+            send_user_credentials_email_batch(self.USERS, on_progress=progress.append)
+
+        self.assertEqual(progress, [1, 2, 3, 4, 5])
+
+    def test_marks_failed_when_retry_also_fails(self, _render_mock):
+        with patch(
+            "apps.authentication.services.email_service.get_connection",
+            side_effect=lambda: _FlakyConnection(fail_after=0),
+        ):
+            from apps.authentication.services.email_service import send_user_credentials_email_batch
+
+            result = send_user_credentials_email_batch(self.USERS[:2])
+
+        self.assertEqual(result["sent"], 0)
+        self.assertEqual([f["username"] for f in result["failed"]], ["u0", "u1"])

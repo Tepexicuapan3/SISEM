@@ -222,6 +222,7 @@ describe("UserImportDialog UI", () => {
     await waitFor(() => {
       expect(confirmMutateAsync).toHaveBeenCalledWith({
         file: expect.any(File),
+        onProgress: expect.any(Function),
       });
     });
 
@@ -234,5 +235,20 @@ describe("UserImportDialog UI", () => {
         description: expect.stringContaining("2"),
       }),
     );
+  });
+
+  it("shows the background import progress while the confirm is pending", () => {
+    vi.mocked(useUserImportConfirm).mockReturnValue({
+      mutateAsync: confirmMutateAsync,
+      isPending: true,
+    } as unknown as ReturnType<typeof useUserImportConfirm>);
+
+    render(<UserImportDialog open onOpenChange={onOpenChange} />);
+
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    expect(screen.getByText(/en cola, esperando al servidor/i)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /importando/i }),
+    ).toBeDisabled();
   });
 });

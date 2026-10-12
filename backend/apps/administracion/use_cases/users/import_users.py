@@ -7,6 +7,10 @@ cada usuario (reusado fila por fila, igual que en el alta individual de
 `UsersListCreateView.post`).
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from django.contrib.auth.hashers import make_password
 from django.db import transaction
 
 from apps.administracion.services.user_import_service import (
@@ -17,6 +21,38 @@ from apps.authentication.services.email_service import send_user_credentials_ema
 from apps.catalogos.models import CatTipoPersonal, Escuelas, Roles
 
 from .create_user import CedulaInput, CreateUserData, CreateUserUseCase
+from .password_utils import generate_temporary_password
+
+# Fases reportadas a `progress(phase, done, total)` -- mismos valores que
+# `UserImportJob.Phase` (el job las persiste tal cual).
+PHASE_VALIDATING = "VALIDATING"
+PHASE_PREPARING = "PREPARING"
+PHASE_SAVING = "SAVING"
+PHASE_SENDING_EMAILS = "SENDING_EMAILS"
+
+# PBKDF2 (hashlib) libera el GIL, asi que hilos SI paralelizan el hasheo:
+# medido 2.5x con 8 hilos. Tope en 8 para no acaparar el host compartido.
+_HASH_WORKERS = max(1, min(8, os.cpu_count() or 1))
+
+
+def _noop_progress(phase, done, total):
+    return None
+
+
+def _hash_credentials(count, progress):
+    """
+    Genera `count` pares (password_temporal, hash) en paralelo, FUERA de
+    cualquier transaccion. Es el 90% del tiempo de un import grande.
+    """
+    passwords = [generate_temporary_password() for _ in range(count)]
+    hashes = [None] * count
+    progress(PHASE_PREPARING, 0, count)
+    with ThreadPoolExecutor(max_workers=_HASH_WORKERS) as executor:
+        futures = {executor.submit(make_password, pwd): idx for idx, pwd in enumerate(passwords)}
+        for done, future in enumerate(as_completed(futures), start=1):
+            hashes[futures[future]] = future.result()
+            progress(PHASE_PREPARING, done, count)
+    return list(zip(passwords, hashes))
 
 # Tipo asignado a la cedula capturada en el import masivo -- la plantilla solo
 # trae un numero de cedula (columna "Cédula"), sin columna de tipo, a
@@ -73,9 +109,17 @@ class ConfirmUsersImportUseCase:
     SMTP) fuera de ella -- si algun correo falla ahi, el usuario ya existe
     en la BD igual; el fallo solo se reporta en `emailFailures` para
     reenviar manualmente.
+
+    Lo ejecuta la tarea Celery `procesar_import_usuarios` (y el comando
+    `importar_usuarios_excel`). `progress(phase, done, total)` es opcional;
+    se llama SOLO fuera de la transaccion (validacion, hasheo y correos):
+    una escritura de avance dentro del atomic no seria visible para el
+    polling hasta el commit, y se revertiria junto con el lote.
     """
 
-    def execute(self, file, actor) -> dict:
+    def execute(self, file, actor, progress=None) -> dict:
+        progress = progress or _noop_progress
+        progress(PHASE_VALIDATING, 0, 0)
         result = parse_and_validate(file)
 
         if result["total_errores"] > 0:
@@ -87,11 +131,19 @@ class ConfirmUsersImportUseCase:
                 "has_errors": True,
             }
 
-        inserted, pending_emails = self._create_all(result["rows"], actor)
+        credentials = _hash_credentials(len(result["rows"]), progress)
+
+        progress(PHASE_SAVING, 0, len(result["rows"]))
+        inserted, pending_emails = self._create_all(result["rows"], actor, credentials)
 
         email_failures = []
         if pending_emails:
-            batch_result = send_user_credentials_email_batch(pending_emails)
+            total_emails = len(pending_emails)
+            progress(PHASE_SENDING_EMAILS, 0, total_emails)
+            batch_result = send_user_credentials_email_batch(
+                pending_emails,
+                on_progress=lambda done: progress(PHASE_SENDING_EMAILS, done, total_emails),
+            )
             email_failures = batch_result["failed"]
 
         return {
@@ -104,12 +156,19 @@ class ConfirmUsersImportUseCase:
         }
 
     @transaction.atomic
-    def _create_all(self, rows, actor):
+    def _create_all(self, rows, actor, credentials):
         inserted = 0
         pending_emails = []
-        for row in rows:
+        # Catalogos resueltos una sola vez por id: con miles de filas que
+        # repiten los mismos pocos roles/tipos/escuelas, consultar por fila
+        # eran miles de queries redundantes.
+        roles_cache, tipos_cache, escuelas_cache = {}, {}, {}
+        for row, (temporary_password, clave_hash) in zip(rows, credentials):
             data = row["data"]
-            role = Roles.objects.filter(id_rol=data["roleId"], is_active=True).first()
+            role_id = data["roleId"]
+            if role_id not in roles_cache:
+                roles_cache[role_id] = Roles.objects.filter(id_rol=role_id, is_active=True).first()
+            role = roles_cache[role_id]
             # `role` ya se valido en parse_and_validate; si desaparecio entre
             # preview y confirm (carrera improbable) fallamos duro para no
             # crear un usuario sin rol.
@@ -118,15 +177,21 @@ class ConfirmUsersImportUseCase:
 
             tipo_personal = None
             if data["tipoPersonalId"]:
-                tipo_personal = CatTipoPersonal.objects.filter(
-                    id=data["tipoPersonalId"], is_active=True
-                ).first()
+                tipo_id = data["tipoPersonalId"]
+                if tipo_id not in tipos_cache:
+                    tipos_cache[tipo_id] = CatTipoPersonal.objects.filter(
+                        id=tipo_id, is_active=True
+                    ).first()
+                tipo_personal = tipos_cache[tipo_id]
 
             escuela = None
             if data["escuelaId"]:
-                escuela = Escuelas.objects.filter(
-                    id=data["escuelaId"], is_active=True
-                ).first()
+                escuela_id = data["escuelaId"]
+                if escuela_id not in escuelas_cache:
+                    escuelas_cache[escuela_id] = Escuelas.objects.filter(
+                        id=escuela_id, is_active=True
+                    ).first()
+                escuela = escuelas_cache[escuela_id]
 
             cedulas = []
             if data["cedula"]:
@@ -155,6 +220,8 @@ class ConfirmUsersImportUseCase:
                     est_activo=data["isActive"],
                     tipo_personal=tipo_personal,
                     send_credentials_email=False,
+                    temporary_password=temporary_password,
+                    clave_hash=clave_hash,
                 )
             )
 

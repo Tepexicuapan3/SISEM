@@ -64,6 +64,11 @@ class CreateUserData:
     # batch (fuera de la transaccion), no una a una durante el alta -- ver
     # `import_users.ConfirmUsersImportUseCase`.
     send_credentials_email: bool = True
+    # Credenciales ya generadas por quien llama (import masivo: hashea en
+    # paralelo ANTES de abrir la transaccion, porque PBKDF2 ~0.5 s/usuario
+    # es el cuello de botella). Si vienen en None se generan aqui como siempre.
+    temporary_password: Optional[str] = None
+    clave_hash: Optional[str] = None
 
 
 @dataclass
@@ -81,13 +86,18 @@ class CreateUserUseCase:
     @staticmethod
     @transaction.atomic
     def execute(data: CreateUserData) -> CreateUserResult:
-        temporary_password = generate_temporary_password()
+        if data.temporary_password and data.clave_hash:
+            temporary_password = data.temporary_password
+            clave_hash = data.clave_hash
+        else:
+            temporary_password = generate_temporary_password()
+            clave_hash = make_password(temporary_password)
         correo = data.email or None
 
         user = SyUsuario.objects.create(
             usuario=data.username,
             correo=correo,
-            clave_hash=make_password(temporary_password),
+            clave_hash=clave_hash,
             est_activo=data.est_activo,
             est_bloqueado=False,
             cambiar_clave=True,
