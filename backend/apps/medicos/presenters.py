@@ -6,8 +6,25 @@ transporte puro (auth + delegar a uses_case + formatear respuesta) y de
 del JSON expuesto.
 """
 
+import logging
+
 from apps.medicos import identity
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoCobertura
+
+logger = logging.getLogger(__name__)
+
+
+def _consultorio_or_none(rmc: RelMedicoConsultorio):
+    # La FK es db_constraint=False: la BD admite filas que apuntan a un
+    # consultorio inexistente. Una huérfana no debe tumbar el endpoint.
+    try:
+        return rmc.consultorio
+    except RelMedicoConsultorio.consultorio.RelatedObjectDoesNotExist:
+        logger.warning(
+            "rel_medico_consultorio id=%s apunta a consultorio inexistente id=%s",
+            rmc.id, rmc.consultorio_id,
+        )
+        return None
 
 
 def serialize_medico(medico: CatMedico) -> dict:
@@ -18,7 +35,10 @@ def serialize_medico(medico: CatMedico) -> dict:
     cedulas = sorted(usuario.cedulas.all(), key=lambda c: c.orden) if usuario is not None else []
     especialidades = list(medico.especialidades.all())
     centros = [c for c in medico.centros.all() if c.is_active]
-    consultorios_activos = [c for c in medico.consultorios.all() if c.is_active]
+    consultorios_activos = [
+        c for c in medico.consultorios.all()
+        if c.is_active and _consultorio_or_none(c) is not None
+    ]
     partes = identity.nombre_partes(medico)
 
     escuela = getattr(det, "id_escuela", None) if det else None
@@ -83,11 +103,13 @@ def serialize_medico(medico: CatMedico) -> dict:
 
 
 def serialize_consultorio_asignacion(rmc: RelMedicoConsultorio) -> dict:
+    # En el detalle la huérfana SÍ se expone (con nulls) para poder eliminarla.
+    consultorio = _consultorio_or_none(rmc)
     return {
         "id": rmc.id,
         "consultorioId": rmc.consultorio_id,
-        "consultorioNumero": rmc.consultorio.numero,
-        "consultorioNombre": rmc.consultorio.name,
+        "consultorioNumero": consultorio.numero if consultorio else None,
+        "consultorioNombre": consultorio.name if consultorio else None,
         "tipoAsignacion": rmc.tipo_asignacion,
         "fechaInicio": str(rmc.fecha_inicio),
         "fechaFin": str(rmc.fecha_fin) if rmc.fecha_fin else None,
