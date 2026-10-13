@@ -246,8 +246,9 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   Columnas, en este orden: <strong>No. Médico</strong>,{" "}
                   <strong>Usuario (Login del sistema)</strong>, Nombre(s),
                   Apellido Paterno, Apellido Materno, Cédula Profesional,
-                  Escuela, Sexo, Fecha de Nacimiento, Clave Clínica (legado),
-                  Especialidad, Servicio, Estatus del Médico.
+                  Escuela, Sexo, Fecha de Nacimiento, Especialidad, Servicio,
+                  Estatus del Médico. El centro de atención no se carga aquí:
+                  se asigna después en la ficha de cada médico.
                 </p>
                 <p>
                   <strong>No. Médico</strong> es opcional: si se captura es
@@ -273,10 +274,9 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                 <p>
                   <strong>Escuela</strong> y <strong>Especialidad</strong> se
                   capturan <strong>solo con el ID del catálogo</strong> (un
-                  nombre o texto es error). Un ID que no existe, o una Clave
-                  Clínica sin coincidencia, genera una{" "}
+                  nombre o texto es error). Un ID que no existe genera una{" "}
                   <strong>advertencia</strong>: no bloquea la importación, pero
-                  el médico se crea sin esa escuela / centro / especialidad.
+                  el médico se crea sin esa escuela / especialidad.
                 </p>
                 <p>
                   Estatus del Médico acepta Activo (A), Vacaciones,

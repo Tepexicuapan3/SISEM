@@ -15,12 +15,10 @@ El confirm lo ejecuta en segundo plano la tarea Celery
 `apps.medicos.tasks.procesar_import_medicos` (ver `MedicoImportJob`).
 """
 
-from datetime import date
-
 from django.db import connection, transaction
 
 from apps.authentication.models import DetUsuarioCedula, SyUsuario
-from apps.medicos.models import CatMedico, RelMedicoCentro, RelMedicoEspecialidad
+from apps.medicos.models import CatMedico, RelMedicoEspecialidad
 from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.medicos.services.medico_import_service import build_template, parse_and_validate
 
@@ -230,14 +228,8 @@ class ConfirmMedicosImportUseCase:
             created_by_id=actor.id_usuario,
         )
 
-        if data["centroId"]:
-            RelMedicoCentro.objects.create(
-                medico=medico,
-                centro_id=data["centroId"],
-                tipo_adscripcion="DEFINITIVA",
-                fecha_inicio=date.today(),
-                created_by_id=actor.id_usuario,
-            )
+        # Sin centro: la plantilla ya no trae Clave Clínica; los centros se
+        # asignan después desde la ficha del médico.
         if data["especialidadId"]:
             RelMedicoEspecialidad.objects.create(
                 medico=medico,

@@ -23,7 +23,6 @@ from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.models import DetUsuario, DetUsuarioCedula, SyUsuario
 from apps.authentication.services.session_registry import start_session
 from apps.catalogos.models import (
-    CatCentroAtencion,
     CatTipoPersonal,
     Escuelas,
     Especialidades,
@@ -44,7 +43,7 @@ IMPORT_CONFIRM_URL = "/api/v1/medicos/import/confirm"
 IMPORT_JOB_URL = "/api/v1/medicos/import/jobs/"
 
 _KEYS = [
-    "no", "usuario", "nom", "pat", "mat", "ced", "esc", "sexo", "fnac", "clave",
+    "no", "usuario", "nom", "pat", "mat", "ced", "esc", "sexo", "fnac",
     "esp", "serv", "estatus",
 ]
 
@@ -393,30 +392,24 @@ class MedicoImportApiTests(APITestCase):
         # S1.5: la fila sin número toma el siguiente tras el máximo explícito.
         self.assertGreater(CatMedico.objects.get(id_usuario=user).id, 2726)
 
-    def test_confirm_crea_centro_y_especialidad_principal(self):
-        centro = CatCentroAtencion.objects.create(
-            name="C1", code="IMP-API-C1", center_type="CLINICA",
-            legacy_cd_clinica=12, is_active=True,
-        )
+    def test_confirm_crea_especialidad_principal_y_ningun_centro(self):
         esp = Especialidades.objects.create(name="Cirugía")
         file = _medicos_xlsx_upload(
-            [row(no="5", pat="A", nom="B", ced="1", clave="12", esp=str(esp.id))]
+            [row(no="5", pat="A", nom="B", ced="1", esp=str(esp.id))]
         )
 
         job = self._confirm_and_wait(file)
 
         self.assertEqual(job["status"], "SUCCESS")
-        rel_centro = RelMedicoCentro.objects.get(medico_id=5)
-        self.assertEqual(rel_centro.centro_id, centro.id)
-        self.assertEqual(rel_centro.tipo_adscripcion, "DEFINITIVA")
-        self.assertIsNotNone(rel_centro.fecha_inicio)
+        # La plantilla ya no trae Clave Clínica: el centro se asigna en la ficha.
+        self.assertFalse(RelMedicoCentro.objects.filter(medico_id=5).exists())
         rel_esp = RelMedicoEspecialidad.objects.get(medico_id=5)
         self.assertEqual(rel_esp.especialidad_id, esp.id)
         self.assertTrue(rel_esp.es_principal)
 
     def test_confirm_con_warnings_no_bloquea_y_crea_sin_relaciones(self):
         file = _medicos_xlsx_upload(
-            [row(no="6", pat="A", nom="B", clave="999", esp="999999")]
+            [row(no="6", pat="A", nom="B", esp="999999")]
         )
 
         job = self._confirm_and_wait(file)
@@ -424,7 +417,8 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(job["status"], "SUCCESS")
         self.assertEqual(job["result"]["inserted"], 1)
         self.assertEqual(job["result"]["totalWarnings"], 1)
-        self.assertEqual(len(job["result"]["rows"][0]["warnings"]), 3)
+        # Sin cédula + especialidad inexistente.
+        self.assertEqual(len(job["result"]["rows"][0]["warnings"]), 2)
         self.assertTrue(CatMedico.objects.filter(id=6).exists())
         self.assertFalse(RelMedicoCentro.objects.filter(medico_id=6).exists())
         self.assertFalse(RelMedicoEspecialidad.objects.filter(medico_id=6).exists())

@@ -287,18 +287,18 @@ export interface MedicoCoberturasResponse {
  * Columnas de origen (en este orden exacto):
  * No. Médico | Usuario (Login del sistema) | Nombre(s) | Apellido Paterno |
  * Apellido Materno | Cédula Profesional | Escuela (ID) | Sexo |
- * Fecha de Nacimiento | Clave Clínica (legado) | Especialidad (ID) | Servicio |
- * Estatus del Médico
+ * Fecha de Nacimiento | Especialidad (ID) | Servicio | Estatus del Médico
  *
  * `tipoMedico` y `observaciones` ya no vienen en la plantilla: el backend
- * devuelve siempre "CLINICA" y null.
+ * devuelve siempre "CLINICA" y null. Tampoco hay Clave Clínica: el import no
+ * asigna centro (se asigna después en la ficha del médico).
  *
  * `noMedico` (opcional) es el `CatMedico.id` explícito; null = toma el
  * siguiente de la secuencia. `usuario` vacío = médico sin usuario: paterno y
  * nombre son obligatorios y se guardan en el propio médico. Con usuario,
  * paterno/materno/nombre son null (se toman del usuario).
- * `centroId` / `especialidadId` / `escuelaId` son null cuando la clave o el
- * nombre no coinciden (la fila trae un warning, no un error). Escuela, sexo y
+ * `especialidadId` / `escuelaId` son null cuando el ID no existe (la fila trae
+ * un warning, no un error). Escuela, sexo y
  * fecha de nacimiento solo aplican sin usuario (con usuario llegan en null).
  */
 export interface MedicoImportRowData {
@@ -315,8 +315,6 @@ export interface MedicoImportRowData {
   sexo: "M" | "F" | "O" | null;
   /** ISO yyyy-mm-dd; solo sin usuario. */
   fechaNac: string | null;
-  claveClinica: number | null;
-  centroId: number | null;
   especialidad: string | null;
   especialidadId: number | null;
   tipoMedico: TipoMedico;

@@ -1,5 +1,5 @@
 """Cobertura de `medico_import_service.parse_and_validate` (R6, medicos-id-no-medico):
-No. Médico, usuario, nombres, cédula, Clave Clínica / Especialidad (warnings,
+No. Médico, usuario, nombres, cédula, Escuela / Especialidad (warnings,
 D7), Estatus A/B y duplicados por nombre. Usa la BD de pruebas (SQLite)."""
 
 import io
@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import CatCentroAtencion, CatTipoPersonal, Escuelas, Especialidades
+from apps.catalogos.models import CatTipoPersonal, Escuelas, Especialidades
 from apps.medicos.models import CatMedico
 from apps.medicos.services.medico_import_service import (
     HEADERS,
@@ -24,7 +24,7 @@ from apps.medicos.services.medico_import_service import (
 def row(**kw):
     """Fila del Excel en el orden de HEADERS; las claves son abreviaturas."""
     keys = [
-        "no", "usuario", "nom", "pat", "mat", "ced", "esc", "sexo", "fnac", "clave",
+        "no", "usuario", "nom", "pat", "mat", "ced", "esc", "sexo", "fnac",
         "esp", "serv", "estatus",
     ]
     unknown = set(kw) - set(keys)
@@ -209,40 +209,10 @@ class MedicoImportParseTests(TestCase):
         self.assertEqual(result["total_errores"], 1)
         self.assertIn("Ya existe un médico sin usuario", result["rows"][0]["errors"][0])
 
-    # ── Clave Clínica y Especialidad (S6.5, S6.6, D7) ───────────────────────
+    # ── Especialidad (S6.6, D7) ─────────────────────────────────────────────
 
-    def test_clave_clinica_con_match_resuelve_centro(self):
-        centro = CatCentroAtencion.objects.create(
-            name="C1", code="IMP-C1", center_type="CLINICA",
-            legacy_cd_clinica=12, is_active=True,
-        )
-        result = self._parse(row(pat="A", nom="B", ced="1", clave="12"))
-        r = result["rows"][0]
-        self.assertEqual(r["data"]["centroId"], centro.id)
-        self.assertEqual(r["warnings"], [])
-
-    def test_clave_clinica_sin_match_es_warning(self):
-        result = self._parse(row(pat="A", nom="B", ced="1", clave="99"))
-        r = result["rows"][0]
-        self.assertEqual(r["errors"], [])
-        self.assertIsNone(r["data"]["centroId"])
-        self.assertEqual(len(r["warnings"]), 1)
-
-    def test_clave_clinica_no_numerica_es_warning(self):
-        result = self._parse(row(pat="A", nom="B", ced="1", clave="XX"))
-        self.assertEqual(result["total_errores"], 0)
-        self.assertEqual(len(result["rows"][0]["warnings"]), 1)
-
-    def test_clave_clinica_ambigua_es_warning(self):
-        for i in range(2):
-            CatCentroAtencion.objects.create(
-                name=f"D{i}", code=f"IMP-D{i}", center_type="CLINICA",
-                legacy_cd_clinica=5, is_active=True,
-            )
-        result = self._parse(row(pat="A", nom="B", ced="1", clave="5"))
-        r = result["rows"][0]
-        self.assertIsNone(r["data"]["centroId"])
-        self.assertIn("ambigua", r["warnings"][0])
+    def test_plantilla_ya_no_trae_clave_clinica(self):
+        self.assertNotIn("Clave Clínica (legado)", HEADERS)
 
     def test_especialidad_por_nombre_es_error(self):
         # FK a catálogo: solo se acepta el ID.

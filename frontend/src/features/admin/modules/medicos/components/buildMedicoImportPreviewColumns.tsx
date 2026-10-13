@@ -35,8 +35,8 @@ const nombreCompleto =(row: MedicoImportRow) =>
 /**
  * Columnas de la tabla de vista previa de importación masiva de médicos.
  * Refleja el orden de la plantilla: No. Médico | Usuario | Nombre(s) y
- * Apellidos | Cédula | Escuela | Sexo | Fecha de Nacimiento | Clave Clínica |
- * Especialidad | Servicio | Estatus.
+ * Apellidos | Cédula | Escuela | Sexo | Fecha de Nacimiento | Especialidad |
+ * Servicio | Estatus.
  * "Resultado" distingue errores (rojo, bloquean) de warnings (ámbar, no
  * bloquean).
  */
@@ -96,16 +96,6 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       align: "center",
       className: "w-[130px]",
       render: (row) => formatFechaNac(row.data.fechaNac),
-    },
-    {
-      key: "claveClinica",
-      header: "Clave Clínica",
-      align: "center",
-      className: "w-[110px]",
-      render: (row) =>
-        row.data.claveClinica === null
-          ? "—"
-          : `${row.data.claveClinica}${row.data.centroId ? "" : " (sin centro)"}`,
     },
     {
       key: "especialidad",

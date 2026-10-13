@@ -53,8 +53,6 @@ const buildData = (
   escuelaId: null,
   sexo: null,
   fechaNac: null,
-  claveClinica: null,
-  centroId: null,
   especialidad: null,
   especialidadId: null,
   tipoMedico: "CLINICA",
@@ -256,12 +254,11 @@ describe("MedicoImportDialog UI", () => {
               paterno: "López",
               materno: "Ramírez",
               nombre: "Juan",
-              claveClinica: 99,
-              especialidad: "Inexistente",
+              especialidad: "999",
             }),
             errors: [],
             warnings: [
-              "Clave Clínica '99' sin coincidencia: el médico se crea sin centro.",
+              "Especialidad con ID 999 no existe o está inactiva: el médico se crea sin especialidad.",
             ],
           },
         ],
@@ -275,7 +272,7 @@ describe("MedicoImportDialog UI", () => {
 
     expect(
       await screen.findByText(
-        "Clave Clínica '99' sin coincidencia: el médico se crea sin centro.",
+        "Especialidad con ID 999 no existe o está inactiva: el médico se crea sin especialidad.",
       ),
     ).toBeVisible();
     expect(screen.getByText("Juan López Ramírez")).toBeVisible();

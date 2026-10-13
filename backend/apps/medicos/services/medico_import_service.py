@@ -9,8 +9,8 @@ sobre el MISMO archivo en ambos pasos (mecanismo stateless, sin token/cache).
 
 Cambio `medicos-id-no-medico`: "No. Médico" (opcional) ES `CatMedico.id`.
 Errores (bloquean la fila) = formato/identidad; warnings (NO bloquean) =
-lookups de catálogo sin match (Clave Clínica; Especialidad y Escuela, que se
-capturan SOLO por ID: un valor no numérico sí es error) y cédula faltante
+IDs de catálogo inexistentes (Especialidad y Escuela, que se capturan SOLO
+por ID: un valor no numérico sí es error) y cédula faltante
 sin usuario (decisión D7).
 """
 
@@ -26,7 +26,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from apps.authentication.models import SyUsuario
-from apps.catalogos.models import CatCentroAtencion, Escuelas, Especialidades
+from apps.catalogos.models import Escuelas, Especialidades
 from apps.medicos.models import CatMedico, ESTATUS_MEDICO
 from apps.medicos.repositories.medico_repository import MedicoRepository
 
@@ -40,7 +40,6 @@ HEADERS = [
     "Escuela",
     "Sexo",
     "Fecha de Nacimiento",
-    "Clave Clínica (legado)",
     "Especialidad",
     "Servicio",
     "Estatus del Médico",
@@ -80,12 +79,12 @@ _FECHA_NAC_FORMATS = ("%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y")
 _SAMPLE_ROWS = (
     # Con usuario: nombre/cédula se toman del usuario (se dejan vacíos).
     # Escuela y Especialidad van por ID del catálogo (son llaves foráneas).
-    ("2726", "jperez", "", "", "", "", "", "", "", "12", "5", "Cardiología", "A"),
+    ("2726", "jperez", "", "", "", "", "", "", "", "5", "Cardiología", "A"),
     # Sin usuario: nombre, cédula, escuela, sexo y fecha de nacimiento viven
     # en el propio médico.
-    ("2727", "", "JUAN", "LÓPEZ", "RAMÍREZ", "1234567", "3", "M", "15/03/1975", "12", "8", "", "A"),
+    ("2727", "", "JUAN", "LÓPEZ", "RAMÍREZ", "1234567", "3", "M", "15/03/1975", "8", "", "A"),
     # Sin No. Médico: toma el siguiente de la secuencia.
-    ("", "mgomez", "", "", "", "", "", "", "", "", "", "", "A"),
+    ("", "mgomez", "", "", "", "", "", "", "", "", "", "A"),
 )
 
 
@@ -269,7 +268,6 @@ def parse_and_validate(file) -> dict:
                 "escuelaRaw": _clean_text(line["Escuela"]),
                 "sexoRaw": _clean_text(line["Sexo"]),
                 "fechaNacRaw": _clean_text(line["Fecha de Nacimiento"]),
-                "claveClinicaRaw": _clean_text(line["Clave Clínica (legado)"]),
                 "especialidadRaw": _clean_text(line["Especialidad"]),
                 "servicioRaw": _clean_text(line["Servicio"]),
                 "estatusRaw": _clean_text(line["Estatus del Médico"]),
@@ -329,15 +327,7 @@ def parse_and_validate(file) -> dict:
         else set()
     )
 
-    # --- Catálogos (warning si no hay match o es ambiguo) --------------------
-    claves = {int(r["claveClinicaRaw"]) for r in raw_rows if r["claveClinicaRaw"].isdigit()}
-    centros_by_clave: dict = {}
-    if claves:
-        for centro_id, clave in CatCentroAtencion.objects.filter(
-            legacy_cd_clinica__in=claves, is_active=True
-        ).values_list("id", "legacy_cd_clinica"):
-            centros_by_clave.setdefault(clave, []).append(centro_id)
-
+    # --- Catálogos (ID inexistente = warning) -------------------------------
     # Especialidad y Escuela son FKs a catálogo: se capturan SOLO por ID.
     especialidades_ids: set = set()
     if any(r["especialidadRaw"] for r in raw_rows):
@@ -450,27 +440,6 @@ def parse_and_validate(file) -> dict:
                         errors.append("Fecha de Nacimiento no puede ser futura.")
                         fecha_nac = None
 
-        # Clave Clínica -> centro
-        centro_id = None
-        clave_value = None
-        if parsed["claveClinicaRaw"]:
-            matches = []
-            if parsed["claveClinicaRaw"].isdigit():
-                clave_value = int(parsed["claveClinicaRaw"])
-                matches = centros_by_clave.get(clave_value, [])
-            if len(matches) == 1:
-                centro_id = matches[0]
-            elif not matches:
-                warnings.append(
-                    f"Clave Clínica '{parsed['claveClinicaRaw']}' sin coincidencia: "
-                    "el médico se crea sin centro."
-                )
-            else:
-                warnings.append(
-                    f"Clave Clínica '{parsed['claveClinicaRaw']}' es ambigua "
-                    "(varios centros): el médico se crea sin centro."
-                )
-
         especialidad_id = None
         if parsed["especialidadRaw"]:
             especialidad_id = _resolve_catalog_id(
@@ -504,8 +473,6 @@ def parse_and_validate(file) -> dict:
             "escuelaId": escuela_id,
             "sexo": sexo,
             "fechaNac": fecha_nac,
-            "claveClinica": clave_value,
-            "centroId": centro_id,
             "especialidad": parsed["especialidadRaw"] or None,
             "especialidadId": especialidad_id,
             # Tipo de Médico y Observaciones ya no vienen en la plantilla: el
