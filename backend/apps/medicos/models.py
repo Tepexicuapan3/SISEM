@@ -1,3 +1,6 @@
+import json
+import uuid
+
 from django.db import models
 
 
@@ -96,7 +99,18 @@ class CatMedico(models.Model):
     paterno            = models.CharField(max_length=80, null=True, blank=True)
     materno            = models.CharField(max_length=80, null=True, blank=True)
     cedula_profesional = models.CharField(max_length=30, null=True, blank=True)
-    tipo_medico    = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
+    # Escuela de egreso, igual que DetUsuario.id_escuela (misma regla: solo
+    # sin usuario; al asignar usuario se mueve a DetUsuario si está vacía).
+    id_escuela = models.ForeignKey(
+        "catalogos.Escuelas",
+        db_column="id_escuela",
+        db_constraint=False,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    tipo_medico   = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
     servicio        = models.CharField(max_length=100, null=True, blank=True)
     observaciones   = models.TextField(null=True, blank=True)
     estatus_medico  = models.CharField(max_length=20, choices=ESTATUS_MEDICO, default="ACTIVO", db_index=True)
@@ -118,6 +132,7 @@ class CatMedico(models.Model):
                         paterno__isnull=True,
                         materno__isnull=True,
                         cedula_profesional__isnull=True,
+                        id_escuela__isnull=True,
                     )
                 ),
                 name="cat_medicos_datos_personales_solo_sin_usuario",
@@ -268,3 +283,82 @@ class RelMedicoCoberturaHorario(models.Model):
 
     def __str__(self):
         return f"Cobertura {self.cobertura_id} {self.dia_semana}"
+
+
+# ─── IMPORT MASIVO EN SEGUNDO PLANO ──────────────────────────────────────────
+
+class MedicoImportJob(models.Model):
+    """
+    Import masivo de médicos por Excel ejecutado en segundo plano (Celery).
+    Calca `apps.administracion.models.UserImportJob`: el confirm síncrono no
+    escala (~2700 médicos exceden el timeout HTTP: frontend 30 s, nginx 60 s).
+    El confirm solo guarda el archivo aquí y encola
+    `apps.medicos.tasks.procesar_import_medicos`; el frontend consulta
+    `GET /medicos/import/jobs/<id>`.
+
+    El archivo vive en la BD (`file_content`) porque `celery-worker` no
+    comparte volumen con `backend`; se vacía al terminar. `result_json` es
+    TEXT con JSON a mano (no `JSONField`): en la Postgres real hay columnas
+    `json` (no `jsonb`) que rompen la lectura por ORM.
+
+    El avance de la fase SAVING corre DENTRO de la transacción del lote, así
+    que no puede escribirse aquí (no sería visible hasta el commit): va a la
+    cache (Redis, compartida backend/worker) y la vista de estado lo combina.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "En cola"
+        RUNNING = "RUNNING", "En proceso"
+        SUCCESS = "SUCCESS", "Completado"
+        VALIDATION_FAILED = "VALIDATION_FAILED", "Con errores de validacion"
+        ERROR = "ERROR", "Error"
+
+    class Phase(models.TextChoices):
+        QUEUED = "QUEUED", "En cola"
+        VALIDATING = "VALIDATING", "Validando archivo"
+        SAVING = "SAVING", "Guardando médicos"
+        DONE = "DONE", "Terminado"
+
+    STATUS_FINALES = (Status.SUCCESS, Status.VALIDATION_FAILED, Status.ERROR)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(
+        "authentication.SyUsuario",
+        db_column="actor_id",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="medico_import_jobs",
+    )
+    file_name = models.CharField(max_length=255)
+    file_content = models.BinaryField(null=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+    phase = models.CharField(max_length=20, choices=Phase.choices, default=Phase.QUEUED)
+    total_records = models.IntegerField(default=0)
+    processed = models.IntegerField(default=0)
+    phase_total = models.IntegerField(default=0)
+    inserted = models.IntegerField(default=0)
+    result_json = models.TextField(null=True, blank=True)
+    error_code = models.CharField(max_length=50, null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
+    fch_alta = models.DateTimeField(auto_now_add=True)
+    fch_inicio = models.DateTimeField(null=True, blank=True)
+    fch_fin = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "medico_import_jobs"
+        ordering = ["-fch_alta"]
+
+    def __str__(self):
+        return f"{self.file_name} ({self.status})"
+
+    @property
+    def is_final(self):
+        return self.status in self.STATUS_FINALES
+
+    def get_result(self):
+        return json.loads(self.result_json) if self.result_json else None
+
+    def set_result(self, value):
+        self.result_json = json.dumps(value, default=str, ensure_ascii=False)

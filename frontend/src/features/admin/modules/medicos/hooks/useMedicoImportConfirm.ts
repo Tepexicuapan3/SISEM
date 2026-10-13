@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { medicosAPI } from "@api/resources/medicos.api";
-import type { MedicoImportResult } from "@api/types/medicos.types";
+import type { MedicoImportJob, MedicoImportResult } from "@api/types/medicos.types";
 
 interface MedicoImportConfirmInput {
   file: File;
+  /** Avance del import en segundo plano (fase y médicos procesados). */
+  onProgress?: (job: MedicoImportJob) => void;
 }
 
 // Mismo query key raíz que `keys.all` en
@@ -13,15 +15,16 @@ interface MedicoImportConfirmInput {
 const MEDICOS_LIST_QUERY_KEY = ["medicos"] as const;
 
 /**
- * PASO 2 - Confirm de importación masiva de médicos: crea médicos solo si
- * el archivo no tiene ningún error (todo-o-nada). Invalida el listado de
- * médicos cuando la importación efectivamente inserta registros.
+ * PASO 2 - Confirm de importación masiva de médicos: encola el import en el
+ * backend (Celery) y espera a que termine consultando su avance. Crea
+ * médicos solo si el archivo no tiene ningún error (todo-o-nada). Invalida
+ * el listado de médicos cuando la importación efectivamente inserta registros.
  */
 export const useMedicoImportConfirm = () => {
   const queryClient = useQueryClient();
 
   return useMutation<MedicoImportResult, Error, MedicoImportConfirmInput>({
-    mutationFn: ({ file }) => medicosAPI.import.confirm(file),
+    mutationFn: ({ file, onProgress }) => medicosAPI.import.confirm(file, { onProgress }),
     onSuccess: (result) => {
       if (result.inserted > 0) {
         void queryClient.invalidateQueries({ queryKey: MEDICOS_LIST_QUERY_KEY });

@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.medicos.views.medico_import_views import (
     MedicoImportConfirmView,
+    MedicoImportJobStatusView,
     MedicoImportPreviewView,
     MedicoImportTemplateView,
 )
@@ -31,6 +32,7 @@ urlpatterns = [
     path("medicos/import/template",                           MedicoImportTemplateView.as_view(),     name="medico-import-template"),
     path("medicos/import/preview",                             MedicoImportPreviewView.as_view(),      name="medico-import-preview"),
     path("medicos/import/confirm",                             MedicoImportConfirmView.as_view(),      name="medico-import-confirm"),
+    path("medicos/import/jobs/<uuid:job_id>",                  MedicoImportJobStatusView.as_view(),    name="medico-import-job"),
 
     path("medicos/<int:medico_id>",                             MedicoDetailView.as_view(),             name="medico-detail"),
 

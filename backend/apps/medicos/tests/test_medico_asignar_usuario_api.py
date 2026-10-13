@@ -14,7 +14,7 @@ from rest_framework.test import APITestCase
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.models import DetUsuario, DetUsuarioCedula, SyUsuario
 from apps.authentication.services.session_registry import start_session
-from apps.catalogos.models import CatTipoPersonal, Permisos, Roles
+from apps.catalogos.models import CatTipoPersonal, Escuelas, Permisos, Roles
 from apps.medicos import identity
 from apps.medicos.models import CatMedico
 
@@ -151,6 +151,35 @@ class MedicoAsignarUsuarioApiTests(APITestCase):
         # Igual se limpia: el CheckConstraint exige que no queden datos propios.
         self.assertIsNone(self.medico.cedula_profesional)
         self.assertEqual(self.medico.id_usuario_id, user.id_usuario)
+
+    def test_mueve_la_escuela_si_el_usuario_no_tiene(self):
+        esc = Escuelas.objects.create(code="UNAM", name="Universidad Nacional")
+        CatMedico.objects.filter(pk=512).update(id_escuela=esc)
+        user = self._create_user("dr_sin_escuela", self.tipo_medico)
+
+        response = self._post(self.medico.id, user.id_usuario)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(DetUsuario.objects.get(pk=user.id_usuario).id_escuela_id, esc.id)
+        self.assertEqual(response.data["escuela"]["id"], esc.id)
+        self.assertNotIn("escuelaId", response.data["descartados"])
+        self.medico.refresh_from_db()
+        self.assertIsNone(self.medico.id_escuela_id)
+
+    def test_no_pisa_la_escuela_del_usuario_y_la_reporta(self):
+        propia = Escuelas.objects.create(code="IPN", name="Instituto Politecnico")
+        del_medico = Escuelas.objects.create(code="UNAM", name="Universidad Nacional")
+        CatMedico.objects.filter(pk=512).update(id_escuela=del_medico)
+        user = self._create_user("dr_con_escuela", self.tipo_medico)
+        DetUsuario.objects.filter(pk=user.id_usuario).update(id_escuela=propia)
+
+        response = self._post(self.medico.id, user.id_usuario)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(DetUsuario.objects.get(pk=user.id_usuario).id_escuela_id, propia.id)
+        self.assertEqual(response.data["descartados"]["escuelaId"], del_medico.id)
+        self.medico.refresh_from_db()
+        self.assertIsNone(self.medico.id_escuela_id)
 
     def test_medico_sin_datos_personales_solo_asigna(self):
         vacio = CatMedico.objects.create(id=700)

@@ -41,7 +41,10 @@ def serialize_medico(medico: CatMedico) -> dict:
     ]
     partes = identity.nombre_partes(medico)
 
-    escuela = getattr(det, "id_escuela", None) if det else None
+    # Con usuario manda DetUsuario; sin usuario, la escuela propia del médico.
+    # getattr con default: la FK es db_constraint=False y una huérfana lanza
+    # RelatedObjectDoesNotExist (subclase de AttributeError).
+    escuela = getattr(det if usuario is not None else medico, "id_escuela", None)
 
     return {
         # Contrato unificado: "id" es SIEMPRE CatMedico.id (No. Médico).

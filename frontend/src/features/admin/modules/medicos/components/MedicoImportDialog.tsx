@@ -23,7 +23,11 @@ import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
 import { cn } from "@shared/utils/styling/cn";
 import { DataTable } from "@features/admin/shared/components/DataTable";
-import type { MedicoImportResult } from "@api/types/medicos.types";
+import type {
+  MedicoImportJob,
+  MedicoImportJobPhase,
+  MedicoImportResult,
+} from "@api/types/medicos.types";
 import { useMedicoImportPreview } from "@features/admin/modules/medicos/hooks/useMedicoImportPreview";
 import { useMedicoImportConfirm } from "@features/admin/modules/medicos/hooks/useMedicoImportConfirm";
 import { useMedicoImportTemplateDownload } from "@features/admin/modules/medicos/hooks/useMedicoImportTemplateDownload";
@@ -50,11 +54,69 @@ const MEDICO_IMPORT_ERROR_MESSAGES: Record<string, string> = {
     "El archivo tiene filas con error. Corrígelas y volvé a subirlo.",
   MEDICO_IMPORT_RACE:
     "Algo cambió entre la vista previa y la confirmación. No se creó ningún médico; volvé a intentarlo.",
+  IMPORT_IN_PROGRESS:
+    "Ya hay una importación de médicos en curso. Espera a que termine.",
+  IMPORT_UNEXPECTED_ERROR:
+    "Error inesperado al importar. No se creó ningún médico.",
   VALIDATION_ERROR: "Revisa el archivo antes de continuar.",
 };
 
 const getMedicoImportErrorMessage = (error: unknown, fallback: string) =>
   resolveApiErrorMessage(error, fallback, MEDICO_IMPORT_ERROR_MESSAGES);
+
+const PHASE_LABELS: Record<MedicoImportJobPhase, string> = {
+  QUEUED: "En cola, esperando al servidor...",
+  VALIDATING: "Validando archivo...",
+  SAVING: "Guardando médicos",
+  DONE: "Terminando...",
+};
+
+// Mismo componente que `ImportProgress` del import de usuarios
+// (`UserImportDialog.tsx`, privado a ese archivo -- se duplica).
+function ImportProgress({ job }: { job: MedicoImportJob | null }) {
+  const phase = job?.phase ?? "QUEUED";
+  const hasCount = job !== null && job.phaseTotal > 0;
+  const percent = hasCount
+    ? Math.min(100, Math.round((job.processed / job.phaseTotal) * 100))
+    : null;
+
+  return (
+    <section
+      className="space-y-3 rounded-2xl border border-line-struct bg-subtle/40 p-4 sm:p-5"
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <p className="font-medium text-txt-body">{PHASE_LABELS[phase]}</p>
+        {hasCount ? (
+          <p className="tabular-nums text-txt-muted">
+            {job.processed} / {job.phaseTotal}
+          </p>
+        ) : null}
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Avance de la importacion"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent ?? undefined}
+        className="h-2 w-full overflow-hidden rounded-full bg-line-struct"
+      >
+        <div
+          className={cn(
+            "h-full rounded-full bg-brand transition-[width] duration-500",
+            percent === null && "w-1/3 animate-pulse",
+          )}
+          style={percent === null ? undefined : { width: `${percent}%` }}
+        />
+      </div>
+      <p className="text-xs text-txt-muted">
+        La importacion corre en el servidor y puede tardar varios minutos con
+        archivos grandes. No es necesario mantener esta ventana abierta: los
+        médicos se crean igual.
+      </p>
+    </section>
+  );
+}
 
 export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogProps) {
   const fileInputId = useId();
@@ -68,6 +130,7 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
   );
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [importJob, setImportJob] = useState<MedicoImportJob | null>(null);
 
   const columns = useMemo(() => buildMedicoImportPreviewColumns(), []);
 
@@ -123,8 +186,12 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
   const handleConfirm = async () => {
     if (!file || !canConfirm || confirmImport.isPending) return;
 
+    setImportJob(null);
     try {
-      const result = await confirmImport.mutateAsync({ file });
+      const result = await confirmImport.mutateAsync({
+        file,
+        onProgress: setImportJob,
+      });
       setPreviewResult(result);
       setPage(1);
 
@@ -177,10 +244,10 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
               <div className="space-y-1.5 text-xs text-txt-muted">
                 <p>
                   Columnas, en este orden: <strong>No. Médico</strong>,{" "}
-                  <strong>Usuario (Login del sistema)</strong>, Apellido
-                  Paterno, Apellido Materno, Nombre(s), Cédula Profesional,
-                  Clave Clínica (legado), Especialidad, Servicio, Tipo de
-                  Médico, Estatus del Médico, Observaciones.
+                  <strong>Usuario (Login del sistema)</strong>, Nombre(s),
+                  Apellido Paterno, Apellido Materno, Cédula Profesional,
+                  Escuela, Clave Clínica (legado), Especialidad, Servicio,
+                  Estatus del Médico.
                 </p>
                 <p>
                   <strong>No. Médico</strong> es opcional: si se captura es
@@ -194,16 +261,18 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   médico (apellidos y nombre se toman del usuario). Si se deja
                   vacío, <strong>Apellido Paterno</strong> y{" "}
                   <strong>Nombre(s)</strong> son obligatorios y conviene
-                  capturar la Cédula Profesional.
+                  capturar la Cédula Profesional y la Escuela (con usuario, la
+                  Escuela del Excel se ignora: se toma del usuario).
                 </p>
                 <p>
-                  Una Clave Clínica o Especialidad sin coincidencia genera una{" "}
+                  <strong>Escuela</strong> y <strong>Especialidad</strong> se
+                  capturan <strong>solo con el ID del catálogo</strong> (un
+                  nombre o texto es error). Un ID que no existe, o una Clave
+                  Clínica sin coincidencia, genera una{" "}
                   <strong>advertencia</strong>: no bloquea la importación, pero
-                  el médico se crea sin ese centro / especialidad.
+                  el médico se crea sin esa escuela / centro / especialidad.
                 </p>
                 <p>
-                  Tipo de Médico acepta &quot;Clínica&quot;, &quot;Hospital&quot;
-                  o &quot;Ambos&quot; (vacío se interpreta como Clínica).
                   Estatus del Médico acepta Activo (A), Vacaciones,
                   Incapacidad, Suspendido o Baja (B); vacío se interpreta como
                   Activo.
@@ -255,6 +324,8 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                 ) : null}
               </div>
             </section>
+
+            {confirmImport.isPending ? <ImportProgress job={importJob} /> : null}
 
             {previewResult ? (
               <section className="space-y-4">

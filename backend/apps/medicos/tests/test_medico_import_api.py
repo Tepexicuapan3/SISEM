@@ -7,6 +7,7 @@ establecido en `test_medico_create_api.py` (`start_session` directo -- evita
 los 409 intermitentes del flujo HTTP de login contra Redis)."""
 
 import io
+import uuid
 from unittest import skipUnless
 from unittest.mock import patch
 
@@ -24,20 +25,27 @@ from apps.authentication.services.session_registry import start_session
 from apps.catalogos.models import (
     CatCentroAtencion,
     CatTipoPersonal,
+    Escuelas,
     Especialidades,
     Permisos,
     Roles,
 )
-from apps.medicos.models import CatMedico, RelMedicoCentro, RelMedicoEspecialidad
+from apps.medicos.models import (
+    CatMedico,
+    MedicoImportJob,
+    RelMedicoCentro,
+    RelMedicoEspecialidad,
+)
 from apps.medicos.services.medico_import_service import HEADERS as MEDICO_IMPORT_HEADERS
 
 IMPORT_TEMPLATE_URL = "/api/v1/medicos/import/template"
 IMPORT_PREVIEW_URL = "/api/v1/medicos/import/preview"
 IMPORT_CONFIRM_URL = "/api/v1/medicos/import/confirm"
+IMPORT_JOB_URL = "/api/v1/medicos/import/jobs/"
 
 _KEYS = [
-    "no", "usuario", "pat", "mat", "nom", "ced", "clave",
-    "esp", "serv", "tipo", "estatus", "obs",
+    "no", "usuario", "nom", "pat", "mat", "ced", "esc", "clave",
+    "esp", "serv", "estatus",
 ]
 
 
@@ -145,22 +153,6 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(rows[3]["errors"], [])
         self.assertEqual(len(rows[3]["warnings"]), 1)
 
-    def test_preview_flags_invalid_tipo_medico_instead_of_silently_defaulting(self):
-        user = self._create_usuario("invalid_tipo_medico")
-        file = _medicos_xlsx_upload([row(usuario=user.usuario, tipo="Clinca", estatus="Activo")])
-
-        response = self._post_file(IMPORT_PREVIEW_URL, file)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["totalErrores"], 1)
-        data_row = response.data["rows"][0]
-        self.assertIn(
-            "Tipo de Médico 'Clinca' no es válido. "
-            "Valores permitidos: CLINICA, HOSPITAL, AMBOS.",
-            data_row["errors"],
-        )
-        self.assertEqual(data_row["data"]["tipoMedico"], "CLINICA")
-
     def test_preview_flags_invalid_estatus_instead_of_silently_defaulting(self):
         user = self._create_usuario("invalid_estatus_medico")
         file = _medicos_xlsx_upload([row(usuario=user.usuario, estatus="Jubilado")])
@@ -189,17 +181,103 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(data_row["data"]["tipoMedico"], "CLINICA")
         self.assertEqual(data_row["data"]["estatusMedico"], "ACTIVO")
 
+    # ── Confirm asíncrono (job + Celery) ─────────────────────────────────────
+
+    def _confirm_and_wait(self, file):
+        """
+        Confirm asíncrono: POST encola (202) y la tarea Celery corre al hacer
+        commit. En el test se ejecuta la tarea en línea (sin broker) y se
+        devuelve el estado final del job tal como lo ve el polling.
+        """
+        from apps.medicos.tasks import procesar_import_medicos
+
+        with patch("apps.medicos.views.medico_import_views.procesar_import_medicos") as task_mock:
+            task_mock.delay.side_effect = lambda job_id: procesar_import_medicos(job_id)
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
+        self.assertEqual(response.data["status"], "PENDING")
+        status_response = self.client.get(f"{IMPORT_JOB_URL}{response.data['jobId']}")
+        self.assertEqual(status_response.status_code, status.HTTP_200_OK)
+        return status_response.data
+
+    def test_confirm_encola_y_responde_202_sin_procesar(self):
+        file = _medicos_xlsx_upload([row(no="7", pat="A", nom="B", ced="1")])
+
+        with patch("apps.medicos.views.medico_import_views.procesar_import_medicos") as task_mock:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        job = MedicoImportJob.objects.get(id=response.data["jobId"])
+        task_mock.delay.assert_called_once_with(str(job.id))
+        self.assertEqual(job.status, MedicoImportJob.Status.PENDING)
+        self.assertEqual(job.actor_id, self.actor.id_usuario)
+        self.assertFalse(CatMedico.objects.filter(id=7).exists())
+
+    def test_confirm_rechaza_si_hay_otro_import_en_curso(self):
+        activo = MedicoImportJob.objects.create(
+            file_name="otro.xlsx", status=MedicoImportJob.Status.RUNNING,
+        )
+        file = _medicos_xlsx_upload([row(no="7", pat="A", nom="B", ced="1")])
+
+        with patch("apps.medicos.views.medico_import_views.procesar_import_medicos") as task_mock:
+            response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "IMPORT_IN_PROGRESS")
+        self.assertEqual(response.data["details"]["jobId"], str(activo.id))
+        task_mock.delay.assert_not_called()
+
+    def test_job_status_muestra_avance_vivo_de_la_cache(self):
+        from apps.medicos.services import import_job_progress
+
+        job = MedicoImportJob.objects.create(
+            file_name="x.xlsx", status=MedicoImportJob.Status.RUNNING,
+        )
+        import_job_progress.set_progress(job.id, "SAVING", 1200, 2709)
+
+        data = self.client.get(f"{IMPORT_JOB_URL}{job.id}").data
+
+        self.assertEqual(
+            (data["phase"], data["processed"], data["phaseTotal"]), ("SAVING", 1200, 2709)
+        )
+        self.assertIsNone(data["result"])
+        import_job_progress.clear_progress(job.id)
+
+    def test_use_case_reporta_avance_de_guardado_por_fila(self):
+        from apps.medicos.uses_case.import_medicos import ConfirmMedicosImportUseCase
+
+        calls = []
+        file = _medicos_xlsx_upload(
+            [row(no="1", pat="A", nom="UNO", ced="1"), row(pat="B", nom="DOS", ced="1")]
+        )
+
+        ConfirmMedicosImportUseCase().execute(
+            file, self.actor, progress=lambda *args: calls.append(args),
+        )
+
+        saving = [c for c in calls if c[0] == "SAVING"]
+        self.assertEqual(saving, [("SAVING", 0, 2), ("SAVING", 1, 2), ("SAVING", 2, 2)])
+        self.assertEqual(calls[0], ("VALIDATING", 0, 0))
+
+    def test_job_inexistente_es_404(self):
+        response = self.client.get(f"{IMPORT_JOB_URL}{uuid.uuid4()}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["code"], "IMPORT_JOB_NOT_FOUND")
+
     # ── Confirm: errores ─────────────────────────────────────────────────────
 
     def test_confirm_with_any_error_creates_nothing(self):
         before = CatMedico.objects.count()
         file = _medicos_xlsx_upload([row(usuario="usuario_que_no_existe_409")])
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(response.data["code"], "IMPORT_HAS_ERRORS")
-        self.assertEqual(response.data["inserted"], 0)
+        self.assertEqual(job["status"], "VALIDATION_FAILED")
+        self.assertEqual(job["result"]["inserted"], 0)
+        self.assertEqual(job["result"]["totalErrores"], 1)
         self.assertEqual(CatMedico.objects.count(), before)
 
     def test_preview_y_confirm_rechazan_usuario_que_no_es_medico(self):
@@ -216,9 +294,9 @@ class MedicoImportApiTests(APITestCase):
         )
 
         file.seek(0)
-        confirm = self._post_file(IMPORT_CONFIRM_URL, file)
-        self.assertEqual(confirm.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(confirm.data["inserted"], 0)
+        job = self._confirm_and_wait(file)
+        self.assertEqual(job["status"], "VALIDATION_FAILED")
+        self.assertEqual(job["result"]["inserted"], 0)
         self.assertEqual(CatMedico.objects.count(), before)
 
     def test_confirm_blocks_all_or_nothing_when_one_row_has_error(self):
@@ -231,11 +309,20 @@ class MedicoImportApiTests(APITestCase):
             ]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(job["status"], "VALIDATION_FAILED")
         self.assertEqual(CatMedico.objects.count(), 1)
         self.assertFalse(CatMedico.objects.filter(id=10).exists())
+
+    def test_confirm_archivo_invalido_termina_en_error(self):
+        file = _medicos_xlsx_upload([row(no="1", pat="A", nom="B")])
+        file.name = "import.csv"
+
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "ERROR")
+        self.assertIsNotNone(job["errorCode"])
 
     # ── Confirm: creación ────────────────────────────────────────────────────
 
@@ -243,41 +330,46 @@ class MedicoImportApiTests(APITestCase):
         user = self._create_usuario("bulk_medico_one")
         file = _medicos_xlsx_upload(
             [row(usuario=user.usuario, pat="Ignorado", nom="Ignorado",
-                 tipo="Hospital", serv="Cardiología", estatus="Activo", obs="obs uno")]
+                 serv="Cardiología", estatus="Activo")]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["inserted"], 1)
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertEqual(job["inserted"], 1)
+        self.assertEqual(job["result"]["inserted"], 1)
         medico = CatMedico.objects.get(id_usuario=user)
         self.assertIsNone(medico.paterno)
         self.assertIsNone(medico.nombre)
         self.assertIsNone(medico.cedula_profesional)
-        self.assertEqual(medico.tipo_medico, "HOSPITAL")
+        self.assertEqual(medico.tipo_medico, "CLINICA")
         self.assertEqual(medico.servicio, "Cardiología")
-        self.assertEqual(medico.observaciones, "obs uno")
+        self.assertIsNone(medico.observaciones)
+        # El archivo se descarta al terminar.
+        self.assertIsNone(MedicoImportJob.objects.get(id=job["jobId"]).file_content)
 
     def test_confirm_sin_usuario_guarda_datos_personales(self):
+        esc = Escuelas.objects.create(code="UNAM", name="Universidad Nacional")
         file = _medicos_xlsx_upload(
             [row(no="2726", pat="López", mat="Ramírez", nom="Juan", ced="1234567",
-                 tipo="Clínica", estatus="A")]
+                 esc=str(esc.id), estatus="A")]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(job["status"], "SUCCESS")
         medico = CatMedico.objects.get(id=2726)
         self.assertIsNone(medico.id_usuario_id)
         self.assertEqual(
             (medico.paterno, medico.materno, medico.nombre, medico.cedula_profesional),
             ("López", "Ramírez", "Juan", "1234567"),
         )
+        self.assertEqual(medico.id_escuela_id, esc.id)
         self.assertEqual(medico.estatus_medico, "ACTIVO")
 
     def test_confirm_estatus_b_crea_baja(self):
         file = _medicos_xlsx_upload([row(no="9", pat="A", nom="B", ced="1", estatus="B")])
-        self._post_file(IMPORT_CONFIRM_URL, file)
+        self._confirm_and_wait(file)
         self.assertEqual(CatMedico.objects.get(id=9).estatus_medico, "BAJA")
 
     def test_confirm_usa_no_medico_como_id_y_los_sin_numero_van_despues(self):
@@ -290,10 +382,10 @@ class MedicoImportApiTests(APITestCase):
             ]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["inserted"], 3)
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertEqual(job["result"]["inserted"], 3)
         self.assertTrue(CatMedico.objects.filter(id=2726).exists())
         self.assertTrue(CatMedico.objects.filter(id=40).exists())
         # S1.5: la fila sin número toma el siguiente tras el máximo explícito.
@@ -306,12 +398,12 @@ class MedicoImportApiTests(APITestCase):
         )
         esp = Especialidades.objects.create(name="Cirugía")
         file = _medicos_xlsx_upload(
-            [row(no="5", pat="A", nom="B", ced="1", clave="12", esp="CIRUGIA")]
+            [row(no="5", pat="A", nom="B", ced="1", clave="12", esp=str(esp.id))]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(job["status"], "SUCCESS")
         rel_centro = RelMedicoCentro.objects.get(medico_id=5)
         self.assertEqual(rel_centro.centro_id, centro.id)
         self.assertEqual(rel_centro.tipo_adscripcion, "DEFINITIVA")
@@ -322,15 +414,15 @@ class MedicoImportApiTests(APITestCase):
 
     def test_confirm_con_warnings_no_bloquea_y_crea_sin_relaciones(self):
         file = _medicos_xlsx_upload(
-            [row(no="6", pat="A", nom="B", clave="999", esp="Inexistente")]
+            [row(no="6", pat="A", nom="B", clave="999", esp="999999")]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["inserted"], 1)
-        self.assertEqual(response.data["totalWarnings"], 1)
-        self.assertEqual(len(response.data["rows"][0]["warnings"]), 3)
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertEqual(job["result"]["inserted"], 1)
+        self.assertEqual(job["result"]["totalWarnings"], 1)
+        self.assertEqual(len(job["result"]["rows"][0]["warnings"]), 3)
         self.assertTrue(CatMedico.objects.filter(id=6).exists())
         self.assertFalse(RelMedicoCentro.objects.filter(medico_id=6).exists())
         self.assertFalse(RelMedicoEspecialidad.objects.filter(medico_id=6).exists())
@@ -349,9 +441,9 @@ class MedicoImportApiTests(APITestCase):
             ]
         )
 
-        response = self._post_file(IMPORT_CONFIRM_URL, file)
+        job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(job["status"], "SUCCESS")
         creada = DetUsuarioCedula.objects.get(id_usuario=sin_cedula)
         self.assertEqual(creada.numero, "NUEVA-1")
         self.assertTrue(creada.es_principal)
@@ -372,10 +464,10 @@ class MedicoImportApiTests(APITestCase):
             # incluidas las 2 filas ya insertadas en la misma transacción.
             exists_mock.side_effect = [False, False, True, False, False]
 
-            response = self._post_file(IMPORT_CONFIRM_URL, file)
+            job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
-        self.assertEqual(response.data["code"], "MEDICO_IMPORT_RACE")
+        self.assertEqual(job["status"], "ERROR")
+        self.assertEqual(job["errorCode"], "MEDICO_IMPORT_RACE")
         self.assertEqual(CatMedico.objects.count(), before)
 
     def test_confirm_rollback_con_ids_explicitos_no_deja_filas(self):
@@ -389,9 +481,9 @@ class MedicoImportApiTests(APITestCase):
             "apps.medicos.uses_case.import_medicos.MedicoRepository.exists_for_usuario",
             return_value=True,
         ):
-            response = self._post_file(IMPORT_CONFIRM_URL, file)
+            job = self._confirm_and_wait(file)
 
-        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(job["status"], "ERROR")
         self.assertFalse(CatMedico.objects.filter(id=100).exists())
 
     # ── Reintentos ───────────────────────────────────────────────────────────
@@ -399,27 +491,29 @@ class MedicoImportApiTests(APITestCase):
     def test_confirm_retry_sin_usuario_ni_numero_does_not_duplicate(self):
         rows = [row(pat="Pérez", nom="Ana", ced="1")]
 
-        first = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
-        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        first = self._confirm_and_wait(_medicos_xlsx_upload(rows))
+        self.assertEqual(first["status"], "SUCCESS")
 
-        retry = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
+        retry = self._confirm_and_wait(_medicos_xlsx_upload(rows))
 
-        self.assertEqual(retry.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(retry["status"], "VALIDATION_FAILED")
         self.assertIn(
             "Ya existe un médico sin usuario con el nombre 'Pérez Ana'.",
-            retry.data["rows"][0]["errors"],
+            retry["result"]["rows"][0]["errors"],
         )
         self.assertEqual(CatMedico.objects.filter(id_usuario__isnull=True).count(), 1)
 
     def test_confirm_retry_con_no_medico_flags_existing_row(self):
         rows = [row(no="321", pat="Pérez", nom="Ana", ced="1")]
 
-        first = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
-        self.assertEqual(first.status_code, status.HTTP_200_OK)
-        retry = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
+        first = self._confirm_and_wait(_medicos_xlsx_upload(rows))
+        self.assertEqual(first["status"], "SUCCESS")
+        retry = self._confirm_and_wait(_medicos_xlsx_upload(rows))
 
-        self.assertEqual(retry.status_code, status.HTTP_409_CONFLICT)
-        self.assertIn("Ya existe un médico con el No. Médico 321.", retry.data["rows"][0]["errors"])
+        self.assertEqual(retry["status"], "VALIDATION_FAILED")
+        self.assertIn(
+            "Ya existe un médico con el No. Médico 321.", retry["result"]["rows"][0]["errors"]
+        )
         self.assertEqual(CatMedico.objects.count(), 1)
 
     def test_confirm_retry_after_success_flags_existing_rows_without_duplicating(self):
@@ -427,15 +521,15 @@ class MedicoImportApiTests(APITestCase):
         user_b = self._create_usuario("retry_medico_b")
         rows = [row(usuario=user_a.usuario), row(usuario=user_b.usuario)]
 
-        first = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
-        self.assertEqual(first.status_code, status.HTTP_200_OK)
-        self.assertEqual(first.data["inserted"], 2)
+        first = self._confirm_and_wait(_medicos_xlsx_upload(rows))
+        self.assertEqual(first["status"], "SUCCESS")
+        self.assertEqual(first["result"]["inserted"], 2)
 
-        retry = self._post_file(IMPORT_CONFIRM_URL, _medicos_xlsx_upload(rows))
+        retry = self._confirm_and_wait(_medicos_xlsx_upload(rows))
 
-        self.assertEqual(retry.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(retry.data["inserted"], 0)
-        for r in retry.data["rows"]:
+        self.assertEqual(retry["status"], "VALIDATION_FAILED")
+        self.assertEqual(retry["result"]["inserted"], 0)
+        for r in retry["result"]["rows"]:
             self.assertIn("Este usuario ya tiene un perfil de médico.", r["errors"])
         self.assertEqual(CatMedico.objects.count(), 2)
 

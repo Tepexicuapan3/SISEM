@@ -1,21 +1,11 @@
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
-import type {
-  EstatusMedico,
-  MedicoImportRow,
-  TipoMedico,
-} from "@api/types/medicos.types";
+import type { EstatusMedico, MedicoImportRow } from "@api/types/medicos.types";
 import { type DataTableColumn } from "@features/admin/shared/components/DataTable";
 
 // Duplicados a propósito de los labels privados de
 // `MedicoTableColumns.tsx` (mismo criterio de "duplicar, no extraer" que
 // los helpers de `medicos.api.ts`).
-const TIPO_MEDICO_LABELS: Record<TipoMedico, string> = {
-  CLINICA: "Clínica",
-  HOSPITAL: "Hospital",
-  AMBOS: "Clínica / Hospital",
-};
-
 const ESTATUS_MEDICO_LABELS: Record<EstatusMedico, string> = {
   ACTIVO: "Activo",
   VACACIONES: "Vacaciones",
@@ -25,16 +15,17 @@ const ESTATUS_MEDICO_LABELS: Record<EstatusMedico, string> = {
 };
 
 const nombreCompleto = (row: MedicoImportRow) =>
-  [row.data.paterno, row.data.materno, row.data.nombre]
+  [row.data.nombre, row.data.paterno, row.data.materno]
     .filter(Boolean)
     .join(" ");
 
 /**
  * Columnas de la tabla de vista previa de importación masiva de médicos.
- * Refleja el orden de la plantilla: No. Médico | Usuario | Apellidos y
- * Nombre(s) | Cédula | Clave Clínica | Especialidad | Servicio | Tipo |
- * Estatus | Observaciones. "Resultado" distingue errores (rojo, bloquean)
- * de warnings (ámbar, no bloquean).
+ * Refleja el orden de la plantilla: No. Médico | Usuario | Nombre(s) y
+ * Apellidos | Cédula | Escuela | Clave Clínica | Especialidad | Servicio |
+ * Estatus.
+ * "Resultado" distingue errores (rojo, bloquean) de warnings (ámbar, no
+ * bloquean).
  */
 export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportRow>[] {
   return [
@@ -60,7 +51,7 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
     },
     {
       key: "nombre",
-      header: "Apellidos y Nombre(s)",
+      header: "Nombre(s) y Apellidos",
       className: "w-[200px]",
       render: (row) => nombreCompleto(row) || "—",
     },
@@ -69,6 +60,15 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       header: "Cédula Profesional",
       className: "w-[140px]",
       render: (row) => row.data.cedulaProfesional || "—",
+    },
+    {
+      key: "escuela",
+      header: "Escuela",
+      className: "w-[170px]",
+      render: (row) =>
+        row.data.escuela
+          ? `${row.data.escuela}${row.data.escuelaId ? "" : " (sin match)"}`
+          : "—",
     },
     {
       key: "claveClinica",
@@ -88,12 +88,6 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
         row.data.especialidad
           ? `${row.data.especialidad}${row.data.especialidadId ? "" : " (sin match)"}`
           : "—",
-    },
-    {
-      key: "tipoMedico",
-      header: "Tipo de Médico",
-      className: "w-[150px]",
-      render: (row) => TIPO_MEDICO_LABELS[row.data.tipoMedico] || row.data.tipoMedico,
     },
     {
       key: "servicio",

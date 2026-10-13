@@ -28,7 +28,9 @@ class MedicoRepository:
 
         return qs.filter(pk=pk).first()
 
-    DETAIL_SELECT_RELATED = ["id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela"]
+    DETAIL_SELECT_RELATED = [
+        "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela", "id_escuela",
+    ]
     DETAIL_PREFETCH_RELATED = [
         "id_usuario__cedulas",
         "especialidades__especialidad",
@@ -48,7 +50,7 @@ class MedicoRepository:
     @staticmethod
     def list_queryset():
         return CatMedico.objects.select_related(
-            "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela"
+            "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela", "id_escuela"
         ).prefetch_related(
             "id_usuario__cedulas",
             "especialidades__especialidad",
@@ -79,6 +81,7 @@ class MedicoRepository:
         paterno=None,
         materno=None,
         cedula_profesional=None,
+        escuela_id=None,
         tipo_medico,
         servicio,
         observaciones,
@@ -86,8 +89,8 @@ class MedicoRepository:
         estatus_medico=None,
     ):
         # `id` explícito = No. Médico legado (import masivo); None deja que la
-        # secuencia asigne el siguiente. nombre/paterno/materno/cédula solo
-        # aplican a médicos SIN usuario (CheckConstraint del modelo).
+        # secuencia asigne el siguiente. nombre/paterno/materno/cédula/escuela
+        # solo aplican a médicos SIN usuario (CheckConstraint del modelo).
         # `estatus_medico=None` deja el default del modelo ("ACTIVO").
         kwargs = {}
         if id is not None:
@@ -101,6 +104,7 @@ class MedicoRepository:
             paterno=paterno,
             materno=materno,
             cedula_profesional=cedula_profesional,
+            id_escuela_id=escuela_id,
             tipo_medico=tipo_medico,
             servicio=servicio,
             observaciones=observaciones,

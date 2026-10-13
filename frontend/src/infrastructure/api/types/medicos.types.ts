@@ -285,16 +285,21 @@ export interface MedicoCoberturasResponse {
 /**
  * Datos normalizados de una fila del Excel de importación.
  * Columnas de origen (en este orden exacto):
- * No. Médico | Usuario (Login del sistema) | Apellido Paterno |
- * Apellido Materno | Nombre(s) | Cédula Profesional | Clave Clínica (legado) |
- * Especialidad | Servicio | Tipo de Médico | Estatus del Médico | Observaciones
+ * No. Médico | Usuario (Login del sistema) | Nombre(s) | Apellido Paterno |
+ * Apellido Materno | Cédula Profesional | Escuela (ID) |
+ * Clave Clínica (legado) | Especialidad (ID) | Servicio |
+ * Estatus del Médico
+ *
+ * `tipoMedico` y `observaciones` ya no vienen en la plantilla: el backend
+ * devuelve siempre "CLINICA" y null.
  *
  * `noMedico` (opcional) es el `CatMedico.id` explícito; null = toma el
  * siguiente de la secuencia. `usuario` vacío = médico sin usuario: paterno y
  * nombre son obligatorios y se guardan en el propio médico. Con usuario,
  * paterno/materno/nombre son null (se toman del usuario).
- * `centroId` / `especialidadId` son null cuando la clave o el nombre no
- * coinciden (la fila trae un warning, no un error).
+ * `centroId` / `especialidadId` / `escuelaId` son null cuando la clave o el
+ * nombre no coinciden (la fila trae un warning, no un error). La escuela solo
+ * aplica sin usuario (con usuario `escuela` y `escuelaId` son null).
  */
 export interface MedicoImportRowData {
   noMedico: number | null;
@@ -304,6 +309,8 @@ export interface MedicoImportRowData {
   materno: string | null;
   nombre: string | null;
   cedulaProfesional: string | null;
+  escuela: string | null;
+  escuelaId: number | null;
   claveClinica: number | null;
   centroId: number | null;
   especialidad: string | null;
@@ -339,4 +346,37 @@ export interface MedicoImportResult {
   totalWarnings: number;
   inserted: number;
   rows: MedicoImportRow[];
+}
+
+export type MedicoImportJobStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCESS"
+  | "VALIDATION_FAILED"
+  | "ERROR";
+
+export type MedicoImportJobPhase = "QUEUED" | "VALIDATING" | "SAVING" | "DONE";
+
+/**
+ * Estado de un import de médicos en segundo plano (Celery).
+ * POST /api/v1/medicos/import/confirm      -> 202 con este payload
+ * GET  /api/v1/medicos/import/jobs/:jobId  -> polling hasta status final
+ *
+ * `processed`/`phaseTotal` son el avance DENTRO de la fase actual (en SAVING,
+ * médicos guardados / total). `result` solo viene con status final.
+ */
+export interface MedicoImportJob {
+  jobId: string;
+  status: MedicoImportJobStatus;
+  phase: MedicoImportJobPhase;
+  processed: number;
+  phaseTotal: number;
+  totalRecords: number;
+  inserted: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: MedicoImportResult | null;
 }

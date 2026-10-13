@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import CatCentroAtencion, CatTipoPersonal, Especialidades
+from apps.catalogos.models import CatCentroAtencion, CatTipoPersonal, Escuelas, Especialidades
 from apps.medicos.models import CatMedico
 from apps.medicos.services.medico_import_service import (
     HEADERS,
@@ -23,8 +23,8 @@ from apps.medicos.services.medico_import_service import (
 def row(**kw):
     """Fila del Excel en el orden de HEADERS; las claves son abreviaturas."""
     keys = [
-        "no", "usuario", "pat", "mat", "nom", "ced", "clave",
-        "esp", "serv", "tipo", "estatus", "obs",
+        "no", "usuario", "nom", "pat", "mat", "ced", "esc", "clave",
+        "esp", "serv", "estatus",
     ]
     unknown = set(kw) - set(keys)
     assert not unknown, unknown
@@ -243,21 +243,69 @@ class MedicoImportParseTests(TestCase):
         self.assertIsNone(r["data"]["centroId"])
         self.assertIn("ambigua", r["warnings"][0])
 
-    def test_especialidad_resuelve_sin_acentos_ni_mayusculas(self):
-        esp = Especialidades.objects.create(name="Cirugía")
-        result = self._parse(row(pat="A", nom="B", ced="1", esp="CIRUGIA"))
+    def test_especialidad_por_nombre_es_error(self):
+        # FK a catálogo: solo se acepta el ID.
+        Especialidades.objects.create(name="Cirugía")
+        r = self._parse(row(pat="A", nom="B", ced="1", esp="Cirugía"))["rows"][0]
+        self.assertIsNone(r["data"]["especialidadId"])
+        self.assertIn("ID numérico", r["errors"][0])
+
+    def test_especialidad_por_id_del_catalogo(self):
+        esp = Especialidades.objects.create(name="Cardiología")
+        result = self._parse(row(pat="A", nom="B", ced="1", esp=str(esp.id)))
         r = result["rows"][0]
         self.assertEqual(r["data"]["especialidadId"], esp.id)
         self.assertEqual(r["warnings"], [])
 
-    def test_especialidad_sin_match_es_warning(self):
-        result = self._parse(row(pat="A", nom="B", ced="1", esp="Inexistente"))
+    def test_especialidad_por_id_float_de_excel(self):
+        esp = Especialidades.objects.create(name="Cardiología")
+        result = self._parse(row(pat="A", nom="B", ced="1", esp=f"{esp.id}.0"))
+        self.assertEqual(result["rows"][0]["data"]["especialidadId"], esp.id)
+
+    def test_especialidad_id_inexistente_es_warning(self):
+        result = self._parse(row(pat="A", nom="B", ced="1", esp="999999"))
         r = result["rows"][0]
         self.assertEqual(r["errors"], [])
         self.assertIsNone(r["data"]["especialidadId"])
-        self.assertEqual(len(r["warnings"]), 1)
+        self.assertIn("ID 999999", r["warnings"][0])
 
-    # ── Estatus / Tipo (S6.7) ───────────────────────────────────────────────
+    # ── Escuela (solo sin usuario) ──────────────────────────────────────────
+
+    def test_escuela_por_id_del_catalogo(self):
+        esc = Escuelas.objects.create(code="UNAM", name="Universidad Nacional Autónoma de México")
+        result = self._parse(
+            row(no="1", pat="A", nom="B", ced="1", esc=str(esc.id)),
+            row(no="2", pat="C", nom="D", ced="1", esc=f"{esc.id}.0"),
+        )
+        self.assertEqual([r["data"]["escuelaId"] for r in result["rows"]], [esc.id] * 2)
+        self.assertEqual(result["total_warnings"], 0)
+
+    def test_escuela_id_inexistente_es_warning(self):
+        r = self._parse(row(pat="A", nom="B", ced="1", esc="999999"))["rows"][0]
+        self.assertEqual(r["errors"], [])
+        self.assertIsNone(r["data"]["escuelaId"])
+        self.assertIn("ID 999999", r["warnings"][0])
+
+    def test_escuela_por_nombre_o_siglas_es_error(self):
+        Escuelas.objects.create(code="UNAM", name="Universidad Nacional")
+        result = self._parse(
+            row(no="1", pat="A", nom="B", ced="1", esc="UNAM"),
+            row(no="2", pat="C", nom="D", ced="1", esc="Universidad Nacional"),
+        )
+        self.assertEqual(result["total_errores"], 2)
+        for r in result["rows"]:
+            self.assertIsNone(r["data"]["escuelaId"])
+            self.assertIn("ID numérico", r["errors"][0])
+
+    def test_escuela_con_usuario_se_ignora_con_warning(self):
+        make_usuario("con_escuela")
+        esc = Escuelas.objects.create(code="IPN", name="Instituto Politécnico Nacional")
+        r = self._parse(row(usuario="con_escuela", esc=str(esc.id)))["rows"][0]
+        self.assertEqual(r["errors"], [])
+        self.assertIsNone(r["data"]["escuelaId"])
+        self.assertIn("Escuela del Excel se ignora", r["warnings"][0])
+
+    # ── Estatus / Tipo (S6.7)───────────────────────────────────────────────
 
     def test_estatus_a_y_b_se_mapean(self):
         result = self._parse(
@@ -274,6 +322,9 @@ class MedicoImportParseTests(TestCase):
         result = self._parse(row(pat="A", nom="B", ced="1", estatus="Z"))
         self.assertEqual(result["total_errores"], 1)
 
-    def test_tipo_medico_invalido_es_error(self):
-        result = self._parse(row(pat="A", nom="B", ced="1", tipo="Clinca"))
-        self.assertEqual(result["total_errores"], 1)
+    def test_tipo_medico_y_observaciones_toman_default(self):
+        # La plantilla ya no trae Tipo de Médico ni Observaciones.
+        result = self._parse(row(pat="A", nom="B", ced="1"))
+        data = result["rows"][0]["data"]
+        self.assertEqual(data["tipoMedico"], "CLINICA")
+        self.assertIsNone(data["observaciones"])

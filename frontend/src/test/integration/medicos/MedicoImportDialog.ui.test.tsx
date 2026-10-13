@@ -49,6 +49,8 @@ const buildData = (
   materno: null,
   nombre: null,
   cedulaProfesional: null,
+  escuela: null,
+  escuelaId: null,
   claveClinica: null,
   centroId: null,
   especialidad: null,
@@ -201,43 +203,6 @@ describe("MedicoImportDialog UI", () => {
     ).toBeVisible();
   });
 
-  it("shows an error badge for an invalid Tipo de Médico value and blocks confirm", async () => {
-    const user = userEvent.setup();
-    previewMutateAsync.mockResolvedValue(
-      buildResult({
-        totalErrores: 1,
-        rows: [
-          {
-            row: 2,
-            data: buildData({
-              usuario: "jperez",
-              usuarioId: 1,
-            }),
-            errors: [
-              "Tipo de Médico 'Clinca' no es válido. Valores permitidos: CLINICA, HOSPITAL, AMBOS.",
-            ],
-            warnings: [],
-          },
-        ],
-      }),
-    );
-
-    render(<MedicoImportDialog open onOpenChange={onOpenChange} />);
-
-    const fileInput = screen.getByLabelText(/archivo excel/i);
-    await user.upload(fileInput, createFile());
-    await user.click(screen.getByRole("button", { name: /validar archivo/i }));
-
-    expect(
-      await screen.findByText(
-        "Tipo de Médico 'Clinca' no es válido. Valores permitidos: CLINICA, HOSPITAL, AMBOS.",
-      ),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: /confirmar e importar/i }),
-    ).toBeDisabled();
-  });
-
   it("shows an error badge for an invalid Estatus value and blocks confirm", async () => {
     const user = userEvent.setup();
     previewMutateAsync.mockResolvedValue(
@@ -311,7 +276,7 @@ describe("MedicoImportDialog UI", () => {
         "Clave Clínica '99' sin coincidencia: el médico se crea sin centro.",
       ),
     ).toBeVisible();
-    expect(screen.getByText("López Ramírez Juan")).toBeVisible();
+    expect(screen.getByText("Juan López Ramírez")).toBeVisible();
     expect(screen.getByText("35")).toBeVisible();
     expect(screen.getByText(/1 fila con advertencia/i)).toBeVisible();
     expect(
@@ -370,6 +335,7 @@ describe("MedicoImportDialog UI", () => {
     await waitFor(() => {
       expect(confirmMutateAsync).toHaveBeenCalledWith({
         file: expect.any(File),
+        onProgress: expect.any(Function),
       });
     });
 

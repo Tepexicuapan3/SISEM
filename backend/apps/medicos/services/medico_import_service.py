@@ -9,7 +9,8 @@ sobre el MISMO archivo en ambos pasos (mecanismo stateless, sin token/cache).
 
 Cambio `medicos-id-no-medico`: "No. Médico" (opcional) ES `CatMedico.id`.
 Errores (bloquean la fila) = formato/identidad; warnings (NO bloquean) =
-lookups de catálogo sin match (Clave Clínica, Especialidad) y cédula faltante
+lookups de catálogo sin match (Clave Clínica; Especialidad y Escuela, que se
+capturan SOLO por ID: un valor no numérico sí es error) y cédula faltante
 sin usuario (decisión D7).
 """
 
@@ -24,23 +25,22 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from apps.authentication.models import SyUsuario
-from apps.catalogos.models import CatCentroAtencion, Especialidades
-from apps.medicos.models import CatMedico, ESTATUS_MEDICO, TIPO_MEDICO
+from apps.catalogos.models import CatCentroAtencion, Escuelas, Especialidades
+from apps.medicos.models import CatMedico, ESTATUS_MEDICO
 from apps.medicos.repositories.medico_repository import MedicoRepository
 
 HEADERS = [
     "No. Médico",
     "Usuario (Login del sistema)",
+    "Nombre(s)",
     "Apellido Paterno",
     "Apellido Materno",
-    "Nombre(s)",
     "Cédula Profesional",
+    "Escuela",
     "Clave Clínica (legado)",
     "Especialidad",
     "Servicio",
-    "Tipo de Médico",
     "Estatus del Médico",
-    "Observaciones",
 ]
 
 MAX_ROWS = 5000
@@ -64,11 +64,12 @@ _NO_MEDICO_RE = re.compile(r"^\d+(\.0+)?$")
 
 _SAMPLE_ROWS = (
     # Con usuario: nombre/cédula se toman del usuario (se dejan vacíos).
-    ("2726", "jperez", "", "", "", "", "12", "Cardiología", "Cardiología", "Clínica", "A", ""),
-    # Sin usuario: nombre y cédula viven en el propio médico.
-    ("2727", "", "LÓPEZ", "RAMÍREZ", "JUAN", "1234567", "12", "Cirugía General", "", "Hospital", "A", "Médico sin usuario del sistema"),
+    # Escuela y Especialidad van por ID del catálogo (son llaves foráneas).
+    ("2726", "jperez", "", "", "", "", "", "12", "5", "Cardiología", "A"),
+    # Sin usuario: nombre, cédula y escuela viven en el propio médico.
+    ("2727", "", "JUAN", "LÓPEZ", "RAMÍREZ", "1234567", "3", "12", "8", "", "A"),
     # Sin No. Médico: toma el siguiente de la secuencia.
-    ("", "mgomez", "", "", "", "", "", "", "", "Clínica", "A", "Alta nativa de SIRES"),
+    ("", "mgomez", "", "", "", "", "", "", "", "", "A"),
 )
 
 
@@ -148,13 +149,12 @@ def _build_choice_lookup(choices) -> dict:
     return lookup
 
 
-_TIPO_MEDICO_LOOKUP = _build_choice_lookup(TIPO_MEDICO)
 _ESTATUS_MEDICO_LOOKUP = {**_build_choice_lookup(ESTATUS_MEDICO), **_ESTATUS_ALIASES}
 
 
 def _resolve_choice(raw_text: str, lookup: dict, default: str) -> tuple[str, bool]:
     """
-    Resuelve un choice de `CatMedico` (Tipo de Médico / Estatus) por label
+    Resuelve un choice de `CatMedico` (Estatus) por label
     o código, insensible a acentos/mayúsculas.
 
     Devuelve `(valor_resuelto, es_valido)`:
@@ -171,6 +171,24 @@ def _resolve_choice(raw_text: str, lookup: dict, default: str) -> tuple[str, boo
     if resolved is None:
         return default, False
     return resolved, True
+
+
+def _resolve_catalog_id(raw: str, valid_ids: set, label: str, noun: str, errors, warnings):
+    """
+    Resuelve una FK a catálogo capturada por ID. Formato no numérico = ERROR
+    (bloquea la fila); ID inexistente o inactivo = WARNING (D7: el médico se
+    crea sin ese dato). Devuelve el id resuelto o None.
+    """
+    if not _NO_MEDICO_RE.match(raw):
+        errors.append(f"{label} '{raw}' no es válida: captura el ID numérico del catálogo.")
+        return None
+    catalog_id = int(float(raw))
+    if catalog_id in valid_ids:
+        return catalog_id
+    warnings.append(
+        f"{label} con ID {catalog_id} no existe o está inactiva: el médico se crea sin {noun}."
+    )
+    return None
 
 
 def _parse_no_medico(raw: str) -> tuple[Optional[int], Optional[str]]:
@@ -222,12 +240,11 @@ def parse_and_validate(file) -> dict:
                 "maternoRaw": _clean_text(line["Apellido Materno"]),
                 "nombreRaw": _clean_text(line["Nombre(s)"]),
                 "cedulaRaw": _clean_text(line["Cédula Profesional"]),
+                "escuelaRaw": _clean_text(line["Escuela"]),
                 "claveClinicaRaw": _clean_text(line["Clave Clínica (legado)"]),
                 "especialidadRaw": _clean_text(line["Especialidad"]),
-                "tipoMedicoRaw": _clean_text(line["Tipo de Médico"]),
                 "servicioRaw": _clean_text(line["Servicio"]),
                 "estatusRaw": _clean_text(line["Estatus del Médico"]),
-                "observacionesRaw": _clean_text(line["Observaciones"]),
             }
         )
 
@@ -293,12 +310,17 @@ def parse_and_validate(file) -> dict:
         ).values_list("id", "legacy_cd_clinica"):
             centros_by_clave.setdefault(clave, []).append(centro_id)
 
-    especialidades_by_key: dict = {}
+    # Especialidad y Escuela son FKs a catálogo: se capturan SOLO por ID.
+    especialidades_ids: set = set()
     if any(r["especialidadRaw"] for r in raw_rows):
-        for esp_id, esp_name in Especialidades.objects.filter(is_active=True).values_list(
-            "id", "name"
-        ):
-            especialidades_by_key.setdefault(_nombre_key(esp_name), []).append(esp_id)
+        especialidades_ids = set(
+            Especialidades.objects.filter(is_active=True).values_list("id", flat=True)
+        )
+
+    # Escuela solo cuenta para médicos sin usuario.
+    escuelas_ids: set = set()
+    if any(r["escuelaRaw"] and not r["usuario"] for r in raw_rows):
+        escuelas_ids = set(Escuelas.objects.filter(is_active=True).values_list("id", flat=True))
 
     result_rows = []
     total_errores = 0
@@ -365,6 +387,17 @@ def parse_and_validate(file) -> dict:
                 f"Cédula Profesional excede el máximo de {_CEDULA_MAX_LEN} caracteres."
             )
 
+        # Escuela: solo sin usuario (con usuario manda DetUsuario.id_escuela).
+        escuela_id = None
+        if parsed["escuelaRaw"] and parsed["usuario"]:
+            warnings.append(
+                "Con Usuario, la Escuela del Excel se ignora (se toma del usuario)."
+            )
+        elif parsed["escuelaRaw"]:
+            escuela_id = _resolve_catalog_id(
+                parsed["escuelaRaw"], escuelas_ids, "Escuela", "escuela", errors, warnings
+            )
+
         # Clave Clínica -> centro
         centro_id = None
         clave_value = None
@@ -386,30 +419,11 @@ def parse_and_validate(file) -> dict:
                     "(varios centros): el médico se crea sin centro."
                 )
 
-        # Especialidad
         especialidad_id = None
         if parsed["especialidadRaw"]:
-            matches = especialidades_by_key.get(_nombre_key(parsed["especialidadRaw"]), [])
-            if len(matches) == 1:
-                especialidad_id = matches[0]
-            elif not matches:
-                warnings.append(
-                    f"Especialidad '{parsed['especialidadRaw']}' sin coincidencia: "
-                    "el médico se crea sin especialidad."
-                )
-            else:
-                warnings.append(
-                    f"Especialidad '{parsed['especialidadRaw']}' es ambigua: "
-                    "el médico se crea sin especialidad."
-                )
-
-        tipo_medico_value, tipo_medico_valid = _resolve_choice(
-            parsed["tipoMedicoRaw"], _TIPO_MEDICO_LOOKUP, DEFAULT_TIPO_MEDICO
-        )
-        if not tipo_medico_valid:
-            errors.append(
-                f"Tipo de Médico '{parsed['tipoMedicoRaw']}' no es válido. "
-                f"Valores permitidos: {', '.join(code for code, _ in TIPO_MEDICO)}."
+            especialidad_id = _resolve_catalog_id(
+                parsed["especialidadRaw"], especialidades_ids, "Especialidad", "especialidad",
+                errors, warnings,
             )
 
         estatus_value, estatus_valid = _resolve_choice(
@@ -434,14 +448,18 @@ def parse_and_validate(file) -> dict:
             # La cédula se conserva siempre: sin usuario va a CatMedico; con
             # usuario se crea en DetUsuarioCedula solo si no tiene ninguna.
             "cedulaProfesional": parsed["cedulaRaw"] or None,
+            "escuela": (parsed["escuelaRaw"] or None) if sin_usuario else None,
+            "escuelaId": escuela_id,
             "claveClinica": clave_value,
             "centroId": centro_id,
             "especialidad": parsed["especialidadRaw"] or None,
             "especialidadId": especialidad_id,
-            "tipoMedico": tipo_medico_value,
+            # Tipo de Médico y Observaciones ya no vienen en la plantilla: el
+            # tipo toma el default del modelo y se edita después en la ficha.
+            "tipoMedico": DEFAULT_TIPO_MEDICO,
             "servicio": _truncate(parsed["servicioRaw"], _SERVICIO_MAX_LEN) or None,
             "estatusMedico": estatus_value,
-            "observaciones": parsed["observacionesRaw"] or None,
+            "observaciones": None,
         }
 
         result_rows.append(

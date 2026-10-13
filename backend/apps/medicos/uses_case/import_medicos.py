@@ -10,6 +10,9 @@ cache ni sesión intermedia. El frontend retiene el mismo `File` entre
 preview y confirm; el confirm re-corre `parse_and_validate` sobre ese MISMO
 archivo como única autoridad -- nunca confía en las filas que el cliente
 validó en preview.
+
+El confirm lo ejecuta en segundo plano la tarea Celery
+`apps.medicos.tasks.procesar_import_medicos` (ver `MedicoImportJob`).
 """
 
 from datetime import date
@@ -20,6 +23,15 @@ from apps.authentication.models import DetUsuarioCedula, SyUsuario
 from apps.medicos.models import CatMedico, RelMedicoCentro, RelMedicoEspecialidad
 from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.medicos.services.medico_import_service import build_template, parse_and_validate
+
+# Fases reportadas a `progress(phase, done, total)` -- mismos valores que
+# `MedicoImportJob.Phase`.
+PHASE_VALIDATING = "VALIDATING"
+PHASE_SAVING = "SAVING"
+
+
+def _noop_progress(phase, done, total):
+    return None
 
 
 class MedicoImportRaceError(Exception):
@@ -122,9 +134,14 @@ class ConfirmMedicosImportUseCase:
     `SyUsuario.usuario`): sin usuario se crea con `id_usuario=NULL` + datos
     personales propios; este import es el ÚNICO camino de alta sin usuario.
     Se llama a `MedicoRepository.create` directo.
+
+    `progress(phase, done, total)` es opcional (la tarea Celery lo usa para
+    publicar el avance en la cache; ver `services/import_job_progress.py`).
     """
 
-    def execute(self, file, actor) -> dict:
+    def execute(self, file, actor, progress=None) -> dict:
+        progress = progress or _noop_progress
+        progress(PHASE_VALIDATING, 0, 0)
         result = parse_and_validate(file)
         if result["total_errores"] > 0:
             return self._rejected(result)
@@ -137,7 +154,7 @@ class ConfirmMedicosImportUseCase:
             result = parse_and_validate(file)
             if result["total_errores"] > 0:
                 return self._rejected(result)
-            inserted = self._create_all(result["rows"], actor)
+            inserted = self._create_all(result["rows"], actor, progress)
 
         return {
             "totalRecords": result["total_records"],
@@ -159,19 +176,26 @@ class ConfirmMedicosImportUseCase:
             "has_errors": True,
         }
 
-    def _create_all(self, rows, actor):
+    def _create_all(self, rows, actor, progress=_noop_progress):
         # Explícitas primero (orden del archivo), luego las que toman nextval.
         explicit = [r for r in rows if r["data"]["noMedico"] is not None]
         implicit = [r for r in rows if r["data"]["noMedico"] is None]
+        total = len(rows)
 
+        done = 0
+        progress(PHASE_SAVING, done, total)
         for row in explicit:
             self._create_one(row, actor)
+            done += 1
+            progress(PHASE_SAVING, done, total)
         if explicit:
             _sync_id_sequence()
         for row in implicit:
             self._create_one(row, actor)
+            done += 1
+            progress(PHASE_SAVING, done, total)
 
-        return len(rows)
+        return total
 
     def _create_one(self, row, actor):
         data = row["data"]
@@ -196,6 +220,7 @@ class ConfirmMedicosImportUseCase:
             materno=None if usuario else data["materno"],
             nombre=None if usuario else data["nombre"],
             cedula_profesional=None if usuario else data["cedulaProfesional"],
+            escuela_id=None if usuario else data["escuelaId"],
             tipo_medico=data["tipoMedico"],
             servicio=data["servicio"],
             observaciones=data["observaciones"],
