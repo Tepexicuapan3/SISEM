@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
 import type { EstatusMedico, MedicoImportRow } from "@api/types/medicos.types";
 import { type DataTableColumn } from "@features/admin/shared/components/DataTable";
@@ -37,8 +37,9 @@ const nombreCompleto =(row: MedicoImportRow) =>
  * Refleja el orden de la plantilla: No. Médico | Usuario | Nombre(s) y
  * Apellidos | Cédula | Escuela | Sexo | Fecha de Nacimiento | Especialidad |
  * Servicio | Estatus.
- * "Resultado" distingue errores (rojo, bloquean) de warnings (ámbar, no
- * bloquean).
+ * "Resultado" muestra solo los errores (rojo, bloquean). Las advertencias no
+ * van por fila: se muestran como resumen general agrupado por tipo en
+ * `MedicoImportWarningSummary`.
  */
 export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportRow>[] {
   return [
@@ -127,7 +128,7 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       cellContentClassName: "mx-auto flex justify-center",
       truncate: false,
       render: (row) => {
-        if (row.errors.length === 0 && row.warnings.length === 0) {
+        if (row.errors.length === 0) {
           return (
             <Badge variant="stable">
               <CheckCircle2 className="size-3" />
@@ -145,16 +146,6 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
                 className="max-w-full whitespace-normal text-left"
               >
                 <AlertTriangle className="size-3 shrink-0" />
-                <span>{message}</span>
-              </Badge>
-            ))}
-            {row.warnings.map((message, index) => (
-              <Badge
-                key={`w-${index}`}
-                variant="alert"
-                className="max-w-full whitespace-normal text-left"
-              >
-                <Info className="size-3 shrink-0" />
                 <span>{message}</span>
               </Badge>
             ))}

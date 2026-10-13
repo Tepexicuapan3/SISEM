@@ -89,6 +89,34 @@ _SAMPLE_ROWS = (
 )
 
 
+# Tipos de warning (no bloquean). El orden es el del resumen general que se
+# muestra en el preview (`warning_summary`): la descripción es genérica (sin
+# datos de la fila); el detalle por fila sigue en `rows[].warnings`.
+WARNING_SIN_CEDULA = "SIN_CEDULA"
+WARNING_NOMBRE_IGNORADO = "NOMBRE_IGNORADO"
+WARNING_ESCUELA_IGNORADA = "ESCUELA_IGNORADA"
+WARNING_SEXO_FECHA_IGNORADOS = "SEXO_FECHA_IGNORADOS"
+WARNING_CEDULA_YA_REGISTRADA = "CEDULA_YA_REGISTRADA"
+
+WARNING_TYPES = {
+    WARNING_SIN_CEDULA: "Médicos sin usuario y sin Cédula Profesional: se crean sin cédula.",
+    WARNING_NOMBRE_IGNORADO: (
+        "Médicos con usuario que traen nombre o apellidos en el Excel: se ignoran "
+        "(se toman del usuario)."
+    ),
+    WARNING_ESCUELA_IGNORADA: (
+        "Médicos con usuario que traen Escuela en el Excel: se ignora (se toma del usuario)."
+    ),
+    WARNING_SEXO_FECHA_IGNORADOS: (
+        "Médicos con usuario que traen Sexo o Fecha de Nacimiento en el Excel: se ignoran "
+        "(se toman del usuario)."
+    ),
+    WARNING_CEDULA_YA_REGISTRADA: (
+        "Cédulas que el usuario ya tenía registradas: no se duplican."
+    ),
+}
+
+
 class ImportFileError(Exception):
     """Error de nivel-archivo (headers, extensión, límite de filas): 400, ninguna fila se evalúa."""
 
@@ -243,6 +271,9 @@ def parse_and_validate(file) -> dict:
             "total_records": int,
             "total_errores": int,     # filas con al menos un error
             "total_warnings": int,    # filas con al menos un warning
+            "warning_summary": [      # resumen por tipo (ver build_warning_summary)
+                {"code": str, "description": str, "count": int, "rows": [int, ...]},
+            ],
             "rows": [
                 {
                     "row": int,             # numero de fila en el Excel (1-based, incluye header)
@@ -354,10 +385,16 @@ def parse_and_validate(file) -> dict:
     result_rows = []
     total_errores = 0
     total_warnings = 0
+    warning_rows: dict = {code: [] for code in WARNING_TYPES}
 
     for row_idx, parsed in enumerate(raw_rows):
         errors = []
         warnings = []
+        excel_row = row_idx + 2  # +1 header, +1 para 1-based
+
+        def add_warning(code, message):
+            warnings.append(message)
+            warning_rows[code].append(excel_row)
 
         # No. Médico
         no_medico, number_error = parsed_numbers[row_idx]
@@ -388,7 +425,10 @@ def parse_and_validate(file) -> dict:
                         f"Ya existe un médico sin usuario con el nombre '{nombre_completo}'."
                     )
             if not parsed["cedulaRaw"]:
-                warnings.append("Sin Usuario y sin Cédula Profesional: el médico queda sin cédula.")
+                add_warning(
+                    WARNING_SIN_CEDULA,
+                    "Sin Usuario y sin Cédula Profesional: el médico queda sin cédula.",
+                )
         else:
             usuario_obj = usuarios_by_username.get(parsed["usuario"])
             if usuario_obj is None:
@@ -405,9 +445,10 @@ def parse_and_validate(file) -> dict:
                     f"El usuario '{parsed['usuario']}' no tiene tipo de personal Médico."
                 )
             if parsed["paternoRaw"] or parsed["maternoRaw"] or parsed["nombreRaw"]:
-                warnings.append(
+                add_warning(
+                    WARNING_NOMBRE_IGNORADO,
                     "Con Usuario, los apellidos y el nombre del Excel se ignoran "
-                    "(se toman del usuario)."
+                    "(se toman del usuario).",
                 )
             if (
                 usuario_obj is not None
@@ -415,9 +456,10 @@ def parse_and_validate(file) -> dict:
                 and cedula_key(parsed["cedulaRaw"])
                 in cedulas_by_usuario.get(usuario_obj.id_usuario, set())
             ):
-                warnings.append(
+                add_warning(
+                    WARNING_CEDULA_YA_REGISTRADA,
                     f"El usuario ya tiene registrada la cédula '{parsed['cedulaRaw']}': "
-                    "no se duplica."
+                    "no se duplica.",
                 )
 
         # Cédula (identificador: no se trunca)
@@ -429,8 +471,9 @@ def parse_and_validate(file) -> dict:
         # Escuela: solo sin usuario (con usuario manda DetUsuario.id_escuela).
         escuela_id = None
         if parsed["escuelaRaw"] and parsed["usuario"]:
-            warnings.append(
-                "Con Usuario, la Escuela del Excel se ignora (se toma del usuario)."
+            add_warning(
+                WARNING_ESCUELA_IGNORADA,
+                "Con Usuario, la Escuela del Excel se ignora (se toma del usuario).",
             )
         elif parsed["escuelaRaw"]:
             escuela_id = _resolve_catalog_id(parsed["escuelaRaw"], escuelas_ids, "Escuela", errors)
@@ -440,9 +483,10 @@ def parse_and_validate(file) -> dict:
         fecha_nac = None
         if parsed["usuario"]:
             if parsed["sexoRaw"] or parsed["fechaNacRaw"]:
-                warnings.append(
+                add_warning(
+                    WARNING_SEXO_FECHA_IGNORADOS,
                     "Con Usuario, Sexo y Fecha de Nacimiento del Excel se ignoran "
-                    "(se toman del usuario)."
+                    "(se toman del usuario).",
                 )
         else:
             if parsed["sexoRaw"]:
@@ -504,7 +548,7 @@ def parse_and_validate(file) -> dict:
 
         result_rows.append(
             {
-                "row": row_idx + 2,  # +1 header, +1 para 1-based
+                "row": excel_row,
                 "data": row_data,
                 "errors": errors,
                 "warnings": warnings,
@@ -519,8 +563,27 @@ def parse_and_validate(file) -> dict:
         "total_records": total_records,
         "total_errores": total_errores,
         "total_warnings": total_warnings,
+        "warning_summary": build_warning_summary(warning_rows),
         "rows": result_rows,
     }
+
+
+def build_warning_summary(warning_rows: dict) -> list:
+    """
+    Resumen general de warnings agrupado por tipo (solo los tipos presentes),
+    en el orden de `WARNING_TYPES`: `[{code, description, count, rows}]`.
+    `rows` son los números de fila del Excel afectados.
+    """
+    return [
+        {
+            "code": code,
+            "description": description,
+            "count": len(warning_rows[code]),
+            "rows": warning_rows[code],
+        }
+        for code, description in WARNING_TYPES.items()
+        if warning_rows.get(code)
+    ]
 
 
 def _read_dataframe(file) -> pd.DataFrame:

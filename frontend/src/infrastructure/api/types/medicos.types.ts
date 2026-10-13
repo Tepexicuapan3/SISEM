@@ -348,10 +348,29 @@ export interface MedicoImportRow {
  * A diferencia del import de usuarios, médicos no envía correos -- no hay
  * campo `emailFailures` en esta response.
  */
+export type MedicoImportWarningCode =
+  | "SIN_CEDULA"
+  | "NOMBRE_IGNORADO"
+  | "ESCUELA_IGNORADA"
+  | "SEXO_FECHA_IGNORADOS"
+  | "CEDULA_YA_REGISTRADA";
+
+/**
+ * Resumen general de advertencias agrupado por tipo (solo los tipos
+ * presentes). `rows` son los números de fila del Excel afectados.
+ */
+export interface MedicoImportWarningSummaryItem {
+  code: MedicoImportWarningCode;
+  description: string;
+  count: number;
+  rows: number[];
+}
+
 export interface MedicoImportResult {
   totalRecords: number;
   totalErrores: number;
   totalWarnings: number;
+  warningSummary: MedicoImportWarningSummaryItem[];
   inserted: number;
   rows: MedicoImportRow[];
 }

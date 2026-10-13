@@ -17,6 +17,7 @@ const RESULT: MedicoImportResult = {
   totalRecords: 2,
   totalErrores: 0,
   totalWarnings: 0,
+  warningSummary: [],
   inserted: 2,
   rows: [],
 };

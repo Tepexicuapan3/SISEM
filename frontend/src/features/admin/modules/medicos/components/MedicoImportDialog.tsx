@@ -5,7 +5,6 @@ import {
   Download,
   FileSpreadsheet,
   RotateCcw,
-  TriangleAlert,
   Upload,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@shared/ui/alert";
@@ -32,6 +31,7 @@ import { useMedicoImportPreview } from "@features/admin/modules/medicos/hooks/us
 import { useMedicoImportConfirm } from "@features/admin/modules/medicos/hooks/useMedicoImportConfirm";
 import { useMedicoImportTemplateDownload } from "@features/admin/modules/medicos/hooks/useMedicoImportTemplateDownload";
 import { buildMedicoImportPreviewColumns } from "@features/admin/modules/medicos/components/buildMedicoImportPreviewColumns";
+import { MedicoImportWarningSummary } from "@features/admin/modules/medicos/components/MedicoImportWarningSummary";
 // Reusa el resolver generico de codigo->mensaje ya usado por el import de
 // usuarios (funcion pura y exportada, no un helper privado de
 // `users.api.ts` -- no aplica el criterio de "duplicar" de ese archivo).
@@ -357,22 +357,10 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   </Alert>
                 )}
 
-                {previewResult.totalWarnings > 0 ? (
-                  <Alert variant="warning">
-                    <TriangleAlert className="size-4" />
-                    <AlertTitle>
-                      {previewResult.totalWarnings} fila
-                      {previewResult.totalWarnings !== 1 ? "s" : ""} con
-                      advertencia
-                    </AlertTitle>
-                    <AlertDescription>
-                      Las advertencias no bloquean la importación. Avisan de
-                      datos del Excel que no se guardan (se toman del usuario
-                      o la cédula ya estaba registrada) o de médicos que
-                      quedan sin cédula.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
+                <MedicoImportWarningSummary
+                  totalWarnings={previewResult.totalWarnings}
+                  summary={previewResult.warningSummary ?? []}
+                />
 
                 <div className="grid gap-3 sm:grid-cols-4">
                   <div className="rounded-xl border border-line-struct bg-subtle/40 px-4 py-3">
@@ -429,9 +417,7 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   getRowClassName={(row) =>
                     row.errors.length > 0
                       ? "bg-status-critical/5 hover:bg-status-critical/10"
-                      : row.warnings.length > 0
-                        ? "bg-status-alert/5 hover:bg-status-alert/10"
-                        : undefined
+                      : undefined
                   }
                   emptyTitle="Sin filas para mostrar"
                   emptyDescription="La vista previa no contiene filas procesadas."

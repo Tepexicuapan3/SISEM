@@ -66,6 +66,7 @@ class PreviewMedicosImportUseCase:
             "totalRecords": result["total_records"],
             "totalErrores": result["total_errores"],
             "totalWarnings": result["total_warnings"],
+            "warningSummary": result["warning_summary"],
             "inserted": 0,
             "rows": result["rows"],
         }
@@ -159,6 +160,7 @@ class ConfirmMedicosImportUseCase:
             "totalRecords": result["total_records"],
             "totalErrores": 0,
             "totalWarnings": result["total_warnings"],
+            "warningSummary": result["warning_summary"],
             "inserted": inserted,
             "rows": result["rows"],
             "has_errors": False,
@@ -170,6 +172,7 @@ class ConfirmMedicosImportUseCase:
             "totalRecords": result["total_records"],
             "totalErrores": result["total_errores"],
             "totalWarnings": result["total_warnings"],
+            "warningSummary": result["warning_summary"],
             "inserted": 0,
             "rows": result["rows"],
             "has_errors": True,

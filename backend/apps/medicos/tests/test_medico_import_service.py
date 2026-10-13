@@ -185,6 +185,25 @@ class MedicoImportParseTests(TestCase):
         self.assertEqual(result["total_errores"], 0)
         self.assertEqual(result["total_warnings"], 1)
 
+    def test_resumen_de_warnings_agrupado_por_tipo(self):
+        result = self._parse(
+            row(pat="López", nom="Juan"),                       # fila 2: sin cédula
+            row(pat="Pérez", nom="Ana"),                        # fila 3: sin cédula
+            row(usuario="dr_uno", pat="X", nom="Y", ced="999"),  # fila 4: nombre ignorado
+        )
+
+        self.assertEqual(result["total_warnings"], 3)
+        self.assertEqual(
+            [(s["code"], s["count"], s["rows"]) for s in result["warning_summary"]],
+            [("SIN_CEDULA", 2, [2, 3]), ("NOMBRE_IGNORADO", 1, [4])],
+        )
+        # Descripción genérica (sin datos de la fila).
+        self.assertIn("sin Cédula Profesional", result["warning_summary"][0]["description"])
+
+    def test_resumen_de_warnings_vacio_sin_avisos(self):
+        result = self._parse(row(pat="López", nom="Juan", ced="1234567"))
+        self.assertEqual(result["warning_summary"], [])
+
     def test_cedula_de_mas_de_30_caracteres_es_error(self):
         result = self._parse(row(pat="A", nom="B", ced="9" * 31))
         self.assertEqual(result["total_errores"], 1)

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen, waitFor } from "@/test/utils";
+import { render, screen, waitFor, within } from "@/test/utils";
 import { toast } from "sonner";
 import { MedicoImportDialog } from "@features/admin/modules/medicos/components/MedicoImportDialog";
 import { useMedicoImportPreview } from "@features/admin/modules/medicos/hooks/useMedicoImportPreview";
@@ -68,6 +68,7 @@ const buildResult = (
   totalRecords: 2,
   totalErrores: 0,
   totalWarnings: 0,
+  warningSummary: [],
   inserted: 0,
   rows: [
     {
@@ -240,26 +241,33 @@ describe("MedicoImportDialog UI", () => {
     ).toBeDisabled();
   });
 
-  it("shows warnings distinct from errors and keeps confirm enabled", async () => {
+  it("shows a warning summary grouped by type instead of per-row warnings", async () => {
     const user = userEvent.setup();
+    const sinCedula = "Sin Usuario y sin Cédula Profesional: el médico queda sin cédula.";
     previewMutateAsync.mockResolvedValue(
       buildResult({
         totalErrores: 0,
-        totalWarnings: 1,
+        totalWarnings: 3,
+        warningSummary: [
+          {
+            code: "SIN_CEDULA",
+            description: "Médicos sin usuario y sin Cédula Profesional: se crean sin cédula.",
+            count: 2,
+            rows: [2, 3],
+          },
+          {
+            code: "NOMBRE_IGNORADO",
+            description: "Médicos con usuario que traen nombre o apellidos en el Excel: se ignoran (se toman del usuario).",
+            count: 1,
+            rows: [4],
+          },
+        ],
         rows: [
           {
             row: 2,
-            data: buildData({
-              noMedico: 35,
-              paterno: "López",
-              materno: "Ramírez",
-              nombre: "Juan",
-              especialidad: "999",
-            }),
+            data: buildData({ noMedico: 35, paterno: "López", materno: "Ramírez", nombre: "Juan" }),
             errors: [],
-            warnings: [
-              "Especialidad con ID 999 no existe o está inactiva: el médico se crea sin especialidad.",
-            ],
+            warnings: [sinCedula],
           },
         ],
       }),
@@ -270,17 +278,38 @@ describe("MedicoImportDialog UI", () => {
     await user.upload(screen.getByLabelText(/archivo excel/i), createFile());
     await user.click(screen.getByRole("button", { name: /validar archivo/i }));
 
-    expect(
-      await screen.findByText(
-        "Especialidad con ID 999 no existe o está inactiva: el médico se crea sin especialidad.",
-      ),
-    ).toBeVisible();
+    const summary = await screen.findByRole("list", { name: /resumen de advertencias/i });
+    expect(within(summary).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(summary).getByText(/se crean sin cédula/i)).toBeVisible();
+    expect(within(summary).getByText("Filas: 2, 3")).toBeVisible();
+    expect(within(summary).getByText("Fila: 4")).toBeVisible();
+    expect(screen.getByText(/3 filas con advertencia/i)).toBeVisible();
+    // El detalle por fila ya no se muestra en la tabla.
+    expect(screen.queryByText(sinCedula)).not.toBeInTheDocument();
     expect(screen.getByText("Juan López Ramírez")).toBeVisible();
-    expect(screen.getByText("35")).toBeVisible();
-    expect(screen.getByText(/1 fila con advertencia/i)).toBeVisible();
     expect(
       screen.getByRole("button", { name: /confirmar e importar/i }),
     ).toBeEnabled();
+  });
+
+  it("summarizes long row lists with 'y N más'", async () => {
+    const user = userEvent.setup();
+    const rows = Array.from({ length: 30 }, (_, i) => i + 2);
+    previewMutateAsync.mockResolvedValue(
+      buildResult({
+        totalWarnings: 30,
+        warningSummary: [
+          { code: "SIN_CEDULA", description: "Sin cédula.", count: 30, rows },
+        ],
+      }),
+    );
+
+    render(<MedicoImportDialog open onOpenChange={onOpenChange} />);
+
+    await user.upload(screen.getByLabelText(/archivo excel/i), createFile());
+    await user.click(screen.getByRole("button", { name: /validar archivo/i }));
+
+    expect(await screen.findByText(/y 5 más$/)).toBeVisible();
   });
 
   it("blocks confirm when there are errors even if there are also warnings", async () => {
