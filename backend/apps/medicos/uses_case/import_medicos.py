@@ -20,6 +20,7 @@ from django.db import connection, transaction
 from apps.authentication.models import DetUsuarioCedula, SyUsuario
 from apps.medicos.models import CatMedico, RelMedicoEspecialidad
 from apps.medicos.repositories.medico_repository import MedicoRepository
+from apps.medicos.identity import cedula_key
 from apps.medicos.services.medico_import_service import build_template, parse_and_validate
 
 # Fases reportadas a `progress(phase, done, total)` -- mismos valores que
@@ -237,14 +238,20 @@ class ConfirmMedicosImportUseCase:
                 es_principal=True,
             )
 
-        # Con usuario: la cédula va a DetUsuarioCedula SOLO si el usuario no
-        # tiene ninguna; nunca se sobrescribe una existente.
+        # Con usuario: la cédula se AGREGA a DetUsuarioCedula (un usuario
+        # admite varias). Principal solo si no tenía ninguna; si ya tenía, va
+        # como adicional con el siguiente `orden`. Nunca se sobrescribe ni se
+        # duplica un número ya registrado (el preview lo avisa como warning).
         if usuario and data["cedulaProfesional"]:
-            if not DetUsuarioCedula.objects.filter(id_usuario=usuario).exists():
+            existentes = list(
+                DetUsuarioCedula.objects.filter(id_usuario=usuario).values_list("numero", "orden")
+            )
+            numero_key = cedula_key(data["cedulaProfesional"])
+            if numero_key not in {cedula_key(numero) for numero, _ in existentes}:
                 DetUsuarioCedula.objects.create(
                     id_usuario=usuario,
                     numero=data["cedulaProfesional"],
                     tipo="PROFESIONAL",
-                    es_principal=True,
-                    orden=1,
+                    es_principal=not existentes,
+                    orden=max((orden for _, orden in existentes), default=0) + 1,
                 )

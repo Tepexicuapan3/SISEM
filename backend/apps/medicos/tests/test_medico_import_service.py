@@ -233,12 +233,20 @@ class MedicoImportParseTests(TestCase):
         result = self._parse(row(pat="A", nom="B", ced="1", esp=f"{esp.id}.0"))
         self.assertEqual(result["rows"][0]["data"]["especialidadId"], esp.id)
 
-    def test_especialidad_id_inexistente_es_warning(self):
+    def test_especialidad_id_inexistente_es_error(self):
         result = self._parse(row(pat="A", nom="B", ced="1", esp="999999"))
         r = result["rows"][0]
-        self.assertEqual(r["errors"], [])
+        self.assertEqual(r["warnings"], [])
         self.assertIsNone(r["data"]["especialidadId"])
-        self.assertIn("ID 999999", r["warnings"][0])
+        self.assertEqual(
+            r["errors"], ["Especialidad con ID 999999 no existe o está inactiva en el catálogo."]
+        )
+        self.assertEqual(result["total_errores"], 1)
+
+    def test_especialidad_inactiva_es_error(self):
+        esp = Especialidades.objects.create(name="Inactiva", is_active=False)
+        r = self._parse(row(pat="A", nom="B", ced="1", esp=str(esp.id)))["rows"][0]
+        self.assertIn(f"ID {esp.id}", r["errors"][0])
 
     # ── Escuela (solo sin usuario) ──────────────────────────────────────────
 
@@ -251,11 +259,18 @@ class MedicoImportParseTests(TestCase):
         self.assertEqual([r["data"]["escuelaId"] for r in result["rows"]], [esc.id] * 2)
         self.assertEqual(result["total_warnings"], 0)
 
-    def test_escuela_id_inexistente_es_warning(self):
+    def test_escuela_id_inexistente_es_error(self):
         r = self._parse(row(pat="A", nom="B", ced="1", esc="999999"))["rows"][0]
-        self.assertEqual(r["errors"], [])
+        self.assertEqual(r["warnings"], [])
         self.assertIsNone(r["data"]["escuelaId"])
-        self.assertIn("ID 999999", r["warnings"][0])
+        self.assertEqual(
+            r["errors"], ["Escuela con ID 999999 no existe o está inactiva en el catálogo."]
+        )
+
+    def test_escuela_inactiva_es_error(self):
+        esc = Escuelas.objects.create(code="OFF", name="Escuela Inactiva", is_active=False)
+        r = self._parse(row(pat="A", nom="B", ced="1", esc=str(esc.id)))["rows"][0]
+        self.assertIn(f"ID {esc.id}", r["errors"][0])
 
     def test_escuela_por_nombre_o_siglas_es_error(self):
         Escuelas.objects.create(code="UNAM", name="Universidad Nacional")

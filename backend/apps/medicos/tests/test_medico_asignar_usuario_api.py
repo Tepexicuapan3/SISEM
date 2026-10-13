@@ -130,7 +130,19 @@ class MedicoAsignarUsuarioApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["descartados"], {})
 
-    def test_no_toca_cedulas_si_el_usuario_ya_tiene(self):
+    def test_no_duplica_cedula_que_el_usuario_ya_tiene(self):
+        user = self._create_user("dr_misma_cedula", self.tipo_medico)
+        DetUsuarioCedula.objects.create(
+            id_usuario=user, numero="ced-1", tipo="PROFESIONAL", es_principal=True, orden=1,
+        )
+
+        response = self._post(self.medico.id, user.id_usuario)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(DetUsuarioCedula.objects.filter(id_usuario=user).count(), 1)
+        self.assertNotIn("cedulaProfesional", response.data["descartados"])
+
+    def test_agrega_cedula_como_adicional_si_el_usuario_ya_tiene(self):
         user = self._create_user("dr_con_cedula", self.tipo_medico)
         DetUsuarioCedula.objects.create(
             id_usuario=user, numero="PROPIA-9", tipo="ESPECIALIDAD", es_principal=True, orden=1,
@@ -139,14 +151,17 @@ class MedicoAsignarUsuarioApiTests(APITestCase):
         response = self._post(self.medico.id, user.id_usuario)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        # La existente no se toca; la del médico se agrega como adicional.
         self.assertEqual(
-            list(DetUsuarioCedula.objects.filter(id_usuario=user).values_list("numero", "tipo")),
-            [("PROPIA-9", "ESPECIALIDAD")],
+            list(
+                DetUsuarioCedula.objects.filter(id_usuario=user)
+                .order_by("orden")
+                .values_list("numero", "tipo", "es_principal", "orden")
+            ),
+            [("PROPIA-9", "ESPECIALIDAD", True, 1), ("CED-1", "PROFESIONAL", False, 2)],
         )
-        # El nombre del usuario (su username) tambien difiere y se conserva.
-        self.assertEqual(
-            response.data["descartados"], {"nombre": "JUAN", "cedulaProfesional": "CED-1"}
-        )
+        # La cédula ya no es "descartado"; el nombre (difiere) sí se conserva.
+        self.assertEqual(response.data["descartados"], {"nombre": "JUAN"})
         self.medico.refresh_from_db()
         # Igual se limpia: el CheckConstraint exige que no queden datos propios.
         self.assertIsNone(self.medico.cedula_profesional)

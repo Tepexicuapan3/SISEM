@@ -3,7 +3,11 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.authentication.models import DetUsuario, DetUsuarioCedula
-from apps.medicos.identity import annotate_display_name, invalidate_identity_cache
+from apps.medicos.identity import (
+    annotate_display_name,
+    cedula_key,
+    invalidate_identity_cache,
+)
 from apps.medicos.models import CatMedico
 from apps.medicos.repositories.consultorio_repository import ConsultorioRepository
 from apps.medicos.repositories.medico_repository import MedicoRepository
@@ -107,7 +111,8 @@ def assign_usuario(medico_id, usuario_id, *, actor_id):
     """Asigna un usuario a un médico que no tiene (R9, `medicos-id-no-medico`).
 
     Atómico, con `select_for_update` sobre el CatMedico. El DetUsuario manda
-    (D8): sus nombres y su cédula NUNCA se pisan, solo se llenan los vacíos.
+    (D8): sus nombres NUNCA se pisan, solo se llenan los vacíos. La cédula
+    del médico se AGREGA a las del usuario (sin pisar ni duplicar).
     Se mueven los datos personales del CatMedico al usuario y se limpian en el
     MISMO save que setea `id_usuario` (el CheckConstraint exige que un médico
     con usuario no tenga datos propios). `CatMedico.id` no cambia.
@@ -155,17 +160,24 @@ def assign_usuario(medico_id, usuario_id, *, actor_id):
         if det_changed:
             det.save(update_fields=det_changed)
 
-        # Cédula: solo si el usuario NO tiene ninguna (nunca se pisa ni se agrega).
+        # Cédula: se AGREGA a las del usuario (admite varias), misma regla que
+        # el import masivo. Principal solo si no tenía ninguna; si ya tenía, va
+        # como adicional con el siguiente `orden`. Nunca se pisa una existente
+        # y no se duplica un número que ya tiene (en ese caso no se pierde
+        # nada: el usuario ya la tiene, por eso tampoco es "descartado").
         if medico.cedula_profesional:
-            if DetUsuarioCedula.objects.filter(id_usuario=usuario).exists():
-                descartados["cedulaProfesional"] = medico.cedula_profesional
-            else:
+            existentes = list(
+                DetUsuarioCedula.objects.filter(id_usuario=usuario).values_list("numero", "orden")
+            )
+            if cedula_key(medico.cedula_profesional) not in {
+                cedula_key(numero) for numero, _ in existentes
+            }:
                 DetUsuarioCedula.objects.create(
                     id_usuario=usuario,
                     numero=medico.cedula_profesional,
                     tipo="PROFESIONAL",
-                    es_principal=True,
-                    orden=1,
+                    es_principal=not existentes,
+                    orden=max((orden for _, orden in existentes), default=0) + 1,
                 )
 
         # Escuela, sexo y fecha de nacimiento: misma regla que los nombres,

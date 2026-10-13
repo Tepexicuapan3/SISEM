@@ -41,6 +41,33 @@ IMPORT_PERMISSION = "admin:gestion:medicos:create"
 # sin hasheo ni correos tardan del orden de minutos.
 ACTIVE_JOB_WINDOW = timedelta(hours=1)
 
+# Un job que sigue PENDING (el worker nunca lo tomó) pasado este tiempo se da
+# por perdido: worker apagado o sin la tarea registrada (Celery no se recarga
+# solo al cambiar código). Se cierra en ERROR para no bloquear una hora.
+PENDING_STALE_AFTER = timedelta(minutes=5)
+WORKER_UNAVAILABLE_MESSAGE = (
+    "El servidor no tomó la importación (worker de Celery apagado o sin la "
+    "tarea registrada). No se creó ningún médico. Reinicia el worker y vuelve "
+    "a intentarlo."
+)
+
+
+def _expire_stale_pending(**filters) -> int:
+    """Cierra en ERROR los jobs PENDING que el worker nunca tomó."""
+    return MedicoImportJob.objects.filter(
+        status=MedicoImportJob.Status.PENDING,
+        fch_inicio__isnull=True,
+        fch_alta__lt=timezone.now() - PENDING_STALE_AFTER,
+        **filters,
+    ).update(
+        status=MedicoImportJob.Status.ERROR,
+        phase=MedicoImportJob.Phase.DONE,
+        error_code="WORKER_NO_DISPONIBLE",
+        error_message=WORKER_UNAVAILABLE_MESSAGE,
+        fch_fin=timezone.now(),
+        file_content=None,
+    )
+
 
 class MedicoImportTemplateView(APIView):
     authentication_classes = []
@@ -149,6 +176,7 @@ class MedicoImportConfirmView(APIView):
         # Un solo import a la vez (además del lock de `cat_medicos` dentro de
         # la tarea). Ventana acotada para que un job huérfano (worker muerto a
         # mitad) no bloquee los imports para siempre.
+        _expire_stale_pending()
         active_since = timezone.now() - ACTIVE_JOB_WINDOW
         active_job = MedicoImportJob.objects.filter(
             status__in=(MedicoImportJob.Status.PENDING, MedicoImportJob.Status.RUNNING),
@@ -192,6 +220,9 @@ class MedicoImportJobStatusView(APIView):
         if auth_error:
             return auth_error
 
+        # El polling también cierra el job si el worker nunca lo tomó: así el
+        # diálogo deja de esperar y muestra el error.
+        _expire_stale_pending(id=job_id)
         job = MedicoImportJob.objects.defer("file_content").filter(id=job_id).first()
         if job is None:
             return error_response(

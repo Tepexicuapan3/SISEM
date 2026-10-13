@@ -63,7 +63,7 @@ describe("MedicoAsignarUsuarioDialog", () => {
   });
 
   it("informa los datos que el usuario ya tenía (descartados)", async () => {
-    mutateAsync.mockResolvedValue({ descartados: { nombre: "JUAN", cedulaProfesional: "C1" } });
+    mutateAsync.mockResolvedValue({ descartados: { nombre: "JUAN", escuelaId: 3, sexo: "M" } });
     render(<MedicoAsignarUsuarioDialog medicoId={512} open onOpenChange={vi.fn()} />);
 
     await userEvent.click(screen.getByText("elegir usuario 77"));
@@ -71,7 +71,7 @@ describe("MedicoAsignarUsuarioDialog", () => {
 
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Usuario asignado al médico.", {
-        description: expect.stringContaining("nombre, cédula profesional"),
+        description: expect.stringContaining("nombre, escuela, sexo"),
       }),
     );
   });

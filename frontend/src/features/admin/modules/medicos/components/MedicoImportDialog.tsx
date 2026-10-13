@@ -263,8 +263,12 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   vacío, <strong>Apellido Paterno</strong> y{" "}
                   <strong>Nombre(s)</strong> son obligatorios y conviene
                   capturar Cédula Profesional, Escuela, Sexo y Fecha de
-                  Nacimiento (con usuario, esos datos del Excel se ignoran: se
-                  toman del usuario).
+                  Nacimiento (con usuario, Escuela, Sexo y Fecha de Nacimiento
+                  del Excel se ignoran: se toman del usuario). La{" "}
+                  <strong>Cédula Profesional</strong> con usuario se{" "}
+                  <strong>agrega</strong> a sus cédulas (principal si no tenía
+                  ninguna, adicional si ya tenía; no se duplica si ya la
+                  tiene).
                 </p>
                 <p>
                   Sexo acepta M, F u O (o Masculino, Femenino, Otro). Fecha de
@@ -273,10 +277,9 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                 </p>
                 <p>
                   <strong>Escuela</strong> y <strong>Especialidad</strong> se
-                  capturan <strong>solo con el ID del catálogo</strong> (un
-                  nombre o texto es error). Un ID que no existe genera una{" "}
-                  <strong>advertencia</strong>: no bloquea la importación, pero
-                  el médico se crea sin esa escuela / especialidad.
+                  capturan <strong>solo con el ID del catálogo</strong>. Un
+                  nombre o texto, o un ID que no existe o está inactivo, es{" "}
+                  <strong>error</strong> y bloquea la importación.
                 </p>
                 <p>
                   Estatus del Médico acepta Activo (A), Vacaciones,
@@ -363,8 +366,10 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                       advertencia
                     </AlertTitle>
                     <AlertDescription>
-                      Las advertencias no bloquean la importación: el médico
-                      se crea sin el dato que no se pudo resolver.
+                      Las advertencias no bloquean la importación. Avisan de
+                      datos del Excel que no se guardan (se toman del usuario
+                      o la cédula ya estaba registrada) o de médicos que
+                      quedan sin cédula.
                     </AlertDescription>
                   </Alert>
                 ) : null}

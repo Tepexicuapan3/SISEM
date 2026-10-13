@@ -23,7 +23,9 @@ const DESCARTADOS_LABELS: Record<keyof AsignarUsuarioDescartados, string> = {
   nombre: "nombre",
   paterno: "apellido paterno",
   materno: "apellido materno",
-  cedulaProfesional: "cédula profesional",
+  escuelaId: "escuela",
+  sexo: "sexo",
+  fechaNac: "fecha de nacimiento",
 };
 
 interface Props {
@@ -46,7 +48,7 @@ export function MedicoAsignarUsuarioDialog({ medicoId, open, onOpenChange }: Pro
     try {
       const result = await asignar.mutateAsync({ usuarioId });
       const descartados = (Object.keys(result.descartados ?? {}) as (keyof AsignarUsuarioDescartados)[])
-        .map((k) => DESCARTADOS_LABELS[k]);
+        .map((k) => DESCARTADOS_LABELS[k] ?? k);
       toast.success("Usuario asignado al médico.", {
         description: descartados.length
           ? `El usuario ya tenía: ${descartados.join(", ")}. Se conservó el dato del usuario.`
@@ -68,8 +70,9 @@ export function MedicoAsignarUsuarioDialog({ medicoId, open, onOpenChange }: Pro
             <UserPlus className="size-4" /> Asignar usuario
           </DialogTitle>
           <DialogDescription className="text-xs text-txt-muted">
-            Los nombres y la cédula del médico pasan al usuario solo si este no los tiene;
-            nunca se sobrescriben datos del usuario.
+            Los nombres, escuela, sexo y fecha de nacimiento del médico pasan al usuario
+            solo si este no los tiene; nunca se sobrescriben datos del usuario. La cédula
+            del médico se agrega a las cédulas del usuario (si no la tenía ya).
           </DialogDescription>
         </DialogHeader>
 

@@ -204,6 +204,16 @@ def cedula_profesional(medico) -> str | None:
     return None
 
 
+def cedula_key(value) -> str:
+    """
+    Clave para comparar números de cédula: mayúsculas, sin espacios
+    ("ABC 123" == "abc123"). Única regla compartida por el import masivo
+    (`medico_import_service` / `import_medicos`) y por `assign_usuario`
+    para decidir si una cédula ya está registrada y no duplicarla.
+    """
+    return "".join(str(value or "").split()).upper()
+
+
 def display_name_expr(prefix: str = ""):
     """
     Equivalente en SQL de `display_name` (sin el placeholder "Médico #id"),

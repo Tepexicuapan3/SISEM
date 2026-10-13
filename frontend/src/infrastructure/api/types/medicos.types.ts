@@ -185,12 +185,18 @@ export interface AsignarUsuarioRequest {
   usuarioId: number;
 }
 
-/** Datos del CatMedico que NO se movieron porque el usuario ya tenía un valor propio. */
+/**
+ * Datos del CatMedico que NO se movieron porque el usuario ya tenía un valor
+ * propio distinto. La cédula nunca aparece aquí: siempre se agrega a las
+ * cédulas del usuario (o ya la tenía).
+ */
 export interface AsignarUsuarioDescartados {
   nombre?: string;
   paterno?: string;
   materno?: string;
-  cedulaProfesional?: string;
+  escuelaId?: number;
+  sexo?: string;
+  fechaNac?: string;
 }
 
 export interface AsignarUsuarioResponse extends MedicoListItem {

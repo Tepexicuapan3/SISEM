@@ -8,10 +8,10 @@ nada -- ni preview ni confirm llaman a este módulo para escribir; ver
 sobre el MISMO archivo en ambos pasos (mecanismo stateless, sin token/cache).
 
 Cambio `medicos-id-no-medico`: "No. Médico" (opcional) ES `CatMedico.id`.
-Errores (bloquean la fila) = formato/identidad; warnings (NO bloquean) =
-IDs de catálogo inexistentes (Especialidad y Escuela, que se capturan SOLO
-por ID: un valor no numérico sí es error) y cédula faltante
-sin usuario (decisión D7).
+Errores (bloquean la fila) = formato/identidad e IDs de catálogo
+(Especialidad y Escuela se capturan SOLO por ID; no numérico, inexistente o
+inactivo es error). Warnings (NO bloquean) = cédula faltante sin usuario
+(decisión D7) y datos del Excel que se ignoran por venir el Usuario.
 """
 
 import io
@@ -25,8 +25,9 @@ import pandas as pd
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from apps.authentication.models import SyUsuario
+from apps.authentication.models import DetUsuarioCedula, SyUsuario
 from apps.catalogos.models import Escuelas, Especialidades
+from apps.medicos.identity import cedula_key
 from apps.medicos.models import CatMedico, ESTATUS_MEDICO
 from apps.medicos.repositories.medico_repository import MedicoRepository
 
@@ -198,11 +199,13 @@ def _parse_fecha_nac(text: str) -> date:
     raise ValueError(text)
 
 
-def _resolve_catalog_id(raw: str, valid_ids: set, label: str, noun: str, errors, warnings):
+def _resolve_catalog_id(raw: str, valid_ids: set, label: str, errors):
     """
-    Resuelve una FK a catálogo capturada por ID. Formato no numérico = ERROR
-    (bloquea la fila); ID inexistente o inactivo = WARNING (D7: el médico se
-    crea sin ese dato). Devuelve el id resuelto o None.
+    Resuelve una FK a catálogo capturada por ID. Formato no numérico o ID
+    inexistente/inactivo = ERROR (bloquea la fila). Antes el ID inexistente
+    era warning y el médico se creaba sin ese dato: un ID mal capturado
+    pasaba en silencio, así que ahora se exige corregir el archivo.
+    Devuelve el id resuelto o None.
     """
     if not _NO_MEDICO_RE.match(raw):
         errors.append(f"{label} '{raw}' no es válida: captura el ID numérico del catálogo.")
@@ -210,8 +213,8 @@ def _resolve_catalog_id(raw: str, valid_ids: set, label: str, noun: str, errors,
     catalog_id = int(float(raw))
     if catalog_id in valid_ids:
         return catalog_id
-    warnings.append(
-        f"{label} con ID {catalog_id} no existe o está inactiva: el médico se crea sin {noun}."
+    errors.append(
+        f"{label} con ID {catalog_id} no existe o está inactiva en el catálogo."
     )
     return None
 
@@ -301,6 +304,14 @@ def parse_and_validate(file) -> dict:
     for name in usernames:
         usuario_seen[name] = usuario_seen.get(name, 0) + 1
 
+    # Cédulas ya registradas por usuario: la del Excel se AGREGA (un usuario
+    # admite varias), salvo que ya tenga ese mismo número.
+    cedulas_by_usuario: dict = {}
+    for id_usuario, numero in DetUsuarioCedula.objects.filter(
+        id_usuario_id__in=[u.id_usuario for u in usuarios_by_username.values()]
+    ).values_list("id_usuario_id", "numero"):
+        cedulas_by_usuario.setdefault(id_usuario, set()).add(cedula_key(numero))
+
     # --- Duplicados por nombre (sin usuario y SIN No. Médico) ----------------
     # Con No. Médico la llave natural es el número; sin él, el nombre es la
     # única llave: evita que re-subir el archivo duplique las filas.
@@ -327,7 +338,7 @@ def parse_and_validate(file) -> dict:
         else set()
     )
 
-    # --- Catálogos (ID inexistente = warning) -------------------------------
+    # --- Catálogos (ID inexistente o inactivo = error) ----------------------
     # Especialidad y Escuela son FKs a catálogo: se capturan SOLO por ID.
     especialidades_ids: set = set()
     if any(r["especialidadRaw"] for r in raw_rows):
@@ -398,6 +409,16 @@ def parse_and_validate(file) -> dict:
                     "Con Usuario, los apellidos y el nombre del Excel se ignoran "
                     "(se toman del usuario)."
                 )
+            if (
+                usuario_obj is not None
+                and parsed["cedulaRaw"]
+                and cedula_key(parsed["cedulaRaw"])
+                in cedulas_by_usuario.get(usuario_obj.id_usuario, set())
+            ):
+                warnings.append(
+                    f"El usuario ya tiene registrada la cédula '{parsed['cedulaRaw']}': "
+                    "no se duplica."
+                )
 
         # Cédula (identificador: no se trunca)
         if len(parsed["cedulaRaw"]) > _CEDULA_MAX_LEN:
@@ -412,9 +433,7 @@ def parse_and_validate(file) -> dict:
                 "Con Usuario, la Escuela del Excel se ignora (se toma del usuario)."
             )
         elif parsed["escuelaRaw"]:
-            escuela_id = _resolve_catalog_id(
-                parsed["escuelaRaw"], escuelas_ids, "Escuela", "escuela", errors, warnings
-            )
+            escuela_id = _resolve_catalog_id(parsed["escuelaRaw"], escuelas_ids, "Escuela", errors)
 
         # Sexo / Fecha de Nacimiento: solo sin usuario (con usuario manda DetUsuario).
         sexo = None
@@ -443,8 +462,7 @@ def parse_and_validate(file) -> dict:
         especialidad_id = None
         if parsed["especialidadRaw"]:
             especialidad_id = _resolve_catalog_id(
-                parsed["especialidadRaw"], especialidades_ids, "Especialidad", "especialidad",
-                errors, warnings,
+                parsed["especialidadRaw"], especialidades_ids, "Especialidad", errors
             )
 
         estatus_value, estatus_valid = _resolve_choice(
@@ -467,7 +485,8 @@ def parse_and_validate(file) -> dict:
             "materno": (_truncate(parsed["maternoRaw"], _NOMBRE_PARTE_MAX_LEN) or None) if sin_usuario else None,
             "nombre": (_truncate(parsed["nombreRaw"], _NOMBRE_PARTE_MAX_LEN) or None) if sin_usuario else None,
             # La cédula se conserva siempre: sin usuario va a CatMedico; con
-            # usuario se crea en DetUsuarioCedula solo si no tiene ninguna.
+            # usuario se AGREGA a DetUsuarioCedula (principal si no tenía
+            # ninguna, adicional si ya tenía; nunca duplica el mismo número).
             "cedulaProfesional": parsed["cedulaRaw"] or None,
             "escuela": (parsed["escuelaRaw"] or None) if sin_usuario else None,
             "escuelaId": escuela_id,

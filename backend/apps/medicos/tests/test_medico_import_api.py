@@ -8,6 +8,7 @@ los 409 intermitentes del flujo HTTP de login contra Redis)."""
 
 import io
 import uuid
+from datetime import timedelta
 from unittest import skipUnless
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ from django.contrib.auth.hashers import make_password
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TransactionTestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -229,6 +231,45 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(response.data["details"]["jobId"], str(activo.id))
         task_mock.delay.assert_not_called()
 
+    def _job_pending_viejo(self, minutos=6, **fields):
+        job = MedicoImportJob.objects.create(file_name="viejo.xlsx", **fields)
+        MedicoImportJob.objects.filter(id=job.id).update(
+            fch_alta=timezone.now() - timedelta(minutes=minutos)
+        )
+        return job
+
+    def test_confirm_cierra_pending_que_el_worker_nunca_tomo_y_encola(self):
+        viejo = self._job_pending_viejo()
+        file = _medicos_xlsx_upload([row(no="7", pat="A", nom="B", ced="1")])
+
+        with patch("apps.medicos.views.medico_import_views.procesar_import_medicos"):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self._post_file(IMPORT_CONFIRM_URL, file)
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        viejo.refresh_from_db()
+        self.assertEqual(viejo.status, MedicoImportJob.Status.ERROR)
+        self.assertEqual(viejo.error_code, "WORKER_NO_DISPONIBLE")
+        self.assertIsNotNone(viejo.fch_fin)
+
+    def test_polling_cierra_pending_viejo_con_error_claro(self):
+        viejo = self._job_pending_viejo()
+
+        data = self.client.get(f"{IMPORT_JOB_URL}{viejo.id}").data
+
+        self.assertEqual(data["status"], "ERROR")
+        self.assertEqual(data["errorCode"], "WORKER_NO_DISPONIBLE")
+        self.assertIn("Reinicia el worker", data["errorMessage"])
+
+    def test_pending_reciente_y_running_viejo_no_se_cierran(self):
+        reciente = self._job_pending_viejo(minutos=1)
+        corriendo = self._job_pending_viejo(
+            status=MedicoImportJob.Status.RUNNING, fch_inicio=timezone.now(),
+        )
+
+        self.assertEqual(self.client.get(f"{IMPORT_JOB_URL}{reciente.id}").data["status"], "PENDING")
+        self.assertEqual(self.client.get(f"{IMPORT_JOB_URL}{corriendo.id}").data["status"], "RUNNING")
+
     def test_job_status_muestra_avance_vivo_de_la_cache(self):
         from apps.medicos.services import import_job_progress
 
@@ -408,22 +449,36 @@ class MedicoImportApiTests(APITestCase):
         self.assertTrue(rel_esp.es_principal)
 
     def test_confirm_con_warnings_no_bloquea_y_crea_sin_relaciones(self):
-        file = _medicos_xlsx_upload(
-            [row(no="6", pat="A", nom="B", esp="999999")]
-        )
+        # Sin cédula = warning: no bloquea.
+        file = _medicos_xlsx_upload([row(no="6", pat="A", nom="B")])
 
         job = self._confirm_and_wait(file)
 
         self.assertEqual(job["status"], "SUCCESS")
         self.assertEqual(job["result"]["inserted"], 1)
         self.assertEqual(job["result"]["totalWarnings"], 1)
-        # Sin cédula + especialidad inexistente.
-        self.assertEqual(len(job["result"]["rows"][0]["warnings"]), 2)
+        self.assertEqual(len(job["result"]["rows"][0]["warnings"]), 1)
         self.assertTrue(CatMedico.objects.filter(id=6).exists())
         self.assertFalse(RelMedicoCentro.objects.filter(medico_id=6).exists())
         self.assertFalse(RelMedicoEspecialidad.objects.filter(medico_id=6).exists())
 
-    def test_confirm_con_usuario_crea_cedula_principal_solo_si_no_tiene(self):
+    def test_confirm_bloquea_todo_si_especialidad_o_escuela_no_existen(self):
+        before = CatMedico.objects.count()
+        file = _medicos_xlsx_upload(
+            [
+                row(no="7", pat="A", nom="B", ced="1"),
+                row(no="8", pat="C", nom="D", ced="1", esp="999999"),
+                row(no="9", pat="E", nom="F", ced="1", esc="999999"),
+            ]
+        )
+
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "VALIDATION_FAILED")
+        self.assertEqual(job["result"]["totalErrores"], 2)
+        self.assertEqual(CatMedico.objects.count(), before)
+
+    def test_confirm_con_usuario_agrega_cedula_principal_o_adicional(self):
         sin_cedula = self._create_usuario("sin_cedula")
         con_cedula = self._create_usuario("con_cedula")
         DetUsuarioCedula.objects.create(
@@ -440,13 +495,36 @@ class MedicoImportApiTests(APITestCase):
         job = self._confirm_and_wait(file)
 
         self.assertEqual(job["status"], "SUCCESS")
+        # Sin cédulas previas: la del Excel queda como principal.
         creada = DetUsuarioCedula.objects.get(id_usuario=sin_cedula)
         self.assertEqual(creada.numero, "NUEVA-1")
         self.assertTrue(creada.es_principal)
+        # Con cédula previa: se AGREGA como adicional, la original no se toca.
         self.assertEqual(
-            list(DetUsuarioCedula.objects.filter(id_usuario=con_cedula).values_list("numero", flat=True)),
-            ["ORIGINAL"],
+            list(
+                DetUsuarioCedula.objects.filter(id_usuario=con_cedula)
+                .order_by("orden")
+                .values_list("numero", "es_principal", "orden")
+            ),
+            [("ORIGINAL", True, 1), ("NUEVA-2", False, 2)],
         )
+
+    def test_confirm_con_usuario_no_duplica_cedula_ya_registrada(self):
+        usuario = self._create_usuario("cedula_repetida")
+        DetUsuarioCedula.objects.create(
+            id_usuario=usuario, numero="ABC 123", tipo="PROFESIONAL",
+            es_principal=True, orden=1,
+        )
+        file = _medicos_xlsx_upload([row(usuario=usuario.usuario, ced="abc123")])
+
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "SUCCESS")
+        self.assertIn(
+            "El usuario ya tiene registrada la cédula 'abc123': no se duplica.",
+            job["result"]["rows"][0]["warnings"],
+        )
+        self.assertEqual(DetUsuarioCedula.objects.filter(id_usuario=usuario).count(), 1)
 
     def test_confirm_rolls_back_everything_if_one_row_fails_mid_transaction(self):
         usuarios = [self._create_usuario(f"rollback_medico_{i}") for i in range(5)]
