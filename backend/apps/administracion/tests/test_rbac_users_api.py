@@ -175,12 +175,34 @@ class RbacUsersApiTests(APITestCase):
             usr_asignacion=self.admin,
         )
 
+        # Dado de baja sin onboarding (ej. importado por Excel con Estado
+        # "Dado de baja"): es inactivo, NO pendiente.
+        inactive_user = SyUsuario.objects.create(
+            usuario="inactive_new_user",
+            correo="inactive.new@example.com",
+            clave_hash=make_password("Inactive_123456"),
+            est_activo=False,
+            cambiar_clave=True,
+            terminos_acept=False,
+        )
+        DetUsuario.objects.create(
+            id_usuario=inactive_user,
+            nombre="Inactive",
+            paterno="User",
+            materno="",
+        )
+
         response = self.client.get("/api/v1/users?status=pending")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         usernames = {item["username"] for item in response.data["items"]}
         self.assertIn("pending_user", usernames)
         self.assertNotIn("target_user", usernames)
+        self.assertNotIn("inactive_new_user", usernames)
+
+        response_inactive = self.client.get("/api/v1/users?status=inactive")
+        inactive_usernames = {item["username"] for item in response_inactive.data["items"]}
+        self.assertIn("inactive_new_user", inactive_usernames)
 
     def test_users_list_filters_search_role_clinic_and_status(self):
         response_search = self.client.get("/api/v1/users?search=target")

@@ -1177,7 +1177,9 @@ class UsersListCreateView(APIView):
         elif status_filter == "inactive":
             queryset = queryset.filter(est_activo=False)
         elif status_filter == "pending":
-            queryset = queryset.filter(Q(terminos_acept=False) | Q(cambiar_clave=True))
+            queryset = queryset.filter(est_activo=True).filter(
+                Q(terminos_acept=False) | Q(cambiar_clave=True)
+            )
 
         tipo_personal_id = request.query_params.get("tipoPersonalId")
         if tipo_personal_id:
@@ -2537,7 +2539,9 @@ class UserExportView(APIView):
         elif status_filter == "inactive":
             qs = qs.filter(est_activo=False)
         elif status_filter == "pending":
-            qs = qs.filter(Q(terminos_acept=False) | Q(cambiar_clave=True))
+            qs = qs.filter(est_activo=True).filter(
+                Q(terminos_acept=False) | Q(cambiar_clave=True)
+            )
 
         no_exp = request.query_params.get("noExp")
         if no_exp:
