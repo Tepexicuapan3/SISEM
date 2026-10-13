@@ -81,7 +81,7 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       className: "w-[170px]",
       render: (row) =>
         row.data.escuela
-          ? `${row.data.escuela}${row.data.escuelaId ? "" : " (sin match)"}`
+          ? `${row.data.escuela}${row.data.escuelaId != null ? "" : " (sin match)"}`
           : "—",
     },
     {
@@ -104,7 +104,7 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       className: "w-[170px]",
       render: (row) =>
         row.data.especialidad
-          ? `${row.data.especialidad}${row.data.especialidadId ? "" : " (sin match)"}`
+          ? `${row.data.especialidad}${row.data.especialidadId != null ? "" : " (sin match)"}`
           : "—",
     },
     {

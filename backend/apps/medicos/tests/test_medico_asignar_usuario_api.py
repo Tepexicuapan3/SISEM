@@ -181,6 +181,30 @@ class MedicoAsignarUsuarioApiTests(APITestCase):
         self.medico.refresh_from_db()
         self.assertIsNone(self.medico.id_escuela_id)
 
+    def test_mueve_la_escuela_con_id_0(self):
+        # El ID 0 es un registro real del catálogo: no debe tratarse como vacío.
+        esc = Escuelas.objects.create(id=0, code="CERO", name="Escuela con ID 0")
+        CatMedico.objects.filter(pk=512).update(id_escuela=esc)
+        user = self._create_user("dr_escuela_cero", self.tipo_medico)
+
+        response = self._post(self.medico.id, user.id_usuario)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(DetUsuario.objects.get(pk=user.id_usuario).id_escuela_id, 0)
+
+    def test_no_pisa_la_escuela_0_del_usuario(self):
+        propia = Escuelas.objects.create(id=0, code="CERO", name="Escuela con ID 0")
+        del_medico = Escuelas.objects.create(code="UNAM", name="Universidad Nacional")
+        CatMedico.objects.filter(pk=512).update(id_escuela=del_medico)
+        user = self._create_user("dr_con_escuela_cero", self.tipo_medico)
+        DetUsuario.objects.filter(pk=user.id_usuario).update(id_escuela=propia)
+
+        response = self._post(self.medico.id, user.id_usuario)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(DetUsuario.objects.get(pk=user.id_usuario).id_escuela_id, 0)
+        self.assertEqual(response.data["descartados"]["escuelaId"], del_medico.id)
+
     def test_no_pisa_la_escuela_del_usuario_y_la_reporta(self):
         propia = Escuelas.objects.create(code="IPN", name="Instituto Politecnico")
         del_medico = Escuelas.objects.create(code="UNAM", name="Universidad Nacional")

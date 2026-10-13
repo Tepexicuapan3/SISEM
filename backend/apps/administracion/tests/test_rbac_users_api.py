@@ -1814,6 +1814,26 @@ class RbacUsersImportApiTests(APITestCase):
         self.assertIn((escuela.id, "ESC-IMP", "Escuela Import"), rows[1:])
         self.assertNotIn("Escuela Inactiva", [row[2] for row in rows[1:]])
 
+    @patch("apps.administracion.use_cases.users.import_users.send_user_credentials_email_batch")
+    def test_confirm_keeps_school_with_id_0(self, send_batch_mock):
+        # El ID 0 es un registro real del catálogo de escuelas.
+        send_batch_mock.return_value = {"sent": 0, "failed": []}
+        Escuelas.objects.create(id=0, code="CERO", name="Escuela con ID 0", is_active=True)
+        file = _users_xlsx_upload(
+            [
+                (
+                    "import_esc_cero", "Ana", "Lopez", "", "", "", self.role_medico.rol,
+                    "", "", "0", "", "", "Activo",
+                ),
+            ]
+        )
+
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "SUCCESS", job)
+        user = SyUsuario.objects.get(usuario="import_esc_cero")
+        self.assertEqual(DetUsuario.objects.get(id_usuario=user).id_escuela_id, 0)
+
     def test_preview_resolves_school_by_id_and_rejects_names(self):
         escuela = Escuelas.objects.create(code="ESC-IMP", name="Escuela Import", is_active=True)
         file = _users_xlsx_upload(

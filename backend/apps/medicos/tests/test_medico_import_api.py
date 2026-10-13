@@ -448,6 +448,25 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(rel_esp.especialidad_id, esp.id)
         self.assertTrue(rel_esp.es_principal)
 
+    def test_confirm_acepta_id_0_de_escuela_y_especialidad(self):
+        # El ID 0 es un registro real en ambos catálogos: no debe tratarse
+        # como "vacío" (antes `if especialidadId:` lo descartaba en silencio).
+        Escuelas.objects.create(id=0, code="CERO", name="Escuela con ID 0")
+        Especialidades.objects.create(id=0, name="Especialidad con ID 0")
+        file = _medicos_xlsx_upload(
+            [row(no="15", pat="A", nom="B", ced="1", esc="0", esp="0")]
+        )
+
+        job = self._confirm_and_wait(file)
+
+        self.assertEqual(job["status"], "SUCCESS", job)
+        data = job["result"]["rows"][0]["data"]
+        self.assertEqual((data["escuelaId"], data["especialidadId"]), (0, 0))
+        self.assertEqual(CatMedico.objects.get(id=15).id_escuela_id, 0)
+        rel_esp = RelMedicoEspecialidad.objects.get(medico_id=15)
+        self.assertEqual(rel_esp.especialidad_id, 0)
+        self.assertTrue(rel_esp.es_principal)
+
     def test_confirm_con_warnings_no_bloquea_y_crea_sin_relaciones(self):
         # Sin cédula = warning: no bloquea.
         file = _medicos_xlsx_upload([row(no="6", pat="A", nom="B")])

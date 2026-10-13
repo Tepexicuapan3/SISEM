@@ -107,6 +107,11 @@ def update_medico(medico, data, *, actor_id):
     return medico
 
 
+def _vacio(value) -> bool:
+    """None o cadena vacía. No usar truthiness: 0 es un ID válido de catálogo."""
+    return value is None or value == ""
+
+
 def assign_usuario(medico_id, usuario_id, *, actor_id):
     """Asigna un usuario a un médico que no tiene (R9, `medicos-id-no-medico`).
 
@@ -181,15 +186,16 @@ def assign_usuario(medico_id, usuario_id, *, actor_id):
                 )
 
         # Escuela, sexo y fecha de nacimiento: misma regla que los nombres,
-        # solo se llenan si DetUsuario no tiene.
+        # solo se llenan si DetUsuario no tiene. "Vacío" = None o "" (NO
+        # truthiness: la escuela con ID 0 es un registro real del catálogo).
         det_extra = []
         for campo, clave in (
             ("id_escuela_id", "escuelaId"), ("sexo", "sexo"), ("fecha_nac", "fechaNac"),
         ):
             propio = getattr(medico, campo)
-            if not propio:
+            if _vacio(propio):
                 continue
-            if not getattr(det, campo):
+            if _vacio(getattr(det, campo)):
                 setattr(det, campo, propio)
                 det_extra.append(campo.removesuffix("_id"))
             elif getattr(det, campo) != propio:

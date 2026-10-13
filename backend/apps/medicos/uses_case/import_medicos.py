@@ -234,7 +234,8 @@ class ConfirmMedicosImportUseCase:
 
         # Sin centro: la plantilla ya no trae Clave Clínica; los centros se
         # asignan después desde la ficha del médico.
-        if data["especialidadId"]:
+        # `is not None`, no truthiness: el ID 0 es un registro real del catálogo.
+        if data["especialidadId"] is not None:
             RelMedicoEspecialidad.objects.create(
                 medico=medico,
                 especialidad_id=data["especialidadId"],

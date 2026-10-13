@@ -175,8 +175,10 @@ class ConfirmUsersImportUseCase:
             if role is None:
                 raise RoleVanishedDuringImport(row["row"], data["username"])
 
+            # `is not None`, no truthiness: el ID 0 es un registro real en los
+            # catálogos (p. ej. la escuela con ID 0) y no debe descartarse.
             tipo_personal = None
-            if data["tipoPersonalId"]:
+            if data["tipoPersonalId"] is not None:
                 tipo_id = data["tipoPersonalId"]
                 if tipo_id not in tipos_cache:
                     tipos_cache[tipo_id] = CatTipoPersonal.objects.filter(
@@ -185,7 +187,7 @@ class ConfirmUsersImportUseCase:
                 tipo_personal = tipos_cache[tipo_id]
 
             escuela = None
-            if data["escuelaId"]:
+            if data["escuelaId"] is not None:
                 escuela_id = data["escuelaId"]
                 if escuela_id not in escuelas_cache:
                     escuelas_cache[escuela_id] = Escuelas.objects.filter(
