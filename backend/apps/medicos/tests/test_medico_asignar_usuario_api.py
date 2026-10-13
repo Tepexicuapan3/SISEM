@@ -181,6 +181,24 @@ class MedicoAsignarUsuarioApiTests(APITestCase):
         self.medico.refresh_from_db()
         self.assertIsNone(self.medico.id_escuela_id)
 
+    def test_mueve_sexo_y_fecha_nac_y_no_pisa_los_del_usuario(self):
+        CatMedico.objects.filter(pk=512).update(sexo="M", fecha_nac="1975-03-15")
+        user = self._create_user("dr_sexo", self.tipo_medico)
+        # El usuario ya tiene sexo (se conserva) pero no fecha (se llena).
+        DetUsuario.objects.filter(pk=user.id_usuario).update(sexo="F")
+
+        response = self._post(self.medico.id, user.id_usuario)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        det = DetUsuario.objects.get(pk=user.id_usuario)
+        self.assertEqual((det.sexo, str(det.fecha_nac)), ("F", "1975-03-15"))
+        self.assertEqual(response.data["descartados"]["sexo"], "M")
+        self.assertNotIn("fechaNac", response.data["descartados"])
+        self.assertEqual(response.data["fechaNac"], "1975-03-15")
+        self.medico.refresh_from_db()
+        self.assertIsNone(self.medico.sexo)
+        self.assertIsNone(self.medico.fecha_nac)
+
     def test_medico_sin_datos_personales_solo_asigna(self):
         vacio = CatMedico.objects.create(id=700)
         user = self._create_user("dr_vacio", self.tipo_medico)

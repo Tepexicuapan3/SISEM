@@ -221,6 +221,8 @@ class ConfirmMedicosImportUseCase:
             nombre=None if usuario else data["nombre"],
             cedula_profesional=None if usuario else data["cedulaProfesional"],
             escuela_id=None if usuario else data["escuelaId"],
+            sexo=None if usuario else data["sexo"],
+            fecha_nac=None if usuario else data["fechaNac"],
             tipo_medico=data["tipoMedico"],
             servicio=data["servicio"],
             observaciones=data["observaciones"],

@@ -52,9 +52,10 @@ class CatMedicoConstraintTests(TestCase):
             with self.subTest(campo=campo):
                 with self.assertRaises(IntegrityError), transaction.atomic():
                     CatMedico.objects.create(id_usuario=user, **{campo: "x"})
-        with self.subTest(campo="id_escuela"):
-            with self.assertRaises(IntegrityError), transaction.atomic():
-                CatMedico.objects.create(id_usuario=user, id_escuela_id=1)
+        for campo, valor in (("id_escuela_id", 1), ("sexo", "M"), ("fecha_nac", "1975-03-15")):
+            with self.subTest(campo=campo):
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    CatMedico.objects.create(id_usuario=user, **{campo: valor})
 
     def test_con_usuario_sin_datos_personales_ok(self):
         user = _usuario("dr_limpio")

@@ -82,6 +82,8 @@ class MedicoRepository:
         materno=None,
         cedula_profesional=None,
         escuela_id=None,
+        sexo=None,
+        fecha_nac=None,
         tipo_medico,
         servicio,
         observaciones,
@@ -89,8 +91,8 @@ class MedicoRepository:
         estatus_medico=None,
     ):
         # `id` explícito = No. Médico legado (import masivo); None deja que la
-        # secuencia asigne el siguiente. nombre/paterno/materno/cédula/escuela
-        # solo aplican a médicos SIN usuario (CheckConstraint del modelo).
+        # secuencia asigne el siguiente. nombre/paterno/materno/cédula/escuela/
+        # sexo/fecha_nac solo aplican a médicos SIN usuario (CheckConstraint).
         # `estatus_medico=None` deja el default del modelo ("ACTIVO").
         kwargs = {}
         if id is not None:
@@ -105,6 +107,8 @@ class MedicoRepository:
             materno=materno,
             cedula_profesional=cedula_profesional,
             id_escuela_id=escuela_id,
+            sexo=sexo,
+            fecha_nac=fecha_nac,
             tipo_medico=tipo_medico,
             servicio=servicio,
             observaciones=observaciones,

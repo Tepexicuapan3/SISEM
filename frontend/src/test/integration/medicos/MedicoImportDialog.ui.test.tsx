@@ -51,6 +51,8 @@ const buildData = (
   cedulaProfesional: null,
   escuela: null,
   escuelaId: null,
+  sexo: null,
+  fechaNac: null,
   claveClinica: null,
   centroId: null,
   especialidad: null,

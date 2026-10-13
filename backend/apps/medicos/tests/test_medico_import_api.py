@@ -44,7 +44,7 @@ IMPORT_CONFIRM_URL = "/api/v1/medicos/import/confirm"
 IMPORT_JOB_URL = "/api/v1/medicos/import/jobs/"
 
 _KEYS = [
-    "no", "usuario", "nom", "pat", "mat", "ced", "esc", "clave",
+    "no", "usuario", "nom", "pat", "mat", "ced", "esc", "sexo", "fnac", "clave",
     "esp", "serv", "estatus",
 ]
 
@@ -352,7 +352,7 @@ class MedicoImportApiTests(APITestCase):
         esc = Escuelas.objects.create(code="UNAM", name="Universidad Nacional")
         file = _medicos_xlsx_upload(
             [row(no="2726", pat="López", mat="Ramírez", nom="Juan", ced="1234567",
-                 esc=str(esc.id), estatus="A")]
+                 esc=str(esc.id), sexo="M", fnac="15/03/1975", estatus="A")]
         )
 
         job = self._confirm_and_wait(file)
@@ -365,6 +365,8 @@ class MedicoImportApiTests(APITestCase):
             ("López", "Ramírez", "Juan", "1234567"),
         )
         self.assertEqual(medico.id_escuela_id, esc.id)
+        self.assertEqual(medico.sexo, "M")
+        self.assertEqual(str(medico.fecha_nac), "1975-03-15")
         self.assertEqual(medico.estatus_medico, "ACTIVO")
 
     def test_confirm_estatus_b_crea_baja(self):

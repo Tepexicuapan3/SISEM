@@ -3,6 +3,7 @@ No. Médico, usuario, nombres, cédula, Clave Clínica / Especialidad (warnings,
 D7), Estatus A/B y duplicados por nombre. Usa la BD de pruebas (SQLite)."""
 
 import io
+from datetime import date
 
 import openpyxl
 from django.contrib.auth.hashers import make_password
@@ -23,7 +24,7 @@ from apps.medicos.services.medico_import_service import (
 def row(**kw):
     """Fila del Excel en el orden de HEADERS; las claves son abreviaturas."""
     keys = [
-        "no", "usuario", "nom", "pat", "mat", "ced", "esc", "clave",
+        "no", "usuario", "nom", "pat", "mat", "ced", "esc", "sexo", "fnac", "clave",
         "esp", "serv", "estatus",
     ]
     unknown = set(kw) - set(keys)
@@ -304,6 +305,51 @@ class MedicoImportParseTests(TestCase):
         self.assertEqual(r["errors"], [])
         self.assertIsNone(r["data"]["escuelaId"])
         self.assertIn("Escuela del Excel se ignora", r["warnings"][0])
+
+    # ── Sexo / Fecha de Nacimiento (solo sin usuario) ───────────────────────
+
+    def test_sexo_acepta_codigo_o_nombre(self):
+        result = self._parse(
+            row(no="1", pat="A", nom="B", ced="1", sexo="M"),
+            row(no="2", pat="C", nom="D", ced="1", sexo="femenino"),
+            row(no="3", pat="E", nom="F", ced="1", sexo="Otro"),
+            row(no="4", pat="G", nom="H", ced="1"),
+        )
+        self.assertEqual([r["data"]["sexo"] for r in result["rows"]], ["M", "F", "O", None])
+        self.assertEqual(result["total_errores"], 0)
+
+    def test_sexo_invalido_es_error(self):
+        r = self._parse(row(pat="A", nom="B", ced="1", sexo="X"))["rows"][0]
+        self.assertIsNone(r["data"]["sexo"])
+        self.assertIn("Sexo debe ser", r["errors"][0])
+
+    def test_fecha_nac_acepta_texto_y_celda_de_fecha(self):
+        result = self._parse(
+            row(no="1", pat="A", nom="B", ced="1", fnac="15/03/1975"),
+            row(no="2", pat="C", nom="D", ced="1", fnac="1975-03-15 00:00:00"),
+        )
+        self.assertEqual(
+            [r["data"]["fechaNac"] for r in result["rows"]], [date(1975, 3, 15)] * 2
+        )
+
+    def test_fecha_nac_invalida_o_futura_es_error(self):
+        result = self._parse(
+            row(no="1", pat="A", nom="B", ced="1", fnac="31/02/1980"),
+            row(no="2", pat="C", nom="D", ced="1", fnac="01/01/2999"),
+        )
+        self.assertEqual(result["total_errores"], 2)
+        self.assertIn("formato inválido", result["rows"][0]["errors"][0])
+        self.assertIn("no puede ser futura", result["rows"][1]["errors"][0])
+        for r in result["rows"]:
+            self.assertIsNone(r["data"]["fechaNac"])
+
+    def test_sexo_y_fecha_con_usuario_se_ignoran_con_warning(self):
+        make_usuario("con_sexo")
+        r = self._parse(row(usuario="con_sexo", sexo="X", fnac="basura"))["rows"][0]
+        self.assertEqual(r["errors"], [])
+        self.assertIsNone(r["data"]["sexo"])
+        self.assertIsNone(r["data"]["fechaNac"])
+        self.assertIn("Sexo y Fecha de Nacimiento del Excel se ignoran", r["warnings"][0])
 
     # ── Estatus / Tipo (S6.7)───────────────────────────────────────────────
 

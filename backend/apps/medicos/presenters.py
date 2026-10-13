@@ -27,6 +27,11 @@ def _consultorio_or_none(rmc: RelMedicoConsultorio):
         return None
 
 
+def _fecha_nac(fuente):
+    fecha = getattr(fuente, "fecha_nac", None) if fuente is not None else None
+    return str(fecha) if fecha else None
+
+
 def serialize_medico(medico: CatMedico) -> dict:
     usuario = medico.id_usuario
     det = getattr(usuario, "detalle", None) if usuario is not None else None
@@ -61,8 +66,9 @@ def serialize_medico(medico: CatMedico) -> dict:
         "email": usuario.correo if usuario is not None else None,
         "telefono": det.telefono if det else None,
         "direccion": det.direccion if det else None,
-        "sexo": det.sexo if det else None,
-        "fechaNac": str(det.fecha_nac) if det and det.fecha_nac else None,
+        # Con usuario manda DetUsuario; sin usuario, los datos propios del médico.
+        "sexo": getattr(det if usuario is not None else medico, "sexo", None),
+        "fechaNac": _fecha_nac(det if usuario is not None else medico),
         "isActive": usuario.est_activo if usuario is not None else False,
         "tipoMedico": medico.tipo_medico,
         "servicio": medico.servicio,

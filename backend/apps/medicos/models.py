@@ -12,6 +12,8 @@ TIPO_MEDICO = [
     ("AMBOS",    "Ambos"),
 ]
 
+SEXO = [("M", "Masculino"), ("F", "Femenino"), ("O", "Otro")]
+
 ESTATUS_MEDICO = [
     ("ACTIVO",       "Activo"),
     ("VACACIONES",   "Vacaciones"),
@@ -110,7 +112,10 @@ class CatMedico(models.Model):
         on_delete=models.SET_NULL,
         related_name="+",
     )
-    tipo_medico   = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
+    # Mismos valores que DetUsuario.sexo / fecha_nac (misma regla que arriba).
+    sexo      = models.CharField(max_length=1, null=True, blank=True, choices=SEXO)
+    fecha_nac = models.DateField(null=True, blank=True)
+    tipo_medico  = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
     servicio        = models.CharField(max_length=100, null=True, blank=True)
     observaciones   = models.TextField(null=True, blank=True)
     estatus_medico  = models.CharField(max_length=20, choices=ESTATUS_MEDICO, default="ACTIVO", db_index=True)
@@ -133,6 +138,8 @@ class CatMedico(models.Model):
                         materno__isnull=True,
                         cedula_profesional__isnull=True,
                         id_escuela__isnull=True,
+                        sexo__isnull=True,
+                        fecha_nac__isnull=True,
                     )
                 ),
                 name="cat_medicos_datos_personales_solo_sin_usuario",

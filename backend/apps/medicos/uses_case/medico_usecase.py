@@ -168,18 +168,28 @@ def assign_usuario(medico_id, usuario_id, *, actor_id):
                     orden=1,
                 )
 
-        # Escuela: misma regla que los nombres, solo se llena si DetUsuario no tiene.
-        if medico.id_escuela_id:
-            if not det.id_escuela_id:
-                det.id_escuela_id = medico.id_escuela_id
-                det.save(update_fields=["id_escuela"])
-            elif det.id_escuela_id != medico.id_escuela_id:
-                descartados["escuelaId"] = medico.id_escuela_id
+        # Escuela, sexo y fecha de nacimiento: misma regla que los nombres,
+        # solo se llenan si DetUsuario no tiene.
+        det_extra = []
+        for campo, clave in (
+            ("id_escuela_id", "escuelaId"), ("sexo", "sexo"), ("fecha_nac", "fechaNac"),
+        ):
+            propio = getattr(medico, campo)
+            if not propio:
+                continue
+            if not getattr(det, campo):
+                setattr(det, campo, propio)
+                det_extra.append(campo.removesuffix("_id"))
+            elif getattr(det, campo) != propio:
+                descartados[clave] = str(propio) if clave == "fechaNac" else propio
+        if det_extra:
+            det.save(update_fields=det_extra)
 
         # Un solo UPDATE: asigna el usuario y limpia los datos propios.
         medico.id_usuario = usuario
         medico.nombre = medico.paterno = medico.materno = medico.cedula_profesional = None
         medico.id_escuela = None
+        medico.sexo = medico.fecha_nac = None
         medico.updated_at = timezone.now()
         medico.updated_by_id = actor_id
         try:
@@ -187,7 +197,8 @@ def assign_usuario(medico_id, usuario_id, *, actor_id):
                 medico.save(
                     update_fields=[
                         "id_usuario", "nombre", "paterno", "materno",
-                        "cedula_profesional", "id_escuela", "updated_at", "updated_by_id",
+                        "cedula_profesional", "id_escuela", "sexo", "fecha_nac",
+                        "updated_at", "updated_by_id",
                     ]
                 )
         except IntegrityError:

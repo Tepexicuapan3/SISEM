@@ -246,8 +246,8 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   Columnas, en este orden: <strong>No. Médico</strong>,{" "}
                   <strong>Usuario (Login del sistema)</strong>, Nombre(s),
                   Apellido Paterno, Apellido Materno, Cédula Profesional,
-                  Escuela, Clave Clínica (legado), Especialidad, Servicio,
-                  Estatus del Médico.
+                  Escuela, Sexo, Fecha de Nacimiento, Clave Clínica (legado),
+                  Especialidad, Servicio, Estatus del Médico.
                 </p>
                 <p>
                   <strong>No. Médico</strong> es opcional: si se captura es
@@ -261,8 +261,14 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   médico (apellidos y nombre se toman del usuario). Si se deja
                   vacío, <strong>Apellido Paterno</strong> y{" "}
                   <strong>Nombre(s)</strong> son obligatorios y conviene
-                  capturar la Cédula Profesional y la Escuela (con usuario, la
-                  Escuela del Excel se ignora: se toma del usuario).
+                  capturar Cédula Profesional, Escuela, Sexo y Fecha de
+                  Nacimiento (con usuario, esos datos del Excel se ignoran: se
+                  toman del usuario).
+                </p>
+                <p>
+                  Sexo acepta M, F u O (o Masculino, Femenino, Otro). Fecha de
+                  Nacimiento en formato dd/mm/aaaa (o una celda con formato de
+                  fecha); no puede ser futura.
                 </p>
                 <p>
                   <strong>Escuela</strong> y <strong>Especialidad</strong> se

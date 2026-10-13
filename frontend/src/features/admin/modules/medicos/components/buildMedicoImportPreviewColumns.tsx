@@ -14,7 +14,20 @@ const ESTATUS_MEDICO_LABELS: Record<EstatusMedico, string> = {
   BAJA: "Baja",
 };
 
-const nombreCompleto = (row: MedicoImportRow) =>
+const SEXO_LABELS: Record<"M" | "F" | "O", string> = {
+  M: "Masculino",
+  F: "Femenino",
+  O: "Otro",
+};
+
+// "1975-03-15" -> "15/03/1975" (sin pasar por Date: evita corrimientos de zona).
+const formatFechaNac = (iso: string | null) => {
+  if (!iso) return "—";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return d && m && y ? `${d}/${m}/${y}` : iso;
+};
+
+const nombreCompleto =(row: MedicoImportRow) =>
   [row.data.nombre, row.data.paterno, row.data.materno]
     .filter(Boolean)
     .join(" ");
@@ -22,8 +35,8 @@ const nombreCompleto = (row: MedicoImportRow) =>
 /**
  * Columnas de la tabla de vista previa de importación masiva de médicos.
  * Refleja el orden de la plantilla: No. Médico | Usuario | Nombre(s) y
- * Apellidos | Cédula | Escuela | Clave Clínica | Especialidad | Servicio |
- * Estatus.
+ * Apellidos | Cédula | Escuela | Sexo | Fecha de Nacimiento | Clave Clínica |
+ * Especialidad | Servicio | Estatus.
  * "Resultado" distingue errores (rojo, bloquean) de warnings (ámbar, no
  * bloquean).
  */
@@ -69,6 +82,20 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
         row.data.escuela
           ? `${row.data.escuela}${row.data.escuelaId ? "" : " (sin match)"}`
           : "—",
+    },
+    {
+      key: "sexo",
+      header: "Sexo",
+      align: "center",
+      className: "w-[110px]",
+      render: (row) => (row.data.sexo ? SEXO_LABELS[row.data.sexo] : "—"),
+    },
+    {
+      key: "fechaNac",
+      header: "Fecha de Nacimiento",
+      align: "center",
+      className: "w-[130px]",
+      render: (row) => formatFechaNac(row.data.fechaNac),
     },
     {
       key: "claveClinica",

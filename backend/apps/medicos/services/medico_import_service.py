@@ -17,6 +17,7 @@ sin usuario (decisión D7).
 import io
 import re
 import unicodedata
+from datetime import date, datetime
 from typing import Optional
 
 import openpyxl
@@ -37,6 +38,8 @@ HEADERS = [
     "Apellido Materno",
     "Cédula Profesional",
     "Escuela",
+    "Sexo",
+    "Fecha de Nacimiento",
     "Clave Clínica (legado)",
     "Especialidad",
     "Servicio",
@@ -62,14 +65,27 @@ _ESTATUS_ALIASES = {"a": "ACTIVO", "b": "BAJA"}
 
 _NO_MEDICO_RE = re.compile(r"^\d+(\.0+)?$")
 
+# Sexo y Fecha de Nacimiento: mismo criterio que el import de usuarios
+# (`apps.administracion.services.user_import_service`, helpers privados ahí --
+# se duplican). Mismos códigos que `DetUsuario.sexo`.
+_SEXO_LOOKUP = {
+    "m": "M", "masculino": "M",
+    "f": "F", "femenino": "F",
+    "o": "O", "otro": "O",
+}
+# Texto dd/mm/aaaa (lo más común en MX) o, si la celda tenía formato de
+# fecha, el string que deja pandas con hora 00:00:00.
+_FECHA_NAC_FORMATS = ("%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y")
+
 _SAMPLE_ROWS = (
     # Con usuario: nombre/cédula se toman del usuario (se dejan vacíos).
     # Escuela y Especialidad van por ID del catálogo (son llaves foráneas).
-    ("2726", "jperez", "", "", "", "", "", "12", "5", "Cardiología", "A"),
-    # Sin usuario: nombre, cédula y escuela viven en el propio médico.
-    ("2727", "", "JUAN", "LÓPEZ", "RAMÍREZ", "1234567", "3", "12", "8", "", "A"),
+    ("2726", "jperez", "", "", "", "", "", "", "", "12", "5", "Cardiología", "A"),
+    # Sin usuario: nombre, cédula, escuela, sexo y fecha de nacimiento viven
+    # en el propio médico.
+    ("2727", "", "JUAN", "LÓPEZ", "RAMÍREZ", "1234567", "3", "M", "15/03/1975", "12", "8", "", "A"),
     # Sin No. Médico: toma el siguiente de la secuencia.
-    ("", "mgomez", "", "", "", "", "", "", "", "", "A"),
+    ("", "mgomez", "", "", "", "", "", "", "", "", "", "", "A"),
 )
 
 
@@ -173,6 +189,16 @@ def _resolve_choice(raw_text: str, lookup: dict, default: str) -> tuple[str, boo
     return resolved, True
 
 
+def _parse_fecha_nac(text: str) -> date:
+    """Lanza ValueError si `text` no matchea ninguno de `_FECHA_NAC_FORMATS`."""
+    for fmt in _FECHA_NAC_FORMATS:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(text)
+
+
 def _resolve_catalog_id(raw: str, valid_ids: set, label: str, noun: str, errors, warnings):
     """
     Resuelve una FK a catálogo capturada por ID. Formato no numérico = ERROR
@@ -241,6 +267,8 @@ def parse_and_validate(file) -> dict:
                 "nombreRaw": _clean_text(line["Nombre(s)"]),
                 "cedulaRaw": _clean_text(line["Cédula Profesional"]),
                 "escuelaRaw": _clean_text(line["Escuela"]),
+                "sexoRaw": _clean_text(line["Sexo"]),
+                "fechaNacRaw": _clean_text(line["Fecha de Nacimiento"]),
                 "claveClinicaRaw": _clean_text(line["Clave Clínica (legado)"]),
                 "especialidadRaw": _clean_text(line["Especialidad"]),
                 "servicioRaw": _clean_text(line["Servicio"]),
@@ -398,6 +426,30 @@ def parse_and_validate(file) -> dict:
                 parsed["escuelaRaw"], escuelas_ids, "Escuela", "escuela", errors, warnings
             )
 
+        # Sexo / Fecha de Nacimiento: solo sin usuario (con usuario manda DetUsuario).
+        sexo = None
+        fecha_nac = None
+        if parsed["usuario"]:
+            if parsed["sexoRaw"] or parsed["fechaNacRaw"]:
+                warnings.append(
+                    "Con Usuario, Sexo y Fecha de Nacimiento del Excel se ignoran "
+                    "(se toman del usuario)."
+                )
+        else:
+            if parsed["sexoRaw"]:
+                sexo = _SEXO_LOOKUP.get(_strip_accents(parsed["sexoRaw"]).lower())
+                if sexo is None:
+                    errors.append("Sexo debe ser 'Masculino', 'Femenino' u 'Otro' (M, F u O).")
+            if parsed["fechaNacRaw"]:
+                try:
+                    fecha_nac = _parse_fecha_nac(parsed["fechaNacRaw"])
+                except ValueError:
+                    errors.append("Fecha de Nacimiento con formato inválido (use dd/mm/aaaa).")
+                else:
+                    if fecha_nac > date.today():
+                        errors.append("Fecha de Nacimiento no puede ser futura.")
+                        fecha_nac = None
+
         # Clave Clínica -> centro
         centro_id = None
         clave_value = None
@@ -450,6 +502,8 @@ def parse_and_validate(file) -> dict:
             "cedulaProfesional": parsed["cedulaRaw"] or None,
             "escuela": (parsed["escuelaRaw"] or None) if sin_usuario else None,
             "escuelaId": escuela_id,
+            "sexo": sexo,
+            "fechaNac": fecha_nac,
             "claveClinica": clave_value,
             "centroId": centro_id,
             "especialidad": parsed["especialidadRaw"] or None,
