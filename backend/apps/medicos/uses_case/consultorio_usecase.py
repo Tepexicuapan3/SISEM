@@ -22,8 +22,8 @@ def _validar_horarios(horarios_payload: list) -> list:
 
 
 @transaction.atomic
-def add_consultorio(user_id, data, *, actor_id, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def add_consultorio(medico_id, data, *, actor_id, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     if not medico:
         raise VisitDomainError("MEDICO_NOT_FOUND", "Médico no encontrado.", 404)
 
@@ -46,8 +46,8 @@ def add_consultorio(user_id, data, *, actor_id, request=None):
     return ConsultorioRepository.get_with_horarios(rmc.id)
 
 
-def update_consultorio_asignacion(user_id, rmc_id, data, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def update_consultorio_asignacion(medico_id, rmc_id, data, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     rmc = ConsultorioRepository.get_asignacion(rmc_id=rmc_id, medico_id=getattr(medico, "id", None))
     if not rmc:
         raise VisitDomainError("NOT_FOUND", "Asignación no encontrada.", 404)
@@ -66,14 +66,14 @@ def update_consultorio_asignacion(user_id, rmc_id, data, *, request=None):
     return ConsultorioRepository.get_with_horarios(rmc.id)
 
 
-def remove_consultorio(user_id, rmc_id, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def remove_consultorio(medico_id, rmc_id, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     ConsultorioRepository.deactivate(medico_id=getattr(medico, "id", None), rmc_id=rmc_id)
 
 
 @transaction.atomic
-def save_horario(user_id, rmc_id, data, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def save_horario(medico_id, rmc_id, data, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     rmc = ConsultorioRepository.get_asignacion(rmc_id=rmc_id, medico_id=getattr(medico, "id", None))
     if not rmc:
         raise VisitDomainError("NOT_FOUND", "Asignación no encontrada.", 404)

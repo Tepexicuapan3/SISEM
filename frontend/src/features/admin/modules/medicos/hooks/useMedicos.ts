@@ -3,6 +3,7 @@ import { medicosAPI } from "@api/resources/medicos.api";
 import type {
   CreateMedicoRequest,
   UpdateMedicoRequest,
+  AsignarUsuarioRequest,
   AddEspecialidadRequest,
   AddCentroRequest,
   AddConsultorioRequest,
@@ -38,12 +39,12 @@ export const useMedicosList = (
 
 // ─── Detalle ──────────────────────────────────────────────────────────────────
 
-export const useMedicoDetail = (userId: number | undefined, enabled = true) =>
+export const useMedicoDetail = (medicoId: number | undefined, enabled = true) =>
   useQuery({
-    queryKey: keys.detail(userId!),
-    queryFn: () => medicosAPI.getById(userId!),
+    queryKey: keys.detail(medicoId!),
+    queryFn: () => medicosAPI.getById(medicoId!),
     staleTime: 60_000,
-    enabled: enabled && !!userId,
+    enabled: enabled && !!medicoId,
   });
 
 // ─── Mutaciones CRUD ──────────────────────────────────────────────────────────
@@ -56,12 +57,23 @@ export const useCreateMedico = () => {
   });
 };
 
-export const useUpdateMedico = (userId: number) => {
+export const useUpdateMedico = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateMedicoRequest) => medicosAPI.update(userId, data),
+    mutationFn: (data: UpdateMedicoRequest) => medicosAPI.update(medicoId, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.detail(userId) });
+      qc.invalidateQueries({ queryKey: keys.detail(medicoId) });
+      qc.invalidateQueries({ queryKey: keys.all });
+    },
+  });
+};
+
+export const useAsignarUsuario = (medicoId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: AsignarUsuarioRequest) => medicosAPI.asignarUsuario(medicoId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.detail(medicoId) });
       qc.invalidateQueries({ queryKey: keys.all });
     },
   });
@@ -69,130 +81,130 @@ export const useUpdateMedico = (userId: number) => {
 
 // ─── Especialidades ───────────────────────────────────────────────────────────
 
-export const useAddEspecialidad = (userId: number) => {
+export const useAddEspecialidad = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: AddEspecialidadRequest) => medicosAPI.addEspecialidad(userId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (data: AddEspecialidadRequest) => medicosAPI.addEspecialidad(medicoId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
-export const useRemoveEspecialidad = (userId: number) => {
+export const useRemoveEspecialidad = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (espId: number) => medicosAPI.removeEspecialidad(userId, espId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (espId: number) => medicosAPI.removeEspecialidad(medicoId, espId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
 // ─── Centros ──────────────────────────────────────────────────────────────────
 
-export const useAddCentro = (userId: number) => {
+export const useAddCentro = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: AddCentroRequest) => medicosAPI.addCentro(userId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (data: AddCentroRequest) => medicosAPI.addCentro(medicoId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
-export const useRemoveCentro = (userId: number) => {
+export const useRemoveCentro = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (relId: number) => medicosAPI.removeCentro(userId, relId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (relId: number) => medicosAPI.removeCentro(medicoId, relId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
 // ─── Consultorios ─────────────────────────────────────────────────────────────
 
-export const useAddConsultorio = (userId: number) => {
+export const useAddConsultorio = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: AddConsultorioRequest) => medicosAPI.addConsultorio(userId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (data: AddConsultorioRequest) => medicosAPI.addConsultorio(medicoId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
-export const useUpdateConsultorio = (userId: number) => {
+export const useUpdateConsultorio = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ rmcId, data }: { rmcId: number; data: { consultorioId?: number; tipoAsignacion?: string } }) =>
-      medicosAPI.updateConsultorio(userId, rmcId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+      medicosAPI.updateConsultorio(medicoId, rmcId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
-export const useRemoveConsultorio = (userId: number) => {
+export const useRemoveConsultorio = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (rmcId: number) => medicosAPI.removeConsultorio(userId, rmcId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (rmcId: number) => medicosAPI.removeConsultorio(medicoId, rmcId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
-export const useSaveHorario = (userId: number, rmcId: number) => {
+export const useSaveHorario = (medicoId: number, rmcId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: SaveHorarioRequest) => medicosAPI.saveHorario(userId, rmcId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(userId) }),
+    mutationFn: (data: SaveHorarioRequest) => medicosAPI.saveHorario(medicoId, rmcId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.detail(medicoId) }),
   });
 };
 
 // ─── Excepciones ──────────────────────────────────────────────────────────────
 
-export const useMedicoExcepciones = (userId: number, enabled = true) =>
+export const useMedicoExcepciones = (medicoId: number, enabled = true) =>
   useQuery({
-    queryKey: keys.excepciones(userId),
-    queryFn: () => medicosAPI.getExcepciones(userId),
+    queryKey: keys.excepciones(medicoId),
+    queryFn: () => medicosAPI.getExcepciones(medicoId),
     staleTime: 30_000,
     enabled,
   });
 
-export const useCreateExcepcion = (userId: number) => {
+export const useCreateExcepcion = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateExcepcionRequest) => medicosAPI.createExcepcion(userId, data),
+    mutationFn: (data: CreateExcepcionRequest) => medicosAPI.createExcepcion(medicoId, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.excepciones(userId) });
-      qc.invalidateQueries({ queryKey: keys.detail(userId) });
+      qc.invalidateQueries({ queryKey: keys.excepciones(medicoId) });
+      qc.invalidateQueries({ queryKey: keys.detail(medicoId) });
     },
   });
 };
 
-export const useDeleteExcepcion = (userId: number) => {
+export const useDeleteExcepcion = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (excId: number) => medicosAPI.deleteExcepcion(userId, excId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.excepciones(userId) }),
+    mutationFn: (excId: number) => medicosAPI.deleteExcepcion(medicoId, excId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.excepciones(medicoId) }),
   });
 };
 
 // ─── Coberturas ───────────────────────────────────────────────────────────────
 
-export const useMedicoCoberturas = (userId: number, enabled = true) =>
+export const useMedicoCoberturas = (medicoId: number, enabled = true) =>
   useQuery({
-    queryKey: keys.coberturas(userId),
-    queryFn: () => medicosAPI.getCoberturas(userId),
+    queryKey: keys.coberturas(medicoId),
+    queryFn: () => medicosAPI.getCoberturas(medicoId),
     staleTime: 30_000,
     enabled,
   });
 
-export const useCreateCobertura = (userId: number) => {
+export const useCreateCobertura = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateCoberturaRequest) => medicosAPI.createCobertura(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.coberturas(userId) });
+      qc.invalidateQueries({ queryKey: keys.coberturas(medicoId) });
       qc.invalidateQueries({ queryKey: keys.all });
     },
   });
 };
 
-export const useDeleteCobertura = (userId: number) => {
+export const useDeleteCobertura = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (coberturaId: number) => medicosAPI.deleteCobertura(coberturaId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.coberturas(userId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.coberturas(medicoId) }),
   });
 };
 

@@ -20,6 +20,7 @@ import io
 from django.conf import settings
 from django.utils import timezone
 
+from apps.medicos.identity import display_name
 from apps.portal_citas.services.comprobante_service import (
     construir_payload_qr,
     generar_qr_png,
@@ -247,10 +248,8 @@ def generar_pdf_comprobante(cita, miembro_objetivo) -> bytes:
     c.drawCentredString(width / 2, y - folio_pill_h + 3.3 * mm, folio_texto)
     y -= folio_pill_h + 8 * mm
 
-    det_medico = getattr(cita.medico.id_usuario, "detalle", None)
-    nombre_medico = (
-        det_medico.nombre_completo if det_medico else cita.medico.id_usuario.usuario
-    )
+    # Médico sin usuario (alta por import Excel): display_name no revienta.
+    nombre_medico = display_name(cita.medico)
 
     campos = [
         ("Paciente", miembro_objetivo.nombre_visible),

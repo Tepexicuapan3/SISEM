@@ -33,7 +33,7 @@ class SurgeryScheduleApiTests(APITestCase):
             permissions=[],
         )
 
-        self.surgeon = CatMedico.objects.create(nombre_display="Dr. Prueba")
+        self.surgeon = CatMedico.objects.create(nombre="Prueba", paterno="Dr")
         self.surgery_type = CatTipoCirugia.objects.create(name="Apendicectomia")
         self.classification = CatClasificacionCirugia.objects.create(name="Cirugia corta")
 

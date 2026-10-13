@@ -40,7 +40,11 @@ class MedicoDetailAndRelationsApiTestsBase(APITestCase):
         self.auth_headers = self._auth_headers(self.actor)
 
         self.medico_user = self._create_user("medico_test", tipo_personal=self.tipo_medico)
-        self.medico = CatMedico.objects.create(id_usuario=self.medico_user)
+        # id explícito distinto del id_usuario: si algún endpoint mezcla los dos
+        # espacios de ids, los tests de esta clase lo detectan.
+        self.medico = CatMedico.objects.create(
+            id=self.medico_user.id_usuario + 500, id_usuario=self.medico_user,
+        )
 
     def _create_user(self, username, tipo_personal=None):
         user = SyUsuario.objects.create(
@@ -69,7 +73,7 @@ class MedicoPatchApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_patch_updates_editable_fields(self):
         response = self.client.patch(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}",
+            f"{MEDICOS_URL}/{self.medico.id}",
             {
                 "tipoMedico": "HOSPITAL",
                 "servicio": "Urgencias",
@@ -101,7 +105,77 @@ class MedicoPatchApiTests(MedicoDetailAndRelationsApiTestsBase):
         response = self.client.get(f"{MEDICOS_URL}/{self.medico.id}", **self.auth_headers)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["medico"]["medicoId"], self.medico.id)
+        self.assertEqual(response.data["medico"]["id"], self.medico.id)
+        self.assertEqual(response.data["medico"]["usuarioId"], self.medico_user.id_usuario)
+        self.assertTrue(response.data["medico"]["tieneUsuario"])
+        self.assertNotIn("medicoId", response.data["medico"])
+
+    def test_get_detail_no_fallback_to_id_usuario(self):
+        """A(id=5, usuario=7) y B(id=7, usuario=99): /medicos/7 es B, /medicos/99 es 404."""
+        user_a = self._create_user("medico_a", tipo_personal=self.tipo_medico)
+        user_b = self._create_user("medico_b", tipo_personal=self.tipo_medico)
+        a = CatMedico.objects.create(id=5, id_usuario=user_a)
+        b = CatMedico.objects.create(id=7, id_usuario=user_b)
+
+        response = self.client.get(f"{MEDICOS_URL}/7", **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["medico"]["id"], b.id)
+        self.assertEqual(response.data["medico"]["usuarioId"], user_b.id_usuario)
+
+        # id_usuario de A existe como usuario pero no como pk de ningún médico
+        response = self.client.get(f"{MEDICOS_URL}/{user_a.id_usuario + 100000}", **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(a.id, 5)
+
+    def test_get_detail_404_when_value_is_only_an_id_usuario(self):
+        # self.medico.id = id_usuario + 500; su id_usuario NO es pk de ningún médico
+        response = self.client.get(
+            f"{MEDICOS_URL}/{self.medico_user.id_usuario}", **self.auth_headers
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["code"], "MEDICO_NOT_FOUND")
+
+    def test_list_query_count_is_constant(self):
+        """serialize_medico usa .all() (respeta el prefetch): sin N+1 en el listado."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        def _count():
+            with CaptureQueriesContext(connection) as ctx:
+                response = self.client.get(MEDICOS_URL, **self.auth_headers)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            return len(ctx), response.data["total"]
+
+        # línea base con 1 especialidad para que todos los niveles de prefetch ya corran
+        RelMedicoEspecialidad.objects.create(
+            medico=self.medico, especialidad=Especialidades.objects.create(name="Esp base"),
+        )
+        base, total_base = _count()
+        for i in range(4):
+            user = self._create_user(f"medico_extra_{i}", tipo_personal=self.tipo_medico)
+            medico = CatMedico.objects.create(id_usuario=user)
+            RelMedicoEspecialidad.objects.create(
+                medico=medico, especialidad=Especialidades.objects.create(name=f"Esp {i}"),
+            )
+        con_mas, total_mas = _count()
+
+        self.assertEqual(total_mas, total_base + 4)
+        self.assertEqual(con_mas, base)
+
+    def test_detail_serializes_medico_without_usuario(self):
+        sin_usuario = CatMedico.objects.create(
+            id=2726, nombre="Ana", paterno="Lopez", materno="Ruiz", cedula_profesional="123456",
+        )
+
+        response = self.client.get(f"{MEDICOS_URL}/{sin_usuario.id}", **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data["medico"]
+        self.assertEqual(data["id"], 2726)
+        self.assertIsNone(data["usuarioId"])
+        self.assertFalse(data["tieneUsuario"])
+        self.assertEqual(data["nombreCompleto"], "Ana Lopez Ruiz")
+        self.assertEqual(data["cedulaProfesional"], "123456")
 
 
 class MedicoEspecialidadesApiTests(MedicoDetailAndRelationsApiTestsBase):
@@ -114,7 +188,7 @@ class MedicoEspecialidadesApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_post_especialidad_creates_relation(self):
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/especialidades",
+            f"{MEDICOS_URL}/{self.medico.id}/especialidades",
             {"especialidadId": self.especialidad.id, "esPrincipal": True},
             format="json",
             **self.auth_headers,
@@ -133,7 +207,7 @@ class MedicoEspecialidadesApiTests(MedicoDetailAndRelationsApiTestsBase):
         )
 
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/especialidades",
+            f"{MEDICOS_URL}/{self.medico.id}/especialidades",
             {"especialidadId": self.especialidad_2.id, "esPrincipal": True},
             format="json",
             **self.auth_headers,
@@ -153,7 +227,7 @@ class MedicoEspecialidadesApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_post_especialidad_rejects_unknown_especialidad(self):
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/especialidades",
+            f"{MEDICOS_URL}/{self.medico.id}/especialidades",
             {"especialidadId": 999999},
             format="json",
             **self.auth_headers,
@@ -166,7 +240,7 @@ class MedicoEspecialidadesApiTests(MedicoDetailAndRelationsApiTestsBase):
         RelMedicoEspecialidad.objects.create(medico=self.medico, especialidad=self.especialidad)
 
         response = self.client.delete(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/especialidades/{self.especialidad.id}",
+            f"{MEDICOS_URL}/{self.medico.id}/especialidades/{self.especialidad.id}",
             **self.auth_headers,
         )
 
@@ -195,7 +269,7 @@ class MedicoCentrosApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_post_centro_creates_relation(self):
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/centros",
+            f"{MEDICOS_URL}/{self.medico.id}/centros",
             {
                 "centroId": self.centro.id,
                 "tipoAdscripcion": "DEFINITIVA",
@@ -212,7 +286,7 @@ class MedicoCentrosApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_post_centro_rejects_unknown_centro(self):
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/centros",
+            f"{MEDICOS_URL}/{self.medico.id}/centros",
             {"centroId": 999999, "fechaInicio": str(date.today())},
             format="json",
             **self.auth_headers,
@@ -227,7 +301,7 @@ class MedicoCentrosApiTests(MedicoDetailAndRelationsApiTestsBase):
         )
 
         response = self.client.delete(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/centros/{rel.id}",
+            f"{MEDICOS_URL}/{self.medico.id}/centros/{rel.id}",
             **self.auth_headers,
         )
 
@@ -242,7 +316,7 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_post_excepcion_creates_and_lists(self):
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/excepciones",
+            f"{MEDICOS_URL}/{self.medico.id}/excepciones",
             {
                 "tipo": "PERMISO",
                 "fechaInicio": str(date.today()),
@@ -255,7 +329,7 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         list_response = self.client.get(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/excepciones", **self.auth_headers
+            f"{MEDICOS_URL}/{self.medico.id}/excepciones", **self.auth_headers
         )
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(list_response.data["items"]), 1)
@@ -263,7 +337,7 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
 
     def test_post_excepcion_vacaciones_updates_estatus_medico(self):
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/excepciones",
+            f"{MEDICOS_URL}/{self.medico.id}/excepciones",
             {
                 "tipo": "VACACIONES",
                 "fechaInicio": str(date.today()),
@@ -281,7 +355,7 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
         estatus_original = self.medico.estatus_medico
 
         response = self.client.post(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/excepciones",
+            f"{MEDICOS_URL}/{self.medico.id}/excepciones",
             {
                 "tipo": "PERMISO",
                 "fechaInicio": str(date.today()),
@@ -302,7 +376,7 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
         )
 
         response = self.client.delete(
-            f"{MEDICOS_URL}/{self.medico_user.id_usuario}/excepciones/{excepcion.id}",
+            f"{MEDICOS_URL}/{self.medico.id}/excepciones/{excepcion.id}",
             **self.auth_headers,
         )
 

@@ -108,7 +108,7 @@ def generar_slots_todos_medicos(self):
 
     medicos = (
         CatMedico.objects.filter(estatus_medico="ACTIVO")
-        .order_by("id_usuario_id")
+        .order_by("id")  # id = No. Médico; hay médicos sin usuario, orden determinista
     )
 
     total_slots = 0
@@ -128,7 +128,7 @@ def generar_slots_todos_medicos(self):
             total_medicos += 1
         except Exception as exc:
             errores += 1
-            logger.exception("Error generando slots para médico %s: %s", medico.id_medclin, exc)
+            logger.exception("Error generando slots para médico %s: %s", medico.id, exc)
 
     logger.info(
         "Generación de slots completada. medicos=%s slots_creados=%s errores=%s",

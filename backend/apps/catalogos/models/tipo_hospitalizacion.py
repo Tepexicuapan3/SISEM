@@ -11,8 +11,7 @@ class CatTipoHospitalizacion(CatalogBase):
     name = models.CharField(max_length=200, db_column="nombre")
     # Clave de cat_tphospi en el legado. unique=True + null=True: Postgres/SQLite
     # tratan multiples NULL como distintos, asi que un tipo nativo de SIRES
-    # (sin origen legado) convive sin colision -- mismo criterio que
-    # CatMedico.legacy_cd_medico (apps/medicos/models.py:100).
+    # (sin origen legado) convive sin colision.
     legacy_code = models.IntegerField(unique=True, null=True, blank=True, db_column="cd_legado")
 
     class Meta:

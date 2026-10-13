@@ -68,7 +68,8 @@ function MedicoDialogHeader({
           {medicoSummary?.nombreCompleto ?? "Médico"}
         </h2>
         <p className="truncate text-sm text-txt-muted">
-          {medicoSummary?.username}
+          {medicoSummary ? `No. ${medicoSummary.id}` : ""}
+          {medicoSummary ? ` · ${medicoSummary.username ?? "Sin usuario"}` : ""}
           {medicoSummary?.servicio ? ` · ${medicoSummary.servicio}` : ""}
         </p>
       </div>
@@ -118,8 +119,8 @@ interface Props {
 // ─── Dialog principal ─────────────────────────────────────────────────────────
 
 export function MedicoDetailsDialog({ open, onOpenChange, medicoSummary, canEdit }: Props) {
-  const userId = medicoSummary?.id;
-  const { data, isLoading, isError, refetch } = useMedicoDetail(userId, open && !!userId);
+  const medicoId = medicoSummary?.id;
+  const { data, isLoading, isError, refetch } = useMedicoDetail(medicoId, open && !!medicoId);
   const medico = data?.medico;
 
   const tipo      = medico?.tipoMedico ?? medicoSummary?.tipoMedico;

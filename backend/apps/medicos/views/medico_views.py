@@ -72,13 +72,13 @@ class MedicoDetailView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def get(self, request, user_id):
+    def get(self, request, medico_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:read")
         if auth_error:
             return auth_error
 
         try:
-            medico, consultorios = medico_usecase.get_medico_detail(user_id, request=request)
+            medico, consultorios = medico_usecase.get_medico_detail(medico_id, request=request)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
@@ -87,18 +87,41 @@ class MedicoDetailView(APIView):
 
         return Response({"medico": data})
 
-    def patch(self, request, user_id):
+    def patch(self, request, medico_id):
         actor, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
-            medico = medico_usecase.get_medico_or_404(user_id, request=request)
+            medico = medico_usecase.get_medico_or_404(medico_id, request=request)
             medico = medico_usecase.update_medico(medico, request.data, actor_id=actor.id_usuario)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
         return Response(presenters.serialize_medico(medico))
+
+
+class MedicoAsignarUsuarioView(APIView):
+    """POST /medicos/{medico_id}/asignar-usuario  body: {"usuarioId": int}"""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, medico_id):
+        actor, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
+        if auth_error:
+            return auth_error
+
+        try:
+            medico, descartados = medico_usecase.assign_usuario(
+                medico_id, request.data.get("usuarioId"), actor_id=actor.id_usuario,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        data = presenters.serialize_medico(medico)
+        data["descartados"] = descartados
+        return Response(data)
 
 
 # ─── ESPECIALIDADES ──────────────────────────────────────────────────────────
@@ -107,13 +130,13 @@ class MedicoEspecialidadesView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def post(self, request, user_id):
+    def post(self, request, medico_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
-            rel, created = especialidad_usecase.add_especialidad(user_id, request.data, request=request)
+            rel, created = especialidad_usecase.add_especialidad(medico_id, request.data, request=request)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
@@ -122,13 +145,13 @@ class MedicoEspecialidadesView(APIView):
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
-    def delete(self, request, user_id, especialidad_id):
+    def delete(self, request, medico_id, especialidad_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
-            especialidad_usecase.remove_especialidad(user_id, especialidad_id, request=request)
+            especialidad_usecase.remove_especialidad(medico_id, especialidad_id, request=request)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
@@ -141,25 +164,25 @@ class MedicoCentrosView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def post(self, request, user_id):
+    def post(self, request, medico_id):
         actor, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
-            rel = centro_usecase.add_centro(user_id, request.data, actor_id=actor.id_usuario, request=request)
+            rel = centro_usecase.add_centro(medico_id, request.data, actor_id=actor.id_usuario, request=request)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
         return Response(presenters.serialize_centro(rel), status=status.HTTP_201_CREATED)
 
-    def delete(self, request, user_id, rel_id):
+    def delete(self, request, medico_id, rel_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
-            centro_usecase.remove_centro(user_id, rel_id, request=request)
+            centro_usecase.remove_centro(medico_id, rel_id, request=request)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
@@ -172,40 +195,40 @@ class MedicoConsultoriosView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def post(self, request, user_id):
+    def post(self, request, medico_id):
         actor, auth_error = _authorize(request, "admin:gestion:medicos:horarios", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
             rmc = consultorio_usecase.add_consultorio(
-                user_id, request.data, actor_id=actor.id_usuario, request=request,
+                medico_id, request.data, actor_id=actor.id_usuario, request=request,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
         return Response(presenters.serialize_consultorio_asignacion(rmc), status=status.HTTP_201_CREATED)
 
-    def patch(self, request, user_id, rmc_id):
+    def patch(self, request, medico_id, rmc_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:horarios", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
             rmc = consultorio_usecase.update_consultorio_asignacion(
-                user_id, rmc_id, request.data, request=request,
+                medico_id, rmc_id, request.data, request=request,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
         return Response(presenters.serialize_consultorio_asignacion(rmc))
 
-    def delete(self, request, user_id, rmc_id):
+    def delete(self, request, medico_id, rmc_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:horarios", require_csrf=True)
         if auth_error:
             return auth_error
 
-        consultorio_usecase.remove_consultorio(user_id, rmc_id, request=request)
+        consultorio_usecase.remove_consultorio(medico_id, rmc_id, request=request)
         return Response({"success": True})
 
 
@@ -213,13 +236,13 @@ class MedicoConsultorioHorarioView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def put(self, request, user_id, rmc_id):
+    def put(self, request, medico_id, rmc_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:horarios", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
-            rmc = consultorio_usecase.save_horario(user_id, rmc_id, request.data, request=request)
+            rmc = consultorio_usecase.save_horario(medico_id, rmc_id, request.data, request=request)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 
@@ -232,34 +255,34 @@ class MedicoExcepcionesView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def get(self, request, user_id):
+    def get(self, request, medico_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:read")
         if auth_error:
             return auth_error
 
-        excepciones = excepcion_usecase.list_excepciones(user_id, request=request)
+        excepciones = excepcion_usecase.list_excepciones(medico_id, request=request)
         return Response({"items": [presenters.serialize_excepcion(e) for e in excepciones]})
 
-    def post(self, request, user_id):
+    def post(self, request, medico_id):
         actor, auth_error = _authorize(request, "admin:gestion:medicos:excepciones", require_csrf=True)
         if auth_error:
             return auth_error
 
         try:
             exc = excepcion_usecase.create_excepcion(
-                user_id, request.data, actor_id=actor.id_usuario, request=request,
+                medico_id, request.data, actor_id=actor.id_usuario, request=request,
             )
         except VisitDomainError as exc_error:
             return _domain_error_response(request, exc_error)
 
         return Response(presenters.serialize_excepcion_created(exc), status=status.HTTP_201_CREATED)
 
-    def delete(self, request, user_id, exc_id):
+    def delete(self, request, medico_id, exc_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:excepciones", require_csrf=True)
         if auth_error:
             return auth_error
 
-        excepcion_usecase.delete_excepcion(user_id, exc_id, request=request)
+        excepcion_usecase.delete_excepcion(medico_id, exc_id, request=request)
         return Response({"success": True})
 
 
@@ -358,12 +381,12 @@ class MedicoDisponibilidadView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def get(self, request, user_id):
+    def get(self, request, medico_id):
         _, auth_error = _authorize(request, "recepcion:read")
         if auth_error:
             return auth_error
 
-        medico = MedicoRepository.resolve(user_id, request=request, select_related=["id_usuario"])
+        medico = MedicoRepository.resolve(medico_id, request=request, select_related=["id_usuario"])
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))
@@ -383,22 +406,21 @@ class MedicoDisponibilidadView(APIView):
 
 
 class GenerarSlotsView(APIView):
-    """POST /medicos/{user_id}/slots/generar — genera HorarioDisponible para los próximos N días."""
+    """POST /medicos/{medico_id}/slots/generar — genera HorarioDisponible para los próximos N días."""
 
     authentication_classes = []
     permission_classes     = []
 
-    def post(self, request, user_id):
+    def post(self, request, medico_id):
         _, auth_error = _authorize(request, "recepcion:read")
         if auth_error:
             return auth_error
 
         from apps.recepcion.repositories.citas_repository import CitasRepository
 
-        # generar_slots_medico filtra/crea HorarioDisponible.medico_id
-        # (espacio médico) -- se resuelve el {user_id} de la ruta a
-        # CatMedico.pk (D7) en vez de pasarlo directo (R1).
-        medico = MedicoRepository.resolve(user_id, request=request)
+        # generar_slots_medico filtra/crea HorarioDisponible.medico_id; la ruta
+        # ya trae CatMedico.id (No. Médico), resolve solo valida que exista.
+        medico = MedicoRepository.resolve(medico_id, request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",
                                   status.HTTP_404_NOT_FOUND, request_id=_request_id(request))

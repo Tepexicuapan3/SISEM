@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalogos.models import MotivoCita
+from apps.medicos.identity import display_name
 from apps.recepcion.models import CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.uses_case.cita_state_machine_usecase import transition_cita_state
 
@@ -18,14 +19,13 @@ from apps.recepcion.uses_case.cita_state_machine_usecase import transition_cita_
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _serialize_cita(cita: CitaMedica) -> dict:
-    det = getattr(cita.medico.id_usuario, "detalle", None)
     return {
         "id":             cita.id,
         "folio":          cita.folio,
         "noExp":          cita.no_exp,
         "pkNum":          cita.pk_num,
         "medicoId":       cita.medico_id,
-        "medicoNombre":   det.nombre_completo if det else str(cita.medico_id),
+        "medicoNombre":   display_name(cita.medico),
         "consultorioId":  cita.consultorio_id,
         "consultorioNombre": (
             f"#{cita.consultorio.numero} — {cita.consultorio.name}"

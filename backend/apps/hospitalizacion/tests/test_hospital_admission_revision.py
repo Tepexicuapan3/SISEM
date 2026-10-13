@@ -123,7 +123,7 @@ class ResolvePendingFkTests(TestCase):
 
     def setUp(self):
         self.tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
-        self.medico = CatMedico.objects.create(nombre_display="Dr. Prueba", legacy_cd_medico="0512")
+        self.medico = CatMedico.objects.create(id=512, nombre="Prueba", paterno="Dr")
         self.admission = HospitalAdmission.objects.create(
             no_exp="EXP0003",
             reason="Motivo",
@@ -158,7 +158,7 @@ class ResolvePendingFkTests(TestCase):
         self.assertEqual(evento.actor_nombre, "Sistema")
 
     def test_guard_does_not_touch_already_resolved_fk(self):
-        otro_medico = CatMedico.objects.create(nombre_display="Dr. Otro", legacy_cd_medico="9999")
+        otro_medico = CatMedico.objects.create(id=9999, nombre="Otro", paterno="Dr")
         self.admission.admitting_doctor = self.medico
         self.admission.save()
 

@@ -48,7 +48,7 @@ export function MedicoCoberturasTab({ medico, isEditable }: Props) {
 
   const medicoOptions: CatalogOption[] = (medicosData?.items ?? [])
     .filter((m) => m.id !== medico.id)
-    .map((m) => ({ id: m.id, name: m.nombreCompleto || m.username, isActive: m.isActive }));
+    .map((m) => ({ id: m.id, name: m.nombreCompleto || m.username || `Médico #${m.id}`, isActive: m.isActive }));
 
   const centroOptions: CatalogOption[] = (centrosData?.items ?? []).map((c) => ({
     id: c.id, name: c.name, isActive: true,

@@ -71,12 +71,8 @@ class AgendaSemanalView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
 
-        # Gap 10.3 (design, topic sdd/medico-pk-independiente/design):
-        # `medicoId` llega crudo del frontend (id legacy id_usuario, ya que
-        # el frontend no fue migrado). Se resuelve contra CatMedico con el
-        # mismo patrón que `MedicoRepository.resolve` (PK surrogate primero,
-        # fallback a id_usuario con WARN) en vez de pasarlo sin traducir a
-        # HorarioDisponible.medico_id / CitasRepository (R1).
+        # `medicoId` es CatMedico.id (contrato unificado); resolve valida que
+        # exista (solo por pk, sin fallback a id_usuario).
         medico = MedicoRepository.resolve(s.validated_data["medicoId"], request=request)
         if not medico:
             return error_response("MEDICO_NOT_FOUND", "Médico no encontrado.",

@@ -12,9 +12,12 @@ archivo como única autoridad -- nunca confía en las filas que el cliente
 validó en preview.
 """
 
-from django.db import transaction
+from datetime import date
 
-from apps.authentication.models import SyUsuario
+from django.db import connection, transaction
+
+from apps.authentication.models import DetUsuarioCedula, SyUsuario
+from apps.medicos.models import CatMedico, RelMedicoCentro, RelMedicoEspecialidad
 from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.medicos.services.medico_import_service import build_template, parse_and_validate
 
@@ -44,16 +47,53 @@ class TemplateMedicosImportUseCase:
 
 
 class PreviewMedicosImportUseCase:
-    """Paso 1: valida el Excel y devuelve las filas con error. NO escribe en la BD."""
+    """Paso 1: valida el Excel y devuelve errores/warnings por fila. NO escribe en la BD."""
 
     def execute(self, file) -> dict:
         result = parse_and_validate(file)
         return {
             "totalRecords": result["total_records"],
             "totalErrores": result["total_errores"],
+            "totalWarnings": result["total_warnings"],
             "inserted": 0,
             "rows": result["rows"],
         }
+
+
+def _lock_cat_medicos():
+    """
+    Serializa el confirm contra altas manuales/imports concurrentes (D5).
+    Solo Postgres: el advisory lock serializa imports entre sí y el LOCK TABLE
+    en SHARE ROW EXCLUSIVE evita que un alta con `nextval` tome un id
+    explícito del Excel mientras se inserta. Se libera al cerrar la transacción.
+    """
+    if connection.vendor != "postgresql":
+        return
+    table = connection.ops.quote_name(CatMedico._meta.db_table)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))", [CatMedico._meta.db_table]
+        )
+        cursor.execute(f"LOCK TABLE {table} IN SHARE ROW EXCLUSIVE MODE")
+
+
+def _sync_id_sequence():
+    """
+    Deja la secuencia en MAX(id)+1 (D4). `is_called=false` + COALESCE funciona
+    también con la tabla vacía (a diferencia del setval de catalog_import, que
+    con MAX NULL no hace nada). Solo Postgres; en SQLite el autoincrement
+    ya continúa desde el id máximo.
+    """
+    if connection.vendor != "postgresql":
+        return
+    table = CatMedico._meta.db_table
+    quoted = connection.ops.quote_name(table)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT setval(pg_get_serial_sequence(%s, 'id'), "
+            f"COALESCE((SELECT MAX(id) FROM {quoted}), 0) + 1, false)",
+            [table],
+        )
 
 
 class ConfirmMedicosImportUseCase:
@@ -62,75 +102,130 @@ class ConfirmMedicosImportUseCase:
     cliente) y re-corre `parse_and_validate` como única autoridad.
     Todo-o-nada en dos niveles (idéntico a `ConfirmUsersImportUseCase`):
 
-    1. Validación: si queda un solo error en cualquier fila, NO se crea
-       ningún médico (`has_errors=True` -> la vista responde 409).
+    1. Validación: si queda un solo ERROR en cualquier fila, NO se crea
+       ningún médico (`has_errors=True` -> la vista responde 409). Los
+       warnings NO bloquean.
     2. Persistencia: si todas las filas son válidas, se crean todos los
        médicos dentro de una única transacción atómica -- si una fila
        revienta (IntegrityError que el preview no vio), rollback total.
 
-    Simplificación vs. usuarios: médicos no manda correos, así que no hay
-    efecto lateral no transaccional que sacar de `_create_all` -- todo el
-    confirm es atómico sin excepciones.
+    La validación se repite DENTRO del lock de `cat_medicos` (D5): entre el
+    preview y el lock otro alta pudo tomar un No. Médico del archivo.
+
+    Orden de inserción (D6): primero las filas con No. Médico explícito,
+    luego `setval` (D4) y al final las filas sin número, que toman `nextval`
+    sin chocar con ningún id explícito de una fila posterior.
 
     NO reusa `medico_usecase.create_medico`: ese use case exige
-    `usuarioId` numérico, valida `tipo_personal == "Médico"` y depende del
-    flag `MEDICOS_ALLOW_SIN_USUARIO`. Acá `Usuario` es texto OPCIONAL
-    (resuelto por `parse_and_validate` contra `SyUsuario.usuario`): sin
-    usuario se crea con `id_usuario=NULL` + `nombre_display`, sin pasar por
-    el flag -- el flag sigue gobernando solo el alta manual (formulario).
+    `usuarioId` numérico y valida `tipo_personal == "Médico"`. Acá `Usuario`
+    es texto OPCIONAL (resuelto por `parse_and_validate` contra
+    `SyUsuario.usuario`): sin usuario se crea con `id_usuario=NULL` + datos
+    personales propios; este import es el ÚNICO camino de alta sin usuario.
     Se llama a `MedicoRepository.create` directo.
     """
 
     def execute(self, file, actor) -> dict:
         result = parse_and_validate(file)
-
         if result["total_errores"] > 0:
-            return {
-                "totalRecords": result["total_records"],
-                "totalErrores": result["total_errores"],
-                "inserted": 0,
-                "rows": result["rows"],
-                "has_errors": True,
-            }
+            return self._rejected(result)
 
-        inserted = self._create_all(result["rows"], actor)
+        with transaction.atomic():
+            _lock_cat_medicos()
+            # Re-validar con el lock tomado: el archivo se relee desde el inicio.
+            if hasattr(file, "seek"):
+                file.seek(0)
+            result = parse_and_validate(file)
+            if result["total_errores"] > 0:
+                return self._rejected(result)
+            inserted = self._create_all(result["rows"], actor)
 
         return {
             "totalRecords": result["total_records"],
             "totalErrores": 0,
+            "totalWarnings": result["total_warnings"],
             "inserted": inserted,
             "rows": result["rows"],
             "has_errors": False,
         }
 
-    @transaction.atomic
+    @staticmethod
+    def _rejected(result) -> dict:
+        return {
+            "totalRecords": result["total_records"],
+            "totalErrores": result["total_errores"],
+            "totalWarnings": result["total_warnings"],
+            "inserted": 0,
+            "rows": result["rows"],
+            "has_errors": True,
+        }
+
     def _create_all(self, rows, actor):
-        inserted = 0
-        for row in rows:
-            data = row["data"]
+        # Explícitas primero (orden del archivo), luego las que toman nextval.
+        explicit = [r for r in rows if r["data"]["noMedico"] is not None]
+        implicit = [r for r in rows if r["data"]["noMedico"] is None]
 
-            usuario = None
-            if data["usuario"]:
-                usuario = SyUsuario.objects.filter(usuario=data["usuario"]).first()
-                # `usuario` ya se validó en parse_and_validate; si desapareció
-                # o quedó vinculado a otro médico entre preview/confirm y este
-                # instante (carrera improbable), fallamos duro en vez de crear
-                # un médico inconsistente.
-                if usuario is None:
-                    raise MedicoImportRaceError(row["row"], data["usuario"])
-                if MedicoRepository.exists_for_usuario(usuario):
-                    raise MedicoImportRaceError(row["row"], data["usuario"])
+        for row in explicit:
+            self._create_one(row, actor)
+        if explicit:
+            _sync_id_sequence()
+        for row in implicit:
+            self._create_one(row, actor)
 
-            MedicoRepository.create(
-                usuario=usuario,
-                nombre_display=data["nombreDisplay"],
-                tipo_medico=data["tipoMedico"],
-                servicio=data["servicio"],
-                observaciones=data["observaciones"],
-                estatus_medico=data["estatusMedico"],
-                legacy_cd_medico=data["legacyCdMedico"],
+        return len(rows)
+
+    def _create_one(self, row, actor):
+        data = row["data"]
+
+        usuario = None
+        if data["usuario"]:
+            usuario = SyUsuario.objects.filter(usuario=data["usuario"]).first()
+            # `usuario` ya se validó en parse_and_validate; si desapareció
+            # o quedó vinculado a otro médico entre preview/confirm y este
+            # instante (carrera improbable), fallamos duro en vez de crear
+            # un médico inconsistente.
+            if usuario is None:
+                raise MedicoImportRaceError(row["row"], data["usuario"])
+            if MedicoRepository.exists_for_usuario(usuario):
+                raise MedicoImportRaceError(row["row"], data["usuario"])
+
+        # Datos personales SOLO sin usuario (CheckConstraint del modelo).
+        medico = MedicoRepository.create(
+            usuario=usuario,
+            id=data["noMedico"],
+            paterno=None if usuario else data["paterno"],
+            materno=None if usuario else data["materno"],
+            nombre=None if usuario else data["nombre"],
+            cedula_profesional=None if usuario else data["cedulaProfesional"],
+            tipo_medico=data["tipoMedico"],
+            servicio=data["servicio"],
+            observaciones=data["observaciones"],
+            estatus_medico=data["estatusMedico"],
+            created_by_id=actor.id_usuario,
+        )
+
+        if data["centroId"]:
+            RelMedicoCentro.objects.create(
+                medico=medico,
+                centro_id=data["centroId"],
+                tipo_adscripcion="DEFINITIVA",
+                fecha_inicio=date.today(),
                 created_by_id=actor.id_usuario,
             )
-            inserted += 1
+        if data["especialidadId"]:
+            RelMedicoEspecialidad.objects.create(
+                medico=medico,
+                especialidad_id=data["especialidadId"],
+                es_principal=True,
+            )
 
-        return inserted
+        # Con usuario: la cédula va a DetUsuarioCedula SOLO si el usuario no
+        # tiene ninguna; nunca se sobrescribe una existente.
+        if usuario and data["cedulaProfesional"]:
+            if not DetUsuarioCedula.objects.filter(id_usuario=usuario).exists():
+                DetUsuarioCedula.objects.create(
+                    id_usuario=usuario,
+                    numero=data["cedulaProfesional"],
+                    tipo="PROFESIONAL",
+                    es_principal=True,
+                    orden=1,
+                )

@@ -10,14 +10,14 @@ from apps.recepcion.services.errors import VisitDomainError
 _TIPOS_QUE_ACTUALIZAN_ESTATUS = ("VACACIONES", "INCAPACIDAD", "SUSPENSION")
 
 
-def list_excepciones(user_id, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def list_excepciones(medico_id, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     return ExcepcionRepository.list_active(getattr(medico, "id", None))
 
 
 @transaction.atomic
-def create_excepcion(user_id, data, *, actor_id, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def create_excepcion(medico_id, data, *, actor_id, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     if not medico:
         raise VisitDomainError("MEDICO_NOT_FOUND", "Médico no encontrado.", 404)
 
@@ -42,6 +42,6 @@ def create_excepcion(user_id, data, *, actor_id, request=None):
     return exc
 
 
-def delete_excepcion(user_id, exc_id, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def delete_excepcion(medico_id, exc_id, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     ExcepcionRepository.deactivate(medico_id=getattr(medico, "id", None), exc_id=exc_id)

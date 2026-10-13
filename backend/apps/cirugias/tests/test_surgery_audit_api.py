@@ -47,7 +47,7 @@ class SurgeryAuditApiTests(APITestCase):
         )
         self.writer = SyUsuario.objects.get(usuario="cirugias_audit_writer")
 
-        self.surgeon = CatMedico.objects.create(nombre_display="Dr. Auditoria")
+        self.surgeon = CatMedico.objects.create(nombre="Auditoria", paterno="Dr")
         self.surgery_type = CatTipoCirugia.objects.create(name="Apendicectomia")
         self.classification = CatClasificacionCirugia.objects.create(name="Cirugia corta")
         self.reason = CatMotivoCancelacionCirugia.objects.create(name="Paciente no se presento")

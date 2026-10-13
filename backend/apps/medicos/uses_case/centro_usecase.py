@@ -8,8 +8,8 @@ from apps.recepcion.services.errors import VisitDomainError
 
 
 @transaction.atomic
-def add_centro(user_id, data, *, actor_id, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def add_centro(medico_id, data, *, actor_id, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     if not medico:
         raise VisitDomainError("MEDICO_NOT_FOUND", "Médico no encontrado.", 404)
 
@@ -27,8 +27,8 @@ def add_centro(user_id, data, *, actor_id, request=None):
     )
 
 
-def remove_centro(user_id, rel_id, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def remove_centro(medico_id, rel_id, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     if not medico:
         raise VisitDomainError("MEDICO_NOT_FOUND", "Médico no encontrado.", 404)
 

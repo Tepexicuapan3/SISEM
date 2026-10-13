@@ -1,24 +1,23 @@
-import logging
-
 from apps.authentication.models import SyUsuario
 from apps.medicos.models import CatMedico
-
-logger = logging.getLogger(__name__)
 
 
 class MedicoRepository:
     @staticmethod
     def resolve(value, *, request=None, select_related=None, prefetch_related=None):
         """
-        D7 (contrato dual, ventana de compatibilidad): resuelve el parámetro de
-        ruta `/medicos/{value}/...` o un payload `medicoId`/`medicoSuplenteId`/
-        `medicoTitularId` a un `CatMedico`. Intenta primero por la PK surrogate
-        (`CatMedico.pk`); si no hay match, cae a `id_usuario` (comportamiento
-        legacy previo al cambio medico-pk-independiente) y loguea el fallback
-        -- el contador de ese WARN en logs es la métrica que habilita Fase 5
-        (remover el fallback, ver design sección 5).
+        Resuelve el parámetro de ruta `/medicos/{value}/...` o un payload
+        `medicoId`/`medicoSuplenteId`/`medicoTitularId` a un `CatMedico`.
+
+        Contrato unificado (medicos-id-no-medico): `value` es SIEMPRE
+        `CatMedico.pk` (No. Médico). NO hay fallback a `id_usuario`: un id de
+        usuario que no sea además pk de médico devuelve None (404).
         """
         if value in (None, ""):
+            return None
+        try:
+            pk = int(value)
+        except (TypeError, ValueError):
             return None
 
         qs = CatMedico.objects.all()
@@ -27,17 +26,7 @@ class MedicoRepository:
         if prefetch_related:
             qs = qs.prefetch_related(*prefetch_related)
 
-        medico = qs.filter(pk=value).first()
-        if medico is not None:
-            return medico
-
-        medico = qs.filter(id_usuario_id=value).first()
-        if medico is not None:
-            logger.warning(
-                "MEDICO_ID_LEGACY_FALLBACK",
-                extra={"value": value, "path": getattr(request, "path", None)},
-            )
-        return medico
+        return qs.filter(pk=pk).first()
 
     DETAIL_SELECT_RELATED = ["id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela"]
     DETAIL_PREFETCH_RELATED = [
@@ -69,7 +58,13 @@ class MedicoRepository:
 
     @staticmethod
     def get_usuario_candidato(usuario_id):
-        return SyUsuario.objects.select_related("detalle").filter(id_usuario=usuario_id).first()
+        return SyUsuario.objects.select_related("detalle__id_tipo_personal").filter(id_usuario=usuario_id).first()
+
+    @staticmethod
+    def usuario_es_medico(usuario) -> bool:
+        """Regla única: el usuario debe tener tipo_personal "Médico" (alta manual, import, asignar-usuario)."""
+        det = getattr(usuario, "detalle", None)
+        return bool(det and det.id_tipo_personal and det.id_tipo_personal.name == "Médico")
 
     @staticmethod
     def exists_for_usuario(usuario):
@@ -79,29 +74,33 @@ class MedicoRepository:
     def create(
         *,
         usuario=None,
-        nombre_display=None,
+        id=None,
+        nombre=None,
+        paterno=None,
+        materno=None,
+        cedula_profesional=None,
         tipo_medico,
         servicio,
         observaciones,
         created_by_id,
         estatus_medico=None,
-        legacy_cd_medico=None,
     ):
-        # `estatus_medico`/`legacy_cd_medico` son kwargs nuevos (import
-        # masivo, ver Engram sdd/medicos-legacy-field-bulk-import) con
-        # default `None`: si el caller no los pasa, `CatMedico` aplica sus
-        # propios defaults de modelo (`estatus_medico="ACTIVO"`,
-        # `legacy_cd_medico=None`) -- los callers existentes
-        # (`medico_usecase.create_medico`) no rompen.
+        # `id` explícito = No. Médico legado (import masivo); None deja que la
+        # secuencia asigne el siguiente. nombre/paterno/materno/cédula solo
+        # aplican a médicos SIN usuario (CheckConstraint del modelo).
+        # `estatus_medico=None` deja el default del modelo ("ACTIVO").
         kwargs = {}
+        if id is not None:
+            kwargs["id"] = id
         if estatus_medico is not None:
             kwargs["estatus_medico"] = estatus_medico
-        if legacy_cd_medico is not None:
-            kwargs["legacy_cd_medico"] = legacy_cd_medico
 
         return CatMedico.objects.create(
             id_usuario=usuario,
-            nombre_display=nombre_display,
+            nombre=nombre,
+            paterno=paterno,
+            materno=materno,
+            cedula_profesional=cedula_profesional,
             tipo_medico=tipo_medico,
             servicio=servicio,
             observaciones=observaciones,

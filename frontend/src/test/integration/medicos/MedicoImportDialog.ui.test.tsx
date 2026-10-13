@@ -6,7 +6,10 @@ import { MedicoImportDialog } from "@features/admin/modules/medicos/components/M
 import { useMedicoImportPreview } from "@features/admin/modules/medicos/hooks/useMedicoImportPreview";
 import { useMedicoImportConfirm } from "@features/admin/modules/medicos/hooks/useMedicoImportConfirm";
 import { useMedicoImportTemplateDownload } from "@features/admin/modules/medicos/hooks/useMedicoImportTemplateDownload";
-import type { MedicoImportResult } from "@api/types/medicos.types";
+import type {
+  MedicoImportResult,
+  MedicoImportRowData,
+} from "@api/types/medicos.types";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -36,40 +39,55 @@ vi.mock(
   }),
 );
 
+const buildData = (
+  overrides: Partial<MedicoImportRowData> = {},
+): MedicoImportRowData => ({
+  noMedico: null,
+  usuario: "",
+  usuarioId: null,
+  paterno: null,
+  materno: null,
+  nombre: null,
+  cedulaProfesional: null,
+  claveClinica: null,
+  centroId: null,
+  especialidad: null,
+  especialidadId: null,
+  tipoMedico: "CLINICA",
+  servicio: null,
+  estatusMedico: "ACTIVO",
+  observaciones: null,
+  ...overrides,
+});
+
 const buildResult = (
   overrides: Partial<MedicoImportResult> = {},
 ): MedicoImportResult => ({
   totalRecords: 2,
   totalErrores: 0,
+  totalWarnings: 0,
   inserted: 0,
   rows: [
     {
       row: 2,
-      data: {
-        legacyCdMedico: "E00000",
+      data: buildData({
+        noMedico: 2726,
         usuario: "jperez",
         usuarioId: 1,
-        nombreDisplay: null,
-        tipoMedico: "CLINICA",
         servicio: "Cardiología",
-        estatusMedico: "ACTIVO",
-        observaciones: null,
-      },
+      }),
       errors: [],
+      warnings: [],
     },
     {
       row: 3,
-      data: {
-        legacyCdMedico: null,
+      data: buildData({
         usuario: "mgomez",
         usuarioId: 2,
-        nombreDisplay: null,
         tipoMedico: "HOSPITAL",
-        servicio: null,
-        estatusMedico: "ACTIVO",
-        observaciones: null,
-      },
+      }),
       errors: [],
+      warnings: [],
     },
   ],
   ...overrides,
@@ -158,17 +176,9 @@ describe("MedicoImportDialog UI", () => {
         rows: [
           {
             row: 2,
-            data: {
-              legacyCdMedico: null,
-              usuario: "",
-              usuarioId: null,
-              nombreDisplay: null,
-              tipoMedico: "CLINICA",
-              servicio: null,
-              estatusMedico: "ACTIVO",
-              observaciones: null,
-            },
-            errors: ["Nombre del Médico es obligatorio cuando no se captura Usuario."],
+            data: buildData({}),
+            errors: ["Nombre(s) es obligatorio cuando no se captura Usuario."],
+            warnings: [],
           },
         ],
       }),
@@ -181,7 +191,7 @@ describe("MedicoImportDialog UI", () => {
     await user.click(screen.getByRole("button", { name: /validar archivo/i }));
 
     expect(
-      await screen.findByText("Nombre del Médico es obligatorio cuando no se captura Usuario."),
+      await screen.findByText("Nombre(s) es obligatorio cuando no se captura Usuario."),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: /confirmar e importar/i }),
@@ -199,19 +209,14 @@ describe("MedicoImportDialog UI", () => {
         rows: [
           {
             row: 2,
-            data: {
-              legacyCdMedico: null,
+            data: buildData({
               usuario: "jperez",
               usuarioId: 1,
-              nombreDisplay: null,
-              tipoMedico: "CLINICA",
-              servicio: null,
-              estatusMedico: "ACTIVO",
-              observaciones: null,
-            },
+            }),
             errors: [
               "Tipo de Médico 'Clinca' no es válido. Valores permitidos: CLINICA, HOSPITAL, AMBOS.",
             ],
+            warnings: [],
           },
         ],
       }),
@@ -241,19 +246,14 @@ describe("MedicoImportDialog UI", () => {
         rows: [
           {
             row: 2,
-            data: {
-              legacyCdMedico: null,
+            data: buildData({
               usuario: "jperez",
               usuarioId: 1,
-              nombreDisplay: null,
-              tipoMedico: "CLINICA",
-              servicio: null,
-              estatusMedico: "ACTIVO",
-              observaciones: null,
-            },
+            }),
             errors: [
-              "Estatus del Médico 'Jubilado' no es válido. Valores permitidos: ACTIVO, VACACIONES, INCAPACIDAD, SUSPENDIDO, BAJA.",
+              "Estatus del Médico 'Jubilado' no es válido. Valores permitidos: ACTIVO, VACACIONES, INCAPACIDAD, SUSPENDIDO, BAJA (o A / B).",
             ],
+            warnings: [],
           },
         ],
       }),
@@ -267,8 +267,82 @@ describe("MedicoImportDialog UI", () => {
 
     expect(
       await screen.findByText(
-        "Estatus del Médico 'Jubilado' no es válido. Valores permitidos: ACTIVO, VACACIONES, INCAPACIDAD, SUSPENDIDO, BAJA.",
+        "Estatus del Médico 'Jubilado' no es válido. Valores permitidos: ACTIVO, VACACIONES, INCAPACIDAD, SUSPENDIDO, BAJA (o A / B).",
       ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /confirmar e importar/i }),
+    ).toBeDisabled();
+  });
+
+  it("shows warnings distinct from errors and keeps confirm enabled", async () => {
+    const user = userEvent.setup();
+    previewMutateAsync.mockResolvedValue(
+      buildResult({
+        totalErrores: 0,
+        totalWarnings: 1,
+        rows: [
+          {
+            row: 2,
+            data: buildData({
+              noMedico: 35,
+              paterno: "López",
+              materno: "Ramírez",
+              nombre: "Juan",
+              claveClinica: 99,
+              especialidad: "Inexistente",
+            }),
+            errors: [],
+            warnings: [
+              "Clave Clínica '99' sin coincidencia: el médico se crea sin centro.",
+            ],
+          },
+        ],
+      }),
+    );
+
+    render(<MedicoImportDialog open onOpenChange={onOpenChange} />);
+
+    await user.upload(screen.getByLabelText(/archivo excel/i), createFile());
+    await user.click(screen.getByRole("button", { name: /validar archivo/i }));
+
+    expect(
+      await screen.findByText(
+        "Clave Clínica '99' sin coincidencia: el médico se crea sin centro.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("López Ramírez Juan")).toBeVisible();
+    expect(screen.getByText("35")).toBeVisible();
+    expect(screen.getByText(/1 fila con advertencia/i)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /confirmar e importar/i }),
+    ).toBeEnabled();
+  });
+
+  it("blocks confirm when there are errors even if there are also warnings", async () => {
+    const user = userEvent.setup();
+    previewMutateAsync.mockResolvedValue(
+      buildResult({
+        totalErrores: 1,
+        totalWarnings: 1,
+        rows: [
+          {
+            row: 2,
+            data: buildData({ noMedico: 10 }),
+            errors: ["Ya existe un médico con el No. Médico 10."],
+            warnings: ["Sin Usuario y sin Cédula Profesional: el médico queda sin cédula."],
+          },
+        ],
+      }),
+    );
+
+    render(<MedicoImportDialog open onOpenChange={onOpenChange} />);
+
+    await user.upload(screen.getByLabelText(/archivo excel/i), createFile());
+    await user.click(screen.getByRole("button", { name: /validar archivo/i }));
+
+    expect(
+      await screen.findByText("Ya existe un médico con el No. Médico 10."),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: /confirmar e importar/i }),

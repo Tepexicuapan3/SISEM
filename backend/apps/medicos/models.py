@@ -70,7 +70,9 @@ class CatMedico(models.Model):
 
     PK propia (`id`), independiente de `id_usuario` desde el cambio
     `medico-pk-independiente` (ver Engram, topic_key
-    sdd/medico-pk-independiente/design). `id_usuario` bajó a FK nullable
+    sdd/medico-pk-independiente/design). Desde `medicos-id-no-medico`,
+    `id` ES el "No. Médico" del legado (el import lo inserta explícito y
+    ajusta la secuencia). `id_usuario` bajó a FK nullable
     (`SET_NULL`): un médico puede existir sin cuenta de usuario del sistema
     (médico externo/invitado). Esquema físico realizado en
     `medicos/migrations/0004_expand_surrogate_pk.py` .. `0007_switch_surrogate_pk.py`.
@@ -84,21 +86,17 @@ class CatMedico(models.Model):
         blank=True,
         related_name="medico",
     )
-    # Nombre a mostrar cuando id_usuario es NULL (médico sin usuario) y no
-    # hay DetUsuario del que tomar nombre_completo. Ver
-    # apps.medicos.identity.display_name() para la cadena de fallback
-    # completa (cierre de R5, propuesta obs #467).
-    nombre_display  = models.CharField(max_length=200, null=True, blank=True)
-    # Clave del médico en el sistema legado (RH, MySQL). Distinta de
-    # `id_usuario`/los `*_id_legacy` de `0006`/`0007`: aquellos son la PK
-    # vieja intra-SIRES para el médico como usuario; esta es la clave con la
-    # que el legado identifica al médico en `det_cirugia.cd_medico`, y la
-    # usa el import masivo (`services/medico_import_service.py`) para
-    # resolver ese join a futuro. `unique=True` + `null=True`: Postgres/SQLite
-    # tratan múltiples NULL como distintos, así que los médicos nativos de
-    # SIRES (sin origen legado) conviven sin colisión.
-    legacy_cd_medico = models.CharField(max_length=10, null=True, blank=True, unique=True)
-    tipo_medico     = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
+    # Datos personales: SOLO para médicos SIN usuario (los que entran por el
+    # import Excel). Con usuario, la fuente de verdad es DetUsuario /
+    # DetUsuarioCedula; el CheckConstraint de Meta lo garantiza. Lectura
+    # única vía apps.medicos.identity (display_name / nombre_partes /
+    # cedula_profesional). cedula_profesional=30 igual que
+    # DetUsuarioCedula.numero, para moverla al asignar usuario sin truncar.
+    nombre             = models.CharField(max_length=80, null=True, blank=True)
+    paterno            = models.CharField(max_length=80, null=True, blank=True)
+    materno            = models.CharField(max_length=80, null=True, blank=True)
+    cedula_profesional = models.CharField(max_length=30, null=True, blank=True)
+    tipo_medico    = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
     servicio        = models.CharField(max_length=100, null=True, blank=True)
     observaciones   = models.TextField(null=True, blank=True)
     estatus_medico  = models.CharField(max_length=20, choices=ESTATUS_MEDICO, default="ACTIVO", db_index=True)
@@ -111,6 +109,20 @@ class CatMedico(models.Model):
         db_table = "cat_medicos"
         verbose_name = "Médico"
         verbose_name_plural = "Médicos"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(id_usuario__isnull=True)
+                    | models.Q(
+                        nombre__isnull=True,
+                        paterno__isnull=True,
+                        materno__isnull=True,
+                        cedula_profesional__isnull=True,
+                    )
+                ),
+                name="cat_medicos_datos_personales_solo_sin_usuario",
+            ),
+        ]
 
     def __str__(self):
         return f"Médico #{self.id}"

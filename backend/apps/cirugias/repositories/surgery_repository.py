@@ -84,7 +84,9 @@ class SurgeryRepository:
             # origin_clinic_id NO se puede select_related: CatClinica vive
             # en la BD "expedientes" (ver routers.ExpedientesRouter), una
             # base de datos fisicamente distinta.
-            .select_related("surgeon", "surgery_type", "classification")
+            .select_related(
+                "surgeon__id_usuario__detalle", "surgery_type", "classification"
+            )
             .prefetch_related("diagnoses__cie")
             .order_by("scheduled_date", "scheduled_time")
         )

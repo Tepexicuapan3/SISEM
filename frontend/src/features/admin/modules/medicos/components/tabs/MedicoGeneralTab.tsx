@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Save, ShieldCheck, UserRound } from "lucide-react";
+import { Loader2, Save, ShieldCheck, UserPlus, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
@@ -10,6 +10,7 @@ import {
 import { Separator } from "@shared/ui/separator";
 import { Badge } from "@shared/ui/badge";
 import { useUpdateMedico } from "@features/admin/modules/medicos/hooks/useMedicos";
+import { MedicoAsignarUsuarioDialog } from "@features/admin/modules/medicos/components/MedicoAsignarUsuarioDialog";
 import type { MedicoDetail, EstatusMedico, TipoMedico } from "@api/types/medicos.types";
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 
 export function MedicoGeneralTab({ medico, isEditable }: Props) {
   const update = useUpdateMedico(medico.id);
+  const [asignarOpen, setAsignarOpen] = useState(false);
 
   const [tipoMedico, setTipoMedico]       = useState<TipoMedico>(medico.tipoMedico);
   const [servicio, setServicio]           = useState(medico.servicio ?? "");
@@ -54,14 +56,30 @@ export function MedicoGeneralTab({ medico, isEditable }: Props) {
           <ShieldCheck className="size-3.5 text-txt-muted" />
           <p className="text-xs font-semibold tracking-wide text-txt-body uppercase">Datos del usuario</p>
         </div>
+        {!medico.tieneUsuario ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+            <p className="text-xs text-txt-body">
+              <span className="font-semibold">Sin usuario.</span> Los datos personales de este médico
+              viven en el catálogo
+              {medico.cedulaProfesional ? <> (cédula <span className="font-mono">{medico.cedulaProfesional}</span>)</> : null}.
+            </p>
+            {isEditable ? (
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-2"
+                onClick={() => setAsignarOpen(true)}>
+                <UserPlus className="size-3.5" />
+                Asignar usuario
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-line-struct/60 bg-subtle/20 p-4">
           <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
             {([
               { label: "Nombre(s)",       val: medico.nombre  || "—", mono: false },
               { label: "Apellido paterno", val: medico.paterno || "—", mono: false },
               { label: "Apellido materno", val: medico.materno || "—", mono: false },
-              { label: "Usuario",          val: medico.username, mono: true },
-              { label: "Correo",           val: medico.email, mono: false },
+              { label: "Usuario",          val: medico.username ?? "Sin usuario", mono: true },
+              { label: "Correo",           val: medico.email ?? "—", mono: false },
               { label: "Sexo",             val: sexoLabel ?? "No registrado", mono: false },
             ] as const).map(({ label, val, mono }) => (
               <div key={label} className="space-y-0.5">
@@ -183,6 +201,14 @@ export function MedicoGeneralTab({ medico, isEditable }: Props) {
           </div>
         ) : null}
       </div>
+
+      {!medico.tieneUsuario ? (
+        <MedicoAsignarUsuarioDialog
+          medicoId={medico.id}
+          open={asignarOpen}
+          onOpenChange={setAsignarOpen}
+        />
+      ) : null}
     </div>
   );
 }

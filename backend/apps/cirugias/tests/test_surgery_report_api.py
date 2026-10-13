@@ -27,7 +27,7 @@ class SurgeryReportApiTests(APITestCase):
             permissions=["clinico:cirugias:read"],
         )
 
-        self.surgeon = CatMedico.objects.create(nombre_display="Dr. Reporte")
+        self.surgeon = CatMedico.objects.create(nombre="Reporte", paterno="Dr")
         self.surgery_type = CatTipoCirugia.objects.create(name="Colecistectomia")
         self.classification = CatClasificacionCirugia.objects.create(name="Cirugia de quirofano")
 

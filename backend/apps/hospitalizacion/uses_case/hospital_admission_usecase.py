@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from django.db import transaction
@@ -5,6 +6,7 @@ from django.db import transaction
 from apps.administracion.models import AuditoriaEvento
 from apps.hospitalizacion.models import HospitalAdmission
 from apps.hospitalizacion.repositories.hospital_admission_repository import HospitalAdmissionRepository
+from apps.medicos.models import CatMedico
 
 # Campos de texto largo: se auditan como longitud (`<campo>_len`), nunca el
 # contenido -- mismo criterio de minimizacion de datos que
@@ -106,3 +108,80 @@ def resolve_pending_fk(*, field, code_field, lookup, request_id=None):
         )
 
     return resolved_count
+
+
+# Pares (FK, codigo legado crudo) de medico en HospitalAdmission que puentea
+# el comando `resolve_hsp_doctor_codes`.
+DOCTOR_FK_FIELDS = (
+    ("admitting_doctor", "admitting_doctor_code_legacy"),
+    ("discharge_doctor", "discharge_doctor_code_legacy"),
+)
+
+_DIGITS_RE = re.compile(r"[0-9]+")
+
+
+def build_doctor_code_lookup(code_field):
+    """Arma `{codigo_crudo: CatMedico.id}` para `resolve_pending_fk`.
+
+    Desde el cambio `medicos-id-no-medico`, `CatMedico.id` ES el No. Medico
+    legado, asi que el puente es `int(codigo) == CatMedico.id` ("0512" -> 512).
+    Solo mira los codigos de filas pendientes (FK NULL y codigo no NULL).
+    Quedan FUERA (la FK sigue NULL): vacio, no numerico, 0 y numeros sin
+    medico existente. Las claves son las cadenas CRUDAS porque
+    `HospitalAdmission.resolve_pending_fk` filtra `code_field=<crudo>`.
+    """
+    fk_field = next(fk for fk, code in DOCTOR_FK_FIELDS if code == code_field)
+    raw_codes = (
+        HospitalAdmission.objects.filter(**{f"{fk_field}__isnull": True, f"{code_field}__isnull": False})
+        .values_list(code_field, flat=True)
+        .distinct()
+    )
+    numeric = {}
+    for raw in raw_codes:
+        stripped = (raw or "").strip()
+        if _DIGITS_RE.fullmatch(stripped) and int(stripped) > 0:
+            numeric[raw] = int(stripped)
+
+    existing = set(CatMedico.objects.filter(id__in=set(numeric.values())).values_list("id", flat=True))
+    return {raw: medico_id for raw, medico_id in numeric.items() if medico_id in existing}
+
+
+def preview_pending_doctors():
+    """Dry-run: no escribe nada. Por campo: `pending` (FK NULL con codigo),
+    `resolved` (las que se resolverian) y `unresolved` (el resto)."""
+    report = {}
+    for fk_field, code_field in DOCTOR_FK_FIELDS:
+        lookup = build_doctor_code_lookup(code_field)
+        pending = HospitalAdmission.objects.filter(
+            **{f"{fk_field}__isnull": True, f"{code_field}__isnull": False}
+        )
+        pending_count = pending.count()
+        resolvable = pending.filter(**{f"{code_field}__in": list(lookup)}).count()
+        report[fk_field] = {
+            "pending": pending_count,
+            "resolved": resolvable,
+            "unresolved": pending_count - resolvable,
+        }
+    return report
+
+
+def resolve_pending_doctors(request_id=None):
+    """Resuelve `admitting_doctor` y `discharge_doctor` desde sus codigos
+    legados, vía `resolve_pending_fk` (deja un AuditoriaEvento de Sistema por
+    campo y NO genera HospitalAdmissionRevision). Mismo formato que
+    `preview_pending_doctors`."""
+    report = {}
+    for fk_field, code_field in DOCTOR_FK_FIELDS:
+        lookup = build_doctor_code_lookup(code_field)
+        pending_count = HospitalAdmission.objects.filter(
+            **{f"{fk_field}__isnull": True, f"{code_field}__isnull": False}
+        ).count()
+        resolved = resolve_pending_fk(
+            field=fk_field, code_field=code_field, lookup=lookup, request_id=request_id,
+        )
+        report[fk_field] = {
+            "pending": pending_count,
+            "resolved": resolved,
+            "unresolved": pending_count - resolved,
+        }
+    return report

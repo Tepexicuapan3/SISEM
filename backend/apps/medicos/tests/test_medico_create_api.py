@@ -137,6 +137,33 @@ class MedicoCreateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "VALIDATION_ERROR")
 
+    def test_post_medico_without_usuario_id_ignores_nombre_display(self):
+        # R7/S7.1: ya no existe el camino de alta sin usuario (ni con
+        # nombreDisplay): los médicos sin usuario entran solo por import Excel.
+        response = self.client.post(
+            MEDICOS_URL,
+            {"nombreDisplay": "Dr. Sin Usuario"},
+            format="json",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "VALIDATION_ERROR")
+        self.assertEqual(CatMedico.objects.count(), 0)
+
+    def test_post_medico_unknown_usuario_returns_404(self):
+        response = self.client.post(
+            MEDICOS_URL, {"usuarioId": 999999}, format="json", **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_allow_sin_usuario_flag_no_longer_exists(self):
+        # R7/S7.4
+        from django.conf import settings
+
+        self.assertFalse(hasattr(settings, "MEDICOS_ALLOW_SIN_USUARIO"))
+
 
 class MedicoSearchApiTests(APITestCase):
     """GET /api/v1/medicos?search=... no tenia ninguna prueba. Cubre el

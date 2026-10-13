@@ -7,6 +7,8 @@ import type {
   MedicoDetail,
   CreateMedicoRequest,
   UpdateMedicoRequest,
+  AsignarUsuarioRequest,
+  AsignarUsuarioResponse,
   AddEspecialidadRequest,
   AddCentroRequest,
   AddConsultorioRequest,
@@ -54,76 +56,88 @@ export const medicosAPI = {
     return r.data;
   },
 
-  getById: async (userId: number): Promise<MedicoDetailResponse> => {
-    const r = await apiClient.get<MedicoDetailResponse>(`/medicos/${userId}`);
+  getById: async (medicoId: number): Promise<MedicoDetailResponse> => {
+    const r = await apiClient.get<MedicoDetailResponse>(`/medicos/${medicoId}`);
     return r.data;
   },
 
-  update: async (userId: number, data: UpdateMedicoRequest): Promise<MedicoDetail> => {
-    const r = await apiClient.patch<MedicoDetail>(`/medicos/${userId}`, data);
+  update: async (medicoId: number, data: UpdateMedicoRequest): Promise<MedicoDetail> => {
+    const r = await apiClient.patch<MedicoDetail>(`/medicos/${medicoId}`, data);
+    return r.data;
+  },
+
+  /** Asigna un usuario (tipo Médico) a un médico sin usuario; mueve sus datos personales al usuario. */
+  asignarUsuario: async (
+    medicoId: number,
+    data: AsignarUsuarioRequest,
+  ): Promise<AsignarUsuarioResponse> => {
+    const r = await apiClient.post<AsignarUsuarioResponse>(
+      `/medicos/${medicoId}/asignar-usuario`,
+      data,
+    );
     return r.data;
   },
 
   // ── Especialidades ────────────────────────────────────────────────────────
 
-  addEspecialidad: async (userId: number, data: AddEspecialidadRequest) => {
-    const r = await apiClient.post(`/medicos/${userId}/especialidades`, data);
+  addEspecialidad: async (medicoId: number, data: AddEspecialidadRequest) => {
+    const r = await apiClient.post(`/medicos/${medicoId}/especialidades`, data);
     return r.data;
   },
 
-  removeEspecialidad: async (userId: number, especialidadId: number) => {
-    const r = await apiClient.delete(`/medicos/${userId}/especialidades/${especialidadId}`);
+  removeEspecialidad: async (medicoId: number, especialidadId: number) => {
+    const r = await apiClient.delete(`/medicos/${medicoId}/especialidades/${especialidadId}`);
     return r.data;
   },
 
   // ── Centros ───────────────────────────────────────────────────────────────
 
-  addCentro: async (userId: number, data: AddCentroRequest) => {
-    const r = await apiClient.post(`/medicos/${userId}/centros`, data);
+  addCentro: async (medicoId: number, data: AddCentroRequest) => {
+    const r = await apiClient.post(`/medicos/${medicoId}/centros`, data);
     return r.data;
   },
 
-  removeCentro: async (userId: number, relId: number) => {
-    const r = await apiClient.delete(`/medicos/${userId}/centros/${relId}`);
+  removeCentro: async (medicoId: number, relId: number) => {
+    const r = await apiClient.delete(`/medicos/${medicoId}/centros/${relId}`);
     return r.data;
   },
 
   // ── Consultorios ──────────────────────────────────────────────────────────
 
-  addConsultorio: async (userId: number, data: AddConsultorioRequest) => {
-    const r = await apiClient.post(`/medicos/${userId}/consultorios`, data);
+  addConsultorio: async (medicoId: number, data: AddConsultorioRequest) => {
+    const r = await apiClient.post(`/medicos/${medicoId}/consultorios`, data);
     return r.data;
   },
 
-  updateConsultorio: async (userId: number, rmcId: number, data: { consultorioId?: number; tipoAsignacion?: string }) => {
-    const r = await apiClient.patch(`/medicos/${userId}/consultorios/${rmcId}`, data);
+  updateConsultorio: async (medicoId: number, rmcId: number, data: { consultorioId?: number; tipoAsignacion?: string }) => {
+    const r = await apiClient.patch(`/medicos/${medicoId}/consultorios/${rmcId}`, data);
     return r.data;
   },
 
-  removeConsultorio: async (userId: number, rmcId: number) => {
-    const r = await apiClient.delete(`/medicos/${userId}/consultorios/${rmcId}`);
+  removeConsultorio: async (medicoId: number, rmcId: number) => {
+    const r = await apiClient.delete(`/medicos/${medicoId}/consultorios/${rmcId}`);
     return r.data;
   },
 
-  saveHorario: async (userId: number, rmcId: number, data: SaveHorarioRequest) => {
-    const r = await apiClient.put(`/medicos/${userId}/consultorios/${rmcId}/horario`, data);
+  saveHorario: async (medicoId: number, rmcId: number, data: SaveHorarioRequest) => {
+    const r = await apiClient.put(`/medicos/${medicoId}/consultorios/${rmcId}/horario`, data);
     return r.data;
   },
 
   // ── Excepciones ───────────────────────────────────────────────────────────
 
-  getExcepciones: async (userId: number): Promise<MedicoExcepcionesResponse> => {
-    const r = await apiClient.get<MedicoExcepcionesResponse>(`/medicos/${userId}/excepciones`);
+  getExcepciones: async (medicoId: number): Promise<MedicoExcepcionesResponse> => {
+    const r = await apiClient.get<MedicoExcepcionesResponse>(`/medicos/${medicoId}/excepciones`);
     return r.data;
   },
 
-  createExcepcion: async (userId: number, data: CreateExcepcionRequest) => {
-    const r = await apiClient.post(`/medicos/${userId}/excepciones`, data);
+  createExcepcion: async (medicoId: number, data: CreateExcepcionRequest) => {
+    const r = await apiClient.post(`/medicos/${medicoId}/excepciones`, data);
     return r.data;
   },
 
-  deleteExcepcion: async (userId: number, excId: number) => {
-    const r = await apiClient.delete(`/medicos/${userId}/excepciones/${excId}`);
+  deleteExcepcion: async (medicoId: number, excId: number) => {
+    const r = await apiClient.delete(`/medicos/${medicoId}/excepciones/${excId}`);
     return r.data;
   },
 
@@ -155,8 +169,8 @@ export const medicosAPI = {
     return r.data;
   },
 
-  getDisponibilidad: async (userId: number, fecha?: string): Promise<MedicoDisponible> => {
-    const r = await apiClient.get<MedicoDisponible>(`/medicos/${userId}/disponibilidad`, {
+  getDisponibilidad: async (medicoId: number, fecha?: string): Promise<MedicoDisponible> => {
+    const r = await apiClient.get<MedicoDisponible>(`/medicos/${medicoId}/disponibilidad`, {
       params: { fecha },
     });
     return r.data;

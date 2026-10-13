@@ -71,13 +71,18 @@ export interface MedicoConsultorioActivoItem {
 }
 
 export interface MedicoListItem {
+  /** CatMedico.id = No. Médico. Es el único id válido para URLs y payloads de médico. */
   id: number;
-  username: string;
+  /** SyUsuario asociado; null en médicos sin usuario. NUNCA usarlo como id de médico. */
+  usuarioId: number | null;
+  tieneUsuario: boolean;
+  username: string | null;
   nombreCompleto: string;
   nombre: string;
   paterno: string;
   materno: string;
-  email: string;
+  cedulaProfesional: string | null;
+  email: string | null;
   telefono: string | null;
   direccion: string | null;
   sexo: "M" | "F" | "O" | null;
@@ -142,7 +147,10 @@ export interface MedicoCoberturaItem {
 // ─── DISPONIBILIDAD ──────────────────────────────────────────────────────────
 
 export interface MedicoDisponible {
+  /** CatMedico.id (No. Médico): espacio MÉDICO (agenda, slots, citas). */
   medicoId: number;
+  /** SyUsuario del médico: espacio USUARIO (Visit.doctorId). null = no puede atender visitas. */
+  usuarioId: number | null;
   nombreCompleto: string;
   servicio: string | null;
   tipoMedico: TipoMedico;
@@ -171,6 +179,22 @@ export interface CreateMedicoRequest {
   tipoMedico?: TipoMedico;
   servicio?: string | null;
   observaciones?: string | null;
+}
+
+export interface AsignarUsuarioRequest {
+  usuarioId: number;
+}
+
+/** Datos del CatMedico que NO se movieron porque el usuario ya tenía un valor propio. */
+export interface AsignarUsuarioDescartados {
+  nombre?: string;
+  paterno?: string;
+  materno?: string;
+  cedulaProfesional?: string;
+}
+
+export interface AsignarUsuarioResponse extends MedicoListItem {
+  descartados: AsignarUsuarioDescartados;
 }
 
 export interface UpdateMedicoRequest {
@@ -261,17 +285,29 @@ export interface MedicoCoberturasResponse {
 /**
  * Datos normalizados de una fila del Excel de importación.
  * Columnas de origen (en este orden exacto):
- * ID del Médico | Usuario (Login del sistema) | Nombre del Médico |
- * Tipo de Médico | Servicio | Estatus del Médico | Observaciones
+ * No. Médico | Usuario (Login del sistema) | Apellido Paterno |
+ * Apellido Materno | Nombre(s) | Cédula Profesional | Clave Clínica (legado) |
+ * Especialidad | Servicio | Tipo de Médico | Estatus del Médico | Observaciones
  *
- * `usuario` vacío = médico sin usuario (id_usuario NULL); en ese caso
- * `nombreDisplay` es obligatorio. Con usuario, `nombreDisplay` es null.
+ * `noMedico` (opcional) es el `CatMedico.id` explícito; null = toma el
+ * siguiente de la secuencia. `usuario` vacío = médico sin usuario: paterno y
+ * nombre son obligatorios y se guardan en el propio médico. Con usuario,
+ * paterno/materno/nombre son null (se toman del usuario).
+ * `centroId` / `especialidadId` son null cuando la clave o el nombre no
+ * coinciden (la fila trae un warning, no un error).
  */
 export interface MedicoImportRowData {
-  legacyCdMedico: string | null;
+  noMedico: number | null;
   usuario: string;
   usuarioId: number | null;
-  nombreDisplay: string | null;
+  paterno: string | null;
+  materno: string | null;
+  nombre: string | null;
+  cedulaProfesional: string | null;
+  claveClinica: number | null;
+  centroId: number | null;
+  especialidad: string | null;
+  especialidadId: number | null;
   tipoMedico: TipoMedico;
   servicio: string | null;
   estatusMedico: EstatusMedico;
@@ -279,12 +315,14 @@ export interface MedicoImportRowData {
 }
 
 /**
- * Fila procesada de la importación (válida o con errores).
+ * Fila procesada de la importación. `errors` bloquean el lote;
+ * `warnings` son informativos y NO bloquean la confirmación.
  */
 export interface MedicoImportRow {
   row: number;
   data: MedicoImportRowData;
   errors: string[];
+  warnings: string[];
 }
 
 /**
@@ -298,6 +336,7 @@ export interface MedicoImportRow {
 export interface MedicoImportResult {
   totalRecords: number;
   totalErrores: number;
+  totalWarnings: number;
   inserted: number;
   rows: MedicoImportRow[];
 }

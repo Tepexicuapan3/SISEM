@@ -4,6 +4,7 @@ Servicio de notificaciones para citas médicas.
 
 import logging
 
+from apps.medicos.identity import display_name
 from apps.recepcion.models import CitaMedica, CitaNotificacion
 
 logger = logging.getLogger(__name__)
@@ -71,8 +72,7 @@ class NotificacionCitaService:
         )
 
     def _cuerpo_confirmacion(self, cita: CitaMedica) -> str:
-        det = getattr(cita.medico.id_usuario, "detalle", None)
-        nombre_medico = det.nombre_completo if det else "su médico"
+        nombre_medico = display_name(cita.medico)
         return (
             f"Su cita ha sido confirmada.\n\n"
             f"Folio:   {cita.folio}\n"
@@ -83,8 +83,7 @@ class NotificacionCitaService:
         )
 
     def _cuerpo_recordatorio(self, cita: CitaMedica) -> str:
-        det = getattr(cita.medico.id_usuario, "detalle", None)
-        nombre_medico = det.nombre_completo if det else "su médico"
+        nombre_medico = display_name(cita.medico)
         return (
             f"Le recordamos que tiene una cita mañana.\n\n"
             f"Folio:   {cita.folio}\n"

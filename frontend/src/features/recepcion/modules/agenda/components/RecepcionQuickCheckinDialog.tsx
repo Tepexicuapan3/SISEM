@@ -49,6 +49,7 @@ import { useMedicosDisponibles } from "@features/admin/modules/medicos/hooks/use
 import { useAgendaSemanal }       from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
 import { useDebounce } from "@shared/hooks/useDebounce";
+import { puedeAtenderVisitas, SIN_USUARIO_HINT } from "../pages/RecepcionAgendaPage.helpers";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ const resolveDomainError = (error: unknown): string => {
 
 // ─── Sub-componente: tarjeta de disponibilidad de médico ─────────────────────
 
-function MedicoDisponibleCard({
+export function MedicoDisponibleCard({
   medico,
   selected,
   onSelect,
@@ -81,18 +82,21 @@ function MedicoDisponibleCard({
   onSelect: () => void;
 }) {
   const tieneHorario = medico.horaInicio && medico.horaFin;
+  // Sin usuario no existe doctor_id posible: no se puede seleccionar para crear visitas.
+  const sinUsuario = !puedeAtenderVisitas(medico);
+  const bloqueado  = !medico.disponible || sinUsuario;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      disabled={!medico.disponible}
+      disabled={bloqueado}
       className={[
         "flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
         selected
           ? "border-primary bg-primary/5"
           : "border-line-struct hover:bg-subtle/40",
-        !medico.disponible ? "cursor-not-allowed opacity-50" : "",
+        bloqueado ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
     >
       {/* Radio indicator */}
@@ -112,6 +116,9 @@ function MedicoDisponibleCard({
         </p>
         {medico.servicio ? (
           <p className="truncate text-xs text-txt-muted">{medico.servicio}</p>
+        ) : null}
+        {sinUsuario ? (
+          <p className="text-xs text-amber-600">{SIN_USUARIO_HINT}</p>
         ) : null}
 
         {/* Horario y consultorio */}
@@ -254,6 +261,7 @@ export const RecepcionQuickCheckinDialog = ({
   })();
 
   // ── Horarios ocupados — dos fuentes para máxima precisión ───────────────
+  // La agenda semanal es del espacio MÉDICO (CatMedico.id): aquí sí va medicoId.
   const { data: agendaData } = useAgendaSemanal(
     selectedMedico?.medicoId ?? null,
     fechaSlot,
@@ -274,7 +282,8 @@ export const RecepcionQuickCheckinDialog = ({
     activeVisits
       .filter(
         (v) =>
-          v.doctorId === selectedMedico?.medicoId &&
+          selectedMedico?.usuarioId != null &&
+          v.doctorId === selectedMedico.usuarioId &&
           v.horaConsulta !== null &&
           isOpenVisitStatus(v.status),
       )
@@ -313,7 +322,8 @@ export const RecepcionQuickCheckinDialog = ({
   // Sincronizar médico con el form y pre-llenar hora con el PRIMER slot libre
   useEffect(() => {
     if (selectedMedico) {
-      form.setValue("doctorId",      selectedMedico.medicoId,         { shouldValidate: true });
+      // Visit.doctorId = espacio USUARIO (no el No. Médico). Los sin usuario no son seleccionables.
+      form.setValue("doctorId",      selectedMedico.usuarioId ?? undefined, { shouldValidate: true });
       form.setValue("consultorioId", selectedMedico.consultorioId ?? undefined, { shouldValidate: true });
       const primerLibre = slots.find((h) => !horasOcupadas.has(h));
       // Fallback chain: primer slot libre → hora inicio del médico → hora actual

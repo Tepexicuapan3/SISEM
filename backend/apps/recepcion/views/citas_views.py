@@ -110,13 +110,10 @@ def _domain_error(request, exc):
 
 def _resolve_medico_or_404(medico_id_raw, request):
     """
-    Gap 10.3 (design, topic sdd/medico-pk-independiente/design): `medicoId`
-    llega crudo del frontend, que todavía manda el `id` legacy (id_usuario)
-    porque no fue migrado. Se resuelve contra CatMedico con el mismo patrón
-    que `medicos/repositories/medico_repository.py::MedicoRepository.resolve` (PK surrogate
-    primero, fallback a id_usuario con WARN) en vez de pasar el valor sin
-    traducir a CitasRepository -- evita agendar/buscar horarios de la
-    PERSONA EQUIVOCADA (R1).
+    `medicoId` es CatMedico.id (No. Médico, contrato unificado
+    medicos-id-no-medico). `MedicoRepository.resolve` resuelve SOLO por pk (sin
+    fallback a id_usuario): un id inexistente da 404 en vez de agendar con la
+    PERSONA EQUIVOCADA.
 
     Devuelve `(medico, None)` o `(None, error_response)`.
     """
@@ -220,8 +217,8 @@ class CitasListCreateView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
 
-        # Gap 10.3: `medicoId` es un filtro opcional que llega crudo del
-        # frontend (id legacy). Se resuelve contra CatMedico; si no matchea
+        # `medicoId` (CatMedico.id) es un filtro opcional. Se resuelve contra
+        # CatMedico; si no matchea
         # ningún médico, se usa un sentinel imposible (-1) para que el
         # filtro devuelva 0 resultados en vez de ignorarse silenciosamente
         # (list_paginated hace `if medico_id:` -- None se interpretaría
@@ -283,10 +280,8 @@ class CitasListCreateView(APIView):
             except VisitDomainError as exc:
                 return _domain_error(request, exc)
 
-        # Gap 10.3: `medicoId` llega crudo del frontend (id legacy) -- se
-        # resuelve a la PK surrogate de CatMedico ANTES de pasarlo a
-        # CitasRepository.create, mismo patrón que
-        # MedicoRepository.resolve.
+        # `medicoId` es CatMedico.id; se valida su existencia (resolve solo
+        # por pk) ANTES de pasarlo a CitasRepository.create.
         medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
         if err:
             return err
@@ -411,7 +406,7 @@ class SlotsDisponiblesView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
 
-        # Gap 10.3: `medicoId` llega crudo del frontend (id legacy).
+        # `medicoId` es CatMedico.id (contrato unificado).
         medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
         if err:
             return err

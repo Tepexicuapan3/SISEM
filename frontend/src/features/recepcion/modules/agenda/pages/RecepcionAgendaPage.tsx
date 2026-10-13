@@ -63,6 +63,7 @@ import {
   resolveDomainErrorMessage,
   SERVICE_FILTER,
   shouldRefreshQueueAfterError,
+  buildDoctorFilterOptions,
   sortAgendaVisits,
   STATUS_FILTER,
   VISIT_STATUS_DOMAIN_ERROR_MESSAGE,
@@ -263,13 +264,15 @@ export const RecepcionAgendaPage = () => {
       : allConsultorios
   ).map((c) => ({ id: c.id, nombre: `#${c.numero} — ${c.name}` }));
 
-  const doctorOptions = (
+  // El filtro compara contra `visit.doctorId` (espacio USUARIO): las opciones usan
+  // `usuarioId`, no `m.id` (No. Médico). Médicos sin usuario no pueden tener visitas.
+  const doctorOptions = buildDoctorFilterOptions(
     selectedCentroId
       ? allMedicos.filter((m) =>
           m.centros.some((mc) => mc.centroId === selectedCentroId),
         )
-      : allMedicos
-  ).map((m) => ({ id: m.id, nombre: m.nombreCompleto }));
+      : allMedicos,
+  );
 
   // ── Listado visual de médicos — vista Disponibilidad ──────────────────────
   const disponibilidadMedicos = (calCentroId

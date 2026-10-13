@@ -5,6 +5,7 @@ import {
   Download,
   FileSpreadsheet,
   RotateCcw,
+  TriangleAlert,
   Upload,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@shared/ui/alert";
@@ -102,7 +103,7 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
         description:
           result.totalErrores > 0
             ? `${validRows} fila${validRows !== 1 ? "s" : ""} valida${validRows !== 1 ? "s" : ""} y ${result.totalErrores} con error.`
-            : `${result.totalRecords} fila${result.totalRecords !== 1 ? "s" : ""} lista${result.totalRecords !== 1 ? "s" : ""} para importar.`,
+            : `${result.totalRecords} fila${result.totalRecords !== 1 ? "s" : ""} lista${result.totalRecords !== 1 ? "s" : ""} para importar${result.totalWarnings > 0 ? ` (${result.totalWarnings} con advertencia)` : ""}.`,
       });
     } catch (error) {
       toast.error("No se pudo procesar el archivo", {
@@ -175,30 +176,37 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
 
               <div className="space-y-1.5 text-xs text-txt-muted">
                 <p>
-                  Columnas, en este orden:{" "}
-                  <strong>ID del Médico</strong>,{" "}
-                  <strong>Usuario (Login del sistema)</strong>, Nombre del
-                  Médico, Tipo de Médico, Servicio, Estatus del Médico,
-                  Observaciones.
+                  Columnas, en este orden: <strong>No. Médico</strong>,{" "}
+                  <strong>Usuario (Login del sistema)</strong>, Apellido
+                  Paterno, Apellido Materno, Nombre(s), Cédula Profesional,
+                  Clave Clínica (legado), Especialidad, Servicio, Tipo de
+                  Médico, Estatus del Médico, Observaciones.
+                </p>
+                <p>
+                  <strong>No. Médico</strong> es opcional: si se captura es
+                  el identificador del médico (entero positivo, no puede
+                  repetirse ni existir ya); si se deja vacío el sistema asigna
+                  el siguiente número.
                 </p>
                 <p>
                   <strong>Usuario (Login del sistema)</strong> es opcional:
-                  si se captura, debe existir en el sistema y no tener ya un
-                  perfil de médico. Si se deja vacío, el médico se registra
-                  sin usuario y <strong>Nombre del Médico</strong> pasa a ser
-                  obligatorio. El resto es opcional.
+                  si se captura, debe existir y no tener ya un perfil de
+                  médico (apellidos y nombre se toman del usuario). Si se deja
+                  vacío, <strong>Apellido Paterno</strong> y{" "}
+                  <strong>Nombre(s)</strong> son obligatorios y conviene
+                  capturar la Cédula Profesional.
                 </p>
                 <p>
-                  ID del Médico identifica al médico en el sistema
-                  legado; valores como &quot;S/C&quot;, &quot;SN&quot; o
-                  vacío se interpretan como &quot;sin ID&quot; (no como
-                  un ID literal).
+                  Una Clave Clínica o Especialidad sin coincidencia genera una{" "}
+                  <strong>advertencia</strong>: no bloquea la importación, pero
+                  el médico se crea sin ese centro / especialidad.
                 </p>
                 <p>
                   Tipo de Médico acepta &quot;Clínica&quot;, &quot;Hospital&quot;
                   o &quot;Ambos&quot; (vacío se interpreta como Clínica).
-                  Estatus del Médico acepta Activo, Vacaciones, Incapacidad,
-                  Suspendido o Baja (vacío se interpreta como Activo).
+                  Estatus del Médico acepta Activo (A), Vacaciones,
+                  Incapacidad, Suspendido o Baja (B); vacío se interpreta como
+                  Activo.
                 </p>
               </div>
 
@@ -269,7 +277,22 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                   </Alert>
                 )}
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                {previewResult.totalWarnings > 0 ? (
+                  <Alert variant="warning">
+                    <TriangleAlert className="size-4" />
+                    <AlertTitle>
+                      {previewResult.totalWarnings} fila
+                      {previewResult.totalWarnings !== 1 ? "s" : ""} con
+                      advertencia
+                    </AlertTitle>
+                    <AlertDescription>
+                      Las advertencias no bloquean la importación: el médico
+                      se crea sin el dato que no se pudo resolver.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+
+                <div className="grid gap-3 sm:grid-cols-4">
                   <div className="rounded-xl border border-line-struct bg-subtle/40 px-4 py-3">
                     <p className="text-xs text-txt-muted">Total de filas</p>
                     <p className="mt-1 text-lg font-semibold text-txt-body">
@@ -296,6 +319,17 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                     </div>
                   </div>
                   <div className="rounded-xl border border-line-struct bg-subtle/40 px-4 py-3">
+                    <p className="text-xs text-txt-muted">Filas con advertencia</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-lg font-semibold text-txt-body">
+                        {previewResult.totalWarnings}
+                      </p>
+                      {previewResult.totalWarnings > 0 ? (
+                        <Badge variant="alert">Con advertencias</Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-line-struct bg-subtle/40 px-4 py-3">
                     <p className="text-xs text-txt-muted">
                       Médicos creados
                     </p>
@@ -308,12 +342,14 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
                 <DataTable
                   columns={columns}
                   rows={pageRows}
-                  minWidthClassName="min-w-[1440px]"
+                  minWidthClassName="min-w-[1760px]"
                   getRowKey={(row, index) => `${row.row}-${index}`}
                   getRowClassName={(row) =>
                     row.errors.length > 0
                       ? "bg-status-critical/5 hover:bg-status-critical/10"
-                      : undefined
+                      : row.warnings.length > 0
+                        ? "bg-status-alert/5 hover:bg-status-alert/10"
+                        : undefined
                   }
                   emptyTitle="Sin filas para mostrar"
                   emptyDescription="La vista previa no contiene filas procesadas."
@@ -337,7 +373,7 @@ export function MedicoImportDialog({ open, onOpenChange }: MedicoImportDialogPro
             <div className="text-xs text-txt-muted">
               {previewResult && previewResult.totalErrores > 0
                 ? "Hay filas con error: corrige el archivo y volve a subirlo. No se puede confirmar parcialmente."
-                : "La importacion es todo-o-nada: si hay filas con error, no se crea ningun médico."}
+                : "La importacion es todo-o-nada: si hay filas con error, no se crea ningun médico. Las advertencias no bloquean."}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button

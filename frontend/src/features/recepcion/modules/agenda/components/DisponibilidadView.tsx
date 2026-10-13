@@ -8,7 +8,7 @@ import { ARRIVAL_TYPE } from "@api/types";
 import type { MedicoListItem } from "@api/types/medicos.types";
 import type { CheckinFormInput } from "@features/recepcion/modules/checkin/domain/checkin.schemas";
 import { DisponibilidadMedicoCard } from "./DisponibilidadMedicoCard";
-import { formatWeekRange, getMonday } from "../pages/RecepcionAgendaPage.helpers";
+import { formatWeekRange, getMonday, SIN_USUARIO_HINT } from "../pages/RecepcionAgendaPage.helpers";
 
 interface Props {
   centroOptions:          { id: number; nombre: string }[];
@@ -39,6 +39,9 @@ export function DisponibilidadView({
   allMedicos,
   onOpenQuickCheckin,
 }: Props) {
+  const calMedico = allMedicos.find((m) => m.id === calMedicoId);
+  const calMedicoUsuarioId = calMedico?.usuarioId ?? null;
+
   return (
     <div className="space-y-4 rounded-xl border border-line-struct/60 bg-subtle/10 p-4">
 
@@ -130,13 +133,21 @@ export function DisponibilidadView({
         {/* Grilla de slots */}
         <div>
           {calMedicoId ? (
+            <>
+            {calMedicoUsuarioId == null ? (
+              <p className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700" role="status">
+                {SIN_USUARIO_HINT}. Puedes ver su agenda, pero no generar fichas.
+              </p>
+            ) : null}
             <SlotCalendar
               medicoId={calMedicoId}
-              medicoNombre={allMedicos.find((m) => m.id === calMedicoId)?.nombreCompleto}
+              medicoNombre={calMedico?.nombreCompleto}
               weekStart={calWeekStart}
               onSlotClick={(fecha, slot) => {
+                // Visit.doctorId vive en el espacio USUARIO; medicoId (No. Médico) solo para la agenda.
+                if (calMedicoUsuarioId == null) return;
                 onOpenQuickCheckin({
-                  doctorId:      calMedicoId,
+                  doctorId:      calMedicoUsuarioId,
                   consultorioId: slot.consultorioId ?? undefined,
                   horaConsulta:  slot.hora,
                   fechaConsulta: fecha,
@@ -144,6 +155,7 @@ export function DisponibilidadView({
                 });
               }}
             />
+            </>
           ) : (
             <div className="flex flex-col items-center gap-3 py-14 text-center">
               <CalendarDays className="size-12 text-txt-muted/30" />

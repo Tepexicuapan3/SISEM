@@ -13,27 +13,28 @@ from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoCobert
 def serialize_medico(medico: CatMedico) -> dict:
     usuario = medico.id_usuario
     det = getattr(usuario, "detalle", None) if usuario is not None else None
-    cedulas = list(usuario.cedulas.all().order_by("orden")) if usuario is not None else []
-    especialidades = list(medico.especialidades.select_related("especialidad").all())
-    centros = list(medico.centros.select_related("centro").filter(is_active=True))
-    consultorios_activos = list(
-        medico.consultorios.select_related("consultorio", "consultorio__id_center").filter(is_active=True)
-    )
+    # `.all()` + filtro/orden en Python: `.filter()/.order_by()/.select_related()`
+    # sobre el manager relacionado anulan el prefetch de `list_queryset` (N+1).
+    cedulas = sorted(usuario.cedulas.all(), key=lambda c: c.orden) if usuario is not None else []
+    especialidades = list(medico.especialidades.all())
+    centros = [c for c in medico.centros.all() if c.is_active]
+    consultorios_activos = [c for c in medico.consultorios.all() if c.is_active]
+    partes = identity.nombre_partes(medico)
 
     escuela = getattr(det, "id_escuela", None) if det else None
 
     return {
-        # "id" se mantiene como id_usuario (legacy) durante toda la ventana
-        # de compatibilidad -- D7. "medicoId"/"usuarioId" son los campos
-        # nuevos que reemplazan a "id" en Fase 5 (contract).
-        "id": medico.id_usuario_id,
-        "medicoId": medico.id,
+        # Contrato unificado: "id" es SIEMPRE CatMedico.id (No. Médico).
+        # "usuarioId" es el SyUsuario asociado, null en médicos sin usuario.
+        "id": medico.id,
         "usuarioId": medico.id_usuario_id,
+        "tieneUsuario": usuario is not None,
         "username": usuario.usuario if usuario is not None else None,
         "nombreCompleto": identity.display_name(medico),
-        "nombre": det.nombre if det else "",
-        "paterno": det.paterno if det else "",
-        "materno": det.materno if det else "",
+        "nombre": partes.nombre or "",
+        "paterno": partes.paterno or "",
+        "materno": partes.materno or "",
+        "cedulaProfesional": identity.cedula_profesional(medico),
         "email": usuario.correo if usuario is not None else None,
         "telefono": det.telefono if det else None,
         "direccion": det.direccion if det else None,

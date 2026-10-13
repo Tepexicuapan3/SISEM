@@ -25,7 +25,6 @@ import { ScrollArea } from "@shared/ui/ScrollArea";
 import { CatalogCombobox, type CatalogOption }
   from "@/domains/auth-access/components/admin/rbac/users/CatalogCombobox";
 import { useCreateMedico } from "@features/admin/modules/medicos/hooks/useMedicos";
-import { useUsersList }    from "@/domains/auth-access/hooks/rbac/users/useUsersList";
 import { useEspecialidadesList }
   from "@features/admin/modules/catalogos/especialidades/queries/useEspecialidadesList";
 import { useCentrosAtencionList }
@@ -33,7 +32,7 @@ import { useCentrosAtencionList }
 import { useConsultoriosList }
   from "@features/admin/modules/catalogos/consultorios/queries/useConsultoriosList";
 import { medicosAPI } from "@api/resources/medicos.api";
-import { useDebounce } from "@shared/hooks/useDebounce";
+import { MedicoUsuarioPicker } from "@features/admin/modules/medicos/components/MedicoUsuarioPicker";
 import type { MedicoListItem, DiaSemana, TipoExcepcion } from "@api/types/medicos.types";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
@@ -118,10 +117,6 @@ interface Props {
 export function MedicoCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ── Búsqueda de usuario ───────────────────────────────────────────────────
-  const [search, setSearch]     = useState("");
-  const debouncedSearch         = useDebounce(search, 350);
-
   // ── Especialidades (pre-selección) ────────────────────────────────────────
   const [espItems, setEspItems]             = useState<EspItem[]>([]);
   const [selectedEspId, setSelectedEspId]   = useState<number | null>(null);
@@ -151,14 +146,6 @@ export function MedicoCreateDialog({ open, onOpenChange, onCreated }: Props) {
 
   // ── Catálogos ─────────────────────────────────────────────────────────────
 
-  const { data: usersData, isFetching: isSearching } = useUsersList(
-    { search: debouncedSearch, pageSize: 20, page: 1 },
-    { enabled: open && debouncedSearch.length >= 2 },
-  );
-  const medicoUsers = (usersData?.items ?? []).filter(
-    (u) => (u.tipoPersonal?.name ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase() === "MEDICO",
-  );
-
   const { data: espData }    = useEspecialidadesList({ pageSize: 100, isActive: true });
   const espOptions: CatalogOption[] = (espData?.items ?? []).map((e) => ({ id: e.id, name: e.name, isActive: e.isActive }));
 
@@ -185,7 +172,6 @@ export function MedicoCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const handleClose = (nextOpen: boolean) => {
     if (!nextOpen) {
       form.reset();
-      setSearch("");
       setEspItems([]); setSelectedEspId(null);
       setCentroItems([]); setSelectedCentroId(null); setTipoCentro("DEFINITIVA");
       setPendingConsultorios([]);
@@ -358,47 +344,11 @@ export function MedicoCreateDialog({ open, onOpenChange, onCreated }: Props) {
               {/* ── 1. Usuario médico ──────────────────────────────────── */}
               <div className="space-y-2">
                 <SectionHeader>Buscar usuario médico</SectionHeader>
-                <Input
-                  placeholder="Escribe nombre o usuario..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                <MedicoUsuarioPicker
+                  value={form.watch("usuarioId")}
+                  onChange={(id) => form.setValue("usuarioId", id, { shouldValidate: true })}
+                  enabled={open}
                 />
-                {search.length > 0 && search.length < 2 ? (
-                  <p className="text-xs text-txt-muted">Escribe al menos 2 caracteres para buscar.</p>
-                ) : null}
-                {debouncedSearch.length >= 2 && (
-                  <div className="rounded-xl border border-line-struct bg-subtle/20 divide-y divide-line-struct/50 max-h-44 overflow-y-auto">
-                    {isSearching ? (
-                      <p className="px-3 py-2 text-xs text-txt-muted">Buscando...</p>
-                    ) : medicoUsers.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-txt-muted">
-                        Sin usuarios médicos para "{debouncedSearch}"
-                      </p>
-                    ) : (
-                      medicoUsers.map((u) => {
-                        const selected = form.watch("usuarioId") === u.id;
-                        const displayName = u.fullname || u.username;
-                        const initials = displayName.slice(0, 2).toUpperCase();
-                        return (
-                          <button
-                            key={u.id} type="button"
-                            className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-subtle/40 ${selected ? "bg-primary/5 border-l-2 border-primary" : ""}`}
-                            onClick={() => form.setValue("usuarioId", u.id, { shouldValidate: true })}
-                          >
-                            <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold select-none ${selected ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
-                              {initials}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{displayName}</p>
-                              <p className="text-xs text-txt-muted">{u.username}</p>
-                            </div>
-                            {selected && <Badge variant="stable" className="text-xs shrink-0">✓ Seleccionado</Badge>}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
                 <FormField control={form.control} name="usuarioId" render={() => <FormMessage />} />
               </div>
 

@@ -24,7 +24,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
-from apps.medicos.identity import usuario_id_for_medico
+from apps.medicos.identity import display_name, usuario_id_for_medico
 from apps.portal_citas.services.comprobante_service import verificar_payload_qr
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
@@ -145,8 +145,7 @@ def _resolver_nombre_paciente(no_exp: str, pk_num: int) -> str:
 
 
 def _nombre_medico(cita: CitaMedica) -> str:
-    det = getattr(cita.medico.id_usuario, "detalle", None)
-    return det.nombre_completo if det else str(cita.medico_id)
+    return display_name(cita.medico)
 
 
 def _nombre_consultorio(cita: CitaMedica) -> str | None:

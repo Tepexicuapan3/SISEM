@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
 import type {
   EstatusMedico,
@@ -24,11 +24,17 @@ const ESTATUS_MEDICO_LABELS: Record<EstatusMedico, string> = {
   BAJA: "Baja",
 };
 
+const nombreCompleto = (row: MedicoImportRow) =>
+  [row.data.paterno, row.data.materno, row.data.nombre]
+    .filter(Boolean)
+    .join(" ");
+
 /**
  * Columnas de la tabla de vista previa de importación masiva de médicos.
- * Refleja el orden de la plantilla: ID del Médico | Usuario (Login del
- * sistema) | Nombre del Médico | Tipo de Médico | Servicio | Estatus del
- * Médico | Observaciones.
+ * Refleja el orden de la plantilla: No. Médico | Usuario | Apellidos y
+ * Nombre(s) | Cédula | Clave Clínica | Especialidad | Servicio | Tipo |
+ * Estatus | Observaciones. "Resultado" distingue errores (rojo, bloquean)
+ * de warnings (ámbar, no bloquean).
  */
 export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportRow>[] {
   return [
@@ -40,10 +46,11 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       render: (row) => row.row,
     },
     {
-      key: "legacyCdMedico",
-      header: "ID del Médico",
-      className: "w-[120px]",
-      render: (row) => row.data.legacyCdMedico || "—",
+      key: "noMedico",
+      header: "No. Médico",
+      align: "center",
+      className: "w-[110px]",
+      render: (row) => row.data.noMedico ?? "—",
     },
     {
       key: "usuario",
@@ -52,10 +59,35 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       render: (row) => row.data.usuario || "—",
     },
     {
-      key: "nombreDisplay",
-      header: "Nombre del Médico",
-      className: "w-[180px]",
-      render: (row) => row.data.nombreDisplay || "—",
+      key: "nombre",
+      header: "Apellidos y Nombre(s)",
+      className: "w-[200px]",
+      render: (row) => nombreCompleto(row) || "—",
+    },
+    {
+      key: "cedulaProfesional",
+      header: "Cédula Profesional",
+      className: "w-[140px]",
+      render: (row) => row.data.cedulaProfesional || "—",
+    },
+    {
+      key: "claveClinica",
+      header: "Clave Clínica",
+      align: "center",
+      className: "w-[110px]",
+      render: (row) =>
+        row.data.claveClinica === null
+          ? "—"
+          : `${row.data.claveClinica}${row.data.centroId ? "" : " (sin centro)"}`,
+    },
+    {
+      key: "especialidad",
+      header: "Especialidad",
+      className: "w-[170px]",
+      render: (row) =>
+        row.data.especialidad
+          ? `${row.data.especialidad}${row.data.especialidadId ? "" : " (sin match)"}`
+          : "—",
     },
     {
       key: "tipoMedico",
@@ -80,32 +112,42 @@ export function buildMedicoImportPreviewColumns(): DataTableColumn<MedicoImportR
       key: "errors",
       header: "Resultado",
       align: "center",
-      className: "w-[280px]",
+      className: "w-[300px]",
       cellContentClassName: "mx-auto flex justify-center",
       truncate: false,
       render: (row) => {
-        if (row.errors.length > 0) {
+        if (row.errors.length === 0 && row.warnings.length === 0) {
           return (
-            <div className="flex flex-col items-center gap-1">
-              {row.errors.map((message, index) => (
-                <Badge
-                  key={index}
-                  variant="critical"
-                  className="max-w-full whitespace-normal text-left"
-                >
-                  <AlertTriangle className="size-3 shrink-0" />
-                  <span>{message}</span>
-                </Badge>
-              ))}
-            </div>
+            <Badge variant="stable">
+              <CheckCircle2 className="size-3" />
+              Sin errores
+            </Badge>
           );
         }
 
         return (
-          <Badge variant="stable">
-            <CheckCircle2 className="size-3" />
-            Sin errores
-          </Badge>
+          <div className="flex flex-col items-center gap-1">
+            {row.errors.map((message, index) => (
+              <Badge
+                key={`e-${index}`}
+                variant="critical"
+                className="max-w-full whitespace-normal text-left"
+              >
+                <AlertTriangle className="size-3 shrink-0" />
+                <span>{message}</span>
+              </Badge>
+            ))}
+            {row.warnings.map((message, index) => (
+              <Badge
+                key={`w-${index}`}
+                variant="alert"
+                className="max-w-full whitespace-normal text-left"
+              >
+                <Info className="size-3 shrink-0" />
+                <span>{message}</span>
+              </Badge>
+            ))}
+          </div>
         );
       },
     },

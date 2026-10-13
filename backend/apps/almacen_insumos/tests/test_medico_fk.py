@@ -174,3 +174,77 @@ class ConsumoConsultaCreateApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("no encontrado", response.data["detail"])
+
+
+class MedicoSinUsuarioKardexTests(APITestCase):
+    """R5/S5.3: un médico sin usuario (alta por import Excel; nombre propio en
+    CatMedico) se resuelve por nombre, se serializa y se encuentra en la
+    búsqueda del listado de consumos."""
+
+    def setUp(self):
+        self.almacen = _make_almacen()
+        self.medico = CatMedico.objects.create(
+            id=777, nombre="Laura", paterno="Mendoza", materno="Ortiz",
+        )
+        actor = SyUsuario.objects.create(
+            usuario="almacen_user_sin", correo="almacen_sin@example.com",
+            clave_hash=make_password("x"), est_activo=True,
+        )
+        access, _refresh, _sid = start_session(actor, ip_address="127.0.0.1", user_agent="test-agent")
+        self.client.cookies["access_token_cookie"] = access
+
+    def test_serializer_reads_name_of_medico_without_user(self):
+        consumo = ConsumoConsulta.objects.create(
+            id_almacen=self.almacen, fch_consumo="2026-01-01", medico=self.medico
+        )
+
+        data = ConsumoConsultaSerializer(consumo).data
+
+        self.assertEqual(data["medico"], "Laura Mendoza Ortiz")
+
+    def test_serializer_write_resolves_medico_without_user_by_name(self):
+        consumo = ConsumoConsulta.objects.create(id_almacen=self.almacen, fch_consumo="2026-01-01")
+
+        serializer = ConsumoConsultaSerializer(
+            consumo, data={"medico": "Laura Mendoza Ortiz"}, partial=True
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.save().medico_id, self.medico.pk)
+
+    def test_list_search_matches_medico_without_user_by_name_part(self):
+        ConsumoConsulta.objects.create(
+            id_almacen=self.almacen, fch_consumo="2026-01-01", medico=self.medico
+        )
+        otro = _make_medico("medico_consumo_otro", "Pedro Ruiz Soto")
+        ConsumoConsulta.objects.create(
+            id_almacen=self.almacen, fch_consumo="2026-01-02", medico=otro
+        )
+
+        response = self.client.get("/api/v1/almacen/consumos/", {"search": "Mendoza"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        resultados = response.data["results"] if "results" in response.data else response.data["items"]
+        self.assertEqual([r["medico"] for r in resultados], ["Laura Mendoza Ortiz"])
+
+    def test_create_resolves_medico_without_user_by_name(self):
+        categoria = CatCategoriaInsumo.objects.create(nombre="Categoria Sin Usuario")
+        unidad = CatUnidadMedida.objects.create(nombre="Pieza SU", abreviacion="psu")
+        insumo = CatInsumo.objects.create(
+            nombre="Insumo SU", codigo="INS-SU-001", id_categoria=categoria, id_unidad=unidad,
+        )
+        ExistenciaAlmacen.objects.create(id_almacen=self.almacen, id_insumo=insumo, cantidad=10)
+
+        response = self.client.post(
+            "/api/v1/almacen/consumos/",
+            {
+                "idAlmacen": self.almacen.pk,
+                "medico": "Laura Mendoza Ortiz",
+                "fchConsumo": "2026-01-01",
+                "detalles": [{"idInsumo": insumo.pk, "idLote": None, "cantidad": "1"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(ConsumoConsulta.objects.get(pk=response.data["id"]).medico_id, 777)

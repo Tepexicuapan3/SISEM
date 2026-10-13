@@ -134,7 +134,7 @@ class CheckinManualApiTests(APITestCase):
         defaults = dict(
             folio=CitaMedica.generar_folio(),
             no_exp=PACIENTE_NO_EXP, pk_num=0,
-            medico_id=self.medico.id_usuario_id,
+            medico_id=self.medico.id,
             fecha_hora=fecha_hora, duracion_min=20,
             servicio_tipo="medicina_general", estatus=EstatusCita.AGENDADA,
             motivo="Test check-in manual",

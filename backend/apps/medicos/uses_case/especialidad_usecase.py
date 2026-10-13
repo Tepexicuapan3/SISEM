@@ -3,8 +3,8 @@ from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.services.errors import VisitDomainError
 
 
-def add_especialidad(user_id, data, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def add_especialidad(medico_id, data, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     if not medico:
         raise VisitDomainError("MEDICO_NOT_FOUND", "Médico no encontrado.", 404)
 
@@ -26,8 +26,8 @@ def add_especialidad(user_id, data, *, request=None):
     return rel, created
 
 
-def remove_especialidad(user_id, especialidad_id, *, request=None):
-    medico = MedicoRepository.resolve(user_id, request=request)
+def remove_especialidad(medico_id, especialidad_id, *, request=None):
+    medico = MedicoRepository.resolve(medico_id, request=request)
     if not medico:
         raise VisitDomainError("MEDICO_NOT_FOUND", "Médico no encontrado.", 404)
 

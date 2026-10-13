@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.authentication.services.cookie_auth import CookieJWTAuthentication
+from apps.medicos.identity import annotate_display_name, with_identity
 from apps.medicos.models import CatMedico
 
 from ..models.catalogos import Almacen, CatInsumo, CatProveedor
@@ -503,13 +504,17 @@ class ConsumoConsultaViewSet(viewsets.ModelViewSet):
     serializer_class       = ConsumoConsultaSerializer
     pagination_class       = StandardListPagination
     filter_backends        = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields          = ["paciente", "medico__id_usuario__detalle__nombre_completo", "id_almacen__nombre"]
+    search_fields          = ["paciente", "medico__id_usuario__detalle__nombre_completo",
+                              "medico__nombre", "medico__paterno", "medico__materno",
+                              "id_almacen__nombre"]
     ordering_fields        = ["fch_consumo", "created_at"]
     ordering               = ["-fch_consumo"]
     http_method_names      = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        qs = ConsumoConsulta.objects.select_related("id_almacen").prefetch_related(
+        qs = with_identity(
+            ConsumoConsulta.objects.select_related("id_almacen"), prefix="medico__"
+        ).prefetch_related(
             "detalles__id_insumo", "detalles__id_lote"
         )
         id_almacen = self.request.query_params.get("idAlmacen")
@@ -540,8 +545,8 @@ class ConsumoConsultaViewSet(viewsets.ModelViewSet):
         medico_nombre = (data.get("medico") or "").strip()
         if medico_nombre:
             candidatos = list(
-                CatMedico.objects.filter(
-                    id_usuario__detalle__nombre_completo=medico_nombre
+                annotate_display_name(CatMedico.objects.all()).filter(
+                    medico_nombre=medico_nombre
                 )[:2]
             )
             if not candidatos:

@@ -37,6 +37,12 @@ export const buildMedicosTableColumns = ({
 }: BuildOptions): DataTableColumn<MedicoListItem>[] => {
   const base: DataTableColumn<MedicoListItem>[] = [
     {
+      key: "id",
+      header: "No. Médico",
+      className: "w-[100px]",
+      render: (row) => <span className="font-mono text-sm text-txt-muted">{row.id}</span>,
+    },
+    {
       key: "nombre",
       header: "Médico",
       className: "w-[280px]",
@@ -62,7 +68,7 @@ export const buildMedicosTableColumns = ({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-txt-body">{row.nombreCompleto}</p>
-              <p className="truncate text-xs text-txt-muted">{row.username}</p>
+              <p className="truncate text-xs text-txt-muted">{row.username ?? "Sin usuario"}</p>
             </div>
           </div>
         );
@@ -149,6 +155,7 @@ export const buildMedicosTableColumns = ({
 
 export const buildMedicosVisibilityOptions = (showActions: boolean): TableColumnVisibilityItem[] => {
   const opts: TableColumnVisibilityItem[] = [
+    { key: "id",            label: "No. Médico" },
     { key: "nombre",        label: "Médico" },
     { key: "tipoMedico",    label: "Tipo" },
     { key: "servicio",      label: "Servicio" },
