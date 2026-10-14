@@ -1283,6 +1283,9 @@ export type {
   VisitConsultationSummary,
   CloseVisitRequest,
   CloseVisitResponse,
+  FollowUpAppointment,
+  FollowUpSlot,
+  FollowUpSlotsResponse,
   VisitStatusLogItem,
   VisitStatusLogResponse,
 } from "@api/types/visits.types";
@@ -1303,6 +1306,7 @@ export type {
   SlotsResponse,
   FichaQRResponse,
   ConfirmarQRCheckinResponse,
+  ConfirmarCheckinOptions,
 } from "@api/types/citas.types";
 export { ESTATUS_CITA, ORIGEN_CANAL_CITA } from "@api/types/citas.types";
 

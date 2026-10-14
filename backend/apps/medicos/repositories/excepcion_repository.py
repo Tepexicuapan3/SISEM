@@ -24,5 +24,9 @@ class ExcepcionRepository:
         )
 
     @staticmethod
+    def get(*, medico_id, exc_id):
+        return RelMedicoExcepcion.objects.filter(id=exc_id, medico_id=medico_id).first()
+
+    @staticmethod
     def deactivate(*, medico_id, exc_id):
         RelMedicoExcepcion.objects.filter(id=exc_id, medico_id=medico_id).update(is_active=False)

@@ -76,6 +76,7 @@ from django.db.models import Count
 
 from apps.medicos.models import CatMedico
 from apps.recepcion.models import HorarioDisponible
+from apps.recepcion.repositories.citas_repository import q_slots_futuros
 
 SIN_ESPECIALIDAD_LABEL = "Medicina General"
 
@@ -108,6 +109,12 @@ def get_slots_portal(
             fecha=fecha,
             canal__in=["LINEA", "AMBOS"],
         )
+        # Un horario que ya pasó no se puede reservar: ni se muestra.
+        .filter(q_slots_futuros())
+        # Bloqueado por una ausencia del médico: no es "ocupado", no se ofrece.
+        .filter(bloqueado_por_excepcion__isnull=True)
+        # Médico de baja, suspendido, etc.: sus horarios no se ofrecen.
+        .filter(medico__estatus_medico="ACTIVO")
         .select_related("medico__id_usuario__detalle", "consultorio")
         .order_by("hora")
     )
@@ -165,7 +172,9 @@ def get_disponibilidad_mensual(consultorio_id: int, anio: int, mes: int) -> list
             canal__in=["LINEA", "AMBOS"],
             disponible=True,
             fecha__range=(primer_dia, ultimo_dia),
+            medico__estatus_medico="ACTIVO",
         )
+        .filter(q_slots_futuros())
         .values("fecha")
         .annotate(total=Count("id"))
         .order_by("fecha")

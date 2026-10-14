@@ -54,17 +54,30 @@ export interface DiaDisponible {
   slotsDisponibles: number;
 }
 
-export function listarConsultorios(centroId?: number): Promise<Consultorio[]> {
+/**
+ * `miembroId`: paciente para el que se busca horario. El backend deja solo
+ * los consultorios/clínicas de SU clínica (la reserva también lo valida:
+ * `CLINICA_NO_CORRESPONDE`). Sin dato de clínica en SERMED no se filtra.
+ */
+export function listarConsultorios(
+  centroId?: number,
+  miembroId?: string,
+): Promise<Consultorio[]> {
   return apiClient
     .get<{ consultorios: Consultorio[] }>("/portal/consultorios", {
-      params: centroId !== undefined ? { centroId } : undefined,
+      params: {
+        ...(centroId !== undefined ? { centroId } : {}),
+        ...(miembroId ? { miembroId } : {}),
+      },
     })
     .then((res) => res.data.consultorios);
 }
 
-export function listarCentros(): Promise<Centro[]> {
+export function listarCentros(miembroId?: string): Promise<Centro[]> {
   return apiClient
-    .get<{ centros: Centro[] }>("/portal/centros")
+    .get<{ centros: Centro[] }>("/portal/centros", {
+      params: miembroId ? { miembroId } : undefined,
+    })
     .then((res) => res.data.centros);
 }
 

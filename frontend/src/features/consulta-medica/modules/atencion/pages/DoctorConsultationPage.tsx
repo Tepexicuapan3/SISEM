@@ -33,6 +33,7 @@ import { useDoctorQueue } from "@features/consulta-medica/modules/atencion/queri
 import {
   buildDiagnosisFingerprint,
   buildDiagnosisPayload,
+  buildFollowUpSlotId,
   CLOSE_CONSULTATION_DOMAIN_ERROR_MESSAGE,
   DEFAULT_DIAGNOSIS_FORM_VALUES,
   DEFAULT_PRESCRIPTIONS_FORM_VALUES,
@@ -460,9 +461,9 @@ export const DoctorConsultationPage = () => {
         }));
       }
 
-      await closeVisit.mutateAsync({
+      const closeResult = await closeVisit.mutateAsync({
         visitId: selectedVisit.id,
-        data: diagnosisPayload,
+        data: { ...diagnosisPayload, followUpSlotId: buildFollowUpSlotId(values) },
       });
 
       setSelectedVisitStatusOverride({
@@ -474,7 +475,16 @@ export const DoctorConsultationPage = () => {
         delete next[selectedVisit.id];
         return next;
       });
-      toast.success("Consulta cerrada");
+      const seguimiento = closeResult.followUpAppointment;
+      toast.success("Consulta cerrada", {
+        description: seguimiento
+          ? `Cita de seguimiento ${seguimiento.folio}, ${new Date(seguimiento.fechaHora).toLocaleString("es-MX", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              timeZone: "America/Mexico_City",
+            })}.`
+          : undefined,
+      });
       navigate("/clinico/consultas/doctor");
       diagnosisForm.reset(DEFAULT_DIAGNOSIS_FORM_VALUES);
       prescriptionsForm.reset(DEFAULT_PRESCRIPTIONS_FORM_VALUES);

@@ -245,7 +245,8 @@ class PortalCentrosYFiltroClinicaTests(APITestCase):
     # ── GET /portal/slots — JSON crudo sin medicoNombre ─────────────────
 
     def test_slots_json_crudo_no_incluye_medico_nombre(self):
-        fecha = date(2026, 8, 10)
+        # Fecha futura: los horarios que ya pasaron no se listan.
+        fecha = (timezone.now() + timedelta(days=30)).date()
         HorarioDisponible.objects.create(
             medico=self.medico, consultorio=self.consultorio,
             fecha=fecha, hora="09:00", canal="LINEA",

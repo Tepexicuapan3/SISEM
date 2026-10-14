@@ -170,15 +170,32 @@ def serialize_excepcion(exc) -> dict:
     }
 
 
-def serialize_excepcion_created(exc) -> dict:
+def serialize_excepcion_created(resultado) -> dict:
     """Forma reducida que devuelve el POST -- distinta del listado (ver
     contrato preexistente: el POST nunca expuso horaInicio/horaFin/motivo/
-    consultorioId, solo id/tipo/fechaInicio/fechaFin)."""
+    consultorioId, solo id/tipo/fechaInicio/fechaFin). Suma lo que la
+    ausencia afectó: horarios bloqueados y las citas ya agendadas que
+    recepción tiene que reprogramar (no se cancelan solas)."""
+    exc = resultado.excepcion
     return {
         "id": exc.id,
         "tipo": exc.tipo,
         "fechaInicio": str(exc.fecha_inicio),
         "fechaFin": str(exc.fecha_fin),
+        "horariosBloqueados": resultado.horarios_bloqueados,
+        "citasAfectadas": [
+            {
+                "id": cita.id,
+                "folio": cita.folio,
+                "noExp": cita.no_exp,
+                "pkNum": cita.pk_num,
+                "fechaHora": cita.fecha_hora.isoformat(),
+                "consultorioNombre": cita.consultorio.name if cita.consultorio_id else None,
+                "estatus": cita.estatus,
+                "origenCanal": cita.origen_canal,
+            }
+            for cita in resultado.citas_afectadas
+        ],
     }
 
 

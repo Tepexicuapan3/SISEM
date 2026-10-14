@@ -67,7 +67,12 @@ export default function ConfirmarReservaPage() {
       navigate("/reservar/exito", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.code === "SLOT_NO_DISPONIBLE") {
+        if (
+          err.code === "SLOT_NO_DISPONIBLE" ||
+          err.code === "HORARIO_PASADO" ||
+          err.code === "MEDICO_NO_DISPONIBLE" ||
+          err.code === "CLINICA_NO_CORRESPONDE"
+        ) {
           setSlotNoDisponible(true);
           setError(err.message);
         } else if (err.code === "VALIDATION_ERROR") {

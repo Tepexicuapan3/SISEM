@@ -98,12 +98,21 @@ def update_medico(medico, data, *, actor_id):
         medico.servicio = data.get("servicio") or None
     if "observaciones" in data:
         medico.observaciones = data.get("observaciones") or None
+    estatus_anterior = medico.estatus_medico
     if "estatusMedico" in data:
         medico.estatus_medico = data["estatusMedico"]
 
     medico.updated_at = timezone.now()
     medico.updated_by_id = actor_id
     MedicoRepository.save(medico)
+
+    # La generación semanal salta a los médicos no ACTIVOS: al reactivarlo
+    # se generan sus horarios sin esperar al lunes. (Mientras no está ACTIVO,
+    # sus horarios no se listan ni se reservan.)
+    if estatus_anterior != "ACTIVO" and medico.estatus_medico == "ACTIVO":
+        from apps.recepcion.repositories.citas_repository import CitasRepository
+
+        CitasRepository.generar_slots_medico(medico_id=medico.id, dias_adelante=30)
     return medico
 
 

@@ -73,6 +73,7 @@ from .uses_case.consultation_usecase import (
     add_secondary_diagnosis,
     cancel_secondary_diagnosis,
     close_consultation,
+    ensure_doctor_role,
     get_consultation_addenda,
     get_secondary_diagnoses,
     save_diagnosis,
@@ -81,6 +82,7 @@ from .uses_case.consultation_usecase import (
     start_consultation,
     suggest_morbidity,
 )
+from .uses_case.follow_up_usecase import list_follow_up_slots
 from .uses_case.medical_leave_usecase import (
     create_medical_leave,
     get_patient_medical_leaves,
@@ -2234,6 +2236,36 @@ class VisitMorbiditySuggestionView(APIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
+class VisitFollowUpSlotsView(APIView):
+    """Horarios libres de la agenda del médico que atiende, para elegir la
+    cita de seguimiento al cerrar la nota (P-12). Solo lectura."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        actor_id, roles, permissions = _actor_context(user)
+        try:
+            ensure_doctor_role(roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        try:
+            fecha = parse_date(request.query_params.get("fecha", ""))
+        except ValueError:
+            fecha = None
+        if fecha is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "La fecha debe tener el formato AAAA-MM-DD.",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                request_id=get_request_id(request),
+            )
+        return Response({"slots": list_follow_up_slots(fecha, actor_id)}, status=status.HTTP_200_OK)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class VisitPrescriptionsSaveView(APIView):
     authentication_classes = []
@@ -2371,6 +2403,7 @@ class VisitConsultationCloseView(APIView):
                 therapeutic_plan=validated_data.get("therapeuticPlan"),
                 morbidity=validated_data.get("morbidity"),
                 follow_up_date=validated_data.get("followUpDate"),
+                follow_up_slot_id=validated_data.get("followUpSlotId"),
                 audit_hook=audit_hook,
             )
         except VisitDomainError as exc:

@@ -420,14 +420,18 @@ def change_visit_status(
                     visit.doctor_id, visit_id,
                 )
             else:
+                from apps.recepcion.services.bloqueo_slots_service import liberar_slots
+
                 fecha_slot = visit.fecha_consulta or timezone.localtime(timezone.now()).date()
-                HorarioDisponible.objects.filter(
+                # Si el horario cae en una ausencia del médico queda bloqueado.
+                liberar_slots(HorarioDisponible.objects.filter(
                     medico_id=medico_id,
                     fecha=fecha_slot,
                     hora=visit.hora_consulta,
                     disponible=False,
                     cita__isnull=True,  # solo libera slots de fichas, no de CitaMedica formal
-                ).update(disponible=True)
+                    bloqueado_por_excepcion__isnull=True,
+                ))
 
     return VisitRepository.to_contract(visit)
 

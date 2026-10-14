@@ -3,6 +3,7 @@ import type {
   CitaListItem,
   CitasListParams,
   CitasListResponse,
+  ConfirmarCheckinOptions,
   ConfirmarQRCheckinResponse,
   CreateCitaRequest,
   FichaQRResponse,
@@ -48,10 +49,13 @@ export const citasAPI = {
     return r.data;
   },
 
-  confirmarVerificacionQR: async (payload: string): Promise<ConfirmarQRCheckinResponse> => {
+  confirmarVerificacionQR: async (
+    payload: string,
+    options: ConfirmarCheckinOptions = {},
+  ): Promise<ConfirmarQRCheckinResponse> => {
     const r = await apiClient.post<ConfirmarQRCheckinResponse>(
       "/citas/verificar-qr/confirmar",
-      { payload },
+      { payload, ...options },
     );
     return r.data;
   },

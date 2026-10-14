@@ -62,6 +62,7 @@ export const buildConfirmedFichaFromCandidato = (
 ): FichaQRResponse => ({
   folio: result.folio,
   paciente: result.paciente || candidato.pacienteNombre,
+  vigenciaActiva: candidato.vigenciaActiva,
   medico: candidato.medicoNombre,
   consultorio: candidato.consultorioNombre,
   fechaHora: candidato.fechaHora,

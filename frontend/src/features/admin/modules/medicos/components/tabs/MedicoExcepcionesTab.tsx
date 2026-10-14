@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarX2, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@shared/ui/alert";
 import { Button } from "@shared/ui/button";
 import { Badge } from "@shared/ui/badge";
 import { Input } from "@shared/ui/input";
@@ -9,7 +10,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@shared/ui/select";
 import { useMedicoExcepciones, useCreateExcepcion, useDeleteExcepcion } from "@features/admin/modules/medicos/hooks/useMedicos";
-import type { TipoExcepcion } from "@api/types/medicos.types";
+import type { CitaAfectadaPorExcepcion, TipoExcepcion } from "@api/types/medicos.types";
+
+const formatFechaHoraCita = (iso: string) =>
+  new Date(iso).toLocaleString("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Mexico_City",
+  });
 
 const TIPO_LABELS: Record<TipoExcepcion, string> = {
   VACACIONES: "Vacaciones", INCAPACIDAD: "Incapacidad", PERMISO: "Permiso",
@@ -36,11 +44,13 @@ export function MedicoExcepcionesTab({ medicoId, isEditable }: Props) {
   const [horaInicio, setHoraInicio] = useState("");
   const [horaFin, setHoraFin] = useState("");
   const [motivo, setMotivo] = useState("");
+  // Citas que ya estaban agendadas dentro de la última ausencia registrada.
+  const [citasAfectadas, setCitasAfectadas] = useState<CitaAfectadaPorExcepcion[]>([]);
 
   const handleAdd = async () => {
     if (!fechaInicio || !fechaFin) return;
     try {
-      await createExc.mutateAsync({
+      const resultado = await createExc.mutateAsync({
         tipo,
         fechaInicio,
         fechaFin,
@@ -49,7 +59,10 @@ export function MedicoExcepcionesTab({ medicoId, isEditable }: Props) {
         motivo: motivo || null,
       });
       setFechaInicio(""); setFechaFin(""); setHoraInicio(""); setHoraFin(""); setMotivo("");
-      toast.success("Excepción registrada.");
+      setCitasAfectadas(resultado.citasAfectadas);
+      toast.success("Excepción registrada.", {
+        description: `${resultado.horariosBloqueados} horarios quedaron sin habilitar.`,
+      });
     } catch {
       toast.error("No se pudo registrar la excepción.");
     }
@@ -60,6 +73,40 @@ export function MedicoExcepcionesTab({ medicoId, isEditable }: Props) {
   return (
     <div className="space-y-4">
       <p className="text-xs font-semibold tracking-wide text-txt-muted uppercase">Excepciones y ausencias</p>
+
+      {citasAfectadas.length > 0 ? (
+        <Alert variant="warning">
+          <CalendarX2 className="size-4" />
+          <AlertTitle>
+            {citasAfectadas.length === 1
+              ? "1 cita quedó dentro de la ausencia"
+              : `${citasAfectadas.length} citas quedaron dentro de la ausencia`}
+          </AlertTitle>
+          <AlertDescription>
+            <p>No se cancelaron. Recepción tiene que reprogramarlas.</p>
+            <ul className="mt-2 space-y-1">
+              {citasAfectadas.map((cita) => (
+                <li key={cita.id} className="text-xs">
+                  <span className="font-mono">{cita.folio}</span>
+                  {" · "}
+                  {formatFechaHoraCita(cita.fechaHora)}
+                  {" · Exp. "}
+                  {cita.noExp}
+                  {cita.pkNum ? `-${cita.pkNum}` : ""}
+                  {cita.consultorioNombre ? ` · ${cita.consultorioNombre}` : ""}
+                  {cita.origenCanal === "PORTAL" ? " · En línea" : ""}
+                </li>
+              ))}
+            </ul>
+            <Button
+              type="button" variant="ghost" size="sm" className="mt-2"
+              onClick={() => setCitasAfectadas([])}
+            >
+              Entendido
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {isLoading ? (
         <p className="text-sm text-txt-muted">Cargando...</p>

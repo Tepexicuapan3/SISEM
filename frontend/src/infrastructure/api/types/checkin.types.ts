@@ -21,6 +21,8 @@ import type { EstatusCita, OrigenCanalCita } from "@api/types/citas.types";
 export interface CheckinCandidato {
   folio: string;
   pacienteNombre: string;
+  /** false → el check-in pide el motivo u oficio de Capital Humano. */
+  vigenciaActiva: boolean;
   fechaHora: string; // ISO 8601
   consultorioNombre: string | null;
   medicoNombre: string;

@@ -269,13 +269,13 @@ class MedicoExcepcionesView(APIView):
             return auth_error
 
         try:
-            exc = excepcion_usecase.create_excepcion(
+            resultado = excepcion_usecase.create_excepcion(
                 medico_id, request.data, actor_id=actor.id_usuario, request=request,
             )
         except VisitDomainError as exc_error:
             return _domain_error_response(request, exc_error)
 
-        return Response(presenters.serialize_excepcion_created(exc), status=status.HTTP_201_CREATED)
+        return Response(presenters.serialize_excepcion_created(resultado), status=status.HTTP_201_CREATED)
 
     def delete(self, request, medico_id, exc_id):
         _, auth_error = _authorize(request, "admin:gestion:medicos:excepciones", require_csrf=True)

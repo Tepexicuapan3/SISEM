@@ -16,6 +16,7 @@ from apps.consulta_medica.repositories.consultation_repository import (
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.repositories.visit_diagnosis_repository import VisitDiagnosisRepository
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
+from apps.consulta_medica.uses_case.follow_up_usecase import follow_up_contract, schedule_follow_up
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
@@ -417,8 +418,12 @@ def close_consultation(
     plan=None,
     *,
     audit_hook,
+    follow_up_slot_id=None,
     **note_fields,
 ):
+    """``follow_up_slot_id``: horario de la agenda del médico para la cita de
+    seguimiento; se crea en la misma transacción del cierre (ver
+    ``follow_up_usecase``). Las repeticiones idempotentes no lo usan."""
     ensure_doctor_role(roles, permissions)
     normalized_note_fields = _normalize_note_fields(note_fields)
     normalized_primary_diagnosis = (primary_diagnosis or "").strip()
@@ -545,6 +550,13 @@ def close_consultation(
             to_status=next_state,
             changed_by_id=doctor_id,
         )
+        # Cita de seguimiento elegida por el médico: si el horario ya no se
+        # puede usar, se revierte el cierre completo y el médico elige otro.
+        follow_up = None
+        if follow_up_slot_id:
+            follow_up = schedule_follow_up(
+                visit, normalized_note_fields.get("follow_up_date"), follow_up_slot_id, doctor_id,
+            )
         # Invariante A4.3: exactamente 1 evento ConsultationClosed por
         # request aunque haya 3 escrituras de dominio en este path.
         # strict=False (A7): un fallo del hook no revierte el cierre.
@@ -558,6 +570,7 @@ def close_consultation(
     return {
         "visit": VisitRepository.to_contract(visit),
         "consultation": ConsultationRepository.to_contract(consultation),
+        "followUpAppointment": follow_up_contract(follow_up),
     }
 
 

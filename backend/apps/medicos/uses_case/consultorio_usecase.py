@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers as drf_serializers
 
 from apps.medicos.repositories.consultorio_repository import ConsultorioRepository
@@ -46,6 +47,7 @@ def add_consultorio(medico_id, data, *, actor_id, request=None):
     return ConsultorioRepository.get_with_horarios(rmc.id)
 
 
+@transaction.atomic
 def update_consultorio_asignacion(medico_id, rmc_id, data, *, request=None):
     medico = MedicoRepository.resolve(medico_id, request=request)
     rmc = ConsultorioRepository.get_asignacion(rmc_id=rmc_id, medico_id=getattr(medico, "id", None))
@@ -58,17 +60,26 @@ def update_consultorio_asignacion(medico_id, rmc_id, data, *, request=None):
         if not consultorio:
             raise VisitDomainError("CONSULTORIO_NOT_FOUND", "Consultorio no encontrado.", 404)
 
+    consultorio_anterior_id = rmc.consultorio_id
     ConsultorioRepository.update(
         rmc,
         consultorio=consultorio,
         tipo_asignacion=data.get("tipoAsignacion"),
     )
+    # Los horarios libres no deben quedar publicados en el consultorio viejo.
+    if consultorio is not None and consultorio.id != consultorio_anterior_id:
+        _regenerar_slots(rmc.medico_id)
     return ConsultorioRepository.get_with_horarios(rmc.id)
 
 
+@transaction.atomic
 def remove_consultorio(medico_id, rmc_id, *, request=None):
     medico = MedicoRepository.resolve(medico_id, request=request)
     ConsultorioRepository.deactivate(medico_id=getattr(medico, "id", None), rmc_id=rmc_id)
+    # Sin la asignación, sus horarios libres dejan de publicarse (los que ya
+    # tienen cita se conservan).
+    if medico is not None:
+        _regenerar_slots(medico.id)
 
 
 @transaction.atomic
@@ -96,10 +107,12 @@ def _regenerar_slots(medico_id):
     from apps.recepcion.models import HorarioDisponible
     from apps.recepcion.repositories.citas_repository import CitasRepository
 
+    # También los bloqueados por una ausencia: se regeneran con el horario
+    # nuevo y vuelven a quedar bloqueados si la ausencia sigue.
     HorarioDisponible.objects.filter(
+        Q(disponible=True) | Q(bloqueado_por_excepcion__isnull=False),
         medico_id=medico_id,
         fecha__gte=date.today(),
-        disponible=True,
         cita__isnull=True,
     ).delete()
     CitasRepository.generar_slots_medico(medico_id=medico_id, dias_adelante=60)

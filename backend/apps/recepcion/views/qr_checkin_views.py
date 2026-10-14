@@ -43,6 +43,7 @@ from apps.realtime.events import publish_visit_created, publish_visit_status_cha
 from apps.recepcion.serializers import (
     CandidatosCheckinQuerySerializer,
     ConfirmarCheckinFolioSerializer,
+    ConfirmarQRCheckinSerializer,
     VerificarQRSerializer,
 )
 from apps.recepcion.services.errors import VisitDomainError
@@ -154,6 +155,8 @@ def _log_y_notificar_checkin(request, user, resultado: dict, origen: str) -> Non
             "module": "recepcion", "endpoint": request.path,
             "visitId": visit.get("id"), "origen": origen,
             "folio": resultado.get("folio"),
+            # Atendido sin vigencia por orden de Capital Humano.
+            "autorizacionCapitalHumano": bool(resultado.get("autorizacionVigencia")),
         },
     )
     try:
@@ -191,7 +194,7 @@ class ConfirmarQRCheckinView(APIView):
         except VisitDomainError as exc:
             return _domain_error(request, exc)
 
-        validated_data, err = _validate_body(request, VerificarQRSerializer)
+        validated_data, err = _validate_body(request, ConfirmarQRCheckinSerializer)
         if err:
             return err
         payload = validated_data["payload"]
@@ -200,6 +203,7 @@ class ConfirmarQRCheckinView(APIView):
             resultado = confirmar_checkin(
                 payload,
                 verificado_por_id=getattr(user, "id_usuario", None),
+                autorizacion_capital_humano=validated_data.get("autorizacionCapitalHumano"),
             )
         except VisitDomainError as exc:
             return _domain_error(request, exc)
@@ -275,6 +279,7 @@ class ConfirmarCheckinPorFolioView(APIView):
             resultado = checkin_por_folio(
                 validated_data["folio"],
                 verificado_por_id=getattr(user, "id_usuario", None),
+                autorizacion_capital_humano=validated_data.get("autorizacionCapitalHumano"),
             )
         except VisitDomainError as exc:
             return _domain_error(request, exc)

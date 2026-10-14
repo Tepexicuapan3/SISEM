@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { citasAPI } from "@api/resources/citas.api";
+import type { ConfirmarCheckinOptions } from "@api/types";
 import { visitFlowKeys } from "@features/recepcion/shared/queries/visit-flow.keys";
 
 /**
@@ -13,7 +14,8 @@ export const useConfirmarQRCheckin = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: string) => citasAPI.confirmarVerificacionQR(payload),
+    mutationFn: ({ payload, ...options }: { payload: string } & ConfirmarCheckinOptions) =>
+      citasAPI.confirmarVerificacionQR(payload, options),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: visitFlowKeys.lists() });
       queryClient.invalidateQueries({ queryKey: ["agenda-semanal"] });

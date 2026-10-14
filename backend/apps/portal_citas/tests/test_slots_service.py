@@ -12,7 +12,8 @@ NUNCA incluye la key ``medicoNombre`` -- el nombre del médico no debe
 viajar al navegador antes de que el paciente reserve.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone as dt_timezone
+from unittest import mock
 
 from django.test import TestCase
 
@@ -27,6 +28,15 @@ FECHA = date(2026, 8, 3)
 
 class GetSlotsPortalTests(TestCase):
     def setUp(self):
+        # Los horarios que ya pasaron no se listan: se congela "ahora" antes
+        # de FECHA.
+        ahora_patcher = mock.patch(
+            "django.utils.timezone.now",
+            return_value=datetime(2026, 7, 1, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        ahora_patcher.start()
+        self.addCleanup(ahora_patcher.stop)
+
         self.centro = CatCentroAtencion.objects.create(
             name="Centro Slots",
             code="CT-SLOTS-01",

@@ -21,6 +21,9 @@ const diagnosisFieldsSchema = z.object({
   morbidity: z.enum(["", "1", "2"]),
   followUpEnabled: z.boolean(),
   followUpDate: z.string(),
+  // P-12: horario de la agenda del médico ("" = sin elegir: la fecha queda
+  // como indicación y la cita la agenda recepción). Solo se usa al cerrar.
+  followUpSlotId: z.string(),
 });
 
 export const saveDiagnosisFormSchema = diagnosisFieldsSchema.superRefine((values, ctx) => {

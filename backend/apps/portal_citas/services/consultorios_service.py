@@ -25,6 +25,10 @@ from django.core.cache import cache
 
 from apps.catalogos.models import Consultorios
 from apps.medicos.models import RelMedicoConsultorioHorario
+from apps.portal_citas.errors import PortalReservaError
+from apps.portal_citas.models import PortalMiembro
+from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
+from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 
 CACHE_KEY = "portal:consultorios:linea"
 CACHE_TTL = 300
@@ -60,7 +64,24 @@ def _consultar() -> list[dict]:
     ]
 
 
-def listar_consultorios_en_linea(centro_id: int | None = None) -> list[dict]:
+def clinica_del_miembro(miembro_sesion, miembro_id) -> str | None:
+    """
+    Clínica (centro) del paciente para el que se está buscando horario.
+    Solo se agenda en consultorios de su clínica; la reserva lo vuelve a
+    validar. Un miembro ajeno a la sesión -> mismo 403 genérico que la
+    reserva. ``None`` = sin dato de clínica: no se filtra.
+    """
+    miembro = PortalMiembro.objects.filter(id=miembro_id).first()
+    if miembro is None or not puede_gestionar_miembro(miembro_sesion, miembro_id):
+        raise PortalReservaError("NO_AUTORIZADO", "No puedes agendar una cita para ese miembro.", 403)
+    return centro_del_paciente(miembro.no_exp, miembro.pk_num)
+
+
+def listar_consultorios_en_linea(
+    centro_id: int | None = None,
+    *,
+    centro_paciente: str | None = None,
+) -> list[dict]:
     """
     Lista completa (cacheada) de consultorios habilitados para canal en
     línea. Con ``centro_id`` filtra en memoria sobre esa misma lista
@@ -69,14 +90,19 @@ def listar_consultorios_en_linea(centro_id: int | None = None) -> list[dict]:
     el dataset ya está completo en memoria, filtrar ahí es O(n) trivial
     sobre una lista de decenas de filas. ``centro_id=None`` devuelve todo
     (comportamiento previo, "Todas las clínicas").
+
+    ``centro_paciente`` (ver ``clinica_del_miembro``) deja solo los de la
+    clínica del paciente; también se filtra en memoria.
     """
     datos = cache.get_or_set(CACHE_KEY, _consultar, CACHE_TTL)
+    if centro_paciente is not None:
+        datos = [c for c in datos if centro_permitido(centro_paciente, c["centroId"])]
     if centro_id is None:
         return datos
     return [c for c in datos if c["centroId"] == centro_id]
 
 
-def listar_centros_en_linea() -> list[dict]:
+def listar_centros_en_linea(*, centro_paciente: str | None = None) -> list[dict]:
     """
     Catálogo de centros de atención con AL MENOS UN consultorio habilitado
     para canal en línea, derivado por dedup en memoria de la MISMA lista
@@ -89,7 +115,7 @@ def listar_centros_en_linea() -> list[dict]:
     """
     vistos: set[int] = set()
     centros: list[dict] = []
-    for c in listar_consultorios_en_linea():
+    for c in listar_consultorios_en_linea(centro_paciente=centro_paciente):
         centro_id = c["centroId"]
         if centro_id is not None and centro_id not in vistos:
             vistos.add(centro_id)

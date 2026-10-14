@@ -17,6 +17,12 @@ import {
 } from "@features/recepcion/modules/checkin/domain/checkinSearch";
 import { resolveQrCheckinErrorMessage } from "@features/recepcion/modules/checkin/domain/qrCheckin.errors";
 import {
+  autorizacionVigenciaCompleta,
+  buildConfirmarCheckinOptions,
+  esErrorSinVigencia,
+} from "@features/recepcion/modules/checkin/domain/checkinVigencia";
+import { AutorizacionVigenciaField } from "@features/recepcion/modules/checkin/components/AutorizacionVigenciaField";
+import {
   FichaCheckinCard,
   formatFichaFechaHora,
 } from "@features/recepcion/modules/checkin/components/FichaCheckinCard";
@@ -46,6 +52,9 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
   const [confirmingFolio, setConfirmingFolio] = useState<string | null>(null);
   const [confirmedFicha, setConfirmedFicha] = useState<FichaQRResponse | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  // Candidato sin vigencia esperando el motivo u oficio de Capital Humano.
+  const [pendienteVigencia, setPendienteVigencia] = useState<CheckinCandidato | null>(null);
+  const [autorizacionVigencia, setAutorizacionVigencia] = useState("");
 
   const debouncedQuery = useDebounce(query, 400);
   const searchParams = confirmedFicha ? null : resolveCheckinSearchParams(debouncedQuery);
@@ -64,29 +73,55 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
     setConfirmedFicha(null);
     setConfirmError(null);
     setConfirmingFolio(null);
+    cerrarAutorizacion();
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
-  const handleSelectCandidato = async (candidato: CheckinCandidato) => {
-    if (!canConfirmCheckin || confirmingFolio) {
-      return;
-    }
+  const cerrarAutorizacion = () => {
+    setPendienteVigencia(null);
+    setAutorizacionVigencia("");
+  };
 
+  const confirmarCandidato = async (candidato: CheckinCandidato) => {
     setConfirmError(null);
     setConfirmingFolio(candidato.folio);
 
     try {
-      const result = await confirmarFolio.mutateAsync(candidato.folio);
+      const result = await confirmarFolio.mutateAsync({
+        folio: candidato.folio,
+        ...buildConfirmarCheckinOptions(candidato.vigenciaActiva, autorizacionVigencia),
+      });
       const ficha = buildConfirmedFichaFromCandidato(candidato, result);
       setConfirmedFicha(ficha);
+      cerrarAutorizacion();
       toast.success("Check-in confirmado", {
         description: `${result.paciente || candidato.pacienteNombre} — folio ${result.folio}.`,
       });
     } catch (error) {
+      if (esErrorSinVigencia(error)) {
+        // Perdió la vigencia después de la búsqueda: se pide la autorización.
+        setPendienteVigencia({ ...candidato, vigenciaActiva: false });
+      }
       setConfirmError(resolveQrCheckinErrorMessage(error));
     } finally {
       setConfirmingFolio(null);
     }
+  };
+
+  const handleSelectCandidato = (candidato: CheckinCandidato) => {
+    if (!canConfirmCheckin || confirmingFolio) {
+      return;
+    }
+
+    if (!candidato.vigenciaActiva) {
+      setConfirmError(null);
+      setAutorizacionVigencia("");
+      setPendienteVigencia(candidato);
+      return;
+    }
+
+    cerrarAutorizacion();
+    void confirmarCandidato(candidato);
   };
 
   const candidatos = candidatosQuery.data?.candidatos ?? [];
@@ -171,7 +206,7 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
                   <li key={candidato.folio}>
                     <button
                       type="button"
-                      onClick={() => void handleSelectCandidato(candidato)}
+                      onClick={() => handleSelectCandidato(candidato)}
                       disabled={!canConfirmCheckin || !!confirmingFolio}
                       className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -183,6 +218,11 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
                             {candidato.origenCanal === "PORTAL" ? (
                               <Badge variant="info" className="gap-1 text-xs">
                                 <Globe className="size-3" /> En línea
+                              </Badge>
+                            ) : null}
+                            {!candidato.vigenciaActiva ? (
+                              <Badge variant="alert" className="text-xs">
+                                Sin vigencia
                               </Badge>
                             ) : null}
                           </p>
@@ -206,6 +246,51 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
                 );
               })}
             </ul>
+          ) : null}
+
+          {!confirmedFicha && pendienteVigencia ? (
+            <div className="space-y-3 rounded-xl border border-line-struct p-4">
+              <p className="text-sm text-txt-body">
+                <span className="font-medium">{pendienteVigencia.pacienteNombre || "—"}</span>
+                {" · "}
+                <span className="font-mono">{pendienteVigencia.folio}</span>
+              </p>
+              <AutorizacionVigenciaField
+                id="busqueda-autorizacion-vigencia"
+                value={autorizacionVigencia}
+                onChange={setAutorizacionVigencia}
+                disabled={!!confirmingFolio}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void confirmarCandidato(pendienteVigencia)}
+                  disabled={
+                    !canConfirmCheckin ||
+                    !!confirmingFolio ||
+                    !autorizacionVigenciaCompleta(false, autorizacionVigencia)
+                  }
+                >
+                  {confirmingFolio ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Confirmando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="size-4" /> Confirmar check-in
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={cerrarAutorizacion}
+                  disabled={!!confirmingFolio}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
           ) : null}
         </CardContent>
       </Card>

@@ -22,6 +22,12 @@ import { RECEPCION_WRITE_PERMISSION_REQUIREMENT } from "@features/recepcion/shar
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import { FichaCheckinCard } from "@features/recepcion/modules/checkin/components/FichaCheckinCard";
 import { BusquedaCheckinPanel } from "@features/recepcion/modules/checkin/components/BusquedaCheckinPanel";
+import { AutorizacionVigenciaField } from "@features/recepcion/modules/checkin/components/AutorizacionVigenciaField";
+import {
+  autorizacionVigenciaCompleta,
+  buildConfirmarCheckinOptions,
+  esErrorSinVigencia,
+} from "@features/recepcion/modules/checkin/domain/checkinVigencia";
 
 const CHECKIN_TAB = {
   QR: "qr",
@@ -49,6 +55,7 @@ export const QrCheckinPage = () => {
   const [ficha, setFicha] = useState<FichaQRResponse | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [autorizacionVigencia, setAutorizacionVigencia] = useState("");
 
   const { hasCapability } = usePermissionDependencies();
   const canConfirmCheckin = hasCapability(
@@ -76,6 +83,7 @@ export const QrCheckinPage = () => {
     setFicha(null);
     setVerifyError(null);
     setConfirmError(null);
+    setAutorizacionVigencia("");
     focusInputSoon();
   };
 
@@ -89,6 +97,7 @@ export const QrCheckinPage = () => {
     setConfirmError(null);
     setFicha(null);
     setVerifiedPayload(null);
+    setAutorizacionVigencia("");
 
     try {
       const result = await verificarQR.mutateAsync(payload);
@@ -112,22 +121,32 @@ export const QrCheckinPage = () => {
   };
 
   const handleConfirm = async () => {
-    if (!verifiedPayload) {
+    if (!verifiedPayload || !ficha) {
       return;
     }
 
     setConfirmError(null);
 
     try {
-      const result = await confirmarCheckin.mutateAsync(verifiedPayload);
+      const result = await confirmarCheckin.mutateAsync({
+        payload: verifiedPayload,
+        ...buildConfirmarCheckinOptions(ficha.vigenciaActiva, autorizacionVigencia),
+      });
       toast.success("Check-in confirmado", {
         description: `${result.paciente || "Paciente"} — folio ${result.folio}.`,
       });
       resetForNextScan();
     } catch (error) {
+      if (esErrorSinVigencia(error)) {
+        // Perdió la vigencia después de escanear: se pide la autorización.
+        setFicha({ ...ficha, vigenciaActiva: false });
+      }
       setConfirmError(resolveQrCheckinErrorMessage(error));
     }
   };
+
+  const puedeConfirmar =
+    !!ficha && autorizacionVigenciaCompleta(ficha.vigenciaActiva, autorizacionVigencia);
 
   return (
     <section className="space-y-5 p-6">
@@ -220,11 +239,20 @@ export const QrCheckinPage = () => {
                 </Alert>
               ) : null}
 
+              {!ficha.vigenciaActiva ? (
+                <AutorizacionVigenciaField
+                  id="qr-autorizacion-vigencia"
+                  value={autorizacionVigencia}
+                  onChange={setAutorizacionVigencia}
+                  disabled={!canConfirmCheckin || isConfirming}
+                />
+              ) : null}
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   onClick={() => void handleConfirm()}
-                  disabled={!canConfirmCheckin || isConfirming}
+                  disabled={!canConfirmCheckin || isConfirming || !puedeConfirmar}
                 >
                   {isConfirming ? (
                     <>

@@ -77,9 +77,11 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (step !== "horario") return;
+    if (step !== "horario" || !miembro) return;
     let activo = true;
-    listarCentros()
+    // Solo las clínicas del paciente elegido (cada familiar puede tener otra).
+    setCentroId("");
+    listarCentros(miembro.miembroId)
       .then((data) => {
         if (activo) setCentros(data);
       })
@@ -91,17 +93,17 @@ export default function HomePage() {
     return () => {
       activo = false;
     };
-  }, [step]);
+  }, [step, miembro]);
 
   // Cascada: cambiar de clínica resetea el consultorio elegido (y con él,
   // el calendario — `SlotsMonthCalendar` se desmonta por el guard
   // `consultorioId !== ""`).
   useEffect(() => {
-    if (step !== "horario") return;
+    if (step !== "horario" || !miembro) return;
     let activo = true;
     setConsultoriosError(null);
     setConsultorioId("");
-    listarConsultorios(centroId === "" ? undefined : centroId)
+    listarConsultorios(centroId === "" ? undefined : centroId, miembro.miembroId)
       .then((data) => {
         if (activo) setConsultorios(data);
       })
@@ -114,7 +116,7 @@ export default function HomePage() {
     return () => {
       activo = false;
     };
-  }, [step, centroId]);
+  }, [step, centroId, miembro]);
 
   const handleElegirMiembro = (elegido: MiembroNucleo) => {
     setMiembro(elegido);

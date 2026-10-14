@@ -21,6 +21,8 @@ from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.models import CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
 from apps.recepcion.services.errors import VisitDomainError
+from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
+from apps.recepcion.services.vigencia_service import tiene_vigencia
 
 logger = logging.getLogger(__name__)
 
@@ -35,46 +37,20 @@ def _validar_clinica_paciente(no_exp: str, pk_num: int, consultorio_id: int) -> 
     Verifica que el paciente (empleado o derechohabiente) pertenece al
     centro de atención del consultorio seleccionado.
 
-    Compara cd_clinica de SERMED con legacy_folio de cat_centros_atencion.
+    Regla compartida con el portal: ``services/clinica_paciente_service.py``
+    (sin dato de clínica o centro sin asignar no se bloquea).
     Lanza VisitDomainError si no coinciden.
     """
-    from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
     from apps.catalogos.models.consultorios import Consultorios
 
-    # 1. Obtener cd_clinica del paciente desde SERMED
-    resultado  = buscar_expediente(no_exp)
-    empleados  = resultado.get("empleados", [])
-    familiares = resultado.get("familiares", [])
-
-    cd_clinica = None
-    if pk_num == 0 and empleados:
-        cd_clinica = empleados[0].get("CD_CLINICA")
-    elif pk_num > 0:
-        fam = next((f for f in familiares if f.get("PK_NUM") == pk_num), None)
-        if fam:
-            cd_clinica = fam.get("CD_CLINICA")
-
-    if not cd_clinica:
-        return  # Sin dato de clínica en SERMED → no bloqueamos
-
-    # 2. Obtener el id del centro al que pertenece el consultorio
-    consultorio = (
-        Consultorios.objects
-        .select_related("id_center")
-        .filter(id=consultorio_id)
-        .first()
+    centro_paciente = centro_del_paciente(no_exp, pk_num)
+    centro_consultorio = (
+        Consultorios.objects.filter(id=consultorio_id).values_list("id_center_id", flat=True).first()
     )
-    if not consultorio or not consultorio.id_center:
-        return  # Sin centro asignado → no bloqueamos
-
-    # cd_clinica de SERMED coincide con id (PK) del CatCentroAtencion
-    id_centro = consultorio.id_center.id
-
-    # 3. Comparar (ambos como string para evitar diferencias de tipo)
-    if str(cd_clinica).strip() != str(id_centro).strip():
+    if not centro_permitido(centro_paciente, centro_consultorio):
         raise VisitDomainError(
             "WRONG_CLINIC",
-            f"El paciente pertenece a la clínica {cd_clinica} y no puede "
+            f"El paciente pertenece a la clínica {centro_paciente} y no puede "
             f"agendar cita en este centro de atención.",
             400,
         )
@@ -267,6 +243,16 @@ class CitasListCreateView(APIView):
             return error_response("VALIDATION_ERROR", "Datos inválidos.",
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
+
+        # ── Sin vigencia no se agenda (la orden de Capital Humano se acepta
+        #    en el check-in, no acá) ──────────────────────────────────────────
+        if not tiene_vigencia(s.validated_data["noExp"], s.validated_data.get("pkNum", 0)):
+            return error_response(
+                "PATIENT_NO_SERVICE",
+                "El paciente no tiene vigencia activa; no se le puede agendar una cita.",
+                status.HTTP_409_CONFLICT,
+                request_id=get_request_id(request),
+            )
 
         # ── Validar que el paciente pertenece al centro de la cita ───────────
         consultorio_id = s.validated_data.get("consultorioId")

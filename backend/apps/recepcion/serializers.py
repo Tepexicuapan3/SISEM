@@ -159,3 +159,17 @@ class ConfirmarCheckinFolioSerializer(serializers.Serializer):
     """Folio de cita ya resuelto (búsqueda por nombre o tipeado directo) para confirmar check-in sin QR."""
 
     folio = serializers.CharField(max_length=32)
+    # Motivo u oficio de Capital Humano; solo se exige si el paciente no
+    # tiene vigencia (PACIENTE_SIN_VIGENCIA).
+    autorizacionCapitalHumano = serializers.CharField(
+        max_length=500, required=False, allow_blank=True,
+    )
+
+
+class ConfirmarQRCheckinSerializer(serializers.Serializer):
+    """Payload del QR + la misma autorización opcional que el check-in por folio."""
+
+    payload = serializers.CharField(max_length=200)
+    autorizacionCapitalHumano = serializers.CharField(
+        max_length=500, required=False, allow_blank=True,
+    )

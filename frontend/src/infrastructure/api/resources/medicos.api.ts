@@ -14,6 +14,7 @@ import type {
   AddConsultorioRequest,
   SaveHorarioRequest,
   CreateExcepcionRequest,
+  CreateExcepcionResponse,
   CreateCoberturaRequest,
   MedicoExcepcionesResponse,
   MedicoCoberturaItem,
@@ -152,8 +153,11 @@ export const medicosAPI = {
     return r.data;
   },
 
-  createExcepcion: async (medicoId: number, data: CreateExcepcionRequest) => {
-    const r = await apiClient.post(`/medicos/${medicoId}/excepciones`, data);
+  createExcepcion: async (
+    medicoId: number,
+    data: CreateExcepcionRequest,
+  ): Promise<CreateExcepcionResponse> => {
+    const r = await apiClient.post<CreateExcepcionResponse>(`/medicos/${medicoId}/excepciones`, data);
     return r.data;
   },
 

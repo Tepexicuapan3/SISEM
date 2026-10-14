@@ -23,12 +23,12 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
 from apps.medicos.identity import display_name, usuario_id_for_medico
 from apps.portal_citas.services.comprobante_service import verificar_payload_qr
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
+from apps.recepcion.services.vigencia_service import buscar_fila_paciente, fila_tiene_vigencia
 from apps.recepcion.uses_case.visit_queue_usecase import (
     RECEPCION_WRITE_CAPABILITY,
     create_visit,
@@ -103,6 +103,25 @@ def _validar_checkin_no_duplicado(cita: CitaMedica) -> None:
         )
 
 
+def _resolver_paciente(no_exp: str, pk_num: int) -> tuple[str, bool]:
+    """
+    Nombre y vigencia del paciente con UNA sola consulta a SERMED (la misma
+    fila de ``buscar_expediente``). Si la consulta falla: nombre vacío y
+    vigente=True (no se bloquea, ver ``vigencia_service``).
+    """
+    try:
+        fila = buscar_fila_paciente(no_exp, pk_num)
+    except Exception:
+        logger.exception("Error consultando expediente %s para check-in", no_exp)
+        return "", True
+
+    nombre = ""
+    if fila:
+        partes = [fila.get("DS_PATERNO", ""), fila.get("DS_MATERNO", ""), fila.get("DS_NOMBRE", "")]
+        nombre = " ".join(p for p in partes if p).strip()
+    return nombre, fila_tiene_vigencia(fila, no_exp, pk_num)
+
+
 def _resolver_nombre_paciente(no_exp: str, pk_num: int) -> str:
     """
     Resuelve el nombre completo del paciente desde SERMED.
@@ -120,28 +139,7 @@ def _resolver_nombre_paciente(no_exp: str, pk_num: int) -> str:
     cada cita candidata del día -- en cada tecla que escribe recepción en
     el buscador por nombre.
     """
-    try:
-        resultado  = buscar_expediente(no_exp, incluir_fotos=False)
-        empleados  = resultado.get("empleados", [])
-        familiares = resultado.get("familiares", [])
-
-        fuente = None
-        if pk_num == 0 and empleados:
-            fuente = empleados[0]
-        elif pk_num > 0:
-            fuente = next((f for f in familiares if f.get("PK_NUM") == pk_num), None)
-
-        if fuente:
-            partes = [
-                fuente.get("DS_PATERNO", ""),
-                fuente.get("DS_MATERNO", ""),
-                fuente.get("DS_NOMBRE", ""),
-            ]
-            return " ".join(p for p in partes if p).strip()
-    except Exception:
-        logger.exception("Error consultando expediente %s para check-in por QR", no_exp)
-
-    return ""
+    return _resolver_paciente(no_exp, pk_num)[0]
 
 
 def _nombre_medico(cita: CitaMedica) -> str:
@@ -154,10 +152,12 @@ def _nombre_consultorio(cita: CitaMedica) -> str | None:
     return f"#{cita.consultorio.numero} — {cita.consultorio.name}"
 
 
-def _serializar_ficha(cita: CitaMedica, nombre_paciente: str) -> dict:
+def _serializar_ficha(cita: CitaMedica, nombre_paciente: str, vigente: bool = True) -> dict:
     return {
         "folio":              cita.folio,
         "paciente":           nombre_paciente,
+        # False -> el check-in pide la autorización de Capital Humano.
+        "vigenciaActiva":     vigente,
         "medico":             _nombre_medico(cita),
         "consultorio":        _nombre_consultorio(cita),
         "fechaHora":          timezone.localtime(cita.fecha_hora).isoformat(),
@@ -172,7 +172,7 @@ def _serializar_ficha(cita: CitaMedica, nombre_paciente: str) -> dict:
     }
 
 
-def _serializar_candidato(cita: CitaMedica, nombre_paciente: str) -> dict:
+def _serializar_candidato(cita: CitaMedica, nombre_paciente: str, vigente: bool = True) -> dict:
     """
     Shape reducido de ``_serializar_ficha`` para la lista de candidatos de
     check-in (buscador por nombre/folio) — mismos nombres de campo donde
@@ -182,6 +182,7 @@ def _serializar_candidato(cita: CitaMedica, nombre_paciente: str) -> dict:
     return {
         "folio":             cita.folio,
         "pacienteNombre":    nombre_paciente,
+        "vigenciaActiva":    vigente,
         "fechaHora":         timezone.localtime(cita.fecha_hora).isoformat(),
         "consultorioNombre": _nombre_consultorio(cita),
         "medicoNombre":      _nombre_medico(cita),
@@ -238,11 +239,11 @@ def buscar_candidatos_checkin(nombre: str | None, folio: str | None) -> list[dic
         if cita.estatus in _ESTATUS_NO_CHECKIN or cita.verificado_en is not None:
             continue
 
-        nombre_paciente = _resolver_nombre_paciente(cita.no_exp, cita.pk_num)
+        nombre_paciente, vigente = _resolver_paciente(cita.no_exp, cita.pk_num)
         if nombre_buscado and nombre_buscado not in nombre_paciente.lower():
             continue
 
-        resultado.append(_serializar_candidato(cita, nombre_paciente))
+        resultado.append(_serializar_candidato(cita, nombre_paciente, vigente))
 
     return resultado
 
@@ -265,11 +266,15 @@ def verificar_qr(payload: str) -> dict:
 
     _validar_estatus_checkin(cita)
 
-    nombre_paciente = _resolver_nombre_paciente(cita.no_exp, cita.pk_num)
-    return _serializar_ficha(cita, nombre_paciente)
+    nombre_paciente, vigente = _resolver_paciente(cita.no_exp, cita.pk_num)
+    return _serializar_ficha(cita, nombre_paciente, vigente)
 
 
-def confirmar_checkin(payload: str, verificado_por_id: int | None) -> dict:
+def confirmar_checkin(
+    payload: str,
+    verificado_por_id: int | None,
+    autorizacion_capital_humano: str | None = None,
+) -> dict:
     """
     Wrapper delgado para el check-in vía QR: re-valida la firma HMAC del
     payload (nunca confía en el resultado de una llamada previa a
@@ -281,10 +286,30 @@ def confirmar_checkin(payload: str, verificado_por_id: int | None) -> dict:
     if folio is None:
         raise VisitDomainError("QR_INVALIDO", "Código QR inválido o alterado.", 400)
 
-    return checkin_por_folio(folio, verificado_por_id)
+    return checkin_por_folio(folio, verificado_por_id, autorizacion_capital_humano)
 
 
-def checkin_por_folio(folio: str, verificado_por_id: int | None) -> dict:
+def _validar_vigencia_checkin(vigente: bool, autorizacion: str | None) -> None:
+    """
+    Sin vigencia, la cita no se cancela pero el check-in se frena, salvo
+    orden de Capital Humano (la baja puede ser un error de nómina que se
+    corrige después). Recepción registra el motivo u oficio.
+    """
+    if not vigente and not autorizacion:
+        raise VisitDomainError(
+            "PACIENTE_SIN_VIGENCIA",
+            "El paciente no tiene vigencia activa. Solo se puede atender con "
+            "autorización de Capital Humano: registra el motivo u oficio.",
+            409,
+            details={"requiereAutorizacionCapitalHumano": True},
+        )
+
+
+def checkin_por_folio(
+    folio: str,
+    verificado_por_id: int | None,
+    autorizacion_capital_humano: str | None = None,
+) -> dict:
     """
     Confirma el check-in de una cita a partir de un folio YA RESUELTO (por
     QR, por folio tipeado/buscado directo, o por selección de un candidato
@@ -330,7 +355,11 @@ def checkin_por_folio(folio: str, verificado_por_id: int | None) -> dict:
 
     _validar_estatus_checkin(cita)
 
-    nombre_paciente = _resolver_nombre_paciente(cita.no_exp, cita.pk_num)
+    nombre_paciente, vigente = _resolver_paciente(cita.no_exp, cita.pk_num)
+    autorizacion = (autorizacion_capital_humano or "").strip() or None
+    _validar_vigencia_checkin(vigente, autorizacion)
+    # Con vigencia la autorización no aplica y no se guarda.
+    autorizacion_vigencia = None if vigente else autorizacion
 
     with transaction.atomic():
         # Lockea la fila de la cita: un segundo request concurrente para el
@@ -362,6 +391,10 @@ def checkin_por_folio(folio: str, verificado_por_id: int | None) -> dict:
             notes=cita.motivo,
             created_by_id=verificado_por_id,
         )
+        if autorizacion_vigencia:
+            Visit.objects.filter(pk=visit["id"]).update(
+                autorizacion_vigencia=autorizacion_vigencia,
+            )
 
         ahora = timezone.now()
         CitaMedica.objects.filter(pk=cita.pk).update(
@@ -375,4 +408,5 @@ def checkin_por_folio(folio: str, verificado_por_id: int | None) -> dict:
         "paciente":     nombre_paciente,
         "verificadoEn": ahora.isoformat(),
         "visit":        visit,
+        "autorizacionVigencia": autorizacion_vigencia,
     }

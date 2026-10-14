@@ -357,6 +357,26 @@ export interface CloseVisitRequest extends ConsultationNoteFields {
   primaryDiagnosis: string;
   finalNote: string;
   cieCode?: string;
+  /** Horario de la agenda del médico para la cita de seguimiento (P-12). */
+  followUpSlotId?: number | null;
+}
+
+/** Horario libre del médico para la cita de seguimiento. */
+export interface FollowUpSlot {
+  slotId: number;
+  hora: string; // HH:MM
+  duracionMin: number;
+  consultorioNombre: string | null;
+}
+
+export interface FollowUpSlotsResponse {
+  slots: FollowUpSlot[];
+}
+
+/** Cita de seguimiento creada al cerrar la nota. */
+export interface FollowUpAppointment {
+  folio: string;
+  fechaHora: string; // ISO 8601
 }
 
 export interface VisitConsultationSummary extends ConsultationNoteFields {
@@ -374,4 +394,6 @@ export interface VisitConsultationSummary extends ConsultationNoteFields {
 export interface CloseVisitResponse {
   visit: VisitQueueItem;
   consultation: VisitConsultationSummary;
+  /** Solo si el médico eligió horario de seguimiento. */
+  followUpAppointment?: FollowUpAppointment | null;
 }

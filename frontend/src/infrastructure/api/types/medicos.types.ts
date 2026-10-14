@@ -256,6 +256,28 @@ export interface CreateExcepcionRequest {
   motivo?: string | null;
 }
 
+/** Cita ya agendada dentro de una ausencia: NO se cancela, recepción la reprograma. */
+export interface CitaAfectadaPorExcepcion {
+  id: number;
+  folio: string;
+  noExp: string;
+  pkNum: number;
+  fechaHora: string; // ISO 8601
+  consultorioNombre: string | null;
+  estatus: string;
+  origenCanal: string;
+}
+
+export interface CreateExcepcionResponse {
+  id: number;
+  tipo: TipoExcepcion;
+  fechaInicio: string;
+  fechaFin: string;
+  /** Horarios libres que quedaron sin habilitar por la ausencia. */
+  horariosBloqueados: number;
+  citasAfectadas: CitaAfectadaPorExcepcion[];
+}
+
 export interface CreateCoberturaRequest {
   medicoSuplenteId: number;
   medicoTitularId: number;

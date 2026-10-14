@@ -100,6 +100,9 @@ class SavePrescriptionsSerializer(serializers.Serializer):
 
 
 class CloseConsultationSerializer(SaveDiagnosisSerializer):
+    # Horario de la agenda del médico para la cita de seguimiento (P-12).
+    # Opcional: sin horario, la fecha queda como indicación para recepción.
+    followUpSlotId = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     # CIE-10 obligatorio para CERRAR la consulta (NOM-024-SSA3-2012). En
     # SaveDiagnosisSerializer (guardado de avance, todavía en consulta) se
     # deja opcional a propósito -- el doctor puede ir guardando antes de

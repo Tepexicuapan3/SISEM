@@ -2,6 +2,7 @@ import apiClient from "@api/client";
 import type {
   CheckinCandidatosParams,
   CheckinCandidatosResponse,
+  ConfirmarCheckinOptions,
   ConfirmarQRCheckinResponse,
 } from "@api/types";
 
@@ -26,10 +27,13 @@ export const checkinAPI = {
 
   // Response idéntico al de `citasAPI.confirmarVerificacionQR` — el backend
   // reusa el mismo `checkin_por_folio` para ambos flujos.
-  confirmarFolio: async (folio: string): Promise<ConfirmarQRCheckinResponse> => {
+  confirmarFolio: async (
+    folio: string,
+    options: ConfirmarCheckinOptions = {},
+  ): Promise<ConfirmarQRCheckinResponse> => {
     const r = await apiClient.post<ConfirmarQRCheckinResponse>(
       "/citas/checkin/confirmar-folio",
-      { folio },
+      { folio, ...options },
     );
     return r.data;
   },

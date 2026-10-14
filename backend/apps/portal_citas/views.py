@@ -48,6 +48,7 @@ from apps.portal_citas.serializers import (
     VerificarCodigoSerializer,
 )
 from apps.portal_citas.services.consultorios_service import (
+    clinica_del_miembro,
     listar_centros_en_linea,
     listar_consultorios_en_linea,
 )
@@ -300,10 +301,31 @@ class CentrosPortalView(APIView):
     permission_classes = [IsPortalUser]
 
     def get(self, request):
-        return Response({"centros": listar_centros_en_linea()})
+        validated_data, err = _validar_input(
+            MiembroPortalQuerySerializer, request.query_params, "Parámetros inválidos.", request
+        )
+        if err:
+            return err
+        try:
+            centro_paciente = _clinica_del_miembro(request, validated_data)
+        except PortalReservaError as exc:
+            return _portal_error_response(request, exc)
+        return Response({"centros": listar_centros_en_linea(centro_paciente=centro_paciente)})
 
 
-class ConsultoriosPortalQuerySerializer(serializers.Serializer):
+class MiembroPortalQuerySerializer(serializers.Serializer):
+    # Paciente para el que se busca horario: limita el catálogo a su clínica.
+    miembroId = serializers.UUIDField(required=False)
+
+
+def _clinica_del_miembro(request, validated_data):
+    miembro_id = validated_data.get("miembroId")
+    if miembro_id is None:
+        return None
+    return clinica_del_miembro(request.portal_miembro, miembro_id)
+
+
+class ConsultoriosPortalQuerySerializer(MiembroPortalQuerySerializer):
     # Mismo criterio que ``centroId`` inexistente/valor inválido de
     # ``SlotsPortalQuerySerializer.consultorioId``: entero >= 1, opcional.
     centroId = serializers.IntegerField(required=False, min_value=1)
@@ -332,9 +354,14 @@ class ConsultoriosPortalView(APIView):
         )
         if err:
             return err
+        try:
+            centro_paciente = _clinica_del_miembro(request, validated_data)
+        except PortalReservaError as exc:
+            return _portal_error_response(request, exc)
 
         consultorios = listar_consultorios_en_linea(
-            centro_id=validated_data.get("centroId")
+            centro_id=validated_data.get("centroId"),
+            centro_paciente=centro_paciente,
         )
         return Response({"consultorios": consultorios})
 

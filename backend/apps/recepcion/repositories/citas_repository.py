@@ -8,6 +8,7 @@ import math
 from datetime import date, timedelta
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.catalogos.models import MotivoCita
@@ -17,6 +18,85 @@ from apps.recepcion.uses_case.cita_state_machine_usecase import transition_cita_
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+MENSAJE_HORARIO_PASADO = "Ese horario ya pasó, elige uno posterior."
+
+
+def q_slots_futuros(ahora=None) -> Q:
+    """
+    Filtro de ``HorarioDisponible`` cuya fecha y hora todavía no pasaron.
+    ``fecha``/``hora`` del slot son hora local (TIME_ZONE), por eso se
+    compara contra ``timezone.localtime``. Un slot que empieza justo ahora
+    ya no cuenta como futuro.
+    """
+    ahora = timezone.localtime(ahora)
+    return Q(fecha__gt=ahora.date()) | Q(fecha=ahora.date(), hora__gt=ahora.time())
+
+
+def es_horario_pasado(fecha_hora) -> bool:
+    """``fecha_hora`` aware: True si ya empezó o pasó."""
+    return fecha_hora <= timezone.now()
+
+
+ESTATUS_CITA_ACTIVA = (EstatusCita.AGENDADA, EstatusCita.CONFIRMADA)
+
+
+class TopeCitaExcedido(Exception):
+    """Un tope de citas (``settings.CITAS_MAX_*`` / ``PORTAL_MAX_*``) impide agendar."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bool = False) -> None:
+    """
+    Topes del legado por día (por paciente y por expediente) y, en el
+    portal, de citas futuras por paciente. Solo cuentan citas activas.
+    Se llama dentro de la transacción que crea la cita.
+    """
+    from django.conf import settings
+
+    activas = CitaMedica.objects.filter(no_exp=no_exp, estatus__in=ESTATUS_CITA_ACTIVA)
+    del_dia = activas.filter(fecha_hora__date=timezone.localtime(fecha_hora).date())
+
+    max_paciente = settings.CITAS_MAX_POR_PACIENTE_DIA
+    if max_paciente and del_dia.filter(pk_num=pk_num).count() >= max_paciente:
+        raise TopeCitaExcedido(
+            "CITA_MISMO_DIA",
+            "El paciente ya tiene una cita ese día."
+            if max_paciente == 1
+            else f"El paciente ya tiene {max_paciente} citas ese día.",
+        )
+
+    max_expediente = settings.CITAS_MAX_POR_EXPEDIENTE_DIA
+    if max_expediente and del_dia.count() >= max_expediente:
+        raise TopeCitaExcedido(
+            "TOPE_EXPEDIENTE_DIA",
+            f"El expediente ya tiene {max_expediente} citas ese día "
+            "(contando titular y familiares).",
+        )
+
+    max_futuras = settings.PORTAL_MAX_CITAS_FUTURAS
+    if desde_portal and max_futuras:
+        futuras = activas.filter(pk_num=pk_num, fecha_hora__gte=timezone.now()).count()
+        if futuras >= max_futuras:
+            raise TopeCitaExcedido(
+                "TOPE_CITAS_FUTURAS",
+                f"Ya tenés {futuras} citas próximas. Cancelá una para agendar otra.",
+            )
+
+
+def mensaje_excepcion(exc) -> str:
+    """Texto para recepción cuando una ausencia del médico cubre el horario."""
+    tipo = exc.get_tipo_display().lower()
+    if exc.hora_inicio and exc.hora_fin:
+        return (
+            f"El médico tiene {tipo} de {exc.hora_inicio.strftime('%H:%M')} "
+            f"a {exc.hora_fin.strftime('%H:%M')}."
+        )
+    return f"El médico no está disponible: {tipo}."
 
 def _serialize_cita(cita: CitaMedica) -> dict:
     return {
@@ -125,6 +205,9 @@ class CitasRepository:
         notas: str | None = None,
         created_by_id: int | None = None,
     ) -> dict:
+        if es_horario_pasado(fecha_hora):
+            raise ValueError(MENSAJE_HORARIO_PASADO)
+
         # Valida disponibilidad del médico (status, horario, excepciones) ANTES de
         # abrir la transacción porque es una consulta más costosa.
         from apps.medicos.models import CatMedico
@@ -134,22 +217,20 @@ class CitasRepository:
         # que coincidía con la PK solo por casualidad numérica (R1).
         medico = CatMedico.objects.filter(pk=medico_id).first()
         if medico:
-            disp = get_disponibilidad_medico(medico, fecha_hora.date())
+            from apps.recepcion.services.bloqueo_slots_service import excepcion_en_horario
+
+            local = timezone.localtime(fecha_hora)
+            disp = get_disponibilidad_medico(medico, local.date())
             if not disp["disponible"]:
                 raise ValueError(f"El médico no está disponible: {disp['motivo']}")
-            exc_parcial = disp.get("excepcionParcial")
-            if exc_parcial:
-                from datetime import time as _time
-                exc_inicio = _time.fromisoformat(str(exc_parcial["horaInicio"])[:5])
-                exc_fin    = _time.fromisoformat(str(exc_parcial["horaFin"])[:5])
-                hora_cita  = fecha_hora.time().replace(second=0, microsecond=0)
-                if exc_inicio <= hora_cita < exc_fin:
-                    tipo = exc_parcial["tipo"].lower().replace("_", " ")
-                    raise ValueError(
-                        f"El médico tiene {tipo} de "
-                        f"{str(exc_parcial['horaInicio'])[:5]} a "
-                        f"{str(exc_parcial['horaFin'])[:5]}."
-                    )
+            # Todas las ausencias del día (hora de comida + permiso, etc.),
+            # no solo la primera.
+            exc = excepcion_en_horario(
+                medico.id, local.date(), local.time().replace(second=0, microsecond=0),
+                duracion_min, consultorio_id,
+            )
+            if exc:
+                raise ValueError(mensaje_excepcion(exc))
 
         with transaction.atomic():
             # 1. Bloquea la fila del slot con SELECT FOR UPDATE.
@@ -195,6 +276,12 @@ class CitasRepository:
                 estatus__in=[EstatusCita.AGENDADA, EstatusCita.CONFIRMADA],
             ).exists():
                 raise ValueError("El paciente ya tiene una cita agendada en ese horario.")
+
+            # 4. Topes del legado por día (paciente y expediente).
+            try:
+                validar_topes_cita(no_exp, pk_num, fecha_hora)
+            except TopeCitaExcedido as exc:
+                raise ValueError(exc.message) from exc
 
             cita = CitaMedica.objects.create(
                 folio=CitaMedica.generar_folio(),
@@ -291,11 +378,13 @@ class CitasRepository:
 
             cita.save(update_fields=update_fields)
 
-            # Liberar slot si se cancela o no asistió — dentro de la misma transacción
+            # Liberar slot si se cancela o no asistió — dentro de la misma
+            # transacción. Si cae en una ausencia del médico (p. ej. una cita
+            # afectada que recepción reprograma) queda bloqueado, no libre.
             if estatus in (EstatusCita.CANCELADA, EstatusCita.NO_ASISTIO):
-                HorarioDisponible.objects.filter(cita=cita).update(
-                    disponible=True, cita=None
-                )
+                from apps.recepcion.services.bloqueo_slots_service import liberar_slots
+
+                liberar_slots(HorarioDisponible.objects.filter(cita=cita))
 
             # Bitácora NOM-024 — mismo patrón que VisitStatusLog. `notes`
             # guarda el nombre del motivo tipificado y/o el detalle libre,
@@ -323,6 +412,10 @@ class CitasRepository:
         Idempotente — usa get_or_create.
         """
         from apps.medicos.models import RelMedicoConsultorio
+        from apps.recepcion.services.bloqueo_slots_service import (
+            excepcion_que_cubre,
+            excepciones_activas,
+        )
 
         dia_nombre_a_weekday = {
             "LUNES": 0, "MARTES": 1, "MIERCOLES": 2, "JUEVES": 3,
@@ -331,6 +424,12 @@ class CitasRepository:
 
         hoy      = date.today()
         creados  = 0
+        # Un horario dentro de una ausencia se crea ya bloqueado por ella
+        # (no se omite): así, si la ausencia se borra, se rehabilita sin
+        # esperar a la próxima generación.
+        excepciones = excepciones_activas(
+            medico_id, hoy, hoy + timedelta(days=dias_adelante),
+        )
 
         rmcs = (
             RelMedicoConsultorio.objects
@@ -359,6 +458,9 @@ class CitasRepository:
                     fin_dt    = datetime.combine(dia, fin)
 
                     while slot_time < fin_dt:
+                        exc = excepcion_que_cubre(
+                            excepciones, dia, slot_time.time(), intervalo, rmc.consultorio_id,
+                        )
                         _, created = HorarioDisponible.objects.get_or_create(
                             medico_id=medico_id,
                             fecha=dia,
@@ -366,7 +468,8 @@ class CitasRepository:
                             defaults={
                                 "consultorio_id": rmc.consultorio_id,
                                 "duracion_min":   intervalo,
-                                "disponible":     True,
+                                "disponible":     exc is None,
+                                "bloqueado_por_excepcion": exc,
                                 "canal":          horario.canal,
                             },
                         )
@@ -385,6 +488,7 @@ class CitasRepository:
         slots = (
             HorarioDisponible.objects
             .filter(medico_id=medico_id, fecha=fecha, disponible=True)
+            .filter(q_slots_futuros(), medico__estatus_medico="ACTIVO")
             .order_by("hora")
         )
         return [

@@ -7,7 +7,8 @@ febrero bisiesto), exclusión de slots ``disponible=False`` y
 filtren por el rango.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone as dt_timezone
+from unittest import mock
 
 from django.test import TestCase
 
@@ -20,6 +21,15 @@ from apps.recepcion.models import HorarioDisponible
 
 class GetDisponibilidadMensualTests(TestCase):
     def setUp(self):
+        # Los horarios que ya pasaron no cuentan: se congela "ahora" antes
+        # de todas las fechas fijas de estos tests.
+        ahora_patcher = mock.patch(
+            "django.utils.timezone.now",
+            return_value=datetime(2026, 7, 1, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        ahora_patcher.start()
+        self.addCleanup(ahora_patcher.stop)
+
         self.centro = CatCentroAtencion.objects.create(
             name="Centro Mensual",
             code="CT-MES-01",

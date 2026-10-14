@@ -335,7 +335,10 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
         self.assertEqual(len(list_response.data["items"]), 1)
         self.assertEqual(list_response.data["items"][0]["tipo"], "PERMISO")
 
-    def test_post_excepcion_vacaciones_updates_estatus_medico(self):
+    def test_post_excepcion_vacaciones_no_cambia_estatus_medico(self):
+        # Decisión 2026-10-13: la disponibilidad sale de las fechas de la
+        # ausencia; antes unas vacaciones futuras dejaban al médico no
+        # disponible desde hoy y borrarlas nunca restauraba el estatus.
         response = self.client.post(
             f"{MEDICOS_URL}/{self.medico.id}/excepciones",
             {
@@ -348,8 +351,9 @@ class MedicoExcepcionesApiTests(MedicoDetailAndRelationsApiTestsBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["citasAfectadas"], [])
         self.medico.refresh_from_db()
-        self.assertEqual(self.medico.estatus_medico, "VACACIONES")
+        self.assertEqual(self.medico.estatus_medico, "ACTIVO")
 
     def test_post_excepcion_permiso_does_not_change_estatus_medico(self):
         estatus_original = self.medico.estatus_medico

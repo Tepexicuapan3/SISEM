@@ -123,6 +123,7 @@ export const DEFAULT_DIAGNOSIS_FORM_VALUES: SaveDiagnosisFormInput = {
   morbidity: "",
   followUpEnabled: false,
   followUpDate: "",
+  followUpSlotId: "",
 };
 
 export const DEFAULT_PRESCRIPTIONS_FORM_VALUES: SavePrescriptionsFormInput = {
@@ -314,6 +315,12 @@ export const buildDiagnosisPayload = (values: SaveDiagnosisFormValues) => {
     followUpDate: values.followUpEnabled && values.followUpDate ? values.followUpDate : null,
   };
 };
+
+// Horario de seguimiento: solo al cerrar, con "cita" marcada y fecha elegida.
+export const buildFollowUpSlotId = (values: SaveDiagnosisFormValues): number | null =>
+  values.followUpEnabled && values.followUpDate && values.followUpSlotId
+    ? Number(values.followUpSlotId)
+    : null;
 
 export const normalizeCieCode = (value: string): string | undefined => {
   const normalized = value.trim().toUpperCase();

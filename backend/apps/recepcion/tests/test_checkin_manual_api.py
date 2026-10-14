@@ -31,7 +31,10 @@ PACIENTE_NO_EXP = "40041"
 PACIENTE_NOMBRE_ESPERADO = "HERNANDEZ ROMERO ANA LAURA"
 PACIENTE_EXPEDIENTE_MOCK = {
     "empleados": [
-        {"PK_NUM": 0, "DS_PATERNO": "HERNANDEZ", "DS_MATERNO": "ROMERO", "DS_NOMBRE": "ANA LAURA"},
+        {
+            "PK_NUM": 0, "DS_PATERNO": "HERNANDEZ", "DS_MATERNO": "ROMERO",
+            "DS_NOMBRE": "ANA LAURA", "ESTATUS": "ACTIVO",
+        },
     ],
     "familiares": [],
 }
@@ -40,11 +43,11 @@ PACIENTE_EXPEDIENTE_MOCK = {
 class CheckinManualApiTests(APITestCase):
     def setUp(self):
         expediente_patcher = mock.patch(
-            "apps.recepcion.uses_case.qr_checkin_usecase.buscar_expediente",
+            "apps.recepcion.services.vigencia_service.buscar_expediente",
             return_value=PACIENTE_EXPEDIENTE_MOCK,
         )
         self.addCleanup(expediente_patcher.stop)
-        expediente_patcher.start()
+        self.buscar_expediente_mock = expediente_patcher.start()
 
         self.request_id = "22222222-2222-2222-2222-222222222222"
         self.recepcion_password = "Recep_123456"
@@ -236,6 +239,79 @@ class CheckinManualApiTests(APITestCase):
             {"folio": "CIT-NO-EXISTE"}, format="json", **self._csrf_headers(),
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ── vigencia ─────────────────────────────────────────────────────────
+
+    def _paciente_de_baja(self):
+        fila = dict(PACIENTE_EXPEDIENTE_MOCK["empleados"][0], ESTATUS="BAJA")
+        self.buscar_expediente_mock.return_value = {"empleados": [fila], "familiares": []}
+
+    def test_candidatos_marca_paciente_sin_vigencia(self):
+        self._paciente_de_baja()
+        cita = self._cita_hoy()
+
+        response = self.client.get(
+            "/api/v1/citas/checkin/candidatos", {"folio": cita.folio},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["candidatos"][0]["vigenciaActiva"])
+
+    def test_confirmar_folio_sin_vigencia_y_sin_autorizacion_devuelve_409(self):
+        self._paciente_de_baja()
+        cita = self._cita_hoy()
+
+        response = self.client.post(
+            "/api/v1/citas/checkin/confirmar-folio",
+            {"folio": cita.folio}, format="json", **self._csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "PACIENTE_SIN_VIGENCIA")
+        self.assertTrue(response.data["details"]["requiereAutorizacionCapitalHumano"])
+        self.assertFalse(Visit.objects.filter(appointment_id=cita.folio).exists())
+        cita.refresh_from_db()
+        self.assertEqual(cita.estatus, EstatusCita.AGENDADA)  # la cita no se cancela
+
+    def test_confirmar_folio_sin_vigencia_con_autorizacion_la_guarda(self):
+        self._paciente_de_baja()
+        cita = self._cita_hoy()
+
+        response = self.client.post(
+            "/api/v1/citas/checkin/confirmar-folio",
+            {"folio": cita.folio, "autorizacionCapitalHumano": "  Oficio CH-123/2026  "},
+            format="json", **self._csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["autorizacionVigencia"], "Oficio CH-123/2026")
+        visit = Visit.objects.get(appointment_id=cita.folio)
+        self.assertEqual(visit.autorizacion_vigencia, "Oficio CH-123/2026")
+        recepcionista = SyUsuario.objects.get(usuario="recepcion_checkin_user")
+        self.assertEqual(visit.created_by_id, recepcionista.id_usuario)
+
+    def test_confirmar_folio_con_vigencia_no_guarda_autorizacion(self):
+        cita = self._cita_hoy()
+
+        response = self.client.post(
+            "/api/v1/citas/checkin/confirmar-folio",
+            {"folio": cita.folio, "autorizacionCapitalHumano": "Oficio innecesario"},
+            format="json", **self._csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(Visit.objects.get(appointment_id=cita.folio).autorizacion_vigencia)
+
+    def test_confirmar_folio_si_sermed_no_responde_no_bloquea(self):
+        self.buscar_expediente_mock.return_value = {"empleados": [], "familiares": []}
+        cita = self._cita_hoy()
+
+        response = self.client.post(
+            "/api/v1/citas/checkin/confirmar-folio",
+            {"folio": cita.folio}, format="json", **self._csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_confirmar_folio_sin_csrf_devuelve_403(self):
         cita = self._cita_hoy()

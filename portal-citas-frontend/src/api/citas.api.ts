@@ -27,6 +27,16 @@
  *   - `SLOT_NO_DISPONIBLE` (409) — el slot ya no está libre, no existe, o no
  *     es apto para portal (usecase:108-112). El usuario debe elegir otro
  *     horario.
+ *   - `HORARIO_PASADO` (409) — la fecha y hora del slot ya pasó (el paciente
+ *     dejó la pantalla abierta). Igual que `SLOT_NO_DISPONIBLE`: elegir
+ *     otro horario.
+ *   - `MEDICO_NO_DISPONIBLE` (409) — el médico tiene una ausencia en ese
+ *     horario (vacaciones, hora de comida, etc.). Elegir otro horario.
+ *   - `SIN_VIGENCIA` (403) — la persona no tiene vigencia activa.
+ *   - `CLINICA_NO_CORRESPONDE` (403) — el consultorio no es de la clínica
+ *     del paciente. Elegir otro horario.
+ *   - `CITA_MISMO_DIA` / `TOPE_EXPEDIENTE_DIA` / `TOPE_CITAS_FUTURAS` (409)
+ *     — topes de citas; el mensaje del backend dice cuál.
  *   - `CITA_SUPERPUESTA` (409) — el mismo paciente ya tiene otra cita
  *     activa (AGENDADA/CONFIRMADA) que se cruza en el tiempo con este slot
  *     (usecase:127-137). Distinto de `SLOT_NO_DISPONIBLE`: acá el slot en sí

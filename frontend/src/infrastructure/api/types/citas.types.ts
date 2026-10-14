@@ -106,6 +106,8 @@ export interface SlotsResponse {
 export interface FichaQRResponse {
   folio:        string;
   paciente:     string;
+  /** false → el check-in pide el motivo u oficio de Capital Humano. */
+  vigenciaActiva: boolean;
   medico:       string;
   consultorio:  string | null;
   fechaHora:    string;   // ISO 8601
@@ -123,4 +125,11 @@ export interface ConfirmarQRCheckinResponse {
   paciente:     string;
   verificadoEn: string;   // ISO 8601
   visit:        VisitQueueItem;
+  /** Motivo u oficio de Capital Humano si se atendió sin vigencia; null si tenía vigencia. */
+  autorizacionVigencia: string | null;
+}
+
+/** Check-in de cita; `autorizacionCapitalHumano` solo se exige si el paciente no tiene vigencia (PACIENTE_SIN_VIGENCIA). */
+export interface ConfirmarCheckinOptions {
+  autorizacionCapitalHumano?: string;
 }

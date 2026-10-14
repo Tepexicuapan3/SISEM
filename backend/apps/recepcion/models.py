@@ -171,6 +171,17 @@ class HorarioDisponible(models.Model):
         blank=True,
         related_name="slot",
     )
+    # Ausencia del médico que dejó este horario sin habilitar
+    # (disponible=False). Al borrar la ausencia se rehabilitan solo los
+    # horarios que ella bloqueó (ver services/bloqueo_slots_service.py).
+    bloqueado_por_excepcion = models.ForeignKey(
+        "medicos.RelMedicoExcepcion",
+        db_column="id_excepcion_bloqueo",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="slots_bloqueados",
+    )
 
     class Meta:
         db_table      = "citas_horarios_disponibles"
@@ -317,6 +328,12 @@ class Visit(models.Model):
     )
     # Texto libre complementario/opcional al motivo tipificado de arriba.
     motivo_detalle = models.TextField(null=True, blank=True)
+    # Motivo u oficio de Capital Humano para atender a un paciente sin
+    # vigencia (check-in de cita). Quién lo aceptó = created_by_id. Null
+    # cuando el paciente tenía vigencia.
+    autorizacion_vigencia = models.TextField(
+        db_column="autorizacion_vigencia", null=True, blank=True,
+    )
 
     class Meta:
         db_table = "rcp_visits"

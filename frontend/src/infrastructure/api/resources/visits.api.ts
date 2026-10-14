@@ -6,6 +6,7 @@ import type {
   CieSearchParams,
   CieSearchResponse,
   MorbiditySuggestionResponse,
+  FollowUpSlotsResponse,
   PrescriptionItem,
   SecondaryDiagnosisItem,
   VisitPrescriptionItemsResponse,
@@ -111,6 +112,15 @@ export const visitsAPI = {
     const response = await apiClient.get<MorbiditySuggestionResponse>(
       `/visits/${visitId}/consultation/morbidity-suggestion`,
       { params: { cieCode } },
+    );
+    return response.data;
+  },
+
+  /** P-12: horarios libres de la agenda del médico para la cita de seguimiento. */
+  getFollowUpSlots: async (visitId: number, fecha: string): Promise<FollowUpSlotsResponse> => {
+    const response = await apiClient.get<FollowUpSlotsResponse>(
+      `/visits/${visitId}/consultation/follow-up-slots`,
+      { params: { fecha } },
     );
     return response.data;
   },

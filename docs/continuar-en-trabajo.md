@@ -1489,6 +1489,103 @@ recetas de la misma clínica y año, los folios idénticos chocarían en farmaci
 T, ficha `DT`, exige IDx y folio de referencia, guarda quién capturó). Va
 después del 15.
 
+## 2026-10-13 — Citas y Portal de Citas: 3 problemas corregidos
+
+Salen de comparar SIRES contra el mapa de procesos del legado (P-06 a P-09).
+Sin commitear.
+
+**1. Horarios que ya pasaron.** Un `HorarioDisponible` seguía con
+`disponible=True` después de su hora. Ahora no se listan (portal, calendario
+mensual, recepción) ni se reservan: `HORARIO_PASADO` (409) en el portal y
+`CITA_NOT_AVAILABLE` en recepción. Regla única: `q_slots_futuros` /
+`es_horario_pasado` en `citas_repository.py`.
+
+**2. Vigencia.** Regla de recepción reusada (`ESTATUS` de
+`buscar_expediente`) en `recepcion/services/vigencia_service.py`.
+- Sin vigencia no se entra al portal ni se reserva (`SIN_VIGENCIA`, 403) y
+  recepción no agenda (`PATIENT_NO_SERVICE`, 409).
+- Las citas futuras de quien pierde la vigencia **no se cancelan**: el
+  check-in se frena (`PACIENTE_SIN_VIGENCIA`, 409) salvo orden de Capital
+  Humano. Recepción captura el motivo u oficio (`autorizacionCapitalHumano`);
+  queda en `rcp_visits.autorizacion_vigencia`, quién = `created_by_id`, y en
+  la auditoría `VisitCreated`.
+- Si SERMED no responde **no se bloquea** (warning), igual que
+  `_validar_clinica_paciente`.
+
+**3. Ausencias del médico (opción B).** `recepcion/services/bloqueo_slots_service.py`.
+- Cualquier ausencia (incluidas hora de comida y cambio de horario) deja sin
+  habilitar los horarios libres de su rango; con consultorio, solo los de ese
+  consultorio. `citas_horarios_disponibles.id_excepcion_bloqueo` guarda qué
+  ausencia lo bloqueó.
+- Las citas ya agendadas **no se cancelan**: el POST de la ausencia devuelve
+  `citasAfectadas` y la pestaña de excepciones del médico las muestra para que
+  recepción las reprograme. Al cancelar una de ellas el horario queda
+  bloqueado, no libre.
+- Borrar la ausencia rehabilita sus horarios (salvo otra ausencia activa).
+- La generación crea ya bloqueados los horarios dentro de una ausencia; el
+  portal revisa la ausencia al reservar (`MEDICO_NO_DISPONIBLE`, 409).
+- Se corrigió que solo se miraba UNA ausencia por día (`.first()`).
+- Registrar una ausencia **ya no cambia `estatus_medico`** (dejaba al médico
+  no disponible desde hoy por unas vacaciones futuras y nunca se restauraba;
+  para `SUSPENSION` guardaba `"SUSPENSION"`, que no es un valor válido: el
+  válido es `"SUSPENDIDO"`). El estatus manual sigue bloqueando.
+
+**4. Topes (2026-10-14).** `validar_topes_cita` en `citas_repository.py`,
+dentro de la transacción de recepción y del portal. Solo cuentan citas
+activas. Configurables en settings (0 desactiva):
+`CITAS_MAX_POR_PACIENTE_DIA=1` y `CITAS_MAX_POR_EXPEDIENTE_DIA=3` (legado),
+`PORTAL_MAX_CITAS_FUTURAS=3` (valor propuesto, el legado no tenía portal).
+Portal: `CITA_MISMO_DIA`, `TOPE_EXPEDIENTE_DIA`, `TOPE_CITAS_FUTURAS` (409).
+
+**5. Horarios viejos (2026-10-14).** Quitar o cambiar el consultorio de una
+asignación regenera los horarios libres (`_regenerar_slots`; los que tienen
+cita se conservan). Un médico no ACTIVO no lista horarios (portal, calendario,
+recepción) y al reactivarlo se le generan sin esperar al lunes.
+
+**6. Solo en su clínica (2026-10-14, decisión del usuario).** Regla de
+recepción movida a `recepcion/services/clinica_paciente_service.py` (CD_CLINICA
+de SERMED = id del centro del consultorio; sin dato no se bloquea). El portal
+la aplica al reservar (`CLINICA_NO_CORRESPONDE`, 403) y filtra
+`/portal/centros` y `/portal/consultorios` con `?miembroId=` (el familiar
+puede tener otra clínica). La reserva lee la fila de SERMED una sola vez para
+vigencia y clínica.
+
+**7. Cita de seguimiento desde la nota (P-12, decisión del usuario).** El
+médico elige un horario libre de SU agenda (`GET
+/visits/<id>/consultation/follow-up-slots?fecha=`) y el cierre
+(`followUpSlotId`) crea la cita en la misma transacción
+(`consulta_medica/uses_case/follow_up_usecase.py`, vía
+`CitasRepository.create`: mismas reglas que recepción). Si el horario ya no
+sirve, la nota no se cierra (`FOLLOW_UP_SLOT_UNAVAILABLE`, 409). Sin horario la
+fecha queda como indicación para recepción (como antes). Siempre con el médico
+que atiende: SIRES no tiene médico familiar (P-03).
+
+Bloque de citas completo. Sigue sin existir la asignación de consultorio al
+paciente (P-03).
+
+### Checklist de deploy (este cambio)
+1. Migraciones `recepcion.0025_visit_autorizacion_vigencia` y
+   `recepcion.0026_slot_bloqueado_por_excepcion`.
+2. `python manage.py bloquear_horarios_ausencias --dry-run`, revisar y correr
+   sin `--dry-run`: aplica las ausencias que ya existían y lista las citas a
+   reprogramar.
+3. Revisar a mano los médicos que la lógica vieja dejó con estatus distinto de
+   ACTIVO (solo lectura):
+   `SELECT id, estatus_medico, updated_at FROM cat_medicos WHERE estatus_medico IN ('VACACIONES','INCAPACIDAD','SUSPENDIDO','SUSPENSION') ORDER BY updated_at DESC;`
+   Si no tienen una ausencia vigente, volverlos a ACTIVO desde la pantalla de
+   médicos.
+4. Backend, frontend interno y portal van en el mismo deploy (contratos
+   nuevos: `vigenciaActiva`, `autorizacionCapitalHumano`, `citasAfectadas`,
+   `miembroId` en centros/consultorios, `followUpSlotId`/`followUpAppointment`).
+5. Opcional: ajustar los topes con variables de entorno
+   (`CITAS_MAX_POR_PACIENTE_DIA`, `CITAS_MAX_POR_EXPEDIENTE_DIA`,
+   `PORTAL_MAX_CITAS_FUTURAS`; 0 desactiva).
+
+Tests: backend 733 OK en consulta_medica + portal_citas + recepcion + medicos;
+suite completa con las 4 fallas previas (2 auth, 2 realtime, verificadas en
+HEAD limpio). Frontend: `tsc` y ESLint limpios; vitest unit 344 OK + 1 falla
+en `auth/auth-harness-mode.test.ts` (no tocado).
+
 ## Convenciones y Reglas Operacionales
 
 ### Regla: nunca probar directo contra bases de datos externas/legado

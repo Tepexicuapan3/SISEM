@@ -27,6 +27,7 @@ from apps.consulta_medica.views import (
     VisitConsultationStartView,
     VisitDiagnosisSaveView,
     VisitMedicalLeaveCreateView,
+    VisitFollowUpSlotsView,
     VisitMorbiditySuggestionView,
     VisitPrescriptionItemCancelView,
     VisitPrescriptionItemsView,
@@ -115,6 +116,11 @@ urlpatterns = [
         "visits/<int:visit_id>/consultation/morbidity-suggestion",
         VisitMorbiditySuggestionView.as_view(),
         name="visit-morbidity-suggestion",
+    ),
+    path(
+        "visits/<int:visit_id>/consultation/follow-up-slots",
+        VisitFollowUpSlotsView.as_view(),
+        name="visit-follow-up-slots",
     ),
     path(
         "visits/<int:visit_id>/consultation/physical-exam",

@@ -91,11 +91,14 @@ def get_asignacion_activa(medico, fecha: date):
     return None
 
 
-def get_excepcion_dia(medico, fecha: date):
-    """Devuelve la excepción activa para esa fecha (si existe)."""
+def get_excepciones_dia(medico, fecha: date) -> list:
+    """
+    TODAS las ausencias activas del médico en esa fecha (hora de comida y un
+    permiso pueden convivir el mismo día). Antes se tomaba solo la primera.
+    """
     from apps.medicos.models import RelMedicoExcepcion
 
-    return (
+    return list(
         RelMedicoExcepcion.objects
         .filter(
             medico=medico,
@@ -103,7 +106,7 @@ def get_excepcion_dia(medico, fecha: date):
             fecha_inicio__lte=fecha,
             fecha_fin__gte=fecha,
         )
-        .first()
+        .order_by("hora_inicio", "id")
     )
 
 
@@ -125,9 +128,17 @@ def get_disponibilidad_medico(medico, fecha: date) -> dict:
     if not horario_dia:
         return {"disponible": False, "motivo": "NO_TRABAJA_ESE_DIA"}
 
-    excepcion = get_excepcion_dia(medico, fecha)
-    if excepcion and excepcion.hora_inicio is None:
-        return {"disponible": False, "motivo": excepcion.tipo, "excepcion_id": excepcion.id}
+    # Una ausencia con consultorio solo afecta a ese consultorio.
+    excepciones = [
+        e for e in get_excepciones_dia(medico, fecha)
+        if e.consultorio_id is None or e.consultorio_id == asignacion["consultorio_id"]
+    ]
+    dia_completo = next((e for e in excepciones if e.hora_inicio is None), None)
+    if dia_completo:
+        return {"disponible": False, "motivo": dia_completo.tipo, "excepcion_id": dia_completo.id}
+
+    parciales = [e for e in excepciones if e.hora_inicio is not None]
+    excepcion = parciales[0] if parciales else None
 
     return {
         "disponible":        True,
@@ -139,11 +150,16 @@ def get_disponibilidad_medico(medico, fecha: date) -> dict:
         "horaInicio":        str(horario_dia["hora_inicio"]),
         "horaFin":           str(horario_dia["hora_fin"]),
         "intervaloCitaMin":  horario_dia.get("intervalo_cita_min", 20),
+        # Se mantiene por compatibilidad (primera parcial del día).
         "excepcionParcial": {
             "horaInicio": str(excepcion.hora_inicio),
             "horaFin":    str(excepcion.hora_fin),
             "tipo":       excepcion.tipo,
         } if excepcion else None,
+        "excepcionesParciales": [
+            {"horaInicio": str(e.hora_inicio), "horaFin": str(e.hora_fin), "tipo": e.tipo}
+            for e in parciales
+        ],
     }
 
 

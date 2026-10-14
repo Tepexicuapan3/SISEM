@@ -56,6 +56,19 @@ from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
 from apps.portal_citas.tasks import enviar_comprobante_portal_task
 from apps.recepcion.models import CitaMedica, EstatusCita, HorarioDisponible
+from apps.recepcion.repositories.citas_repository import (
+    MENSAJE_HORARIO_PASADO,
+    TopeCitaExcedido,
+    es_horario_pasado,
+    validar_topes_cita,
+)
+from apps.recepcion.services.bloqueo_slots_service import excepcion_en_horario
+from apps.recepcion.services.clinica_paciente_service import centro_de_fila, centro_permitido
+from apps.recepcion.services.vigencia_service import (
+    MENSAJE_SIN_VIGENCIA_PORTAL,
+    buscar_fila_paciente,
+    fila_tiene_vigencia,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +103,14 @@ def reservar_cita(
             403,
         )
 
+    # Se revalida acá y no solo en el login: la sesión pudo abrirse antes
+    # de la baja, y el titular reserva también para su núcleo. La misma fila
+    # de SERMED da la clínica del paciente (una sola consulta).
+    fila_paciente = buscar_fila_paciente(miembro_objetivo.no_exp, miembro_objetivo.pk_num)
+    if not fila_tiene_vigencia(fila_paciente, miembro_objetivo.no_exp, miembro_objetivo.pk_num):
+        raise PortalReservaError("SIN_VIGENCIA", MENSAJE_SIN_VIGENCIA_PORTAL, 403)
+    centro_paciente = centro_de_fila(fila_paciente)
+
     with transaction.atomic():
         # Lock sobre el paciente destino: serializa dos intentos concurrentes
         # de reservar para la MISMA persona (aunque sean slots distintos), lo
@@ -122,12 +143,38 @@ def reservar_cita(
                 409,
             )
 
+        # Solo en consultorios de la clínica del paciente (misma regla que
+        # recepción). Sin dato de clínica no se bloquea.
+        centro_slot = slot.consultorio.id_center_id if slot.consultorio else None
+        if not centro_permitido(centro_paciente, centro_slot):
+            raise PortalReservaError(
+                "CLINICA_NO_CORRESPONDE",
+                "Ese consultorio no es de la clínica del paciente. Elige uno de su clínica.",
+                403,
+            )
+
+        inicio_nuevo = _combinar_fecha_hora(slot.fecha, slot.hora)
+        # Un slot del pasado sigue con disponible=True (nada lo da de baja
+        # al pasar la hora), así que la fecha se valida acá.
+        if es_horario_pasado(inicio_nuevo):
+            raise PortalReservaError("HORARIO_PASADO", MENSAJE_HORARIO_PASADO, 409)
+
+        # Protección final: una ausencia registrada (o un estatus manual
+        # distinto de ACTIVO) gana aunque el horario siga libre.
+        if slot.medico.estatus_medico != "ACTIVO" or excepcion_en_horario(
+            slot.medico_id, slot.fecha, slot.hora, slot.duracion_min, slot.consultorio_id,
+        ):
+            raise PortalReservaError(
+                "MEDICO_NO_DISPONIBLE",
+                "El médico no está disponible en ese horario. Elige otro.",
+                409,
+            )
+
         # El slot bloqueado arriba solo evita que DOS personas reserven el
         # MISMO slot exacto. Falta validar que el MISMO paciente no termine
         # con dos citas en horarios que se superponen con médicos/consultorios
         # distintos -- se hace ya con el paciente lockeado, para que quede
         # protegido por ese lock.
-        inicio_nuevo = _combinar_fecha_hora(slot.fecha, slot.hora)
         fin_nuevo = inicio_nuevo + timedelta(minutes=slot.duracion_min)
 
         citas_activas = CitaMedica.objects.filter(
@@ -146,6 +193,16 @@ def reservar_cita(
                     "con este.",
                     409,
                 )
+
+        # Topes por día del legado y de citas futuras del portal (con el
+        # paciente lockeado arriba, igual que el chequeo de traslape).
+        try:
+            validar_topes_cita(
+                miembro_objetivo.no_exp, miembro_objetivo.pk_num, inicio_nuevo,
+                desde_portal=True,
+            )
+        except TopeCitaExcedido as exc:
+            raise PortalReservaError(exc.code, exc.message, 409) from exc
 
         cita = CitaMedica.objects.create(
             folio=CitaMedica.generar_folio(),

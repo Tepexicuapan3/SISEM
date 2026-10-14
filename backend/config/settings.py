@@ -429,6 +429,15 @@ PORTAL_CANCELACION_VENTANA_HORAS = config(
     "PORTAL_CANCELACION_VENTANA_HORAS", default=2, cast=int
 )
 
+# ── Topes de citas (recepción y portal) ───────────────────────────────────────
+# Reglas del legado (horario_fam.jsp): una cita por día por paciente y hasta
+# 3 por expediente (titular + familiares) por día. 0 desactiva el tope.
+CITAS_MAX_POR_PACIENTE_DIA = config("CITAS_MAX_POR_PACIENTE_DIA", default=1, cast=int)
+CITAS_MAX_POR_EXPEDIENTE_DIA = config("CITAS_MAX_POR_EXPEDIENTE_DIA", default=3, cast=int)
+# Solo portal (no existía en el legado): citas futuras activas por paciente,
+# para que nadie ocupe muchos horarios. 0 desactiva el tope.
+PORTAL_MAX_CITAS_FUTURAS = config("PORTAL_MAX_CITAS_FUTURAS", default=3, cast=int)
+
 # ── Solicitudes ARCO (change `solicitudes-arco`) ──────────────────────────────
 # Plazo de respuesta en dias habiles (lunes a viernes) contado desde la
 # recepcion. 20 es el default de la Ley General de Proteccion de Datos

@@ -11,7 +11,7 @@ from apps.portal_citas.models import PortalMiembro, PortalOTP
 from apps.portal_citas.services.email_service import send_otp_email
 from apps.portal_citas.services.identity_service import resolve_identity
 from apps.portal_citas.services.otp_service import generate_code, hash_code, nueva_expiracion
-from apps.portal_citas.uses_case.iniciar_sesion_usecase import mask_email
+from apps.portal_citas.uses_case.iniciar_sesion_usecase import mask_email, validar_vigencia_login
 
 
 def capturar_correo(no_exp, nombre_completo, fecha_nacimiento, correo):
@@ -31,6 +31,8 @@ def capturar_correo(no_exp, nombre_completo, fecha_nacimiento, correo):
             "gestionarlo un adulto del núcleo familiar.",
             403,
         )
+
+    validar_vigencia_login(identidad)
 
     miembro, _creado = PortalMiembro.objects.get_or_create(
         no_exp=identidad.no_exp,

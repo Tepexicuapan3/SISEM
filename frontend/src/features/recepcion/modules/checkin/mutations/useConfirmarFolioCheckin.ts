@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { checkinAPI } from "@api/resources/checkin.api";
+import type { ConfirmarCheckinOptions } from "@api/types";
 import { visitFlowKeys } from "@features/recepcion/shared/queries/visit-flow.keys";
 
 /**
@@ -13,7 +14,8 @@ export const useConfirmarFolioCheckin = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (folio: string) => checkinAPI.confirmarFolio(folio),
+    mutationFn: ({ folio, ...options }: { folio: string } & ConfirmarCheckinOptions) =>
+      checkinAPI.confirmarFolio(folio, options),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: visitFlowKeys.lists() });
       queryClient.invalidateQueries({ queryKey: ["agenda-semanal"] });

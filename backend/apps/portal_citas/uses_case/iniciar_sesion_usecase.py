@@ -11,6 +11,17 @@ from apps.portal_citas.models import PortalMiembro, PortalOTP
 from apps.portal_citas.services.email_service import send_otp_email
 from apps.portal_citas.services.identity_service import resolve_identity
 from apps.portal_citas.services.otp_service import generate_code, hash_code, nueva_expiracion
+from apps.recepcion.services.vigencia_service import MENSAJE_SIN_VIGENCIA_PORTAL, tiene_vigencia
+
+
+def validar_vigencia_login(identidad) -> None:
+    """
+    Sin vigencia no se entra al portal. Va después de resolver la identidad:
+    quien llega acá ya dio expediente, nombre y fecha de nacimiento
+    correctos, así que el mensaje puede decirle qué hacer.
+    """
+    if not tiene_vigencia(identidad.no_exp, identidad.pk_num):
+        raise PortalAuthError("SIN_VIGENCIA", MENSAJE_SIN_VIGENCIA_PORTAL, 403)
 
 
 def mask_email(email: str) -> str:
@@ -37,6 +48,8 @@ def iniciar_sesion(no_exp, nombre_completo, fecha_nacimiento):
             "gestionarlo un adulto del núcleo familiar.",
             403,
         )
+
+    validar_vigencia_login(identidad)
 
     miembro, _creado = PortalMiembro.objects.get_or_create(
         no_exp=identidad.no_exp,
