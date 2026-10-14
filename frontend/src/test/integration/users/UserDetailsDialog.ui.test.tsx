@@ -405,7 +405,7 @@ describe("UserDetailsDialog UI", () => {
       />,
     );
 
-    expect(screen.getByText("Centro de atencion")).toBeVisible();
+    expect(screen.getByText("Centro de atención")).toBeVisible();
     expect(screen.getByText("Estado de la cuenta")).toBeVisible();
     expect(screen.getByText("Ultimo acceso")).toBeVisible();
     expect(screen.getByText("Ultima IP")).toBeVisible();

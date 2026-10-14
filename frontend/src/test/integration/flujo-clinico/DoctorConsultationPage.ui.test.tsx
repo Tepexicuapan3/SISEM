@@ -368,8 +368,10 @@ describe("DoctorConsultationPage UI", () => {
     await user.click(screen.getByTestId("doctor-visit-card-2"));
 
     await waitFor(() => {
+      // El encabezado muestra el folio solo (sin prefijo "Folio") desde el
+      // rediseño del detalle de consulta.
       expect(screen.getByTestId("doctor-consultation-modal")).toHaveTextContent(
-        "Folio VST-2002",
+        "VST-2002",
       );
     });
   });

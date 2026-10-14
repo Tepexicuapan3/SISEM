@@ -63,6 +63,17 @@ vi.mock(
   }),
 );
 
+// La página usa `hasCapability`, pero también renderiza `PermissionGate`, que
+// consume `hasEffectivePermission` / `hasEffectiveRequirement` del MISMO hook.
+// Un mock solo con `hasCapability` rompe con "is not a function": las tres
+// responden con el mismo predicado.
+const mockPermissionDependencies = (allows: (code: string) => boolean) =>
+  ({
+    hasCapability: allows,
+    hasEffectivePermission: allows,
+    hasEffectiveRequirement: () => true,
+  }) as unknown as ReturnType<typeof usePermissionDependencies>;
+
 const createCenter = (
   overrides: Partial<CentroAtencionListItem> = {},
 ): CentroAtencionListItem => ({
@@ -110,9 +121,9 @@ describe("CentrosAtencionPage UI", () => {
       fetchStatus: "idle",
     } as unknown as ReturnType<typeof useCentrosAtencionList>);
 
-    vi.mocked(usePermissionDependencies).mockReturnValue({
-      hasCapability: () => true,
-    } as unknown as ReturnType<typeof usePermissionDependencies>);
+    vi.mocked(usePermissionDependencies).mockReturnValue(
+      mockPermissionDependencies(() => true),
+    );
 
     vi.mocked(useUpdateCentroAtencion).mockReturnValue({
       mutateAsync: updateMutate,
@@ -196,9 +207,9 @@ describe("CentrosAtencionPage UI", () => {
   });
 
   it("shows minimal notice when catalog read access is missing", () => {
-    vi.mocked(usePermissionDependencies).mockReturnValue({
-      hasCapability: (cap: string) => cap !== "admin.catalogs.centers.read",
-    } as unknown as ReturnType<typeof usePermissionDependencies>);
+    vi.mocked(usePermissionDependencies).mockReturnValue(
+      mockPermissionDependencies((cap) => cap !== "admin.catalogs.centers.read"),
+    );
 
     render(<CentrosAtencionPage />);
 

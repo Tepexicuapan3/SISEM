@@ -160,8 +160,11 @@ describe("UserCreateDialog UI", () => {
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
 
     await waitFor(() => {
+      // objectContaining: el formulario además manda los campos opcionales
+      // (escuela, sexo, fecha de nacimiento, tipo de personal, ...) en null;
+      // aquí solo importan los que se capturaron.
       expect(mutateAsync).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           username: "jperez",
           firstName: "Juan",
           paternalName: "Perez",
@@ -169,7 +172,7 @@ describe("UserCreateDialog UI", () => {
           email: "jperez@metro.cdmx.gob.mx",
           clinicId: 7,
           primaryRoleId: 1,
-        },
+        }),
       });
     });
 

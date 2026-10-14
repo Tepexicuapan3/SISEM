@@ -15,6 +15,7 @@ responde 202 con el `jobId`. El frontend consulta
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -41,10 +42,6 @@ IMPORT_PERMISSION = "admin:gestion:medicos:create"
 # sin hasheo ni correos tardan del orden de minutos.
 ACTIVE_JOB_WINDOW = timedelta(hours=1)
 
-# Un job que sigue PENDING (el worker nunca lo tomó) pasado este tiempo se da
-# por perdido: worker apagado o sin la tarea registrada (Celery no se recarga
-# solo al cambiar código). Se cierra en ERROR para no bloquear una hora.
-PENDING_STALE_AFTER = timedelta(minutes=5)
 WORKER_UNAVAILABLE_MESSAGE = (
     "El servidor no tomó la importación (worker de Celery apagado o sin la "
     "tarea registrada). No se creó ningún médico. Reinicia el worker y vuelve "
@@ -52,12 +49,23 @@ WORKER_UNAVAILABLE_MESSAGE = (
 )
 
 
+def pending_stale_after() -> timedelta:
+    """
+    Tiempo que un job puede seguir PENDING (el worker nunca lo tomó) antes de
+    darlo por perdido: worker apagado o sin la tarea registrada (Celery no se
+    recarga solo al cambiar código). Configurable con
+    `MEDICOS_IMPORT_PENDING_STALE_MINUTES` (default 15). Se lee en cada
+    llamada para respetar el setting vigente (y `override_settings` en tests).
+    """
+    return timedelta(minutes=settings.MEDICOS_IMPORT_PENDING_STALE_MINUTES)
+
+
 def _expire_stale_pending(**filters) -> int:
     """Cierra en ERROR los jobs PENDING que el worker nunca tomó."""
     return MedicoImportJob.objects.filter(
         status=MedicoImportJob.Status.PENDING,
         fch_inicio__isnull=True,
-        fch_alta__lt=timezone.now() - PENDING_STALE_AFTER,
+        fch_alta__lt=timezone.now() - pending_stale_after(),
         **filters,
     ).update(
         status=MedicoImportJob.Status.ERROR,

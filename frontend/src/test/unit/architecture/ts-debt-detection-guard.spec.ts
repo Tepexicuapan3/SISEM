@@ -36,7 +36,11 @@ describe("TypeScript debt detection guard", () => {
   it.each(NEGATIVE_GATES)(
     "%s must fail when debt is present",
     ({ gate, project, fixture }) => {
-      const projectPath = path.resolve(FRONTEND_ROOT, project);
+      // Ruta RELATIVA a FRONTEND_ROOT (el cwd del proceso): en Windows el
+      // spawn va por shell y una ruta absoluta con espacios
+      // ("D:\PROYECTOS EN PRODUCCION\...") se parte en varios argumentos y
+      // tsc falla con TS5042 en vez de detectar la deuda.
+      const projectPath = path.relative(FRONTEND_ROOT, path.resolve(FRONTEND_ROOT, project));
       const result = runNegativeTypecheck(projectPath);
       const output = `${result.stdout}\n${result.stderr}`;
 

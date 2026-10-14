@@ -16,7 +16,8 @@ import openpyxl
 from django.contrib.auth.hashers import make_password
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
-from django.test import TransactionTestCase
+from django.conf import settings
+from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -231,7 +232,10 @@ class MedicoImportApiTests(APITestCase):
         self.assertEqual(response.data["details"]["jobId"], str(activo.id))
         task_mock.delay.assert_not_called()
 
-    def _job_pending_viejo(self, minutos=6, **fields):
+    def _job_pending_viejo(self, minutos=None, **fields):
+        # Por defecto, 1 minuto más que el umbral configurado (sea cual sea).
+        if minutos is None:
+            minutos = settings.MEDICOS_IMPORT_PENDING_STALE_MINUTES + 1
         job = MedicoImportJob.objects.create(file_name="viejo.xlsx", **fields)
         MedicoImportJob.objects.filter(id=job.id).update(
             fch_alta=timezone.now() - timedelta(minutes=minutos)
@@ -269,6 +273,23 @@ class MedicoImportApiTests(APITestCase):
 
         self.assertEqual(self.client.get(f"{IMPORT_JOB_URL}{reciente.id}").data["status"], "PENDING")
         self.assertEqual(self.client.get(f"{IMPORT_JOB_URL}{corriendo.id}").data["status"], "RUNNING")
+
+    def test_umbral_de_pending_por_defecto_es_holgado(self):
+        # Un job de 6 min en cola NO se cierra con el default (15): el worker
+        # puede estar ocupado con otra tarea larga sin estar caído.
+        reciente = self._job_pending_viejo(minutos=6)
+
+        data = self.client.get(f"{IMPORT_JOB_URL}{reciente.id}").data
+
+        self.assertEqual(data["status"], "PENDING")
+
+    @override_settings(MEDICOS_IMPORT_PENDING_STALE_MINUTES=2)
+    def test_umbral_de_pending_es_configurable(self):
+        viejo = self._job_pending_viejo(minutos=3)
+
+        data = self.client.get(f"{IMPORT_JOB_URL}{viejo.id}").data
+
+        self.assertEqual(data["errorCode"], "WORKER_NO_DISPONIBLE")
 
     def test_job_status_muestra_avance_vivo_de_la_cache(self):
         from apps.medicos.services import import_job_progress

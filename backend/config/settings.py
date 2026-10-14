@@ -203,6 +203,15 @@ CELERY_TIMEZONE        = "America/Mexico_City"
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT  = ["json"]
 
+# Minutos que un import de médicos puede seguir "En cola" (el worker no lo
+# tomó) antes de cerrarlo como WORKER_NO_DISPONIBLE. Holgado a propósito: el
+# worker corre varios procesos (uno por CPU), así que solo se demora si TODOS
+# están ocupados (p. ej. un import de usuarios mandando miles de correos);
+# demasiado corto da falsos "worker no disponible".
+MEDICOS_IMPORT_PENDING_STALE_MINUTES = config(
+    "MEDICOS_IMPORT_PENDING_STALE_MINUTES", default=15, cast=int
+)
+
 CELERY_BEAT_SCHEDULE = {
     "citas-recordatorios-24h": {
         "task": "apps.recepcion.tasks.enviar_recordatorios_proximos",

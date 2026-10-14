@@ -62,7 +62,7 @@ describe("UserDetailsGeneralTab", () => {
     expect(screen.getByText("Clinico")).toBeVisible();
     expect(screen.getByLabelText("Nombre")).toBeVisible();
     expect(screen.getByLabelText("Correo")).toBeVisible();
-    expect(screen.getByText("Centro de atencion")).toBeVisible();
+    expect(screen.getByText("Centro de atención")).toBeVisible();
     expect(screen.getByText("Estado de la cuenta")).toBeVisible();
   });
 
