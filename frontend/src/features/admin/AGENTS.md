@@ -91,7 +91,7 @@
 ## Checklist for New Admin Modules
 
 1) Define domain capability keys (no ad-hoc checks in components).
-2) Add backend requirement (`CAPABILITY_REQUIREMENTS`) and explicit dependencies when needed.
+2) Add backend requirement (`CAPABILITY_REQUIREMENTS`) and explicit dependencies when needed. MANDATORY: `admin.` is a strict prefix, so any `admin.*` key missing in the backend blocks the screen for everyone, admin included (the fallback requirement is ignored). Full checklist: `docs/domains/auth-access/permissions-source-of-truth.md` section 10; guarded by `backend/apps/authentication/tests/test_capability_registry_sync.py`.
 3) Consume capability in pages/dialogs (`usePermissionDependencies`).
 4) Protect catalog queries with `enabled: false`.
 5) Implement missing-access UX state (neutral notice + selective disable).

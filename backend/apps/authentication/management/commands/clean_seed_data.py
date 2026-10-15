@@ -235,7 +235,7 @@ DJANGO_MANAGED_FK_COLUMNS = {
 # Estas tienen on_delete=PROTECT real en Django -- NUNCA se auto-nulean.
 # Si bloquean el borrado es a proposito (datos clinicos/legales reales).
 PROTECTED_FK_COLUMNS = {
-    ("cat_autorizadores", "id_usuario"),
+    ("cat_designacion_autorizador", "id_usuario"),
     ("cns_visit_consultation", "id_doctor"),
 }
 

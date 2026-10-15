@@ -9,9 +9,12 @@ from django.utils import timezone
 from apps.administracion.management.seeds.navigation_permissions_seed import (
     NAVIGATION_PERMISSIONS_SEED,
 )
-from apps.catalogos.models import Permisos
+from apps.administracion.models import RelRolPermiso
+from apps.catalogos.models import Permisos, Roles
 
 logger = logging.getLogger(__name__)
+
+CATALOGOS_PREFIX = "admin:catalogos:"
 
 
 class Command(BaseCommand):
@@ -21,7 +24,8 @@ class Command(BaseCommand):
         "menu-modulos clasifico como categoria A (feature real, solo "
         "faltaba el codigo en cat_permisos). Correrlo ANTES de "
         "seed_navigation_menu para que esos codigos dejen de reportarse "
-        "como huerfanos."
+        "como huerfanos. Los codigos admin:catalogos:* se asignan ademas "
+        "a los roles con is_admin=True."
     )
 
     def add_arguments(self, parser):
@@ -45,6 +49,9 @@ class Command(BaseCommand):
     def _run(self) -> dict:
         created = 0
         updated = 0
+        asignaciones_creadas = 0
+
+        admin_roles = list(Roles.objects.filter(is_admin=True, is_active=True))
 
         for codigo, descripcion in NAVIGATION_PERMISSIONS_SEED:
             permiso, fue_creado = Permisos.objects.get_or_create(
@@ -56,6 +63,19 @@ class Command(BaseCommand):
                     "updated_at": timezone.now(),
                 },
             )
+
+            # Los catalogos administrativos se asignan a los roles admin, igual
+            # que hace seed_catalogos_crud_permissions con los catalogos CRUD.
+            if codigo.startswith(CATALOGOS_PREFIX):
+                for rol in admin_roles:
+                    _, fue_asignado = RelRolPermiso.objects.get_or_create(
+                        id_rol=rol,
+                        id_permiso=permiso,
+                        defaults={"fch_baja": None},
+                    )
+                    if fue_asignado:
+                        asignaciones_creadas += 1
+
             if fue_creado:
                 created += 1
                 continue
@@ -76,6 +96,8 @@ class Command(BaseCommand):
             "total": len(NAVIGATION_PERMISSIONS_SEED),
             "created": created,
             "updated": updated,
+            "asignaciones_creadas": asignaciones_creadas,
+            "roles_admin": [rol.rol for rol in admin_roles],
         }
 
     # ------------------------------------------------------------------
@@ -84,6 +106,8 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"{prefijo}[seed_navigation_permissions] total={summary['total']} "
-                f"creados={summary['created']} actualizados={summary['updated']}"
+                f"creados={summary['created']} actualizados={summary['updated']} "
+                f"asignaciones_creadas={summary['asignaciones_creadas']} "
+                f"roles_admin={summary['roles_admin']}"
             )
         )

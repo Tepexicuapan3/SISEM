@@ -19,7 +19,7 @@ from apps.catalogos.uses_case.confirm_cies_use_case import ConfirmCiesUseCase
 from apps.catalogos.uses_case.upload_cies_use_case import PreviewCiesUseCase
 
 from .models import (
-    Areas, Autorizadores, Bajas, CalidadLaboral, CatAreaClinica, CatCentroAtencion,
+    Areas, Bajas, CalidadLaboral, CatAreaClinica, CatCentroAtencion,
     CatCentroAtencionHorario, CatCentroAtencionExcepcion, CatCie9Mc,
     CatTipoCirugia, CatClasificacionCirugia, CatMotivoCancelacionCirugia,
     CatMotivoTraslado, CatTipoTraslado, CatTipoServicioAmbulancia, CatDestinoAmbulancia,
@@ -35,7 +35,6 @@ from .serializers import (
     AreasDetailSerializer, AreasListSerializer, AreasWriteSerializer,
     CatAreaClinicaDetailSerializer, CatAreaClinicaListSerializer, CatAreaClinicaWriteSerializer,
     CentroAreaClinicaDetailSerializer, CentroAreaClinicaListSerializer, CentroAreaClinicaWriteSerializer,
-    AutorizadoresDetailSerializer, AutorizadoresListSerializer, AutorizadoresWriteSerializer,
     BajasDetailSerializer, BajasListSerializer, BajasWriteSerializer,
     CalidadLaboralDetailSerializer, CalidadLaboralListSerializer, CalidadLaboralWriteSerializer,
     CatCentroAtencionDetailSerializer, CatCentroAtencionHorarioDetailSerializer,
@@ -781,22 +780,6 @@ class AreasDetailView(CatalogBaseDetailView):
     write_serializer = AreasWriteSerializer
     wrapper_key = "area"
     error_codes = MappingProxyType({"not_found": "AREAS_NOT_FOUND", "exists": "AREAS_EXISTS"})
-
-
-class AutorizadoresListCreateView(CatalogBaseListCreateView):
-    catalog = "autorizadores"
-    model = Autorizadores
-    list_serializer = AutorizadoresListSerializer
-    write_serializer = AutorizadoresWriteSerializer
-    error_codes = MappingProxyType({"exists": "AUTHORIZER_STUDIES_EXISTS"})
-
-class AutorizadoresDetailView(CatalogBaseDetailView):
-    catalog = "autorizadores"
-    model = Autorizadores
-    detail_serializer = AutorizadoresDetailSerializer
-    write_serializer = AutorizadoresWriteSerializer
-    wrapper_key = "authorizer"
-    error_codes = MappingProxyType({"not_found": "AUTHORIZER_NOT_FOUND", "exists": "AUTHORIZER_STUDIES_EXISTS"})
 
 
 class BajasListCreateView(CatalogBaseListCreateView):

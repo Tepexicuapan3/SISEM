@@ -118,3 +118,39 @@ Limites:
 - `GET /api/v1/auth/me` se mantiene para identidad/sesión; no reemplaza la proyección de capacidades para decisiones UX de autorización en admin.
 - En estados `loading/error/degraded` de capacidades, el flujo admin in-scope aplica `deny by default` (fail-closed) para acciones privilegiadas.
 - La sincronía de cache `session + capabilities` (login/logout/refresh/auth-revision) reduce drift temporal entre identidad y autorización UX.
+
+## 10) Alta de un módulo o catálogo nuevo (checklist obligatorio)
+
+### 10.1 Por qué importa: `admin.` también es estricto
+
+Además de los prefijos que manda el backend (`strictCapabilityPrefixes`), el frontend agrega por código `admin.` como prefijo estricto (`KAN49_STRICT_CAPABILITY_PREFIXES` en `frontend/src/domains/auth-access/hooks/usePermissionDependencies.ts`). Consecuencia:
+
+- Si una pantalla llama `hasCapability("admin.catalogs.foo.read", ...)` y esa key **no existe** en `CAPABILITY_REQUIREMENTS`, el backend no la proyecta y `hasCapability` devuelve `false`.
+- El `fallbackRequirement` (segundo argumento) **se ignora** en prefijos estrictos.
+- Tener `permissions: ["*"]` **no alcanza**: `resolve_capabilities` solo concede `*` sobre las keys registradas.
+- Resultado: la pantalla queda bloqueada para TODOS, incluido admin ("No tienes acceso para consultar este catálogo"). Asignar el permiso al rol no lo arregla.
+
+Caso real (2026-10-14): los 8 catálogos de cirugías/ambulancias (`cie9mc`, `tiposcirugia`, `clasificacionescirugia`, `motivoscancelacioncirugia`, `motivostraslado`, `tipostraslado`, `tiposservicioambulancia`, `destinosambulancia`), `admin.arco.write` y `admin.users.clinicsCatalog.read` estaban usados en el frontend sin registrar en el backend.
+
+### 10.2 Pasos
+
+Para cada módulo/catálogo nuevo con permiso `<area>:<modulo>:<recurso>:<accion>` (ej. `admin:catalogos:destinos_ambulancia:read`):
+
+1. **Permiso en BD** — agregar `(codigo, descripcion)` al seed que corresponda:
+   - Catálogo con CRUD: `backend/apps/administracion/management/seeds/catalogos_crud_permissions_seed.py` (read/create/update/delete).
+   - Resto de módulos: `backend/apps/administracion/management/seeds/navigation_permissions_seed.py` (nueva "tanda" al final).
+   - Ambos comandos corren en `backend/start-docker.sh` y asignan los códigos `admin:catalogos:*` a los roles con `is_admin=True`.
+2. **Capability en backend** — registrar cada key que use el frontend en `CAPABILITY_REQUIREMENTS` (`backend/apps/authentication/services/permission_dependencies.py`):
+   ```python
+   "admin.catalogs.destinosambulancia.read": {"allOf": ["admin:catalogos:destinos_ambulancia:read"]},
+   ```
+   La key tiene que coincidir **carácter por carácter** con la del frontend (camelCase, guiones o todo junto: lo que use la página).
+3. **Consumo en frontend** — `usePermissionDependencies().hasCapability(key, { allOf: [permiso] })` en la página/diálogo; queries con `enabled: canRead`.
+4. **Navegación** — nodo en `navigation_seed.py` con el mismo permiso, ruta con `ProtectedRoute requiredPermission`, regenerar `menu-destinations.generated.ts` y agregar el label en `menu-destinations.labels.ts`.
+5. **Verificar** — `python manage.py test apps.authentication.tests.test_capability_registry_sync` (ver 10.3) y entrar con el usuario admin **después de re-loguear** (las capabilities vienen en la sesión).
+
+### 10.3 Guardrail automático
+
+`backend/apps/authentication/tests/test_capability_registry_sync.py` escanea los literales `admin.*` en `frontend/src` (sin tests) y falla si alguno no está en `CAPABILITY_REQUIREMENTS`, indicando archivo y línea. Corre en el job `backend` de CI (`python manage.py test`). Se salta solo si `frontend/src` no existe (contenedor solo backend).
+
+Para otros prefijos estrictos (`flow.*`) el test todavía no aplica: si se agrega un prefijo estricto nuevo, extender el regex del test.

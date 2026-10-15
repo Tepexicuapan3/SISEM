@@ -1,6 +1,7 @@
 from apps.authentication.domain.auth_policy_rules import (
     LOGIN_ACCOUNT_LOCK,
     LOGIN_IP_THROTTLE,
+    REAUTH_FAIL_LOCK,
     RESET_REQUEST_ACCOUNT,
     RESET_REQUEST_IP,
     VERIFY_FAIL_LOCK,
@@ -196,6 +197,50 @@ class AuthPolicyService:
         except PolicyStoreUnavailableError as exc:
             raise self._store_unavailable_error() from exc
 
+    def check_reauth(self, user_id):
+        """423 REAUTH_LOCKED si el usuario esta bloqueado para re-autenticar."""
+        key = str(user_id)
+        try:
+            if self.policy_store.is_locked(self._reauth_lock_key(key)):
+                counter = self.policy_store.get_counter(self._reauth_counter_key(key))
+                raise self._policy_error(
+                    "REAUTH_LOCKED",
+                    "Demasiados intentos fallidos de confirmacion de identidad",
+                    423,
+                    {
+                        "policyKey": REAUTH_FAIL_LOCK.key,
+                        "threshold": REAUTH_FAIL_LOCK.threshold,
+                        "window": REAUTH_FAIL_LOCK.window_label,
+                        "counterValue": counter,
+                        "lockTtl": REAUTH_FAIL_LOCK.lock_ttl_seconds,
+                    },
+                )
+        except PolicyStoreUnavailableError as exc:
+            raise self._store_unavailable_error() from exc
+
+    def record_reauth_failure(self, user_id):
+        key = str(user_id)
+        try:
+            counter = self.policy_store.increment_counter(
+                self._reauth_counter_key(key),
+                REAUTH_FAIL_LOCK.window_seconds,
+            )
+            if counter >= REAUTH_FAIL_LOCK.threshold:
+                self.policy_store.set_lock(
+                    self._reauth_lock_key(key),
+                    REAUTH_FAIL_LOCK.lock_ttl_seconds or REAUTH_FAIL_LOCK.window_seconds,
+                )
+        except PolicyStoreUnavailableError as exc:
+            raise self._store_unavailable_error() from exc
+
+    def record_reauth_success(self, user_id):
+        key = str(user_id)
+        try:
+            self.policy_store.clear_counter(self._reauth_counter_key(key))
+            self.policy_store.clear_counter(self._reauth_lock_key(key))
+        except PolicyStoreUnavailableError as exc:
+            raise self._store_unavailable_error() from exc
+
     @staticmethod
     def _ip_key(ip_address: str | None) -> str:
         return ip_address or "unknown"
@@ -227,6 +272,14 @@ class AuthPolicyService:
     @staticmethod
     def _verify_lock_key(email: str) -> str:
         return f"policy:reset:verify:lock:{email}"
+
+    @staticmethod
+    def _reauth_counter_key(user_id: str) -> str:
+        return f"policy:reauth:firma:counter:{user_id}"
+
+    @staticmethod
+    def _reauth_lock_key(user_id: str) -> str:
+        return f"policy:reauth:firma:lock:{user_id}"
 
     @staticmethod
     def _policy_error(code: str, message: str, status_code: int, policy_meta: dict):

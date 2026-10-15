@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.catalogos.models import (
     Areas,
-    Autorizadores,
     Bajas,
     CalidadLaboral,
     CatAreaClinica,
@@ -1041,51 +1040,6 @@ class ConsultoriosWriteSerializer(CatalogWriteSerializer):
     class Meta(CatalogWriteSerializer.Meta):
         model = Consultorios
         fields = CatalogWriteSerializer.Meta.fields + ("numero", "idTurn", "idCenter")
-
-
-# ---------------------------------------------------------------------------
-# Autorizadores
-# ---------------------------------------------------------------------------
-
-class AutorizadoresListSerializer(CatalogListSerializer):
-    class Meta(CatalogListSerializer.Meta):
-        model = Autorizadores
-
-class AutorizadoresDetailSerializer(CatalogDetailSerializer):
-    center = serializers.SerializerMethodField()
-    authorizationType = serializers.SerializerMethodField()
-    signatureImage = serializers.CharField(source="signature_image", allow_null=True, required=False, allow_blank=True)
-    user = serializers.SerializerMethodField()
-    fileNumber = serializers.CharField(source="file_number", allow_null=True, required=False, allow_blank=True)
-
-    def get_center(self, obj):
-        return build_catalog_ref(obj.center_id, CatCentroAtencion.objects)
-
-    def get_authorizationType(self, obj):
-        return build_catalog_ref(obj.authorization_type_id, TpAutorizacion.objects)
-
-    def get_user(self, obj):
-        return build_user_ref(obj.user_id)
-
-    class Meta(CatalogDetailSerializer.Meta):
-        model = Autorizadores
-        fields = CatalogDetailSerializer.Meta.fields + (
-            "position", "center", "authorizationType", "signatureImage", "user", "fileNumber",
-        )
-
-class AutorizadoresWriteSerializer(CatalogWriteSerializer):
-    centerId = serializers.IntegerField(source="center_id")
-    authorizationTypeId = serializers.IntegerField(source="authorization_type_id")
-    signatureImage = serializers.CharField(source="signature_image", allow_null=True, required=False, allow_blank=True)
-    authorizerPassword = serializers.CharField(source="authorizer_password", write_only=True)
-    userId = serializers.IntegerField(source="user_id")
-    fileNumber = serializers.CharField(source="file_number", allow_null=True, required=False, allow_blank=True)
-
-    class Meta(CatalogWriteSerializer.Meta):
-        model = Autorizadores
-        fields = CatalogWriteSerializer.Meta.fields + (
-            "centerId", "position", "authorizationTypeId", "signatureImage", "authorizerPassword", "userId", "fileNumber",
-        )
 
 
 # ---------------------------------------------------------------------------

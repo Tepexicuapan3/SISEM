@@ -69,7 +69,6 @@ NAVIGATION_PERMISSIONS_SEED: list[tuple[str, str]] = [
 # menu (visibles para cualquier autenticado) por la regla de
 # `GetNavigationMenuUseCase`: sin permiso asociado = publico.
 NAVIGATION_PERMISSIONS_SEED += [
-    ("admin:catalogos:autorizadores:read", "Ver catalogo de autorizadores"),
     ("admin:catalogos:bajas:read", "Ver catalogo de bajas"),
     ("admin:catalogos:calidad_laboral:read", "Ver catalogo de calidad laboral"),
     ("admin:catalogos:cies:upload", "Cargar catalogo CIE-S"),
@@ -193,4 +192,20 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("admin:arco:read", "Ver solicitudes de derechos ARCO"),
     ("admin:arco:write", "Registrar y resolver solicitudes de derechos ARCO"),
+]
+
+# Undecima tanda (change `cancelacion-nota-cascada`, PR1): designacion de
+# autorizadores, que reemplaza al catalogo plano `cat_autorizadores`
+# (admin:catalogos:autorizadores:* se da de baja). `global` es un permiso
+# APARTE a proposito: otorgar alcance GLOBAL (cualquier centro) no se hereda de
+# `write`. No usa el prefijo admin:catalogos:, asi que
+# `seed_navigation_permissions` NO lo asigna solo a los roles admin: se
+# asigna a mano (el rol con "*" ya lo tiene).
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:autorizadores:designacion:read", "Ver designaciones de autorizadores"),
+    ("admin:autorizadores:designacion:write", "Crear, editar y revocar designaciones de autorizadores"),
+    (
+        "admin:autorizadores:designacion:global",
+        "Otorgar alcance GLOBAL (todos los centros) en designaciones de autorizadores",
+    ),
 ]

@@ -1,10 +1,10 @@
 from django.urls import path
 
+from .designacion_views import DesignacionDetailView, DesignacionListCreateView
 from .imports.registry import CATALOG_IMPORT_REGISTRY
 from .views import *
 
 routes = [
-    ("authorizers", AutorizadoresListCreateView, AutorizadoresDetailView, "int"),
     ("discharge-reasons", BajasListCreateView, BajasDetailView, "int"),
     ("labor-quality", CalidadLaboralListCreateView, CalidadLaboralDetailView, "str"),
     ("consulting-rooms", ConsultoriosListCreateView, ConsultoriosDetailView, "int"),
@@ -102,6 +102,18 @@ urlpatterns += [
         "care-center-clinical-areas/<int:center_id>/<int:area_id>/",
         CentroAreaClinicaDetailView.as_view(),
         name="care-center-clinical-areas-detail",
+    ),
+
+    # DESIGNACION DE AUTORIZADORES (reemplaza al catalogo plano "authorizers")
+    path(
+        "authorizer-designations/",
+        DesignacionListCreateView.as_view(),
+        name="authorizer-designations-list-create",
+    ),
+    path(
+        "authorizer-designations/<int:pk>/",
+        DesignacionDetailView.as_view(),
+        name="authorizer-designations-detail",
     ),
 
     # CODIGOS POSTALES

@@ -757,25 +757,23 @@ export type {
 } from "@api/types/catalogos/licencias.types";
 
 // =============================================================================
-// AUTORIZADORES TYPES (CRUD)
+// DESIGNACION DE AUTORIZADORES TYPES
 // =============================================================================
 export type {
   // Entidades
-  AutorizadorListItem,
-  AutorizadorDetail,
-  // CRUD Requests
-  CreateAutorizadorRequest,
-  UpdateAutorizadorRequest,
-  // CRUD Responses
-  CreateAutorizadorResponse,
-  UpdateAutorizadorResponse,
-  DeleteAutorizadorResponse,
+  CentroTipoDesignacion,
+  DesignacionAlcance,
+  DesignacionAlcanceRequest,
+  DesignacionItem,
+  // Requests
+  DesignacionWriteRequest,
+  // Responses
+  DesignacionDetailResponse,
+  DesignacionesListResponse,
+  DeleteDesignacionResponse,
   // Listados
-  AutorizadoresListParams,
-  AutorizadoresListResponse,
-  // Detalle
-  AutorizadorDetailResponse,
-} from "@api/types/catalogos/autorizadores.types";
+  DesignacionesListParams,
+} from "@api/types/catalogos/authorizer-designations.types";
 
 // =============================================================================
 // CALIDAD LABORAL TYPES (CRUD)

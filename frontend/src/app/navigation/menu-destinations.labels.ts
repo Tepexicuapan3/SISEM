@@ -40,10 +40,6 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Áreas Clínicas",
     grupo: "Catálogos",
   },
-  "/admin/catalogos/autorizadores": {
-    label: "Autorizadores",
-    grupo: "Catálogos",
-  },
   "/admin/catalogos/bajas": { label: "Bajas", grupo: "Catálogos" },
   "/admin/catalogos/calidad-laboral": {
     label: "Calidad Laboral",
@@ -67,6 +63,10 @@ export const MENU_DESTINATION_LABELS: Record<
   },
   "/admin/catalogos/clasificaciones-cirugia": {
     label: "Clasificaciones de Cirugía",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/designacion-autorizadores": {
+    label: "Designación de Autorizadores",
     grupo: "Catálogos",
   },
   "/admin/catalogos/destinos-ambulancia": {

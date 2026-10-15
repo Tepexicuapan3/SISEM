@@ -2,7 +2,6 @@ from .base import CatalogBase
 
 from .areas import Areas
 from .areas_clinicas import CatAreaClinica, CentroAreaClinica
-from .autorizadores import Autorizadores
 from .bajas import Bajas
 from .calidad_laboral import CalidadLaboral
 from .centros_atencion import CatCentroAtencion
@@ -18,6 +17,7 @@ from .ambulancias_tipo_traslado import CatTipoTraslado
 from .ambulancias_tipo_servicio import CatTipoServicioAmbulancia
 from .ambulancias_destino import CatDestinoAmbulancia
 from .consultorios import Consultorios
+from .designacion_autorizador import DesignacionAlcance, DesignacionAutorizador
 from .discapacidades import Discapacidades
 from .edo_civil import EdoCivil
 from .enfermedades import Enfermedades
@@ -69,7 +69,6 @@ __all__ = [
     "Areas",
     "CatAreaClinica",
     "CentroAreaClinica",
-    "Autorizadores",
     "Bajas",
     "CalidadLaboral",
     "CatCentroAtencion",
@@ -85,6 +84,8 @@ __all__ = [
     "CatTipoServicioAmbulancia",
     "CatDestinoAmbulancia",
     "Consultorios",
+    "DesignacionAutorizador",
+    "DesignacionAlcance",
     "Discapacidades",
     "EdoCivil",
     "Enfermedades",

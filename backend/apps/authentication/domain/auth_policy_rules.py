@@ -55,3 +55,14 @@ OTP_RULE = PolicyRule(
     window_label="5m",
     otp_ttl_seconds=5 * 60,
 )
+
+# Re-autenticacion con contrasena propia para acciones firmadas (ej. cancelar
+# nota; change cancelacion-nota-cascada). Clave por id_usuario: 5 fallos en
+# 15 min bloquean 15 min, aun con la contrasena correcta.
+REAUTH_FAIL_LOCK = PolicyRule(
+    key="reauth.firma.lock",
+    threshold=5,
+    window_seconds=15 * 60,
+    window_label="15m",
+    lock_ttl_seconds=15 * 60,
+)

@@ -3,8 +3,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from apps.catalogos.serializers import (AutorizadoresDetailSerializer,
-                                        PermisosDetailSerializer,
+from apps.catalogos.serializers import (PermisosDetailSerializer,
                                         RolesDetailSerializer,
                                         build_catalog_ref,
                                         build_user_ref)
@@ -40,7 +39,7 @@ class CatalogSerializersUnitTests(SimpleTestCase):
 
         self.assertEqual(value, {"id": 55, "name": "plain_user"})
 
-    def test_autorizadores_build_catalog_ref_helper(self):
+    def test_build_catalog_ref_helper(self):
         class FakeQuerySet:
             def __init__(self, item):
                 self.item = item
@@ -61,26 +60,6 @@ class CatalogSerializersUnitTests(SimpleTestCase):
         self.assertIsNone(none_ref)
         self.assertEqual(found_ref, {"id": 10, "name": "Item"})
         self.assertEqual(missing_ref, {"id": 11, "name": ""})
-
-    def test_autorizadores_field_getters_delegate_to_helpers(self):
-        serializer = AutorizadoresDetailSerializer()
-        obj = SimpleNamespace(center_id=1, authorization_type_id=2, user_id=3)
-
-        with patch(
-            "apps.catalogos.serializers.build_catalog_ref",
-            side_effect=[{"id": 1, "name": "C"}, {"id": 2, "name": "T"}],
-        ):
-            center = serializer.get_center(obj)
-            authorization_type = serializer.get_authorizationType(obj)
-
-        with patch(
-            "apps.catalogos.serializers.build_user_ref", return_value={"id": 3, "name": "U"},
-        ):
-            user = serializer.get_user(obj)
-
-        self.assertEqual(center, {"id": 1, "name": "C"})
-        self.assertEqual(authorization_type, {"id": 2, "name": "T"})
-        self.assertEqual(user, {"id": 3, "name": "U"})
 
     def test_permisos_and_roles_detail_created_updated_by_helpers(self):
         perm_serializer = PermisosDetailSerializer()

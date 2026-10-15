@@ -47,7 +47,15 @@ def crear_tablas_faltantes(apps, schema_editor):
     tablas_existentes = set(schema_editor.connection.introspection.table_names())
 
     for model_name in CATALOGOS_MODELOS_A_CREAR:
-        model = global_apps.get_model("catalogos", model_name)
+        # Guard (change cancelacion-nota-cascada): este paso usa el registro
+        # de apps VIVO, no el historico. El modelo "autorizadores" fue
+        # eliminado del codigo (cat_autorizadores se dio de baja en 0040), asi
+        # que en una BD fresca ya no existe en el registro: se salta. En
+        # ambientes ya migrados esta migracion no se vuelve a ejecutar.
+        try:
+            model = global_apps.get_model("catalogos", model_name)
+        except LookupError:
+            continue
         if model._meta.db_table in tablas_existentes:
             continue
         schema_editor.create_model(model)

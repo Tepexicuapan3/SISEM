@@ -80,6 +80,13 @@ def add_fk_integrity(apps, schema_editor):
     table = AUTORIZADORES_TABLE
     qn = schema_editor.quote_name
 
+    # Guard (change cancelacion-nota-cascada): en BD fresca 0013 ya no crea
+    # cat_autorizadores (el modelo se elimino del codigo), asi que no hay
+    # tabla sobre la cual agregar FK/indices. En ambientes con historial real
+    # la tabla existe y el comportamiento es el de siempre.
+    if table not in set(connection.introspection.table_names()):
+        return
+
     with connection.cursor() as cursor:
         constraints = connection.introspection.get_constraints(cursor, table)
 

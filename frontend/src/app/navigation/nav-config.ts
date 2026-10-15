@@ -128,9 +128,9 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:catalogos:centros_atencion:read"],
           },
           {
-            title: "Autorizadores",
-            url: "/admin/catalogos/autorizadores",
-            permissions: ["admin:catalogos:autorizadores:read"],
+            title: "Designación de autorizadores",
+            url: "/admin/catalogos/designacion-autorizadores",
+            permissions: ["admin:autorizadores:designacion:read"],
           },
           {
             title: "Bajas",

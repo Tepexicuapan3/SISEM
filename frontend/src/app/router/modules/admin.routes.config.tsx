@@ -20,7 +20,7 @@ import MotivoTrasladoPage from "@features/admin/modules/catalogos/motivos-trasla
 import TipoTrasladoPage from "@features/admin/modules/catalogos/tipos-traslado/pages/TipoTrasladoPage";
 import TipoServicioAmbulanciaPage from "@features/admin/modules/catalogos/tipos-servicio-ambulancia/pages/TipoServicioAmbulanciaPage";
 import DestinoAmbulanciaPage from "@features/admin/modules/catalogos/destinos-ambulancia/pages/DestinoAmbulanciaPage";
-import AutorizadoresPage from "@features/admin/modules/catalogos/autorizadores/pages/AutorizadoresPage";
+import DesignacionAutorizadoresPage from "@features/admin/modules/catalogos/designacion-autorizadores/pages/DesignacionAutorizadoresPage";
 import BajasPage from "@features/admin/modules/catalogos/bajas/pages/BajasPage";
 import CalidadLaboralPage from "@features/admin/modules/catalogos/calidad-laboral/pages/CalidadLaboralPage";
 import EdoCivilPage from "@features/admin/modules/catalogos/edo-civil/pages/EdoCivilPage";
@@ -194,10 +194,16 @@ export const adminRoutes: RouteObject[] = [
         ),
       },
       {
-        path: "autorizadores",
+        path: "designacion-autorizadores",
         element: (
-          <ProtectedRoute requiredPermission="admin:catalogos:autorizadores:read">
-            <AutorizadoresPage />
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.designacionAutorizadores.read"
+            fallbackRequirement={{
+              allOf: ["admin:autorizadores:designacion:read"],
+            }}
+            dependencyAware
+          >
+            <DesignacionAutorizadoresPage />
           </ProtectedRoute>
         ),
       },

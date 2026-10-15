@@ -36,6 +36,11 @@ EXPLICIT_PERMISSION_DEPENDENCIES: Dict[str, List[str]] = {
     ],
     "admin:gestion:roles:create": ["admin:gestion:permisos:read"],
     "admin:gestion:roles:update": ["admin:gestion:permisos:read"],
+    # Designacion de autorizadores (change cancelacion-nota-cascada): `write`
+    # y `global` no estan en WRITE_ACTIONS, asi que la dependencia de lectura
+    # se declara explicita.
+    "admin:autorizadores:designacion:write": ["admin:autorizadores:designacion:read"],
+    "admin:autorizadores:designacion:global": ["admin:autorizadores:designacion:write"],
 }
 
 
@@ -46,6 +51,9 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.users.rolesCatalog.read": {"allOf": ["admin:gestion:roles:read"]},
     "admin.users.permissionsCatalog.read": {
         "allOf": ["admin:gestion:permisos:read"]
+    },
+    "admin.users.clinicsCatalog.read": {
+        "allOf": ["admin:catalogos:centros_atencion:read"]
     },
     "admin.users.editFull": {
         "allOf": [
@@ -111,10 +119,10 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.catalogs.parentescos.create": {"allOf": ["admin:catalogos:parentescos:create"]},
     "admin.catalogs.parentescos.update": {"allOf": ["admin:catalogos:parentescos:update"]},
     "admin.catalogs.parentescos.delete": {"allOf": ["admin:catalogos:parentescos:delete"]},
-    "admin.catalogs.autorizadores.read": {"allOf": ["admin:catalogos:autorizadores:read"]},
-    "admin.catalogs.autorizadores.create": {"allOf": ["admin:catalogos:autorizadores:create"]},
-    "admin.catalogs.autorizadores.update": {"allOf": ["admin:catalogos:autorizadores:update"]},
-    "admin.catalogs.autorizadores.delete": {"allOf": ["admin:catalogos:autorizadores:delete"]},
+    # Designacion de autorizadores (reemplazo de la pantalla antigua de Autorizadores).
+    "admin.catalogs.designacionAutorizadores.read": {"allOf": ["admin:autorizadores:designacion:read"]},
+    "admin.catalogs.designacionAutorizadores.write": {"allOf": ["admin:autorizadores:designacion:write"]},
+    "admin.catalogs.designacionAutorizadores.global": {"allOf": ["admin:autorizadores:designacion:global"]},
     "admin.catalogs.gruposMedicamentos.read": {"allOf": ["admin:catalogos:grupos_medicamentos:read"]},
     "admin.catalogs.gruposMedicamentos.create": {"allOf": ["admin:catalogos:grupos_medicamentos:create"]},
     "admin.catalogs.gruposMedicamentos.update": {"allOf": ["admin:catalogos:grupos_medicamentos:update"]},
@@ -208,6 +216,38 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.catalogs.tiposSanguineo.update": {"allOf": ["admin:catalogos:tipos_sanguineo:update"]},
     "admin.catalogs.tiposSanguineo.delete": {"allOf": ["admin:catalogos:tipos_sanguineo:delete"]},
     "admin.catalogs.cies.upload": {"allOf": ["admin:catalogos:cies:upload"]},
+    "admin.catalogs.cie9mc.read": {"allOf": ["admin:catalogos:cie9_mc:read"]},
+    "admin.catalogs.cie9mc.create": {"allOf": ["admin:catalogos:cie9_mc:create"]},
+    "admin.catalogs.cie9mc.update": {"allOf": ["admin:catalogos:cie9_mc:update"]},
+    "admin.catalogs.cie9mc.delete": {"allOf": ["admin:catalogos:cie9_mc:delete"]},
+    "admin.catalogs.tiposcirugia.read": {"allOf": ["admin:catalogos:tipos_cirugia:read"]},
+    "admin.catalogs.tiposcirugia.create": {"allOf": ["admin:catalogos:tipos_cirugia:create"]},
+    "admin.catalogs.tiposcirugia.update": {"allOf": ["admin:catalogos:tipos_cirugia:update"]},
+    "admin.catalogs.tiposcirugia.delete": {"allOf": ["admin:catalogos:tipos_cirugia:delete"]},
+    "admin.catalogs.clasificacionescirugia.read": {"allOf": ["admin:catalogos:clasificaciones_cirugia:read"]},
+    "admin.catalogs.clasificacionescirugia.create": {"allOf": ["admin:catalogos:clasificaciones_cirugia:create"]},
+    "admin.catalogs.clasificacionescirugia.update": {"allOf": ["admin:catalogos:clasificaciones_cirugia:update"]},
+    "admin.catalogs.clasificacionescirugia.delete": {"allOf": ["admin:catalogos:clasificaciones_cirugia:delete"]},
+    "admin.catalogs.motivoscancelacioncirugia.read": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:read"]},
+    "admin.catalogs.motivoscancelacioncirugia.create": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:create"]},
+    "admin.catalogs.motivoscancelacioncirugia.update": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:update"]},
+    "admin.catalogs.motivoscancelacioncirugia.delete": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:delete"]},
+    "admin.catalogs.motivostraslado.read": {"allOf": ["admin:catalogos:motivos_traslado:read"]},
+    "admin.catalogs.motivostraslado.create": {"allOf": ["admin:catalogos:motivos_traslado:create"]},
+    "admin.catalogs.motivostraslado.update": {"allOf": ["admin:catalogos:motivos_traslado:update"]},
+    "admin.catalogs.motivostraslado.delete": {"allOf": ["admin:catalogos:motivos_traslado:delete"]},
+    "admin.catalogs.tipostraslado.read": {"allOf": ["admin:catalogos:tipos_traslado:read"]},
+    "admin.catalogs.tipostraslado.create": {"allOf": ["admin:catalogos:tipos_traslado:create"]},
+    "admin.catalogs.tipostraslado.update": {"allOf": ["admin:catalogos:tipos_traslado:update"]},
+    "admin.catalogs.tipostraslado.delete": {"allOf": ["admin:catalogos:tipos_traslado:delete"]},
+    "admin.catalogs.tiposservicioambulancia.read": {"allOf": ["admin:catalogos:tipos_servicio_ambulancia:read"]},
+    "admin.catalogs.tiposservicioambulancia.create": {"allOf": ["admin:catalogos:tipos_servicio_ambulancia:create"]},
+    "admin.catalogs.tiposservicioambulancia.update": {"allOf": ["admin:catalogos:tipos_servicio_ambulancia:update"]},
+    "admin.catalogs.tiposservicioambulancia.delete": {"allOf": ["admin:catalogos:tipos_servicio_ambulancia:delete"]},
+    "admin.catalogs.destinosambulancia.read": {"allOf": ["admin:catalogos:destinos_ambulancia:read"]},
+    "admin.catalogs.destinosambulancia.create": {"allOf": ["admin:catalogos:destinos_ambulancia:create"]},
+    "admin.catalogs.destinosambulancia.update": {"allOf": ["admin:catalogos:destinos_ambulancia:update"]},
+    "admin.catalogs.destinosambulancia.delete": {"allOf": ["admin:catalogos:destinos_ambulancia:delete"]},
     # Catalogos genericos (GenericCatalogPage) -- la clave la arma el
     # frontend como `admin.catalogs.${catalog.slug}.read` a partir de
     # `catalog-definitions.ts` (slug con GUIONES, no camelCase/underscore).
@@ -223,6 +263,8 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.menus.create": {"allOf": ["admin:gestion:modulos:create"]},
     "admin.menus.update": {"allOf": ["admin:gestion:modulos:update"]},
     "admin.menus.delete": {"allOf": ["admin:gestion:modulos:delete"]},
+    # Solicitudes ARCO
+    "admin.arco.write": {"allOf": ["admin:arco:write"]},
     # Médicos
     "admin.medicos.read":        {"allOf": ["admin:gestion:medicos:read"]},
     "admin.medicos.create":      {"allOf": ["admin:gestion:medicos:create"]},
