@@ -14,6 +14,11 @@ from apps.consulta_medica.repositories.prescription_repository import Prescripti
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
+from apps.consulta_medica.services.visit_guards import (
+    ensure_visit_not_cancelled,
+    lock_visit_not_cancelled,
+)
+
 from .consultation_usecase import ensure_doctor_role
 
 # Permiso separado del rol de doctor -- quien autoriza no necesariamente
@@ -176,6 +181,7 @@ def add_prescription_item(
     ensure_doctor_role(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
     _get_consultation_or_error(visit)
 
     medication = Medicamentos.objects.filter(pk=medication_id, is_active=True).first()
@@ -211,19 +217,6 @@ def add_prescription_item(
             },
         }
 
-    prescription = PrescriptionRepository.get_or_create_for_visit(
-        visit, created_by_id=actor_id, updated_by_id=actor_id,
-    )
-
-    if PrescriptionItemRepository.get_active_by_prescription_and_medication(
-        prescription, medication,
-    ):
-        raise VisitDomainError(
-            "PRESCRIPTION_ITEM_ALREADY_EXISTS",
-            "Ese medicamento ya esta agregado en la receta de esta consulta.",
-            409,
-        )
-
     normalized_indications = (indications or "").strip()
     if not normalized_indications:
         raise VisitDomainError(
@@ -233,16 +226,32 @@ def add_prescription_item(
             details={"indications": ["Las indicaciones son obligatorias."]},
         )
 
-    item = PrescriptionItemRepository.create(
-        prescription=prescription,
-        medication=medication,
-        indications=normalized_indications,
-        quantity=quantity,
-        dose=(dose or "").strip() or None,
-        created_by_id=actor_id,
-        updated_by_id=actor_id,
-    )
-    _maybe_create_authorization(prescription, visit)
+    with transaction.atomic():
+        # Serializa con cancel_consultation (primer lock = fila Visit).
+        lock_visit_not_cancelled(visit.id_visit)
+        prescription = PrescriptionRepository.get_or_create_for_visit(
+            visit, created_by_id=actor_id, updated_by_id=actor_id,
+        )
+
+        if PrescriptionItemRepository.get_active_by_prescription_and_medication(
+            prescription, medication,
+        ):
+            raise VisitDomainError(
+                "PRESCRIPTION_ITEM_ALREADY_EXISTS",
+                "Ese medicamento ya esta agregado en la receta de esta consulta.",
+                409,
+            )
+
+        item = PrescriptionItemRepository.create(
+            prescription=prescription,
+            medication=medication,
+            indications=normalized_indications,
+            quantity=quantity,
+            dose=(dose or "").strip() or None,
+            created_by_id=actor_id,
+            updated_by_id=actor_id,
+        )
+        _maybe_create_authorization(prescription, visit)
 
     payload = PrescriptionItemRepository.to_contract(item)
     if allergy_match is not None:

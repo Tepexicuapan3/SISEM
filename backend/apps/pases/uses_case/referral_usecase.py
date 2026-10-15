@@ -8,6 +8,10 @@ from apps.catalogos.models import CatCentroAtencion, Especialidades, EstudiosMed
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.pases.models import Referral
 from apps.pases.repositories.referral_repository import ReferralRepository
+from apps.consulta_medica.services.visit_guards import (
+    ensure_visit_not_cancelled,
+    lock_visit_not_cancelled,
+)
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import ROLE_DOCTOR
@@ -129,6 +133,7 @@ def create_referral(
     ensure_pases_write(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
     consultation = _get_consultation_or_error(visit)
 
     if ReferralRepository.get_active_by_consultation_and_type(consultation, referral_type):
@@ -149,6 +154,7 @@ def create_referral(
     folio = f"REF-{timezone.now().strftime('%Y%m%d%H%M%S')}-{visit.no_exp}"
 
     with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
         referral = ReferralRepository.create(
             consultation=consultation,
             no_exp=visit.no_exp,

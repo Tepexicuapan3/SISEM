@@ -112,6 +112,11 @@ CATALOGOS_CRUD_PERMISSIONS_SEED: list[tuple[str, str]] = [
     ("admin:catalogos:motivos_cancelacion_cirugia:update", "Editar catalogo de motivos de cancelacion de cirugia"),
     ("admin:catalogos:motivos_cancelacion_cirugia:delete", "Eliminar en catalogo de motivos de cancelacion de cirugia"),
 
+    ("admin:catalogos:motivos_cancelacion_nota:read", "Ver catalogo de motivos de cancelacion de nota"),
+    ("admin:catalogos:motivos_cancelacion_nota:create", "Crear en catalogo de motivos de cancelacion de nota"),
+    ("admin:catalogos:motivos_cancelacion_nota:update", "Editar catalogo de motivos de cancelacion de nota"),
+    ("admin:catalogos:motivos_cancelacion_nota:delete", "Eliminar en catalogo de motivos de cancelacion de nota"),
+
     ("admin:catalogos:motivos_traslado:read", "Ver catalogo de motivos de traslado en ambulancia"),
     ("admin:catalogos:motivos_traslado:create", "Crear en catalogo de motivos de traslado en ambulancia"),
     ("admin:catalogos:motivos_traslado:update", "Editar catalogo de motivos de traslado en ambulancia"),

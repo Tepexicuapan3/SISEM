@@ -13,6 +13,8 @@ from celery.schedules import crontab
 from corsheaders.defaults import default_headers
 from decouple import config
 
+from apps.impresion.config import validate_ficha_engine
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 POSTAL_CODES_FILE_PATH = BASE_DIR / "storage" / "catalogs" / "codigos_postales.txt"
 
@@ -71,6 +73,7 @@ INSTALLED_APPS = [
     "apps.almacen_insumos",
     "apps.portal_citas",
     "apps.comunicados",
+    "apps.impresion",
 ]
 
 MIDDLEWARE = [
@@ -262,6 +265,14 @@ CITAS_COMPROBANTE_WATERMARK_PATH = (
     / "email"
     / "logos-unidos-sisem-portal.png"
 )
+# --- Impresion de documentos (apps.impresion) ---
+# Motor de la ficha: weasy (HTML/CSS) | docx (Word COM, solo Windows; NO es
+# rollback en Linux). Valor invalido => ImproperlyConfigured al arrancar.
+FICHA_ENGINE = validate_ficha_engine(config("FICHA_ENGINE", default="weasy"))
+# Tope de renders PDF simultaneos por proceso y espera maxima en cola (503).
+PRINT_MAX_CONCURRENCY = config("PRINT_MAX_CONCURRENCY", default=2, cast=int)
+PRINT_QUEUE_TIMEOUT_S = config("PRINT_QUEUE_TIMEOUT_S", default=15, cast=int)
+
 CITAS_BASE_URL = config("CITAS_BASE_URL", default="https://sires.metro.cdmx.gob.mx")
 
 AUTH_PASSWORD_VALIDATORS = [

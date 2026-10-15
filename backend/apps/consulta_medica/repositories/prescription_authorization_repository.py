@@ -91,6 +91,27 @@ class PrescriptionAuthorizationRepository:
         return authorization
 
     @staticmethod
+    def list_pending_for_prescription_for_update(prescription_ids):
+        """Solicitudes PENDIENTES de las recetas dadas, FOR UPDATE, orden por pk.
+        Solo dentro de transaction.atomic() (cascada de cancelacion de nota)."""
+        return list(
+            PrescriptionAuthorization.objects.select_for_update()
+            .filter(
+                prescription_id__in=prescription_ids,
+                status=PrescriptionAuthorization.Status.PENDIENTE,
+            )
+            .order_by("pk")
+        )
+
+    @staticmethod
+    def cancel(authorization):
+        """Pendiente -> cancelada por cancelacion de la nota. NO es un rechazo
+        (decision clinica) y no toca authorized_by/authorized_at."""
+        authorization.status = PrescriptionAuthorization.Status.CANCELADA
+        authorization.save(update_fields=["status", "updated_at"])
+        return authorization
+
+    @staticmethod
     def to_contract(authorization):
         visit = authorization.visit
         return {

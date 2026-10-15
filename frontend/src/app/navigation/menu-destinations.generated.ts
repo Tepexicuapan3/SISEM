@@ -50,6 +50,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/catalogos/grupos-medicamentos","permissions":["admin:catalogos:grupos_medicamentos:read"]},
   {"path":"/admin/catalogos/licencias","permissions":["admin:catalogos:licencias:read"]},
   {"path":"/admin/catalogos/motivos-cancelacion-cirugia","permissions":["admin:catalogos:motivos_cancelacion_cirugia:read"],"capability":"admin.catalogs.motivoscancelacioncirugia.read"},
+  {"path":"/admin/catalogos/motivos-cancelacion-nota","permissions":["admin:catalogos:motivos_cancelacion_nota:read"],"capability":"admin.catalogs.motivoscancelacionnota.read"},
   {"path":"/admin/catalogos/motivos-traslado","permissions":["admin:catalogos:motivos_traslado:read"],"capability":"admin.catalogs.motivostraslado.read"},
   {"path":"/admin/catalogos/ocupaciones","permissions":["admin:catalogos:ocupaciones:read"]},
   {"path":"/admin/catalogos/origen-consulta","permissions":["admin:catalogos:origen_cons:read"]},

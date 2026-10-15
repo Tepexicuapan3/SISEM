@@ -15,6 +15,7 @@ routes = [
     ("surgery-types", TipoCirugiaListCreateView, TipoCirugiaDetailView, "int"),
     ("surgery-classifications", ClasificacionCirugiaListCreateView, ClasificacionCirugiaDetailView, "int"),
     ("surgery-cancellation-reasons", MotivoCancelacionCirugiaListCreateView, MotivoCancelacionCirugiaDetailView, "int"),
+    ("note-cancellation-reasons", MotivoCancelacionNotaListCreateView, MotivoCancelacionNotaDetailView, "int"),
     ("transfer-reasons", MotivoTrasladoListCreateView, MotivoTrasladoDetailView, "int"),
     ("transfer-types", TipoTrasladoListCreateView, TipoTrasladoDetailView, "int"),
     ("ambulance-service-types", TipoServicioAmbulanciaListCreateView, TipoServicioAmbulanciaDetailView, "int"),

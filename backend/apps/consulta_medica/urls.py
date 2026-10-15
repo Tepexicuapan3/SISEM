@@ -36,6 +36,11 @@ from apps.consulta_medica.views import (
     VisitSecondaryDiagnosisCancelView,
     VisitStudyResultCreateView,
 )
+from apps.consulta_medica.views_note_cancellation import (
+    VisitNoteCancelView,
+    VisitNoteCancellationDetailView,
+    VisitNoteCancellationPreviewView,
+)
 from apps.consulta_medica.views_unified_history import (
     ClinicalCatalogsView,
     DentalTreatmentCollectionView,
@@ -264,6 +269,21 @@ urlpatterns = [
         "visits/<int:visit_id>/consultation/addenda",
         VisitConsultationAddendumView.as_view(),
         name="visit-consultation-addenda",
+    ),
+    path(
+        "visits/<int:visit_id>/consultation/cancellation-preview",
+        VisitNoteCancellationPreviewView.as_view(),
+        name="visit-note-cancellation-preview",
+    ),
+    path(
+        "visits/<int:visit_id>/consultation/cancel",
+        VisitNoteCancelView.as_view(),
+        name="visit-note-cancel",
+    ),
+    path(
+        "visits/<int:visit_id>/consultation/cancellation",
+        VisitNoteCancellationDetailView.as_view(),
+        name="visit-note-cancellation",
     ),
     path(
         "visits/<int:visit_id>/close",

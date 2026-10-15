@@ -35,6 +35,9 @@ def _consultation_to_history_item(consultation, permissions, roles=None):
 
     return {
         "visitId": visit.id_visit,
+        # cancelacion-nota-cascada: el historial distingue notas canceladas
+        # (cerrada -> cancelada) para mostrar el badge y ocultar la accion.
+        "visitStatus": visit.status,
         "date": visit.fecha_consulta,
         "doctorId": consultation.doctor_id,
         "doctorName": _doctor_name(consultation.doctor),

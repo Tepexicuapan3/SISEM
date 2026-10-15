@@ -298,6 +298,11 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:catalogos:motivos_cancelacion_cirugia:read"],
           },
           {
+            title: "Motivos de Cancelación de Nota",
+            url: "/admin/catalogos/motivos-cancelacion-nota",
+            permissions: ["admin:catalogos:motivos_cancelacion_nota:read"],
+          },
+          {
             title: "Motivos de Traslado",
             url: "/admin/catalogos/motivos-traslado",
             permissions: ["admin:catalogos:motivos_traslado:read"],

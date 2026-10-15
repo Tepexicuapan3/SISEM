@@ -378,6 +378,9 @@ class PrescriptionAuthorization(models.Model):
         PENDIENTE = "pendiente", "Pendiente"
         AUTORIZADA = "autorizada", "Autorizada"
         RECHAZADA = "rechazada", "Rechazada"
+        # cancelacion-nota-cascada: la nota se cancelo con la solicitud aun
+        # pendiente. Distinto de RECHAZADA (decision clinica del autorizador).
+        CANCELADA = "cancelada", "Cancelada"
 
     id_authorization = models.BigAutoField(primary_key=True, db_column="id_autorizacion")
     prescription = models.ForeignKey(
@@ -472,6 +475,30 @@ class MedicalLeave(models.Model):
     end_date = models.DateField(db_column="fecha_fin")
     folio = models.CharField(max_length=32, db_column="folio", unique=True)
 
+    # cancelacion-nota-cascada: ciclo de vida de la incapacidad. La
+    # cancelacion es baja LOGICA (nunca DELETE) y no escribe a Oracle.
+    class Status(models.TextChoices):
+        EMITIDA = "emitida", "Emitida"
+        CANCELADA = "cancelada", "Cancelada"
+
+    class RhStatus(models.TextChoices):
+        NO_ENVIADA = "no_enviada", "No enviada a RH"
+        ENVIADA = "enviada", "Enviada a RH"
+        VERIFICADA = "verificada", "Verificada por RH"
+
+    status = models.CharField(
+        max_length=12, db_column="estatus", choices=Status.choices,
+        default=Status.EMITIDA, db_index=True,
+    )
+    # SIRES no integra RH todavia: las licencias nacidas aqui son no_enviada
+    # (ver services/medical_leave_rh_reconciliation.py para filas previas).
+    rh_status = models.CharField(
+        max_length=12, db_column="estatus_rh", choices=RhStatus.choices,
+        default=RhStatus.NO_ENVIADA,
+    )
+    cancelled_at = models.DateTimeField(db_column="fch_cancelacion", null=True, blank=True)
+    cancelled_by_id = models.BigIntegerField(db_column="usr_cancela", null=True, blank=True)
+
     is_active = models.BooleanField(db_column="est_activo", default=True)
     created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
     updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
@@ -485,6 +512,96 @@ class MedicalLeave(models.Model):
         indexes = [
             models.Index(fields=["no_exp", "pk_num"], name="cns_medleave_patient_idx"),
             models.Index(fields=["is_active"], name="cns_medleave_active_idx"),
+        ]
+
+
+class ConsultationCancellation(models.Model):
+    """
+    Cabecera APPEND-ONLY de la cancelacion de una nota cerrada (change
+    cancelacion-nota-cascada). Una por consulta (OneToOne => idempotencia).
+    El snapshot se guarda como TEXTO canonico (no JSONField) para que el
+    hash SHA-256 sea verificable byte a byte: json/jsonb reordenan claves.
+    Sin update/delete en el repositorio.
+    """
+
+    class SignatureMethod(models.TextChoices):
+        SIMPLE = "SIMPLE", "Contrasena propia"
+        EFIRMA = "EFIRMA", "e.firma"
+
+    id_cancellation = models.BigAutoField(primary_key=True, db_column="id_cancelacion")
+    consultation = models.OneToOneField(
+        VisitConsultation, db_column="id_consulta", on_delete=models.PROTECT,
+        related_name="cancellation",
+    )
+    visit = models.ForeignKey(
+        "recepcion.Visit", db_column="id_visit", on_delete=models.PROTECT,
+        related_name="note_cancellations",
+    )
+    reason = models.ForeignKey(
+        "catalogos.MotivoCancelacionNota", db_column="id_motivo_cancelacion_nota",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    reason_detail = models.CharField(max_length=500, db_column="motivo_detalle", null=True, blank=True)
+    authorizer = models.ForeignKey(
+        "authentication.SyUsuario", db_column="usr_autoriza", on_delete=models.PROTECT,
+        related_name="+",
+    )
+    designation = models.ForeignKey(
+        "catalogos.DesignacionAutorizador", db_column="id_designacion",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    applied_scope = models.CharField(max_length=12, db_column="alcance_aplicado")
+    center = models.ForeignKey(
+        "catalogos.CatCentroAtencion", db_column="id_centro_atencion",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    outside_assignment = models.BooleanField(db_column="sw_fuera_adscripcion", default=False)
+    signature_method = models.CharField(
+        max_length=10, db_column="metodo_firma", choices=SignatureMethod.choices,
+        default=SignatureMethod.SIMPLE,
+    )
+    snapshot_version = models.PositiveSmallIntegerField(db_column="version_snapshot", default=1)
+    canonical_snapshot = models.TextField(db_column="snapshot_canonico")
+    content_hash = models.CharField(max_length=64, db_column="hash_contenido")
+    signed_at = models.DateTimeField(db_column="fch_firma")
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cns_cancelacion_nota"
+        indexes = [
+            models.Index(fields=["center", "created_at"], name="cns_cancnota_centro_idx"),
+            models.Index(fields=["authorizer", "created_at"], name="cns_cancnota_autor_idx"),
+        ]
+
+
+class ConsultationCancellationItem(models.Model):
+    """Traza (entidad, estado anterior -> nuevo) de cada fila tocada por la cascada."""
+
+    class EntityType(models.TextChoices):
+        VISIT = "VISIT", "Visita"
+        DIAGNOSIS = "DIAGNOSIS", "Diagnostico"
+        RX_ITEM = "RX_ITEM", "Item de receta"
+        RX_AUTH = "RX_AUTH", "Autorizacion de receta"
+        REFERRAL = "REFERRAL", "Pase"
+        REFERRAL_STUDY = "REFERRAL_STUDY", "Estudio de pase"
+        MEDICAL_LEAVE = "MEDICAL_LEAVE", "Incapacidad"
+
+    id_item = models.BigAutoField(primary_key=True, db_column="id_cancelacion_item")
+    cancellation = models.ForeignKey(
+        ConsultationCancellation, db_column="id_cancelacion", on_delete=models.PROTECT,
+        related_name="items",
+    )
+    entity_type = models.CharField(max_length=20, db_column="tp_entidad", choices=EntityType.choices)
+    entity_id = models.BigIntegerField(db_column="id_entidad")
+    previous_status = models.CharField(max_length=20, db_column="estatus_anterior", null=True, blank=True)
+    new_status = models.CharField(max_length=20, db_column="estatus_nuevo", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_cancelacion_nota_item"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["entity_type", "entity_id"], name="cns_cancnota_item_entidad_uq",
+            ),
         ]
 
 
@@ -1841,6 +1958,8 @@ class ChangeLog(models.Model):
         # El dato clinico evoluciona (dejo de fumar, cambio la cantidad): no es un error.
         CLINICAL_UPDATE = "ACTUALIZACION", "Actualizacion del dato clinico"
         CLINIC_CHANGE = "CAMBIO DE CLINICA EN SERMED", "Cambio de clinica en SERMED"
+        # cancelacion-nota-cascada: fila tocada por la cascada de cancelacion de nota.
+        NOTE_CANCELLATION = "CANCELACION NOTA", "Cancelacion de nota cerrada"
 
     id_change = models.BigAutoField(primary_key=True, db_column="id")
     table = models.CharField(max_length=40, db_column="tabla")

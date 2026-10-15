@@ -1,4 +1,9 @@
+import { useState } from "react";
 import { Lock } from "lucide-react";
+import { Badge } from "@shared/ui/badge";
+import { Button } from "@shared/ui/button";
+import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { CancelarNotaDialog } from "@features/expedientes/components/CancelarNotaDialog";
 import { usePatientConsultationsHistory } from "@features/expedientes/queries/usePatientConsultationsHistory";
 import { ConsultationAddendaSection } from "@features/expedientes/components/ConsultationAddendaSection";
 import { LegacyConsultationHistorySection } from "@features/expedientes/components/LegacyConsultationHistorySection";
@@ -29,6 +34,11 @@ export function ExpedienteHistorialTab({
     noExp,
     pkNum,
   );
+  const { hasCapability } = usePermissionDependencies();
+  const canCancelNotes = hasCapability("clinico.notas.cancel", {
+    allOf: ["clinico:notas:cancel"],
+  });
+  const [cancelVisitId, setCancelVisitId] = useState<number | null>(null);
 
   if (isLoading) {
     return (
@@ -66,6 +76,22 @@ export function ExpedienteHistorialTab({
                 <p className="text-sm text-txt-muted">
                   {consulta.doctorName ?? "Médico sin identificar"}
                 </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {consulta.visitStatus === "cancelada" ? (
+                  <Badge variant="critical" className="text-xs">
+                    Cancelada
+                  </Badge>
+                ) : canCancelNotes && consulta.visitStatus === "cerrada" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCancelVisitId(consulta.visitId)}
+                  >
+                    Cancelar nota
+                  </Button>
+                ) : null}
               </div>
             </div>
             <div className="text-sm space-y-1">
@@ -106,6 +132,16 @@ export function ExpedienteHistorialTab({
       )}
 
       <LegacyConsultationHistorySection noExp={noExp} pkNum={pkNum} />
+
+      {canCancelNotes ? (
+        <CancelarNotaDialog
+          visitId={cancelVisitId ?? 0}
+          open={cancelVisitId !== null}
+          onOpenChange={(next) => {
+            if (!next) setCancelVisitId(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -107,6 +107,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Motivos de Cancelación de Cirugía",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/motivos-cancelacion-nota": {
+    label: "Motivos de Cancelación de Nota",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/motivos-traslado": {
     label: "Motivos de Traslado en Ambulancia",
     grupo: "Catálogos",

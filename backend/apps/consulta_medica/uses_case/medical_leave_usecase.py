@@ -1,10 +1,15 @@
 from datetime import timedelta
 
+from django.db import transaction
 from django.utils import timezone
 
 from apps.catalogos.models import Licencias
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.repositories.medical_leave_repository import MedicalLeaveRepository
+from apps.consulta_medica.services.visit_guards import (
+    ensure_visit_not_cancelled,
+    lock_visit_not_cancelled,
+)
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -43,6 +48,7 @@ def create_medical_leave(
 ):
     ensure_doctor_role(roles, permissions)
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
 
     if visit.pk_num != 0:
         raise VisitDomainError(
@@ -97,19 +103,21 @@ def create_medical_leave(
     end_date = start_date + timedelta(days=days - 1)
     folio = f"LIC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{visit.no_exp}"
 
-    leave = MedicalLeaveRepository.create(
-        consultation=consultation,
-        no_exp=visit.no_exp,
-        pk_num=visit.pk_num,
-        leave_type=leave_type,
-        is_subsequent=is_subsequent,
-        days=days,
-        start_date=start_date,
-        end_date=end_date,
-        folio=folio,
-        created_by_id=actor_id,
-        updated_by_id=actor_id,
-    )
+    with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
+        leave = MedicalLeaveRepository.create(
+            consultation=consultation,
+            no_exp=visit.no_exp,
+            pk_num=visit.pk_num,
+            leave_type=leave_type,
+            is_subsequent=is_subsequent,
+            days=days,
+            start_date=start_date,
+            end_date=end_date,
+            folio=folio,
+            created_by_id=actor_id,
+            updated_by_id=actor_id,
+        )
     return MedicalLeaveRepository.to_contract(leave)
 
 

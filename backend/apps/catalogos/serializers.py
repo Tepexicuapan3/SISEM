@@ -18,6 +18,7 @@ from apps.catalogos.models import (
     CatTipoCirugia,
     CatClasificacionCirugia,
     CatMotivoCancelacionCirugia,
+    MotivoCancelacionNota,
     CatMotivoTraslado,
     CatTipoTraslado,
     CatTipoServicioAmbulancia,
@@ -460,6 +461,19 @@ class MotivoCancelacionCirugiaDetailSerializer(CatalogDetailSerializer):
 class MotivoCancelacionCirugiaWriteSerializer(CatalogWriteSerializer):
     class Meta(CatalogWriteSerializer.Meta):
         model = CatMotivoCancelacionCirugia
+
+
+class MotivoCancelacionNotaListSerializer(CatalogListSerializer):
+    class Meta(CatalogListSerializer.Meta):
+        model = MotivoCancelacionNota
+
+class MotivoCancelacionNotaDetailSerializer(CatalogDetailSerializer):
+    class Meta(CatalogDetailSerializer.Meta):
+        model = MotivoCancelacionNota
+
+class MotivoCancelacionNotaWriteSerializer(CatalogWriteSerializer):
+    class Meta(CatalogWriteSerializer.Meta):
+        model = MotivoCancelacionNota
 
 
 class MotivoTrasladoListSerializer(CatalogListSerializer):

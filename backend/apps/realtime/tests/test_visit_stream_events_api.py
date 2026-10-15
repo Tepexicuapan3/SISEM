@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import CatCies, Permisos, Roles
+from apps.catalogos.models import CatCies, MotivoCita, Permisos, Roles
 from apps.recepcion.models import Visit
 from apps.realtime.consumers.visits import VISITS_STREAM_GROUP
 from apps.realtime.events import (
@@ -85,6 +85,12 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
             appointment_id="APP-WS-0003",
             status="en_consulta",
         )
+
+        # Motivo tipificado (catalogo cargado por la migracion de datos
+        # catalogos/0021_motivos_cita); reemplaza el texto libre "motivo".
+        self.motivo_cancelacion_id = MotivoCita.objects.get(
+            name="Cancelada por el paciente"
+        ).id
 
         CatCies.objects.create(
             code="A090",
@@ -257,7 +263,11 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
 
         response = self.client.patch(
             f"/api/v1/visits/{self.visit_recepcion.id_visit}/status",
-            {"targetStatus": "cancelada", "motivo": "El paciente solicito cancelar."},
+            {
+                "targetStatus": "cancelada",
+                "motivoCancelacionId": self.motivo_cancelacion_id,
+                "motivoDetalle": "El paciente solicito cancelar.",
+            },
             format="json",
             HTTP_X_REQUEST_ID=self.request_id,
             **self._csrf_headers(),
@@ -432,6 +442,9 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
             {
                 "primaryDiagnosis": "Rinofaringitis",
                 "finalNote": "Alta con manejo ambulatorio.",
+                # Obligatorios al cerrar la consulta (serializer / consultation_usecase).
+                "cieCode": "A090",
+                "morbidity": "1",
             },
             format="json",
             HTTP_X_REQUEST_ID=self.request_id,

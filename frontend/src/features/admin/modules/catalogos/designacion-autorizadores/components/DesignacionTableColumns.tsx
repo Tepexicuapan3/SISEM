@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import type { DesignacionItem } from "@api/types";
 import { Badge } from "@shared/ui/badge";
 import { type DataTableColumn } from "@features/admin/shared/components/DataTable";
@@ -14,14 +14,16 @@ import {
 } from "@features/admin/modules/catalogos/designacion-autorizadores/utils/designacion.format";
 
 interface BuildDesignacionTableColumnsOptions {
+  canRead: boolean;
   canWrite: boolean;
-  onEdit: (item: DesignacionItem) => void;
+  onOpenDetails: (item: DesignacionItem) => void;
   onRequestRevoke: (item: DesignacionItem) => void;
 }
 
 export const buildDesignacionTableColumns = ({
+  canRead,
   canWrite,
-  onEdit,
+  onOpenDetails,
   onRequestRevoke,
 }: BuildDesignacionTableColumnsOptions): DataTableColumn<DesignacionItem>[] => {
   const baseColumns: DataTableColumn<DesignacionItem>[] = [
@@ -73,7 +75,9 @@ export const buildDesignacionTableColumns = ({
     },
   ];
 
-  if (!canWrite) return baseColumns;
+  const showActions = canRead || canWrite;
+
+  if (!showActions) return baseColumns;
 
   const actionColumn: DataTableColumn<DesignacionItem> = {
     key: "actions",
@@ -82,31 +86,47 @@ export const buildDesignacionTableColumns = ({
     className: "w-9 px-0",
     headerClassName: "w-9 px-0",
     render: (row) => {
-      const actions: TableAction[] = [
-        {
+      const actions: TableAction[] = [];
+
+      if (canRead) {
+        actions.push({
+          id: `view-${row.id}`,
+          label: "Ver detalles",
+          icon: Eye,
+          onSelect: () => onOpenDetails(row),
+        });
+      }
+
+      // Una designacion dada de baja no se edita ni se vuelve a revocar.
+      if (canWrite && row.isActive) {
+        actions.push({
           id: `edit-${row.id}`,
           label: "Editar",
           icon: Pencil,
-          onSelect: () => onEdit(row),
-        },
-        { id: `divider-${row.id}`, type: "separator" },
-        {
+          onSelect: () => onOpenDetails(row),
+        });
+
+        if (actions.length > 0) {
+          actions.push({ id: `divider-${row.id}`, type: "separator" });
+        }
+
+        actions.push({
           id: `revoke-${row.id}`,
           label: "Dar de baja",
           icon: Trash2,
           variant: "destructive",
           onSelect: () => onRequestRevoke(row),
-        },
-      ];
+        });
+      }
 
-      return (
+      return actions.length > 0 ? (
         <div
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
         >
           <TableToolbar actions={actions} />
         </div>
-      );
+      ) : null;
     },
   };
 
@@ -114,7 +134,7 @@ export const buildDesignacionTableColumns = ({
 };
 
 export const buildDesignacionVisibilityOptions = (
-  canWrite: boolean,
+  showActions: boolean,
 ): TableColumnVisibilityItem[] => {
   const options: TableColumnVisibilityItem[] = [
     { key: "user", label: "Autorizador" },
@@ -125,7 +145,7 @@ export const buildDesignacionVisibilityOptions = (
     { key: "vigente", label: "Estado" },
   ];
 
-  if (canWrite) {
+  if (showActions) {
     options.push({ key: "actions", label: "Acciones", canHide: false });
   }
 

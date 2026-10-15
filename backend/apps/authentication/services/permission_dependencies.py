@@ -232,6 +232,10 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.catalogs.motivoscancelacioncirugia.create": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:create"]},
     "admin.catalogs.motivoscancelacioncirugia.update": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:update"]},
     "admin.catalogs.motivoscancelacioncirugia.delete": {"allOf": ["admin:catalogos:motivos_cancelacion_cirugia:delete"]},
+    "admin.catalogs.motivoscancelacionnota.read": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:read"]},
+    "admin.catalogs.motivoscancelacionnota.create": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:create"]},
+    "admin.catalogs.motivoscancelacionnota.update": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:update"]},
+    "admin.catalogs.motivoscancelacionnota.delete": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:delete"]},
     "admin.catalogs.motivostraslado.read": {"allOf": ["admin:catalogos:motivos_traslado:read"]},
     "admin.catalogs.motivostraslado.create": {"allOf": ["admin:catalogos:motivos_traslado:create"]},
     "admin.catalogs.motivostraslado.update": {"allOf": ["admin:catalogos:motivos_traslado:update"]},
@@ -316,6 +320,8 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "flow.doctor.consultation.close": {
         "allOf": ["clinico:consultas:read"]
     },
+    # Cancelacion de nota cerrada en cascada (change `cancelacion-nota-cascada`).
+    "clinico.notas.cancel": {"allOf": ["clinico:notas:cancel"]},
     # ── Citas médicas ──────────────────────────────────────────────────────────
     "recepcion:citas:read": {
         "allOf": ["recepcion:citas:read"]
@@ -323,6 +329,20 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "recepcion:citas:write": {
         "allOf": ["recepcion:citas:write"]
     },
+    # Documentos imprimibles (change `documentos-imprimibles`): mapean a permisos
+    # EXISTENTES (sin seeds nuevos) para no dejar fuera a usuarios actuales.
+    "documentos.ficha.imprimir": {
+        "anyOf": [
+            "recepcion:fichas:medicina_general:create",
+            "recepcion:fichas:especialidad:create",
+            "recepcion:fichas:urgencias:create",
+            "clinico:consultas:read",
+        ]
+    },
+    "documentos.receta.imprimir": {
+        "anyOf": ["clinico:consultas:read", "farmacia:recetas:dispensar"]
+    },
+    "documentos.nota.imprimir": {"allOf": ["clinico:consultas:read"]},
 }
 
 

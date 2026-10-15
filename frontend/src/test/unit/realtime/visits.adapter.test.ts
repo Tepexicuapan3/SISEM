@@ -150,6 +150,55 @@ describe("createVisitsRealtimeAdapter", () => {
     ]);
   });
 
+  it("visit.cancelled desde cerrada invalida historial clinico del paciente y colas", async () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue();
+    const adapter = createVisitsRealtimeAdapter({ queryClient });
+
+    await adapter.handleEvent(
+      buildEvent("visit.cancelled", 22, {
+        status: VISIT_STATUS.CANCELADA,
+        previousStatus: VISIT_STATUS.CERRADA,
+        noteCancellationId: 9,
+      }),
+    );
+
+    for (const key of [
+      ["expedientes", "consultations-history"],
+      ["expedientes", "medical-leaves"],
+      ["expedientes", "study-results"],
+    ]) {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: key });
+    }
+    expectInvalidationForStatuses(invalidateSpy, [
+      VISIT_STATUS.CANCELADA,
+      VISIT_STATUS.CERRADA,
+      undefined,
+    ]);
+  });
+
+  it("visit.cancelled desde otro estado NO toca el historial clinico", async () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue();
+    const adapter = createVisitsRealtimeAdapter({ queryClient });
+
+    await adapter.handleEvent(
+      buildEvent("visit.cancelled", 23, {
+        status: VISIT_STATUS.CANCELADA,
+        previousStatus: VISIT_STATUS.EN_ESPERA,
+      }),
+    );
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ["expedientes", "consultations-history"],
+    });
+  });
+
   it("gap detection dispara resync esperado por API", async () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi

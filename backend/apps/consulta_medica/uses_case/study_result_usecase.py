@@ -1,6 +1,12 @@
+from django.db import transaction
+
 from apps.catalogos.models import EstudiosMed
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.repositories.study_result_repository import StudyResultRepository
+from apps.consulta_medica.services.visit_guards import (
+    ensure_visit_not_cancelled,
+    lock_visit_not_cancelled,
+)
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -27,6 +33,7 @@ def create_study_result(
 ):
     ensure_doctor_role(roles, permissions)
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
 
     consultation = ConsultationRepository.get_by_visit(visit)
     if consultation is None:
@@ -45,17 +52,19 @@ def create_study_result(
             details={"studyTypeId": ["El tipo de estudio no existe o no esta activo."]},
         )
 
-    result = StudyResultRepository.create(
-        consultation=consultation,
-        no_exp=visit.no_exp,
-        pk_num=visit.pk_num,
-        study_type=study_type,
-        result_date=result_date,
-        notes=notes,
-        file=file,
-        created_by_id=actor_id,
-        updated_by_id=actor_id,
-    )
+    with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
+        result = StudyResultRepository.create(
+            consultation=consultation,
+            no_exp=visit.no_exp,
+            pk_num=visit.pk_num,
+            study_type=study_type,
+            result_date=result_date,
+            notes=notes,
+            file=file,
+            created_by_id=actor_id,
+            updated_by_id=actor_id,
+        )
     return StudyResultRepository.to_contract(result)
 
 

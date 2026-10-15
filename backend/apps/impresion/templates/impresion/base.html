@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}{{ doc_title|default:"Documento" }}{% endblock %}</title>
+<link rel="stylesheet" href="css/base.css">
+<style>
+{% block page_css %}{% endblock %}
+</style>
+</head>
+<body>
+{% for wm in watermarks %}<div class="watermark watermark-{{ wm.css|default:'x' }}">{{ wm.label }}</div>{% endfor %}
+<div class="print-footer">
+  <span>Impreso por: {{ printed_by|default:"-" }}</span>
+  <span>{{ printed_at|default:"-" }}</span>
+  <span>Impresión {{ copy_number|default:1 }}</span>
+</div>
+{% block header %}
+<div class="print-header">
+  {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="">{% endif %}
+  <div class="titles">
+    <div class="institution">{{ institution_name|default:"" }}</div>
+    <div class="doc-title">{% block doc_title %}{{ doc_title|default:"" }}{% endblock %}</div>
+  </div>
+</div>
+{% endblock %}
+{% block content %}{% endblock %}
+</body>
+</html>

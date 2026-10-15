@@ -198,6 +198,11 @@ class Roundtrip0039_0040Tests(TransactionTestCase):
 
     at_0038 = [("catalogos", "0038_seed_tpautorizacion_cancelacion_nota")]
     at_0040 = [("catalogos", "0040_drop_autorizadores")]
+    # TransactionTestCase vacia las tablas al terminar (flush); sin esto los
+    # content types / catalogos sembrados se pierden y los tests de migracion
+    # con serialized_rollback que corren despues fallan con UNIQUE
+    # django_content_type. Mismo patron que test_folio_receta.
+    serialized_rollback = True
 
     def tearDown(self):
         executor = MigrationExecutor(connection)

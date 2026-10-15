@@ -81,6 +81,20 @@ const resolveEventStatuses = (
   }
 };
 
+const CLINICAL_HISTORY_QUERY_PREFIXES = [
+  ["expedientes", "consultations-history"],
+  ["expedientes", "medical-leaves"],
+  ["expedientes", "study-results"],
+] as const;
+
+const isClosedNoteCancellation = (event: RealtimeEventEnvelope): boolean => {
+  if (event.eventType !== VISITS_REALTIME_EVENT_TYPE.VISIT_CANCELLED) {
+    return false;
+  }
+  const payload = isRecord(event.payload) ? event.payload : {};
+  return payload.previousStatus === VISIT_STATUS.CERRADA;
+};
+
 interface CreateVisitsRealtimeAdapterOptions {
   queryClient: QueryClient;
   resyncParams?: VisitsListParams;
@@ -118,6 +132,14 @@ export const createVisitsRealtimeAdapter = (
     );
   };
 
+  const invalidateClinicalHistory = async (): Promise<void> => {
+    await Promise.all(
+      CLINICAL_HISTORY_QUERY_PREFIXES.map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey: [...queryKey] }),
+      ),
+    );
+  };
+
   const resync = async (): Promise<void> => {
     if (resyncInFlight) {
       return resyncInFlight;
@@ -141,6 +163,12 @@ export const createVisitsRealtimeAdapter = (
     const statusesToInvalidate = resolveEventStatuses(event);
     if (statusesToInvalidate.length === 0) {
       return;
+    }
+
+    // cancelacion-nota-cascada: cerrada -> cancelada cambia el historial de
+    // consultas, incapacidades y estudios del paciente (no solo las colas).
+    if (isClosedNoteCancellation(event)) {
+      await invalidateClinicalHistory();
     }
 
     await invalidateStatusQueues(statusesToInvalidate);

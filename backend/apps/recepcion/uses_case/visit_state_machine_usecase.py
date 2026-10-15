@@ -5,6 +5,11 @@ from apps.recepcion.services.errors import VisitDomainError
 ROLE_RECEPCION = "RECEPCION"
 ROLE_SOMATOMETRIA = "SOMATOMETRIA"
 ROLE_DOCTOR = "DOCTOR"
+# Rol interno (no es un rol RBAC) con el que la cancelacion de nota cerrada
+# (change cancelacion-nota-cascada) invoca la maquina de estados. El usecase
+# `cancel_consultation` ya valido permiso + designacion + re-autenticacion;
+# recepcion, doctor y somatometria NO pueden usar esta transicion.
+ROLE_AUTORIZADOR_NOTA = "AUTORIZADOR_NOTA"
 
 VISIT_STATES = (
     "en_espera",
@@ -53,6 +58,11 @@ TRANSITION_RULES = {
         action="cerrar_consulta",
         allowed_roles=frozenset({ROLE_DOCTOR}),
         requires_close_fields=True,
+    ),
+    ("cerrada", "cancelada"): TransitionRule(
+        action="cancelar_nota",
+        allowed_roles=frozenset({ROLE_AUTORIZADOR_NOTA}),
+        requires_motivo=True,
     ),
 }
 

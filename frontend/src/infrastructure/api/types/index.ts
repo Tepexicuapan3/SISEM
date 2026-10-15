@@ -389,6 +389,19 @@ export type {
 } from "@api/types/patient-consultations.types";
 
 // =============================================================================
+// CANCELACION DE NOTA CERRADA (cascada)
+// =============================================================================
+export { NOTE_CANCELLATION_BLOCKER_CODE } from "@api/types/note-cancellation.types";
+export type {
+  NoteCancellationBlockerCode,
+  NoteCancellationBlocker,
+  NoteCancellationCascadeCounts,
+  NoteCancellationPreview,
+  CancelConsultationNoteRequest,
+  CancelConsultationNoteResponse,
+} from "@api/types/note-cancellation.types";
+
+// =============================================================================
 // LICENCIAS MEDICAS (MedicalLeave)
 // =============================================================================
 export type {
@@ -921,6 +934,19 @@ export type {
   MotivoCancelacionCirugiaListResponse,
   MotivoCancelacionCirugiaDetailResponse,
 } from "@api/types/catalogos/motivos-cancelacion-cirugia.types";
+
+export type {
+  MotivoCancelacionNotaListItem,
+  MotivoCancelacionNotaDetail,
+  CreateMotivoCancelacionNotaRequest,
+  UpdateMotivoCancelacionNotaRequest,
+  CreateMotivoCancelacionNotaResponse,
+  UpdateMotivoCancelacionNotaResponse,
+  DeleteMotivoCancelacionNotaResponse,
+  MotivoCancelacionNotaListParams,
+  MotivoCancelacionNotaListResponse,
+  MotivoCancelacionNotaDetailResponse,
+} from "@api/types/catalogos/motivos-cancelacion-nota.types";
 
 export type {
   MotivoTrasladoListItem,

@@ -2,6 +2,7 @@ from django.test import SimpleTestCase
 
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
+    ROLE_AUTORIZADOR_NOTA,
     ROLE_DOCTOR,
     ROLE_RECEPCION,
     ROLE_SOMATOMETRIA,
@@ -17,6 +18,8 @@ VALID_TRANSITIONS = {
     ("en_somatometria", "lista_para_doctor"),
     ("lista_para_doctor", "en_consulta"),
     ("en_consulta", "cerrada"),
+    # change cancelacion-nota-cascada: cancelacion post-cierre.
+    ("cerrada", "cancelada"),
 }
 
 
@@ -234,6 +237,25 @@ class VisitStateMachineUseCaseTests(SimpleTestCase):
         )
 
         self.assertEqual(result, "cancelada")
+
+    def test_cancelar_nota_cerrada_solo_autorizador_con_motivo(self):
+        result = transition_visit_state(
+            "cerrada", "cancelada", ROLE_AUTORIZADOR_NOTA, motivo="Nota duplicada",
+        )
+        self.assertEqual(result, "cancelada")
+
+        # Recepcion (y cualquier otro rol) ya no puede cancelar una nota
+        # cerrada: antes era 409 por transicion inexistente, ahora 403.
+        for role in (ROLE_RECEPCION, ROLE_DOCTOR, ROLE_SOMATOMETRIA):
+            with self.subTest(role=role):
+                with self.assertRaises(VisitDomainError) as raised:
+                    transition_visit_state("cerrada", "cancelada", role, motivo="x")
+                self.assertEqual(raised.exception.code, "ROLE_NOT_ALLOWED")
+                self.assertEqual(raised.exception.status_code, 403)
+
+        with self.assertRaises(VisitDomainError) as raised:
+            transition_visit_state("cerrada", "cancelada", ROLE_AUTORIZADOR_NOTA, motivo=None)
+        self.assertEqual(raised.exception.code, "VISIT_MOTIVO_REQUERIDO")
 
     def test_transition_matrix_covers_all_official_states(self):
         matrix = get_transition_matrix()

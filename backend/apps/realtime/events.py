@@ -140,14 +140,16 @@ def publish_visit_cancelled(
     request_id,
     correlation_id=None,
     publisher=None,
+    note_cancellation_id=None,
 ):
+    payload = _build_status_payload(status=status, previous_status=previous_status)
+    if note_cancellation_id is not None:
+        # cancelacion-nota-cascada: cerrada -> cancelada con registro de cancelacion.
+        payload["noteCancellationId"] = note_cancellation_id
     return _publish_visit_event(
         event_type=VISIT_EVENT_CANCELLED,
         visit_id=visit_id,
-        payload=_build_status_payload(
-            status=status,
-            previous_status=previous_status,
-        ),
+        payload=payload,
         request_id=request_id,
         correlation_id=correlation_id,
         publisher=publisher,

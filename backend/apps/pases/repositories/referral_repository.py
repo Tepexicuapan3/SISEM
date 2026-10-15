@@ -66,6 +66,35 @@ class ReferralRepository:
         return referral
 
     @staticmethod
+    def list_active_for_consultation_for_update(consultation):
+        """Pases ACTIVOS de la consulta, FOR UPDATE, orden por pk (cascada de
+        cancelacion de nota; solo dentro de transaction.atomic())."""
+        return list(
+            Referral.objects.select_for_update()
+            .filter(consultation=consultation, status=Referral.Status.ACTIVO, is_active=True)
+            .order_by("pk")
+        )
+
+    @staticmethod
+    def list_active_studies_for_update(referral_ids):
+        return list(
+            ReferralStudyDetail.objects.select_for_update()
+            .filter(
+                referral_id__in=referral_ids,
+                status=Referral.Status.ACTIVO,
+                is_active=True,
+            )
+            .order_by("pk")
+        )
+
+    @staticmethod
+    def cancel_study_detail(detail, *, updated_by_id=None):
+        detail.status = Referral.Status.CANCELADO
+        detail.updated_by_id = updated_by_id
+        detail.save(update_fields=["status", "updated_by_id", "updated_at"])
+        return detail
+
+    @staticmethod
     def list_for_patient(no_exp, pk_num):
         return (
             Referral.objects.filter(no_exp=no_exp, pk_num=pk_num, is_active=True)

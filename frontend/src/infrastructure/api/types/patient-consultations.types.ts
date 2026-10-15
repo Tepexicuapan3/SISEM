@@ -1,5 +1,8 @@
 export interface PatientConsultationHistoryItem {
   visitId: number;
+  // Estado de la visita: "cerrada" (nota vigente) | "cancelada" (nota cancelada
+  // post-cierre, change `cancelacion-nota-cascada`).
+  visitStatus: string;
   date: string | null;
   doctorId: number | null;
   doctorName: string | null;

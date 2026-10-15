@@ -93,6 +93,18 @@ class DiagnosisRedactionTests(TestCase):
         self.assertEqual(item["cieCode"], self.cie_normal.code)
         self.assertFalse(item["restricted"])
 
+    def test_consultation_history_exposes_visit_status(self):
+        # cancelacion-nota-cascada: el FE usa visitStatus para el badge
+        # "Cancelada" y para ocultar la accion "Cancelar nota".
+        visit = self._visit_with_diagnosis("EXP9305", cie_code=self.cie_normal.code)
+
+        item = get_patient_consultations_history("EXP9305", 0, ["DOCTOR"], permissions=[])["items"][0]
+        self.assertEqual(item["visitStatus"], visit.status)
+
+        Visit.objects.filter(pk=visit.pk).update(status="cancelada")
+        item = get_patient_consultations_history("EXP9305", 0, ["DOCTOR"], permissions=[])["items"][0]
+        self.assertEqual(item["visitStatus"], "cancelada")
+
     # ── Diagnosticos secundarios (VisitDiagnosis.cie) ───────────────────
 
     def test_secondary_diagnosis_redacted_without_permission(self):

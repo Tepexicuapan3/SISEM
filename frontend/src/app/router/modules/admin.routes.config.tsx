@@ -16,6 +16,7 @@ import Cie9McPage from "@features/admin/modules/catalogos/cie9-mc/pages/Cie9McPa
 import TipoCirugiaPage from "@features/admin/modules/catalogos/tipos-cirugia/pages/TipoCirugiaPage";
 import ClasificacionCirugiaPage from "@features/admin/modules/catalogos/clasificaciones-cirugia/pages/ClasificacionCirugiaPage";
 import MotivoCancelacionCirugiaPage from "@features/admin/modules/catalogos/motivos-cancelacion-cirugia/pages/MotivoCancelacionCirugiaPage";
+import MotivoCancelacionNotaPage from "@features/admin/modules/catalogos/motivos-cancelacion-nota/pages/MotivoCancelacionNotaPage";
 import MotivoTrasladoPage from "@features/admin/modules/catalogos/motivos-traslado/pages/MotivoTrasladoPage";
 import TipoTrasladoPage from "@features/admin/modules/catalogos/tipos-traslado/pages/TipoTrasladoPage";
 import TipoServicioAmbulanciaPage from "@features/admin/modules/catalogos/tipos-servicio-ambulancia/pages/TipoServicioAmbulanciaPage";
@@ -496,6 +497,18 @@ export const adminRoutes: RouteObject[] = [
             dependencyAware
           >
             <MotivoCancelacionCirugiaPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "motivos-cancelacion-nota",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.motivoscancelacionnota.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:motivos_cancelacion_nota:read"] }}
+            dependencyAware
+          >
+            <MotivoCancelacionNotaPage />
           </ProtectedRoute>
         ),
       },

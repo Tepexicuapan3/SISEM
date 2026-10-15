@@ -91,6 +91,12 @@ def ensure_doctor_or_incapacidad_read_role(roles, permissions=None):
     )
 
 
+from apps.consulta_medica.services.visit_guards import (
+    ensure_visit_not_cancelled,
+    lock_visit_not_cancelled,
+)
+
+
 def _get_visit_or_error(visit_id):
     visit = VisitRepository.get_by_id(visit_id)
     if not visit:
@@ -271,6 +277,7 @@ def save_diagnosis(
     ensure_doctor_role(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
     _ensure_visit_in_consultation(visit)
     normalized_note_fields = _normalize_note_fields(note_fields)
     # Guardado de avance: la morbilidad todavia puede faltar.
@@ -291,6 +298,7 @@ def save_diagnosis(
         )
 
     with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
         consultation, _, previous_snapshot = ConsultationRepository.upsert_for_visit(
             visit,
             doctor_id=doctor_id,
@@ -347,6 +355,7 @@ def save_prescriptions(
     ensure_doctor_role(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
     _ensure_visit_in_consultation(visit)
 
     normalized_items = _normalize_prescription_items(items)
@@ -359,6 +368,7 @@ def save_prescriptions(
         )
 
     with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
         prescription, _, previous_snapshot = PrescriptionRepository.upsert_for_visit(
             visit,
             items=normalized_items,
@@ -656,6 +666,7 @@ def add_secondary_diagnosis(
     ensure_doctor_role(roles, permissions)
 
     visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
     consultation = _get_consultation_or_error(visit)
 
     normalized_cie_code = _normalize_cie_code(cie_code)
@@ -685,13 +696,15 @@ def add_secondary_diagnosis(
 
     normalized_notes = (notes or "").strip() or None
 
-    diagnosis = VisitDiagnosisRepository.create(
-        consultation=consultation,
-        cie=cie,
-        notes=normalized_notes,
-        created_by_id=doctor_id,
-        updated_by_id=doctor_id,
-    )
+    with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
+        diagnosis = VisitDiagnosisRepository.create(
+            consultation=consultation,
+            cie=cie,
+            notes=normalized_notes,
+            created_by_id=doctor_id,
+            updated_by_id=doctor_id,
+        )
     return VisitDiagnosisRepository.to_contract(diagnosis)
 
 

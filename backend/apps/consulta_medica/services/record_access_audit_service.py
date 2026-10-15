@@ -20,6 +20,7 @@ from django.core.cache import cache
 
 from apps.administracion.models import BitacoraAcceso
 from apps.administracion.services.bitacora_acceso_service import registrar, registrar_exportacion
+from apps.authentication.services.response_service import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ class RecordSection:
     HISTORICAL_NOTES = "notas_historicas"
     DAILY_REPORT = "reporte_consultas_diario"
     MEDICAL_LEAVE_REPORT = "reporte_incapacidades"
+    # Documentos imprimibles (change documentos-imprimibles).
+    FICHA = "ficha_consulta"
+    RECETA = "receta"
+    NOTA = "nota_clinica"
 
     ALL = (
         CLINICAL_HISTORY,
@@ -64,6 +69,9 @@ class RecordSection:
         HISTORICAL_NOTES,
         DAILY_REPORT,
         MEDICAL_LEAVE_REPORT,
+        FICHA,
+        RECETA,
+        NOTA,
     )
 
 
@@ -113,3 +121,24 @@ def log_patient_record_change(request, user, *, no_exp, pk_num, section):
 def log_export(request, user, *, section):
     """accion = exportar, de un reporte que abarca a varios pacientes."""
     registrar_exportacion(request, user, recurso=section)
+
+
+def log_print(request, user, *, no_exp, pk_num, section):
+    """accion = imprimir. Sin deduplicar y SIN tragar errores.
+
+    A diferencia del resto de este modulo, la traza de una impresion es
+    obligatoria (change documentos-imprimibles): si falla, la excepcion se
+    propaga para que el caso de uso revierta la transaccion y no entregue el
+    PDF. Debe llamarse dentro del bloque atomico de la impresion.
+    """
+    return BitacoraAcceso.objects.create(
+        no_exp=str(no_exp) if no_exp is not None else None,
+        tp_paciente=pk_num,
+        usuario=user,
+        cd_usuario=getattr(user, "usuario", None),
+        recurso=section,
+        accion=BitacoraAcceso.Accion.IMPRIMIR,
+        ip_origen=get_client_ip(request),
+        endpoint=(request.path or "")[:255],
+        restringidos=0,
+    )

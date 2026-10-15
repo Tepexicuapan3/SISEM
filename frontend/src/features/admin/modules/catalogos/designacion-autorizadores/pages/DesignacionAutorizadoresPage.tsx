@@ -17,8 +17,10 @@ import { TablePrimaryAction } from "@features/admin/shared/components/TablePrima
 import { TableSearch } from "@features/admin/shared/components/TableSearch";
 import { ConfirmDestructiveDialog } from "@features/admin/shared/components/ConfirmDestructiveDialog";
 import { AdminReadOnlyNotice } from "@features/admin/shared/components/AdminReadOnlyNotice";
+import { useTableDetailsDialog } from "@features/admin/shared/hooks/useTableDetailsDialog";
 import { CatalogModuleLayout } from "@features/admin/modules/catalogos/shared/components/CatalogModuleLayout";
-import { DesignacionFormDialog } from "@features/admin/modules/catalogos/designacion-autorizadores/components/DesignacionFormDialog";
+import { DesignacionCreateDialog } from "@features/admin/modules/catalogos/designacion-autorizadores/components/DesignacionCreateDialog";
+import { DesignacionDetailsDialog } from "@features/admin/modules/catalogos/designacion-autorizadores/components/DesignacionDetailsDialog";
 import {
   buildDesignacionTableColumns,
   buildDesignacionVisibilityOptions,
@@ -55,10 +57,17 @@ export function DesignacionAutorizadoresPage() {
     actions: true,
   });
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<DesignacionItem | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [revokeOpen, setRevokeOpen] = useState(false);
   const [itemToRevoke, setItemToRevoke] = useState<DesignacionItem | null>(null);
+
+  const {
+    open: detailsOpen,
+    selectedItem,
+    openDetails: handleOpenDetails,
+    closeDetails: handleCloseDetails,
+    setOpen: setDetailsOpen,
+  } = useTableDetailsDialog<DesignacionItem>();
 
   const debouncedSearch = useDebounce(search, 400);
   const revokeDesignacion = useRevokeDesignacion();
@@ -86,14 +95,9 @@ export function DesignacionAutorizadoresPage() {
 
   const rows = data?.items ?? [];
 
-  const handleOpenCreate = () => {
-    setEditing(null);
-    setFormOpen(true);
-  };
-
-  const handleOpenEdit = (item: DesignacionItem) => {
-    setEditing(item);
-    setFormOpen(true);
+  const handleRequestRevoke = (item: DesignacionItem) => {
+    setItemToRevoke(item);
+    setRevokeOpen(true);
   };
 
   const handleRevoke = async () => {
@@ -105,6 +109,8 @@ export function DesignacionAutorizadoresPage() {
         description: `La designación de ${itemToRevoke.user.name} se dio de baja correctamente.`,
       });
       setRevokeOpen(false);
+      // Si la baja se pidio desde el detalle, ese detalle ya no aplica.
+      if (selectedItem?.id === itemToRevoke.id) handleCloseDetails();
       setItemToRevoke(null);
     } catch (mutationError) {
       toast.error("No se pudo dar de baja", {
@@ -114,14 +120,12 @@ export function DesignacionAutorizadoresPage() {
   };
 
   const columns = buildDesignacionTableColumns({
+    canRead,
     canWrite,
-    onEdit: handleOpenEdit,
-    onRequestRevoke: (item) => {
-      setItemToRevoke(item);
-      setRevokeOpen(true);
-    },
+    onOpenDetails: handleOpenDetails,
+    onRequestRevoke: handleRequestRevoke,
   });
-  const visibilityOptions = buildDesignacionVisibilityOptions(canWrite);
+  const visibilityOptions = buildDesignacionVisibilityOptions(canRead || canWrite);
   const visibleColumns = columns.filter((column) => columnVisibility[column.key] ?? true);
 
   const appliedFiltersCount = [statusFilter !== STATUS_FILTER.ALL].filter(Boolean).length;
@@ -242,7 +246,7 @@ export function DesignacionAutorizadoresPage() {
                 dependencyAware
                 label="Nueva"
                 icon={<Plus className="size-4" />}
-                onClick={handleOpenCreate}
+                onClick={() => setCreateOpen(true)}
               />
             ) : null}
           </>
@@ -257,6 +261,7 @@ export function DesignacionAutorizadoresPage() {
         errorTitle="No se pudo cargar las designaciones"
         errorDescription={tableErrorDescription}
         hasFilters={hasFilters}
+        onRowClick={canRead ? handleOpenDetails : undefined}
         onRetry={() => {
           void refetch();
         }}
@@ -277,10 +282,19 @@ export function DesignacionAutorizadoresPage() {
         emptyDescription="Cuando existan designaciones de autorizadores se listarán aquí."
       />
 
-      <DesignacionFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        designation={editing}
+      <DesignacionDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        onClose={handleCloseDetails}
+        designacionSummary={selectedItem}
+        canEdit={canWrite}
+        canGrantGlobal={canGrantGlobal}
+        onRequestRevoke={handleRequestRevoke}
+      />
+
+      <DesignacionCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
         canGrantGlobal={canGrantGlobal}
       />
 

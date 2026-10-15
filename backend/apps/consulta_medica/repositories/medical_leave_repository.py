@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from apps.consulta_medica.models import MedicalLeave
 from apps.consulta_medica.services.patient_link_service import for_patient
 
@@ -6,14 +8,18 @@ class MedicalLeaveRepository:
     @staticmethod
     def get_active_for_consultation(consultation):
         return MedicalLeave.objects.filter(
-            consultation=consultation, is_active=True
+            consultation=consultation, is_active=True,
+            status=MedicalLeave.Status.EMITIDA,
         ).first()
 
     @staticmethod
     def get_active_overlap_for_patient(no_exp, pk_num, on_date):
         return (
             for_patient(
-                MedicalLeave.objects.filter(is_active=True, end_date__gte=on_date), no_exp, pk_num,
+                MedicalLeave.objects.filter(
+                    is_active=True, status=MedicalLeave.Status.EMITIDA, end_date__gte=on_date,
+                ),
+                no_exp, pk_num,
             )
             .order_by("-end_date")
             .first()
@@ -66,6 +72,7 @@ class MedicalLeaveRepository:
         queryset = (
             MedicalLeave.objects.filter(
                 is_active=True,
+                status=MedicalLeave.Status.EMITIDA,
                 start_date__gte=fecha_inicio,
                 start_date__lte=fecha_fin,
             )
@@ -117,5 +124,28 @@ class MedicalLeaveRepository:
             "startDate": leave.start_date,
             "endDate": leave.end_date,
             "isActive": leave.is_active,
+            "status": leave.status,
             "createdAt": leave.created_at,
         }
+
+    @staticmethod
+    def list_active_for_consultation_for_update(consultation):
+        """Incapacidades emitidas de la consulta, FOR UPDATE, orden fijo por pk.
+        Solo dentro de transaction.atomic() (cascada de cancelacion de nota)."""
+        return list(
+            MedicalLeave.objects.select_for_update()
+            .filter(consultation=consultation, is_active=True, status=MedicalLeave.Status.EMITIDA)
+            .order_by("pk")
+        )
+
+    @staticmethod
+    def cancel(leave, *, cancelled_by_id):
+        """Baja LOGICA de la incapacidad (nunca DELETE). Libera el traslape."""
+        leave.status = MedicalLeave.Status.CANCELADA
+        leave.cancelled_at = timezone.now()
+        leave.cancelled_by_id = cancelled_by_id
+        leave.updated_by_id = cancelled_by_id
+        leave.save(update_fields=[
+            "status", "cancelled_at", "cancelled_by_id", "updated_by_id", "updated_at",
+        ])
+        return leave

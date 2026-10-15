@@ -209,3 +209,12 @@ NAVIGATION_PERMISSIONS_SEED += [
         "Otorgar alcance GLOBAL (todos los centros) en designaciones de autorizadores",
     ),
 ]
+
+# Duodecima tanda (change `cancelacion-nota-cascada`, PR2): cancelacion de una
+# nota de consulta ya cerrada. Permiso APARTE de clinico:consultas:read y de
+# la designacion: tener el permiso NO basta, ademas hace falta una designacion
+# vigente de tipo "CN" que cubra el centro de la nota (puede_autorizar) y
+# re-autenticarse con la contrasena propia. Se asigna a mano a los roles.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:notas:cancel", "Cancelar una nota de consulta cerrada (requiere designacion de autorizador)"),
+]

@@ -225,7 +225,7 @@ NAV_SEED = [
     },
     {
         "clave": "administracion.catalogos.designacion_autorizadores",
-        "titulo": "Designacion de autorizadores",
+        "titulo": "Designación de autorizadores",
         "icono": None,
         "url": "/admin/catalogos/designacion-autorizadores",
         "badge": None,
@@ -636,6 +636,20 @@ NAV_SEED = [
         "grupo": "primary",
         "parent_clave": "administracion.catalogos",
         "permisos": ["admin:catalogos:motivos_cancelacion_cirugia:read"],
+    },
+    {
+        # Agregado 2026-10-15 (cancelacion-nota-cascada): catalogo de motivos
+        # para cancelar una nota cerrada.
+        "clave": "administracion.catalogos.motivos_cancelacion_nota",
+        "titulo": "Motivos de Cancelacion de Nota",
+        "icono": None,
+        "url": "/admin/catalogos/motivos-cancelacion-nota",
+        "badge": None,
+        "orden": 41,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:motivos_cancelacion_nota:read"],
     },
     {
         "clave": "administracion.catalogos.motivos_traslado",

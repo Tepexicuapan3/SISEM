@@ -1,0 +1,17 @@
+/* Estilos base de documentos imprimibles (WeasyPrint). Cada documento declara su @page size. */
+@page {
+  margin: 12mm 10mm 14mm 10mm;
+  @bottom-center { content: element(print-footer); width: 100%; }
+}
+html { font-family: "Liberation Sans", "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
+body { margin: 0; }
+.print-header { display: flex; align-items: center; border-bottom: 1.5pt solid #1f4e79; padding-bottom: 4pt; margin-bottom: 8pt; }
+.print-header img.logo { height: 38pt; width: auto; margin-right: 10pt; }
+.print-header .titles { flex: 1; }
+.print-header .institution { font-size: 12pt; font-weight: bold; color: #1f4e79; }
+.print-header .doc-title { font-size: 10pt; text-transform: uppercase; letter-spacing: .5pt; }
+.print-footer { position: running(print-footer); font-size: 7.5pt; color: #444; border-top: .5pt solid #999; padding-top: 2pt; display: flex; justify-content: space-between; }
+.watermark-layer { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1; }
+.watermark { position: fixed; left: 0; width: 100%; text-align: center; font-weight: bold; text-transform: uppercase; opacity: .18; transform: rotate(-30deg); font-size: 64pt; }
+.watermark-cancelada { color: #c00000; top: 38%; }
+.watermark-reimpresion { color: #444; top: 55%; font-size: 48pt; }

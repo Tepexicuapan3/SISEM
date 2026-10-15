@@ -50,6 +50,9 @@ class ConsultationRepository:
                 "doctor__detalle",
                 "cie",
             )
+            # cancelacion-nota-cascada: una nota cancelada post-cierre deja de
+            # contar como consulta atendida (visita pasa cerrada -> cancelada).
+            .exclude(id_visit__status="cancelada")
             .order_by("id_visit__fecha_consulta", "id_visit__hora_consulta")
         )
         if doctor_id is not None:

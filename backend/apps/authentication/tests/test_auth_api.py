@@ -104,7 +104,8 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.cookies[REFRESH_COOKIE]["httponly"], True)
         self.assertEqual(response.cookies[CSRF_COOKIE]["httponly"], "")
 
-    def test_login_allows_relogin_when_session_is_active(self):
+    def test_login_blocks_relogin_when_session_is_active(self):
+        # Control de sesion unica (commit 57698a8): login usa block_if_active=True.
         self._login()
 
         response = self.client.post(
@@ -113,9 +114,9 @@ class AuthApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn(ACCESS_COOKIE, response.cookies)
-        self.assertIn(REFRESH_COOKIE, response.cookies)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "SESSION_ALREADY_ACTIVE")
+        self.assertNotIn(ACCESS_COOKIE, response.cookies)
 
     def test_login_with_active_session_still_validates_credentials(self):
         self._login()
@@ -129,7 +130,8 @@ class AuthApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["code"], "INVALID_CREDENTIALS")
 
-    def test_login_allows_multiple_browser_sessions_for_same_user(self):
+    def test_login_blocks_second_browser_session_for_same_user(self):
+        # Control de sesion unica (commit 57698a8): un segundo equipo es rechazado.
         first_login = self.client.post(
             "/api/v1/auth/login",
             {"username": "abelb", "password": "Abel_180903"},
@@ -144,9 +146,9 @@ class AuthApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(second_login.status_code, status.HTTP_200_OK)
-        self.assertIn(ACCESS_COOKIE, second_login.cookies)
-        self.assertIn(REFRESH_COOKIE, second_login.cookies)
+        self.assertEqual(second_login.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(second_login.data["code"], "SESSION_ALREADY_ACTIVE")
+        self.assertNotIn(ACCESS_COOKIE, second_login.cookies)
 
     def test_login_invalid_password_has_request_id(self):
         response = self.client.post(

@@ -12,6 +12,7 @@ from .cie9_mc import CatCie9Mc
 from .cirugias_tipo import CatTipoCirugia
 from .cirugias_clasificacion import CatClasificacionCirugia
 from .cirugias_motivo_cancelacion import CatMotivoCancelacionCirugia
+from .motivo_cancelacion_nota import MotivoCancelacionNota
 from .ambulancias_motivo_traslado import CatMotivoTraslado
 from .ambulancias_tipo_traslado import CatTipoTraslado
 from .ambulancias_tipo_servicio import CatTipoServicioAmbulancia
@@ -79,6 +80,7 @@ __all__ = [
     "CatTipoCirugia",
     "CatClasificacionCirugia",
     "CatMotivoCancelacionCirugia",
+    "MotivoCancelacionNota",
     "CatMotivoTraslado",
     "CatTipoTraslado",
     "CatTipoServicioAmbulancia",
