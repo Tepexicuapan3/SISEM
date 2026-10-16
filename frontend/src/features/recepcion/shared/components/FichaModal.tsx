@@ -1,6 +1,4 @@
-import { useState } from "react";
-import { Loader2, Printer } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Button } from "@shared/ui/button";
 import { Badge }  from "@shared/ui/badge";
 import {
@@ -9,7 +7,7 @@ import {
 import type {
   VisitQueueItem, VisitService, VisitStatus, VisitStatusLogItem, VisitVitalsPayload,
 } from "@api/types";
-import { visitsAPI } from "@api/resources/visits.api";
+import { PrintButton } from "@shared/components/print/PrintButton";
 import { usePatientLookupHistorico } from "@features/recepcion/modules/checkin/queries/usePatientLookup";
 import { useVisitStatusLog } from "@features/recepcion/modules/checkin/queries/useVisitStatusLog";
 
@@ -130,8 +128,6 @@ interface FichaModalProps {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function FichaModal({ open, onOpenChange, visit }: FichaModalProps) {
-  const [downloading, setDownloading] = useState(false);
-
   const { data: patientData, isFetching: loadingPatient } = usePatientLookupHistorico(
     visit?.noExp ?? "",
     open && !!visit?.noExp,
@@ -147,26 +143,6 @@ export function FichaModal({ open, onOpenChange, visit }: FichaModalProps) {
         .filter(Boolean)
         .find((m) => m!.pkNum === visit?.pkNum) ?? null
     : null;
-
-  const handleDownload = async () => {
-    if (!visit) return;
-    setDownloading(true);
-    try {
-      const blob = await visitsAPI.downloadFicha(visit.id);
-      const url  = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `ficha_${visit.folio}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    } catch {
-      toast.error("No se pudo generar el PDF de la ficha.");
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   if (!visit) return null;
 
@@ -358,16 +334,11 @@ export function FichaModal({ open, onOpenChange, visit }: FichaModalProps) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>
-          <Button
-            className="gap-2"
-            disabled={downloading}
-            onClick={() => void handleDownload()}
-          >
-            {downloading
-              ? <Loader2 className="size-4 animate-spin" />
-              : <Printer className="size-4" />}
-            {downloading ? "Generando PDF..." : "Imprimir ficha"}
-          </Button>
+          <PrintButton
+            documento="ficha"
+            resourceId={visit.id}
+            label="Imprimir ficha"
+          />
         </div>
       </DialogContent>
     </Dialog>

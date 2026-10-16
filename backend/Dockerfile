@@ -23,8 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libaio1 \
     unzip \
     curl \
-    libreoffice \
-    fonts-dejavu \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libharfbuzz-subset0 \
+    libfontconfig1 \
+    fonts-dejavu-core \
+    fonts-liberation2 \
     && rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------------------------
@@ -58,8 +63,8 @@ RUN unzip -q /tmp/instantclient.zip -d /opt/oracle \
 COPY requirements.txt .
 
 # pywin32 sólo funciona en Windows (automatización COM).
-# En Linux la conversión DOCX -> PDF debe realizarse mediante
-# LibreOffice en modo headless.
+# Los PDF imprimibles se generan con WeasyPrint (apps/impresion); LibreOffice
+# se eliminó de la imagen (no hay conversión DOCX -> PDF en Linux).
 RUN sed -i '/^pywin32==/d' requirements.txt \
     && pip install --no-cache-dir -r requirements.txt
 

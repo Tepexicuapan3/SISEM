@@ -1,0 +1,45 @@
+{% extends "impresion/base.html" %}
+{% block page_css %}
+@page { size: A5 landscape; margin: 10mm 10mm 14mm 10mm; }
+.ficha-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6pt; }
+.ficha-folio { font-size: 14pt; font-weight: bold; }
+.ficha-num { font-size: 11pt; }
+.ficha-barcode img { height: 28pt; width: 150pt; }
+table.ficha-grid { width: 100%; border-collapse: collapse; margin-bottom: 6pt; }
+table.ficha-grid th, table.ficha-grid td { border: .5pt solid #888; padding: 2.5pt 4pt; text-align: left; font-size: 9pt; }
+table.ficha-grid th { background: #eef2f7; width: 17%; font-weight: bold; }
+h3.sec { font-size: 9.5pt; margin: 6pt 0 2pt 0; color: #1f4e79; text-transform: uppercase; }
+{% endblock %}
+{% block content %}
+<div class="ficha-top">
+  <div>
+    <div class="ficha-folio">Folio: {{ folio_ficha }}</div>
+    <div class="ficha-num">Ficha No. {{ num_ficha }}{% if turno %} &middot; Turno: {{ turno }}{% endif %}</div>
+  </div>
+  {% if barcode_uri %}<div class="ficha-barcode"><img src="{{ barcode_uri }}" alt=""></div>{% endif %}
+</div>
+
+<h3 class="sec">Paciente</h3>
+<table class="ficha-grid">
+  <tr><th>Nombre</th><td colspan="3">{{ paciente_nombre_completo }}</td></tr>
+  <tr><th>Expediente</th><td>{{ expediente }}</td><th>Edad</th><td>{{ edad }}</td></tr>
+  <tr><th>Fecha de nac.</th><td>{{ fecnac }}</td><th>Doctor</th><td>{{ nombre_doctor }}</td></tr>
+</table>
+
+<h3 class="sec">Consulta</h3>
+<table class="ficha-grid">
+  <tr><th>Centro</th><td>{{ centro_atencion }}</td><th>Consultorio</th><td>{{ consultorio }}</td></tr>
+  <tr><th>Fecha consulta</th><td>{{ fecha_consulta }}</td><th>Hora consulta</th><td>{{ hora_consulta }}</td></tr>
+  <tr><th>Registro</th><td>{{ fecha_registro }} {{ hora_registro }}</td><th>Recepci&oacute;n</th><td>{{ usuario_recepcion }}</td></tr>
+</table>
+
+<h3 class="sec">Somatometr&iacute;a</h3>
+<table class="ficha-grid">
+  <tr><th>Peso (kg)</th><td>{{ peso }}</td><th>Talla (cm)</th><td>{{ talla }}</td></tr>
+  <tr><th>T/A</th><td>{{ tension_arterial }}</td><th>Temp. (&deg;C)</th><td>{{ temperatura }}</td></tr>
+  <tr><th>FC</th><td>{{ frecuencia_cardiaca }}</td><th>FR</th><td>{{ frecuencia_respiratoria }}</td></tr>
+  <tr><th>SpO2 (%)</th><td>{{ saturacion_oxigeno }}</td><th>IMC</th><td>{{ imc }}</td></tr>
+  <tr><th>Cintura (cm)</th><td>{{ cintura }}</td><th>Glucosa cap.</th><td>{{ glucosa_capilar }}</td></tr>
+</table>
+{% if notas_vitales %}<div style="font-size:8.5pt">Notas: {{ notas_vitales }}</div>{% endif %}
+{% endblock %}

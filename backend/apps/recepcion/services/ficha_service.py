@@ -150,10 +150,13 @@ def _get_turno_context(visit) -> dict:
     }
 
 
-def build_context(visit, usuario_nombre: str = "") -> dict:
+def build_context(visit, usuario_nombre: str = "", nombre: dict | None = None) -> dict:
+    """``nombre`` permite inyectar los datos del paciente ya resueltos (motor
+    WeasyPrint, via patient_header); si es None se consulta SERMED (docx)."""
     from django.utils import timezone as tz
 
-    nombre = _get_nombre_components(visit.no_exp or "", visit.pk_num)
+    if nombre is None:
+        nombre = _get_nombre_components(visit.no_exp or "", visit.pk_num)
     vitals  = _get_vitals(visit)
     # Usar hora local (Mexico_City) para día/mes/año de la ficha
     fecha   = tz.localtime(visit.fch_alta) if visit.fch_alta else datetime.now()

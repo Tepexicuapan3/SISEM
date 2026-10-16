@@ -1,8 +1,17 @@
 """
 apps/impresion/urls.py
 ==========================
-El endpoint generico ``GET /api/v1/impresion/<documento>/<int:id>`` se
-registra en la tarea 0.10; por ahora el modulo queda montado sin rutas.
+Endpoint generico de impresion (montado por config/urls.py).
 """
 
-urlpatterns = []
+from django.urls import path
+
+from apps.impresion.views import PrintDocumentView
+
+urlpatterns = [
+    path(
+        "impresion/<str:documento>/<int:resource_id>",
+        PrintDocumentView.as_view(),
+        name="impresion-documento",
+    ),
+]
