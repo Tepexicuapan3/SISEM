@@ -2,9 +2,7 @@
 reset_catalogo_medicos -- runbook de reset del catalogo de medicos, SOLO TEST
 (cambio `medicos-id-no-medico`, R10 / D9).
 
-Vacia `cat_medicos` para reimportar el Excel con `CatMedico.id` = No. Medico
-legado y deja la secuencia del id lista para que el siguiente `nextval` sea 1
-(el import reajusta la secuencia con max(id)+1).
+Vacia `cat_medicos` y deja la secuencia del id lista (ver `_siguientes_pasos`).
 
 NUNCA correr contra produccion. No existe un indicador de entorno confiable en
 settings (`DEBUG` tiene default True y TEST tambien puede correr con
@@ -254,13 +252,13 @@ class Command(BaseCommand):
     def _siguientes_pasos(self):
         self.stdout.write(
             "\nSiguientes pasos:\n"
-            "  1. Importar el Excel de medicos desde la UI (Medicos > Importar).\n"
+            "  1. Dar de alta los medicos desde la UI (Medicos > Nuevo): cada uno\n"
+            "     requiere un usuario existente con tipo de personal Medico.\n"
+            "     (El import por Excel fue retirado; el catalogo del SISEM legado\n"
+            "     vive en la tabla legacy_medico, solo lectura.)\n"
             "  2. python manage.py resolve_hsp_doctor_codes            (dry-run)\n"
             "     python manage.py resolve_hsp_doctor_codes --execute\n"
             "  3. Verificar en SQL:\n"
-            "       SELECT count(*), max(id) FROM cat_medicos;\n"
-            "         -> esperado 2709 | 2726 (el legado tiene 2709 filas con huecos,\n"
-            "            NO 2726 | 2726)\n"
-            "       SELECT pg_get_serial_sequence('cat_medicos','id');\n"
-            "  4. Un alta manual de prueba debe recibir id 2727."
+            "       SELECT count(*) FROM cat_medicos WHERE id_usuario IS NULL;  -> 0\n"
+            "       SELECT pg_get_serial_sequence('cat_medicos','id');"
         )

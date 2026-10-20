@@ -307,18 +307,9 @@ export const shouldRefreshQueueAfterError = (error: unknown): boolean => {
 // `Visit.doctorId` vive en el espacio USUARIO (SyUsuario). Nunca se mezclan:
 // todo lo que cree o compare visitas usa `usuarioId`.
 
-export const SIN_USUARIO_HINT = "Sin usuario: no puede atender consultas";
-
-/** Un médico solo puede ser doctor de una visita si tiene usuario asociado. */
-export function puedeAtenderVisitas(medico: { usuarioId: number | null }): boolean {
-  return medico.usuarioId != null;
-}
-
 /** Opciones del filtro "médico" de la bandeja: id = usuarioId (compara con visit.doctorId). */
 export function buildDoctorFilterOptions(
-  medicos: { usuarioId: number | null; nombreCompleto: string }[],
+  medicos: { usuarioId: number; nombreCompleto: string }[],
 ): { id: number; nombre: string }[] {
-  return medicos
-    .filter(puedeAtenderVisitas)
-    .map((m) => ({ id: m.usuarioId as number, nombre: m.nombreCompleto }));
+  return medicos.map((m) => ({ id: m.usuarioId, nombre: m.nombreCompleto }));
 }

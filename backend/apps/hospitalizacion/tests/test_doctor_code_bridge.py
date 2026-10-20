@@ -12,13 +12,14 @@ from apps.catalogos.models import CatTipoHospitalizacion
 from apps.hospitalizacion.models import HospitalAdmission, HospitalAdmissionRevision
 from apps.hospitalizacion.uses_case import hospital_admission_usecase
 from apps.medicos.models import CatMedico
+from apps.medicos.tests.factories import crear_medico
 
 
 class DoctorCodeBridgeBase(TestCase):
     def setUp(self):
         self.tipo = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
-        self.m35 = CatMedico.objects.create(id=35, nombre="Ana", paterno="Uno")
-        self.m512 = CatMedico.objects.create(id=512, nombre="Beto", paterno="Dos")
+        self.m35 = crear_medico(id=35, nombre="Ana", paterno="Uno")
+        self.m512 = crear_medico(id=512, nombre="Beto", paterno="Dos")
         self._n = 0
 
     def _admission(self, ingreso=None, alta=None):

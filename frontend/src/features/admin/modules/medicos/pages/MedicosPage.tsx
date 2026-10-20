@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Plus, RotateCcw, Stethoscope, Upload } from "lucide-react";
-import { Button } from "@shared/ui/button";
+import { Plus, RotateCcw, Stethoscope } from "lucide-react";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { DataTable } from "@features/admin/shared/components/DataTable";
 import {
@@ -19,6 +18,8 @@ import { AdminReadOnlyNotice } from "@features/admin/shared/components/AdminRead
 import { CatalogModuleLayout } from "@features/admin/modules/catalogos/shared/components/CatalogModuleLayout";
 import { useTableDetailsDialog } from "@features/admin/shared/hooks/useTableDetailsDialog";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@shared/ui/tabs";
+import { LegacyMedicosTab } from "@features/admin/modules/medicos/components/legado/LegacyMedicosTab";
 import { useMedicosList } from "@features/admin/modules/medicos/hooks/useMedicos";
 import {
   buildMedicosTableColumns,
@@ -26,7 +27,6 @@ import {
 } from "@features/admin/modules/medicos/components/MedicoTableColumns";
 import { MedicoCreateDialog } from "@features/admin/modules/medicos/components/MedicoCreateDialog";
 import { MedicoDetailsDialog } from "@features/admin/modules/medicos/components/MedicoDetailsDialog";
-import { MedicoImportDialog } from "@features/admin/modules/medicos/components/MedicoImportDialog";
 import type { MedicoListItem } from "@api/types/medicos.types";
 
 const ESTATUS_FILTER_ALL = "all";
@@ -38,7 +38,6 @@ export function MedicosPage() {
   const [estatusFilter, setEstatusFilter] = useState(ESTATUS_FILTER_ALL);
   const [tipoFilter, setTipoFilter]       = useState(TIPO_FILTER_ALL);
   const [createOpen, setCreateOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({
     nombre: true, tipoMedico: true, servicio: true,
     especialidades: true, estatusMedico: true, actions: true,
@@ -127,88 +126,89 @@ export function MedicosPage() {
         <AdminReadOnlyNotice message="No tienes acceso para consultar este catálogo." />
       ) : null}
 
-      <TableHeaderBar
-        search={
-          <TableSearch
-            value={search}
-            onChange={(v) => setSearch(v)}
-            placeholder="Buscar por nombre o usuario"
-            disabled={!canRead}
+      <Tabs defaultValue="sires">
+        <TabsList>
+          <TabsTrigger value="sires">SIRES</TabsTrigger>
+          <TabsTrigger value="legado">Legado</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="sires" className="space-y-4">
+          <TableHeaderBar
+            search={
+              <TableSearch
+                value={search}
+                onChange={(v) => setSearch(v)}
+                placeholder="Buscar por nombre o usuario"
+                disabled={!canRead}
+              />
+            }
+            actions={
+              <>
+                {canRead ? (
+                  <TableFilterMenu
+                    sections={filterSections}
+                    appliedCount={appliedFiltersCount}
+                    onClear={handleClearFilters}
+                  />
+                ) : null}
+                {canRead ? (
+                  <TableColumnVisibility
+                    columns={visibilityOptions}
+                    visibility={columnVisibility}
+                    onVisibilityChange={setColumnVisibility}
+                  />
+                ) : null}
+                {canRead ? <TableOptionsMenu options={tableOptions} /> : null}
+                {canCreate ? (
+                  <TablePrimaryAction
+                    permission="admin:gestion:medicos:create"
+                    dependencyAware
+                    label="Nuevo"
+                    icon={<Plus className="size-4" />}
+                    onClick={() => setCreateOpen(true)}
+                  />
+                ) : null}
+              </>
+            }
           />
-        }
-        actions={
-          <>
-            {canRead ? (
-              <TableFilterMenu
-                sections={filterSections}
-                appliedCount={appliedFiltersCount}
-                onClear={handleClearFilters}
-              />
-            ) : null}
-            {canRead ? (
-              <TableColumnVisibility
-                columns={visibilityOptions}
-                visibility={columnVisibility}
-                onVisibilityChange={setColumnVisibility}
-              />
-            ) : null}
-            {canRead ? <TableOptionsMenu options={tableOptions} /> : null}
-            {canCreate ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setImportOpen(true)}
-              >
-                <Upload className="size-4" />
-                Importar
-              </Button>
-            ) : null}
-            {canCreate ? (
-              <TablePrimaryAction
-                permission="admin:gestion:medicos:create"
-                dependencyAware
-                label="Nuevo"
-                icon={<Plus className="size-4" />}
-                onClick={() => setCreateOpen(true)}
-              />
-            ) : null}
-          </>
-        }
-      />
 
-      <DataTable
-        columns={visibleColumns}
-        rows={rows}
-        isLoading={isLoading}
-        isError={canRead && Boolean(error)}
-        errorTitle="No se pudo cargar el catálogo de médicos"
-        hasFilters={Boolean(debouncedSearch.trim()) || appliedFiltersCount > 0}
-        onRowClick={canRead ? handleOpenDetails : undefined}
-        onRetry={() => void refetch()}
-        onClearFilters={handleClearFilters}
-        getRowKey={(row) => row.id.toString()}
-        emptyTitle="Sin médicos registrados"
-        emptyDescription="Usa el botón «Nuevo» para registrar un médico. El usuario debe tener tipo de personal «Médico» configurado previamente."
-      />
+          <DataTable
+            columns={visibleColumns}
+            rows={rows}
+            isLoading={isLoading}
+            isError={canRead && Boolean(error)}
+            errorTitle="No se pudo cargar el catálogo de médicos"
+            hasFilters={Boolean(debouncedSearch.trim()) || appliedFiltersCount > 0}
+            onRowClick={canRead ? handleOpenDetails : undefined}
+            onRetry={() => void refetch()}
+            onClearFilters={handleClearFilters}
+            getRowKey={(row) => row.id.toString()}
+            emptyTitle="Sin médicos registrados"
+            emptyDescription="Usa el botón «Nuevo» para registrar un médico. El usuario debe tener tipo de personal «Médico» configurado previamente."
+          />
 
-      <MedicoDetailsDialog
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
-        medicoSummary={selectedMedico}
-        canEdit={canUpdate}
-      />
+          <MedicoDetailsDialog
+            open={detailsOpen}
+            onOpenChange={setDetailsOpen}
+            medicoSummary={selectedMedico}
+            canEdit={canUpdate}
+          />
 
-      <MedicoCreateDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={(newMedico) => {
-          setCreateOpen(false);
-          // Abre automáticamente el formulario completo para terminar la configuración
-          handleOpenDetails(newMedico);
-        }}
-      />
+          <MedicoCreateDialog
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            onCreated={(newMedico) => {
+              setCreateOpen(false);
+              // Abre automáticamente el formulario completo para terminar la configuración
+              handleOpenDetails(newMedico);
+            }}
+          />
+        </TabsContent>
 
-      <MedicoImportDialog open={importOpen} onOpenChange={setImportOpen} />
+        <TabsContent value="legado">
+          <LegacyMedicosTab canRead={canRead} />
+        </TabsContent>
+      </Tabs>
     </CatalogModuleLayout>
   );
 }

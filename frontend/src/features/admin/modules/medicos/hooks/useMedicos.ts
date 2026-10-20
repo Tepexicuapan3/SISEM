@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { medicosAPI } from "@api/resources/medicos.api";
 import type {
   CreateMedicoRequest,
+  LegacyMedicosParams,
   UpdateMedicoRequest,
-  AsignarUsuarioRequest,
   AddEspecialidadRequest,
   AddCentroRequest,
   AddConsultorioRequest,
@@ -17,6 +17,7 @@ import type {
 const keys = {
   all:          ["medicos"] as const,
   list:         (params?: object) => ["medicos", "list", params] as const,
+  legacy:       (params?: object) => ["medicos", "legacy", params] as const,
   detail:       (id: number)      => ["medicos", "detail", id] as const,
   excepciones:  (id: number)      => ["medicos", id, "excepciones"] as const,
   coberturas:   (id: number)      => ["medicos", id, "coberturas"] as const,
@@ -34,6 +35,20 @@ export const useMedicosList = (
     queryKey: keys.list(params),
     queryFn: () => medicosAPI.getAll(params),
     staleTime: 60_000,
+    enabled: options?.enabled ?? true,
+  });
+
+// ─── Archivo legado (solo lectura) ───────────────────────────────────────────
+
+export const useLegacyMedicosList = (
+  params?: LegacyMedicosParams,
+  options?: { enabled?: boolean },
+) =>
+  useQuery({
+    queryKey: keys.legacy(params),
+    queryFn: () => medicosAPI.getLegacy(params),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
     enabled: options?.enabled ?? true,
   });
 
@@ -61,17 +76,6 @@ export const useUpdateMedico = (medicoId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdateMedicoRequest) => medicosAPI.update(medicoId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.detail(medicoId) });
-      qc.invalidateQueries({ queryKey: keys.all });
-    },
-  });
-};
-
-export const useAsignarUsuario = (medicoId: number) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: AsignarUsuarioRequest) => medicosAPI.asignarUsuario(medicoId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.detail(medicoId) });
       qc.invalidateQueries({ queryKey: keys.all });

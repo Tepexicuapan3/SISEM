@@ -68,7 +68,7 @@ export const buildMedicosTableColumns = ({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-txt-body">{row.nombreCompleto}</p>
-              <p className="truncate text-xs text-txt-muted">{row.username ?? "Sin usuario"}</p>
+              <p className="truncate text-xs text-txt-muted">{row.username}</p>
             </div>
           </div>
         );

@@ -505,7 +505,6 @@ class ConsumoConsultaViewSet(viewsets.ModelViewSet):
     pagination_class       = StandardListPagination
     filter_backends        = [filters.SearchFilter, filters.OrderingFilter]
     search_fields          = ["paciente", "medico__id_usuario__detalle__nombre_completo",
-                              "medico__nombre", "medico__paterno", "medico__materno",
                               "id_almacen__nombre"]
     ordering_fields        = ["fch_consumo", "created_at"]
     ordering               = ["-fch_consumo"]

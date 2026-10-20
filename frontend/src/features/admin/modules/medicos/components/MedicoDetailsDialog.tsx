@@ -69,7 +69,7 @@ function MedicoDialogHeader({
         </h2>
         <p className="truncate text-sm text-txt-muted">
           {medicoSummary ? `No. ${medicoSummary.id}` : ""}
-          {medicoSummary ? ` · ${medicoSummary.username ?? "Sin usuario"}` : ""}
+          {medicoSummary ? ` · ${medicoSummary.username}` : ""}
           {medicoSummary?.servicio ? ` · ${medicoSummary.servicio}` : ""}
         </p>
       </div>

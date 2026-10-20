@@ -21,13 +21,14 @@ directamente. Todo pasa por acá.
 Ver Engram, sdd/medico-pk-independiente/design, sección "D6 — Módulo de
 traducción de identidades".
 
-Actualización (cambio `medicos-id-no-medico`): `CatMedico.id` pasa a ser el
-No. Médico legado (`no_medico`, 1..2726) y la secuencia continúa desde ahí.
 Los dos espacios siguen siendo DISTINTOS (id de médico != id de usuario) y la
-regla dura de arriba no cambia: el id de médico ya no es un surrogate opaco
-sino el número que el legado conoce, y los médicos sin usuario (id_usuario
-NULL) no tienen contraparte en el espacio usuario, por lo que no pueden ser
-`doctor_id` de una visita. Ver sdd/medicos-id-no-medico/design.
+regla dura de arriba no cambia.
+
+Actualización (cambio `medicos-legado-archivo`): `CatMedico.id_usuario` es
+OneToOne NOT NULL: todo médico tiene usuario y su identidad (nombre, cédula)
+sale SIEMPRE de DetUsuario / DetUsuarioCedula. El catálogo legado vive aparte
+en `LegacyMedico` (solo lectura) y un código legado jamás se interpreta como
+`CatMedico.id`.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ from dataclasses import dataclass
 
 from django.core.cache import cache
 from django.db.models import CharField, F, Value
-from django.db.models.functions import Coalesce, Concat, NullIf, Replace, Trim
+from django.db.models.functions import Coalesce, NullIf
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def _cache_key_usuario_by_medico(medico_id: int) -> str:
 
 
 def invalidate_identity_cache(*, medico_id: int | None = None, usuario_id: int | None = None) -> None:
-    """Borra las claves de cache del mapeo usuario<->medico (ej. tras asignar un usuario)."""
+    """Borra las claves de cache del mapeo usuario<->medico."""
     keys = []
     if medico_id is not None:
         keys.append(_cache_key_usuario_by_medico(medico_id))
@@ -97,9 +98,8 @@ def medico_id_for_usuario(usuario_id: int | None) -> int | None:
 def usuario_id_for_medico(medico_id: int | None) -> int | None:
     """
     Traduce una PK surrogate de CatMedico a su id de usuario (espacio
-    SyUsuario/doctor_id). Devuelve None si `medico_id` es None o si ese
-    médico no tiene usuario asociado (id_usuario NULL -- médico sin cuenta
-    de sistema, habilitado por este mismo cambio).
+    SyUsuario/doctor_id). Devuelve None si `medico_id` es None o no existe
+    ese médico.
     """
     if medico_id is None:
         return None
@@ -120,9 +120,8 @@ def usuario_id_for_medico(medico_id: int | None) -> int | None:
 
 # ─── DATOS DE IDENTIDAD (nombre / cédula) ───────────────────────────────────
 #
-# Único punto de lectura del nombre y la cédula de un médico. Con usuario la
-# fuente es DetUsuario / DetUsuarioCedula; sin usuario (médicos que entran por
-# el import Excel) son los campos propios de CatMedico. Ningún helper hace
+# Único punto de lectura del nombre y la cédula de un médico. La fuente es
+# DetUsuario / DetUsuarioCedula del usuario asociado. Ningún helper hace
 # `.filter/.order_by/.select_related` sobre managers relacionados: eso anula
 # el prefetch del caller y genera N+1. Los callers agregan los
 # select_related / prefetch con IDENTITY_SELECT / IDENTITY_PREFETCH.
@@ -144,28 +143,21 @@ def with_identity(qs, prefix: str = ""):
 
 
 def nombre_partes(medico) -> NombrePartes:
-    """Nombre/paterno/materno: del DetUsuario si hay usuario, de CatMedico si no."""
+    """Nombre/paterno/materno del DetUsuario del usuario asociado."""
     usuario = getattr(medico, "id_usuario", None)
-    if usuario is not None:
-        det = getattr(usuario, "detalle", None)
-        if det is None:
-            return NombrePartes()
-        return NombrePartes(det.nombre or None, det.paterno or None, det.materno or None)
-    return NombrePartes(
-        getattr(medico, "nombre", None) or None,
-        getattr(medico, "paterno", None) or None,
-        getattr(medico, "materno", None) or None,
-    )
+    det = getattr(usuario, "detalle", None) if usuario is not None else None
+    if det is None:
+        return NombrePartes()
+    return NombrePartes(det.nombre or None, det.paterno or None, det.materno or None)
 
 
 def display_name(medico) -> str:
     """
-    Nombre a mostrar para un médico. Nunca lanza excepción por usuario ausente:
+    Nombre a mostrar para un médico. Nunca lanza excepción por datos ausentes:
 
-      1. `det.nombre_completo` (DetUsuario del usuario asociado, si existe)
-      2. `id_usuario.usuario` (username, si hay usuario pero sin detalle)
-      3. "nombre paterno materno" de CatMedico (médico SIN usuario)
-      4. `f"Médico #{medico.id}"` (último recurso, nunca revienta la UI)
+      1. `det.nombre_completo` (DetUsuario del usuario asociado)
+      2. `id_usuario.usuario` (username, si el usuario no tiene detalle)
+      3. `f"Médico #{medico.id}"` (último recurso, nunca revienta la UI)
     """
     usuario = getattr(medico, "id_usuario", None)
     if usuario is not None:
@@ -174,25 +166,19 @@ def display_name(medico) -> str:
             return det.nombre_completo
         if usuario.usuario:
             return usuario.usuario
-    else:
-        partes = nombre_partes(medico)
-        propio = " ".join(p for p in (partes.nombre, partes.paterno, partes.materno) if p)
-        if propio:
-            return propio
 
     return f"Médico #{medico.id}"
 
 
 def cedula_profesional(medico) -> str | None:
     """
-    Cédula profesional del médico o None. Con usuario: la principal de
-    DetUsuarioCedula, o la primera de tipo PROFESIONAL (por `orden`); se itera
-    `cedulas.all()` para respetar el prefetch (IDENTITY_PREFETCH). Sin usuario:
-    campo propio de CatMedico.
+    Cédula profesional del médico o None: la principal de DetUsuarioCedula, o
+    la primera de tipo PROFESIONAL (por `orden`); se itera `cedulas.all()`
+    para respetar el prefetch (IDENTITY_PREFETCH).
     """
     usuario = getattr(medico, "id_usuario", None)
     if usuario is None:
-        return getattr(medico, "cedula_profesional", None) or None
+        return None
 
     cedulas = sorted(usuario.cedulas.all(), key=lambda c: c.orden)
     for c in cedulas:
@@ -204,36 +190,13 @@ def cedula_profesional(medico) -> str | None:
     return None
 
 
-def cedula_key(value) -> str:
-    """
-    Clave para comparar números de cédula: mayúsculas, sin espacios
-    ("ABC 123" == "abc123"). Única regla compartida por el import masivo
-    (`medico_import_service` / `import_medicos`) y por `assign_usuario`
-    para decidir si una cédula ya está registrada y no duplicarla.
-    """
-    return "".join(str(value or "").split()).upper()
-
-
 def display_name_expr(prefix: str = ""):
     """
     Equivalente en SQL de `display_name` (sin el placeholder "Médico #id"),
     para ordenar y buscar. `prefix` apunta a un médico relacionado ("medico__").
     """
-    propio = Trim(
-        Replace(
-            Concat(
-                Coalesce(F(f"{prefix}nombre"), Value("")), Value(" "),
-                Coalesce(F(f"{prefix}paterno"), Value("")), Value(" "),
-                Coalesce(F(f"{prefix}materno"), Value("")),
-                output_field=CharField(),
-            ),
-            Value("  "),
-            Value(" "),
-        )
-    )
     return Coalesce(
         NullIf(F(f"{prefix}id_usuario__detalle__nombre_completo"), Value("")),
-        NullIf(propio, Value("")),
         NullIf(F(f"{prefix}id_usuario__usuario"), Value("")),
         output_field=CharField(),
     )

@@ -265,7 +265,7 @@ export const RecepcionAgendaPage = () => {
   ).map((c) => ({ id: c.id, nombre: `#${c.numero} — ${c.name}` }));
 
   // El filtro compara contra `visit.doctorId` (espacio USUARIO): las opciones usan
-  // `usuarioId`, no `m.id` (No. Médico). Médicos sin usuario no pueden tener visitas.
+  // `usuarioId`, no `m.id` (No. Médico).
   const doctorOptions = buildDoctorFilterOptions(
     selectedCentroId
       ? allMedicos.filter((m) =>

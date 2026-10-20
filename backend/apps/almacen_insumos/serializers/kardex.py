@@ -211,7 +211,6 @@ class MedicoNombreField(serializers.RelatedField):
         super().__init__(**kwargs)
 
     def to_representation(self, obj):
-        # display_name cubre médicos sin usuario (nombre propio en CatMedico).
         return display_name(obj)
 
     def to_internal_value(self, data):

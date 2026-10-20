@@ -49,7 +49,6 @@ import { useMedicosDisponibles } from "@features/admin/modules/medicos/hooks/use
 import { useAgendaSemanal }       from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
 import { useDebounce } from "@shared/hooks/useDebounce";
-import { puedeAtenderVisitas, SIN_USUARIO_HINT } from "../pages/RecepcionAgendaPage.helpers";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -82,9 +81,7 @@ export function MedicoDisponibleCard({
   onSelect: () => void;
 }) {
   const tieneHorario = medico.horaInicio && medico.horaFin;
-  // Sin usuario no existe doctor_id posible: no se puede seleccionar para crear visitas.
-  const sinUsuario = !puedeAtenderVisitas(medico);
-  const bloqueado  = !medico.disponible || sinUsuario;
+  const bloqueado  = !medico.disponible;
 
   return (
     <button
@@ -116,9 +113,6 @@ export function MedicoDisponibleCard({
         </p>
         {medico.servicio ? (
           <p className="truncate text-xs text-txt-muted">{medico.servicio}</p>
-        ) : null}
-        {sinUsuario ? (
-          <p className="text-xs text-amber-600">{SIN_USUARIO_HINT}</p>
         ) : null}
 
         {/* Horario y consultorio */}
@@ -282,7 +276,7 @@ export const RecepcionQuickCheckinDialog = ({
     activeVisits
       .filter(
         (v) =>
-          selectedMedico?.usuarioId != null &&
+          selectedMedico &&
           v.doctorId === selectedMedico.usuarioId &&
           v.horaConsulta !== null &&
           isOpenVisitStatus(v.status),
@@ -322,8 +316,8 @@ export const RecepcionQuickCheckinDialog = ({
   // Sincronizar médico con el form y pre-llenar hora con el PRIMER slot libre
   useEffect(() => {
     if (selectedMedico) {
-      // Visit.doctorId = espacio USUARIO (no el No. Médico). Los sin usuario no son seleccionables.
-      form.setValue("doctorId",      selectedMedico.usuarioId ?? undefined, { shouldValidate: true });
+      // Visit.doctorId = espacio USUARIO (no el No. Médico).
+      form.setValue("doctorId",      selectedMedico.usuarioId, { shouldValidate: true });
       form.setValue("consultorioId", selectedMedico.consultorioId ?? undefined, { shouldValidate: true });
       const primerLibre = slots.find((h) => !horasOcupadas.has(h));
       // Fallback chain: primer slot libre → hora inicio del médico → hora actual

@@ -10,6 +10,7 @@ from apps.hospitalizacion.models import HospitalAdmission, HospitalAdmissionRevi
 from apps.hospitalizacion.repositories.hospital_admission_repository import HospitalAdmissionRepository
 from apps.hospitalizacion.uses_case import hospital_admission_usecase
 from apps.medicos.models import CatMedico
+from apps.medicos.tests.factories import crear_medico
 
 
 def _noop_audit_hook(**kwargs):
@@ -123,7 +124,7 @@ class ResolvePendingFkTests(TestCase):
 
     def setUp(self):
         self.tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
-        self.medico = CatMedico.objects.create(id=512, nombre="Prueba", paterno="Dr")
+        self.medico = crear_medico(id=512, nombre="Prueba", paterno="Dr")
         self.admission = HospitalAdmission.objects.create(
             no_exp="EXP0003",
             reason="Motivo",
@@ -158,7 +159,7 @@ class ResolvePendingFkTests(TestCase):
         self.assertEqual(evento.actor_nombre, "Sistema")
 
     def test_guard_does_not_touch_already_resolved_fk(self):
-        otro_medico = CatMedico.objects.create(id=9999, nombre="Otro", paterno="Dr")
+        otro_medico = crear_medico(id=9999, nombre="Otro", paterno="Dr")
         self.admission.admitting_doctor = self.medico
         self.admission.save()
 

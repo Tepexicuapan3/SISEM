@@ -2,12 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { render, screen } from "@/test/utils";
 import { DisponibilidadView } from "@features/recepcion/modules/agenda/components/DisponibilidadView";
-import { MedicoDisponibleCard } from "@features/recepcion/modules/agenda/components/RecepcionQuickCheckinDialog";
-import {
-  buildDoctorFilterOptions,
-  SIN_USUARIO_HINT,
-} from "@features/recepcion/modules/agenda/pages/RecepcionAgendaPage.helpers";
-import type { MedicoDisponible, MedicoListItem } from "@api/types/medicos.types";
+import { buildDoctorFilterOptions } from "@features/recepcion/modules/agenda/pages/RecepcionAgendaPage.helpers";
+import type { MedicoListItem } from "@api/types/medicos.types";
 
 // IDs DIVERGENTES a propósito: No. Médico (512) != id de usuario (7).
 const MEDICO_ID = 512;
@@ -78,20 +74,9 @@ describe("Recepción: espacios de identidad médico vs usuario", () => {
     expect(onOpen.mock.calls[0][0].doctorId).not.toBe(MEDICO_ID);
   });
 
-  it("DisponibilidadView no abre check-in para un médico sin usuario y avisa", async () => {
-    const user = userEvent.setup();
-    const onOpen = renderView(MEDICO_ID, [medico({ usuarioId: null })]);
-
-    expect(screen.getByRole("status")).toHaveTextContent(SIN_USUARIO_HINT);
-    await user.click(screen.getByRole("button", { name: `slot-medico-${MEDICO_ID}` }));
-
-    expect(onOpen).not.toHaveBeenCalled();
-  });
-
-  it("el filtro de médico usa usuarioId y excluye médicos sin usuario", () => {
+  it("el filtro de médico usa usuarioId", () => {
     const options = buildDoctorFilterOptions([
       medico({}),
-      medico({ id: 600, usuarioId: null, nombreCompleto: "Sin usuario" }),
     ]);
 
     expect(options).toEqual([{ id: USUARIO_ID, nombre: "Dra. Divergente" }]);
@@ -100,37 +85,5 @@ describe("Recepción: espacios de identidad médico vs usuario", () => {
     const visit = { doctorId: USUARIO_ID };
     expect(options.some((o) => visit.doctorId === o.id)).toBe(true);
     expect(options.some((o) => o.id === MEDICO_ID)).toBe(false);
-  });
-
-  it("la tarjeta del check-in rápido deshabilita médicos sin usuario", async () => {
-    const user = userEvent.setup();
-    const onSelect = vi.fn();
-    const base: MedicoDisponible = {
-      medicoId: MEDICO_ID,
-      usuarioId: null,
-      nombreCompleto: "Dr. Sin Usuario",
-      servicio: null,
-      tipoMedico: "general",
-      disponible: true,
-    } as MedicoDisponible;
-
-    const { rerender } = render(
-      <MedicoDisponibleCard medico={base} selected={false} onSelect={onSelect} />,
-    );
-
-    const btn = screen.getByRole("button", { name: /Dr\. Sin Usuario/ });
-    expect(btn).toBeDisabled();
-    expect(screen.getByText(SIN_USUARIO_HINT)).toBeVisible();
-    await user.click(btn);
-    expect(onSelect).not.toHaveBeenCalled();
-
-    rerender(
-      <MedicoDisponibleCard
-        medico={{ ...base, usuarioId: USUARIO_ID }}
-        selected={false}
-        onSelect={onSelect}
-      />,
-    );
-    expect(screen.getByRole("button", { name: /Dr\. Sin Usuario/ })).toBeEnabled();
   });
 });

@@ -9,7 +9,7 @@ del JSON expuesto.
 import logging
 
 from apps.medicos import identity
-from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoCobertura
+from apps.medicos.models import CatMedico, LegacyMedico, RelMedicoConsultorio, RelMedicoCobertura
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +27,18 @@ def _consultorio_or_none(rmc: RelMedicoConsultorio):
         return None
 
 
-def _fecha_nac(fuente):
-    fecha = getattr(fuente, "fecha_nac", None) if fuente is not None else None
+def _fecha_nac(det):
+    fecha = getattr(det, "fecha_nac", None) if det is not None else None
     return str(fecha) if fecha else None
 
 
 def serialize_medico(medico: CatMedico) -> dict:
+    # Todo médico tiene usuario (id_usuario NOT NULL): la identidad sale de él.
     usuario = medico.id_usuario
-    det = getattr(usuario, "detalle", None) if usuario is not None else None
+    det = getattr(usuario, "detalle", None)
     # `.all()` + filtro/orden en Python: `.filter()/.order_by()/.select_related()`
     # sobre el manager relacionado anulan el prefetch de `list_queryset` (N+1).
-    cedulas = sorted(usuario.cedulas.all(), key=lambda c: c.orden) if usuario is not None else []
+    cedulas = sorted(usuario.cedulas.all(), key=lambda c: c.orden)
     especialidades = list(medico.especialidades.all())
     centros = [c for c in medico.centros.all() if c.is_active]
     consultorios_activos = [
@@ -46,30 +47,27 @@ def serialize_medico(medico: CatMedico) -> dict:
     ]
     partes = identity.nombre_partes(medico)
 
-    # Con usuario manda DetUsuario; sin usuario, la escuela propia del médico.
     # getattr con default: la FK es db_constraint=False y una huérfana lanza
     # RelatedObjectDoesNotExist (subclase de AttributeError).
-    escuela = getattr(det if usuario is not None else medico, "id_escuela", None)
+    escuela = getattr(det, "id_escuela", None)
 
     return {
         # Contrato unificado: "id" es SIEMPRE CatMedico.id (No. Médico).
-        # "usuarioId" es el SyUsuario asociado, null en médicos sin usuario.
+        # "usuarioId" es el SyUsuario asociado (siempre presente).
         "id": medico.id,
         "usuarioId": medico.id_usuario_id,
-        "tieneUsuario": usuario is not None,
-        "username": usuario.usuario if usuario is not None else None,
+        "username": usuario.usuario,
         "nombreCompleto": identity.display_name(medico),
         "nombre": partes.nombre or "",
         "paterno": partes.paterno or "",
         "materno": partes.materno or "",
         "cedulaProfesional": identity.cedula_profesional(medico),
-        "email": usuario.correo if usuario is not None else None,
+        "email": usuario.correo,
         "telefono": det.telefono if det else None,
         "direccion": det.direccion if det else None,
-        # Con usuario manda DetUsuario; sin usuario, los datos propios del médico.
-        "sexo": getattr(det if usuario is not None else medico, "sexo", None),
-        "fechaNac": _fecha_nac(det if usuario is not None else medico),
-        "isActive": usuario.est_activo if usuario is not None else False,
+        "sexo": getattr(det, "sexo", None),
+        "fechaNac": _fecha_nac(det),
+        "isActive": usuario.est_activo,
         "tipoMedico": medico.tipo_medico,
         "servicio": medico.servicio,
         "observaciones": medico.observaciones,
@@ -224,4 +222,37 @@ def serialize_cobertura(cob: RelMedicoCobertura) -> dict:
             for h in cob.horarios.all().order_by("dia_semana", "hora_inicio")
         ],
         "createdAt": cob.created_at.isoformat() if cob.created_at else None,
+    }
+
+
+def _par_clave_descripcion(clave, descripcion):
+    if clave is None and not descripcion:
+        return None
+    return {"clave": clave, "descripcion": descripcion}
+
+
+def serialize_legacy_medico(legacy: LegacyMedico) -> dict:
+    """Fila del archivo legado. No expone `fe_nac` (minimización de datos)."""
+    nombre_completo = " ".join(
+        p.strip() for p in (legacy.ds_nombre, legacy.ds_paterno, legacy.ds_materno)
+        if p and p.strip()
+    )
+    actual = legacy.medico_actual
+    return {
+        "noMedico": legacy.no_medico,
+        "claveRh": legacy.cd_medico,
+        "nombreCompleto": nombre_completo,
+        "paterno": legacy.ds_paterno,
+        "materno": legacy.ds_materno,
+        "nombre": legacy.ds_nombre,
+        "cedula": legacy.no_cedula,
+        "sexo": legacy.cd_sexo,
+        "clinica": _par_clave_descripcion(legacy.cd_clinica, legacy.ds_clinica),
+        "especialidad": _par_clave_descripcion(legacy.cd_especialidad, legacy.ds_especialidad),
+        "estatus": legacy.sw_status,
+        "usuarioLegado": legacy.cd_usuario,
+        "medicoActual": (
+            {"id": actual.id, "nombreCompleto": identity.display_name(actual)}
+            if actual is not None else None
+        ),
     }

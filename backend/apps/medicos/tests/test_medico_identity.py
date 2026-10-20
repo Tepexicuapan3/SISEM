@@ -1,12 +1,12 @@
-"""Cobertura de `CatMedico` (campos personales + CheckConstraint, R3) y de los
-helpers de `apps.medicos.identity` (R4): display_name / nombre_partes /
-cedula_profesional / annotate_display_name en los dos modos (con y sin
-usuario), sin excepción por usuario ausente y con número de queries
-constante."""
+"""Cobertura de `CatMedico` (id_usuario obligatorio, OneToOne PROTECT) y de los
+helpers de `apps.medicos.identity`: display_name / nombre_partes /
+cedula_profesional / annotate_display_name, siempre desde el usuario, sin
+excepción por detalle ausente y con número de queries constante."""
 
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
+from django.db.models.deletion import ProtectedError
 from django.test import TestCase, TransactionTestCase
 
 from apps.authentication.models import DetUsuario, DetUsuarioCedula, SyUsuario
@@ -32,58 +32,44 @@ def _cargar(medico_id):
     return qs.prefetch_related(*identity.IDENTITY_PREFETCH).get()
 
 
-class CatMedicoConstraintTests(TestCase):
-    def test_sin_usuario_acepta_datos_personales(self):
-        medico = CatMedico.objects.create(
-            nombre="Juan", paterno="López", materno="Ramírez", cedula_profesional="12345678"
-        )
-        medico.refresh_from_db()
-        self.assertEqual(medico.nombre, "Juan")
-        self.assertEqual(medico.cedula_profesional, "12345678")
+class CatMedicoUsuarioObligatorioTests(TestCase):
+    def test_sin_usuario_se_rechaza(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CatMedico.objects.create()
 
-    def test_cedula_acepta_30_caracteres(self):
-        medico = CatMedico.objects.create(nombre="Juan", cedula_profesional="9" * 30)
-        medico.refresh_from_db()
-        self.assertEqual(len(medico.cedula_profesional), 30)
-
-    def test_con_usuario_rechaza_datos_personales(self):
-        user = _usuario("dr_constraint")
-        for campo in ("nombre", "paterno", "materno", "cedula_profesional"):
-            with self.subTest(campo=campo):
-                with self.assertRaises(IntegrityError), transaction.atomic():
-                    CatMedico.objects.create(id_usuario=user, **{campo: "x"})
-        for campo, valor in (("id_escuela_id", 1), ("sexo", "M"), ("fecha_nac", "1975-03-15")):
-            with self.subTest(campo=campo):
-                with self.assertRaises(IntegrityError), transaction.atomic():
-                    CatMedico.objects.create(id_usuario=user, **{campo: valor})
-
-    def test_con_usuario_sin_datos_personales_ok(self):
+    def test_con_usuario_ok(self):
         user = _usuario("dr_limpio")
         self.assertIsNotNone(CatMedico.objects.create(id_usuario=user).pk)
 
+    def test_un_usuario_un_solo_medico(self):
+        user = _usuario("dr_unico")
+        CatMedico.objects.create(id_usuario=user)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CatMedico.objects.create(id_usuario=user)
+
+    def test_borrar_usuario_medico_esta_protegido(self):
+        user = _usuario("dr_protegido")
+        CatMedico.objects.create(id_usuario=user)
+        with self.assertRaises(ProtectedError):
+            user.delete()
+        self.assertTrue(SyUsuario.objects.filter(pk=user.pk).exists())
+
+    def test_sin_campos_personales_propios(self):
+        campos = {f.name for f in CatMedico._meta.get_fields()}
+        for campo in ("nombre", "paterno", "materno", "cedula_profesional", "id_escuela", "sexo", "fecha_nac"):
+            self.assertNotIn(campo, campos)
+
 
 class DisplayNameTests(TestCase):
-    def test_con_usuario_usa_detalle(self):
+    def test_con_detalle_usa_nombre_completo(self):
         user = _usuario("dr_det")
         medico = CatMedico.objects.create(id_usuario=user)
         self.assertEqual(identity.display_name(_cargar(medico.id)), "Ana Pérez Gómez")
 
-    def test_con_usuario_sin_detalle_usa_username(self):
+    def test_usuario_sin_detalle_usa_username(self):
         user = _usuario("dr_sin_det", con_detalle=False)
         medico = CatMedico.objects.create(id_usuario=user)
         self.assertEqual(identity.display_name(_cargar(medico.id)), "dr_sin_det")
-
-    def test_sin_usuario_compone_nombre_paterno_materno(self):
-        medico = CatMedico.objects.create(nombre="Juan", paterno="López", materno="Ramírez")
-        self.assertEqual(identity.display_name(_cargar(medico.id)), "Juan López Ramírez")
-
-    def test_sin_usuario_con_partes_faltantes_no_deja_espacios_sobrantes(self):
-        medico = CatMedico.objects.create(nombre="Juan", paterno="López")
-        self.assertEqual(identity.display_name(_cargar(medico.id)), "Juan López")
-
-    def test_sin_usuario_sin_datos_devuelve_placeholder_sin_excepcion(self):
-        medico = CatMedico.objects.create()
-        self.assertEqual(identity.display_name(_cargar(medico.id)), f"Médico #{medico.id}")
 
 
 class NombrePartesTests(TestCase):
@@ -92,11 +78,6 @@ class NombrePartesTests(TestCase):
         partes = identity.nombre_partes(_cargar(medico.id))
         self.assertEqual((partes.nombre, partes.paterno, partes.materno), ("Ana", "Pérez", "Gómez"))
 
-    def test_sin_usuario(self):
-        medico = CatMedico.objects.create(nombre="Juan", paterno="López")
-        partes = identity.nombre_partes(_cargar(medico.id))
-        self.assertEqual((partes.nombre, partes.paterno, partes.materno), ("Juan", "López", None))
-
     def test_usuario_sin_detalle_devuelve_vacio(self):
         medico = CatMedico.objects.create(id_usuario=_usuario("dr_partes_sd", con_detalle=False))
         partes = identity.nombre_partes(_cargar(medico.id))
@@ -104,14 +85,6 @@ class NombrePartesTests(TestCase):
 
 
 class CedulaProfesionalTests(TestCase):
-    def test_sin_usuario_usa_campo_propio(self):
-        medico = CatMedico.objects.create(nombre="Juan", cedula_profesional="ABC123")
-        self.assertEqual(identity.cedula_profesional(_cargar(medico.id)), "ABC123")
-
-    def test_sin_usuario_sin_cedula_es_none(self):
-        medico = CatMedico.objects.create(nombre="Juan")
-        self.assertIsNone(identity.cedula_profesional(_cargar(medico.id)))
-
     def test_usuario_sin_cedulas_es_none(self):
         medico = CatMedico.objects.create(id_usuario=_usuario("dr_sin_ced"))
         self.assertIsNone(identity.cedula_profesional(_cargar(medico.id)))
@@ -132,27 +105,20 @@ class CedulaProfesionalTests(TestCase):
 
 
 class AnnotateDisplayNameTests(TestCase):
-    def test_ordena_con_y_sin_usuario(self):
+    def test_ordena_por_nombre_del_usuario_con_fallback_a_username(self):
         CatMedico.objects.create(id_usuario=_usuario("dr_z", nombre="Zacarías", paterno="Zepeda", materno=None))
-        sin_a = CatMedico.objects.create(nombre="Alberto", paterno="Aguilar")
-        sin_m = CatMedico.objects.create(nombre="Mario", paterno="Morales", materno="Mora")
+        CatMedico.objects.create(id_usuario=_usuario("dr_a", nombre="Alberto", paterno="Aguilar", materno=None))
         CatMedico.objects.create(id_usuario=_usuario("dr_sin_det_x", con_detalle=False))
 
         qs = identity.annotate_display_name(CatMedico.objects.all()).order_by("medico_nombre", "id")
         nombres = [m.medico_nombre for m in qs]
 
-        self.assertIn("Alberto Aguilar", nombres)
-        self.assertIn("Mario Morales Mora", nombres)
-        self.assertIn("dr_sin_det_x", nombres)
-        self.assertEqual(len(nombres), 4)
-        # Orden estable: los sin usuario quedan intercalados, no al final.
-        ids = [m.id for m in qs]
-        self.assertLess(ids.index(sin_a.id), ids.index(sin_m.id))
+        self.assertEqual(nombres, ["Alberto Aguilar", "Zacarías Zepeda", "dr_sin_det_x"])
 
     def test_prefijo_sobre_relacion(self):
         from apps.medicos.models import RelMedicoEspecialidad
 
-        medico = CatMedico.objects.create(nombre="Juan", paterno="López")
+        medico = CatMedico.objects.create(id_usuario=_usuario("dr_prefijo"))
         qs = identity.annotate_display_name(
             RelMedicoEspecialidad.objects.filter(medico=medico), prefix="medico__", alias="nombre_x"
         )
@@ -163,12 +129,9 @@ class IdentityQueryCountTests(TestCase):
     def _armar(self, n):
         medicos = []
         for i in range(n):
-            if i % 2:
-                user = _usuario(f"dr_q_{n}_{i}")
-                DetUsuarioCedula.objects.create(id_usuario=user, numero=f"C{i}", tipo="PROFESIONAL", es_principal=True, orden=1)
-                medicos.append(CatMedico.objects.create(id_usuario=user))
-            else:
-                medicos.append(CatMedico.objects.create(nombre=f"N{i}", paterno="P", cedula_profesional=f"S{i}"))
+            user = _usuario(f"dr_q_{n}_{i}")
+            DetUsuarioCedula.objects.create(id_usuario=user, numero=f"C{i}", tipo="PROFESIONAL", es_principal=True, orden=1)
+            medicos.append(CatMedico.objects.create(id_usuario=user))
         return [m.id for m in medicos]
 
     def _leer(self, ids):
@@ -182,17 +145,26 @@ class IdentityQueryCountTests(TestCase):
 
     def test_numero_de_queries_constante(self):
         uno = self._armar(1)
-        with self.assertNumQueries(1):
-            self._leer(uno)  # sin usuario: sin prefetch porque id_usuario es NULL
+        # select_related + 1 prefetch de cédulas, sin importar N.
+        with self.assertNumQueries(2):
+            self._leer(uno)
 
         cinco = self._armar(5)
-        # select_related + 1 prefetch de cédulas, sin importar N.
         with self.assertNumQueries(2):
             self._leer(cinco)
 
 
+def _hojas():
+    """Nodos hoja del grafo de migraciones (estado actual del código)."""
+    return MigrationExecutor(connection).loader.graph.leaf_nodes()
+
+
 class Migracion0011ReversibleTests(TransactionTestCase):
     """S3.3: 0011 aplica y revierte (`migrate medicos 0010`) sin error."""
+
+    def tearDown(self):
+        # Deja la BD en el estado final para no contaminar otras suites.
+        MigrationExecutor(connection).migrate(_hojas())
 
     def test_revierte_a_0010_y_vuelve_a_aplicar(self):
         executor = MigrationExecutor(connection)
@@ -210,3 +182,32 @@ class Migracion0011ReversibleTests(TransactionTestCase):
         self.assertNotIn("nombre_display", columnas)
         self.assertNotIn("legacy_cd_medico", columnas)
         self.assertIn("cedula_profesional", columnas)
+
+
+class Migracion0017PrecheckTests(TransactionTestCase):
+    """0017 aborta con mensaje claro si hay médicos sin usuario."""
+
+    def tearDown(self):
+        MigrationExecutor(connection).migrate(_hojas())
+
+    def test_aborta_si_hay_medicos_sin_usuario(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate([("medicos", "0016_delete_medicoimportjob")])
+        apps_0016 = executor.loader.project_state(
+            [("medicos", "0016_delete_medicoimportjob")]
+        ).apps
+        CatMedicoHist = apps_0016.get_model("medicos", "CatMedico")
+        CatMedicoHist.objects.create(nombre="Sin", paterno="Usuario")
+
+        executor = MigrationExecutor(connection)
+        with self.assertRaisesMessage(RuntimeError, "Hay 1 médicos sin usuario"):
+            executor.migrate([("medicos", "0017_catmedico_usuario_obligatorio")])
+
+        # Vaciado el catálogo, la migración aplica.
+        CatMedicoHist.objects.all().delete()
+        executor = MigrationExecutor(connection)
+        executor.migrate([("medicos", "0017_catmedico_usuario_obligatorio")])
+        columnas = {c.name for c in connection.introspection.get_table_description(
+            connection.cursor(), "cat_medicos")}
+        self.assertNotIn("nombre", columnas)
+        self.assertNotIn("cedula_profesional", columnas)

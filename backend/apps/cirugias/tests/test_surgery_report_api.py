@@ -12,6 +12,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import CatClasificacionCirugia, CatTipoCirugia, Permisos, Roles
 from apps.cirugias.models import SurgerySchedule
 from apps.medicos.models import CatMedico
+from apps.medicos.tests.factories import crear_medico
 
 
 class SurgeryReportApiTests(APITestCase):
@@ -27,7 +28,7 @@ class SurgeryReportApiTests(APITestCase):
             permissions=["clinico:cirugias:read"],
         )
 
-        self.surgeon = CatMedico.objects.create(nombre="Reporte", paterno="Dr")
+        self.surgeon = crear_medico(nombre="Reporte", paterno="Dr")
         self.surgery_type = CatTipoCirugia.objects.create(name="Colecistectomia")
         self.classification = CatClasificacionCirugia.objects.create(name="Cirugia de quirofano")
 

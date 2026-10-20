@@ -17,6 +17,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.authentication.services.session_registry import start_session
 from apps.catalogos.models import CatCentroAtencion
 from apps.medicos.models import CatMedico
+from apps.medicos.tests.factories import crear_medico
 
 
 def _make_medico(username, nombre_completo):
@@ -176,14 +177,13 @@ class ConsumoConsultaCreateApiTests(APITestCase):
         self.assertIn("no encontrado", response.data["detail"])
 
 
-class MedicoSinUsuarioKardexTests(APITestCase):
-    """R5/S5.3: un médico sin usuario (alta por import Excel; nombre propio en
-    CatMedico) se resuelve por nombre, se serializa y se encuentra en la
-    búsqueda del listado de consumos."""
+class MedicoNombreKardexTests(APITestCase):
+    """El médico (nombre del DetUsuario) se resuelve por nombre, se serializa
+    y se encuentra en la búsqueda del listado de consumos."""
 
     def setUp(self):
         self.almacen = _make_almacen()
-        self.medico = CatMedico.objects.create(
+        self.medico = crear_medico(
             id=777, nombre="Laura", paterno="Mendoza", materno="Ortiz",
         )
         actor = SyUsuario.objects.create(
@@ -193,7 +193,7 @@ class MedicoSinUsuarioKardexTests(APITestCase):
         access, _refresh, _sid = start_session(actor, ip_address="127.0.0.1", user_agent="test-agent")
         self.client.cookies["access_token_cookie"] = access
 
-    def test_serializer_reads_name_of_medico_without_user(self):
+    def test_serializer_reads_name_of_medico(self):
         consumo = ConsumoConsulta.objects.create(
             id_almacen=self.almacen, fch_consumo="2026-01-01", medico=self.medico
         )
@@ -202,7 +202,7 @@ class MedicoSinUsuarioKardexTests(APITestCase):
 
         self.assertEqual(data["medico"], "Laura Mendoza Ortiz")
 
-    def test_serializer_write_resolves_medico_without_user_by_name(self):
+    def test_serializer_write_resolves_medico_by_name(self):
         consumo = ConsumoConsulta.objects.create(id_almacen=self.almacen, fch_consumo="2026-01-01")
 
         serializer = ConsumoConsultaSerializer(
@@ -212,7 +212,7 @@ class MedicoSinUsuarioKardexTests(APITestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.save().medico_id, self.medico.pk)
 
-    def test_list_search_matches_medico_without_user_by_name_part(self):
+    def test_list_search_matches_medico_by_name_part(self):
         ConsumoConsulta.objects.create(
             id_almacen=self.almacen, fch_consumo="2026-01-01", medico=self.medico
         )
@@ -227,7 +227,7 @@ class MedicoSinUsuarioKardexTests(APITestCase):
         resultados = response.data["results"] if "results" in response.data else response.data["items"]
         self.assertEqual([r["medico"] for r in resultados], ["Laura Mendoza Ortiz"])
 
-    def test_create_resolves_medico_without_user_by_name(self):
+    def test_create_resolves_medico_by_name(self):
         categoria = CatCategoriaInsumo.objects.create(nombre="Categoria Sin Usuario")
         unidad = CatUnidadMedida.objects.create(nombre="Pieza SU", abreviacion="psu")
         insumo = CatInsumo.objects.create(

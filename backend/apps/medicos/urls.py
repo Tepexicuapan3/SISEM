@@ -1,14 +1,8 @@
 from django.urls import path
 
-from apps.medicos.views.medico_import_views import (
-    MedicoImportConfirmView,
-    MedicoImportJobStatusView,
-    MedicoImportPreviewView,
-    MedicoImportTemplateView,
-)
 from apps.medicos.views.medico_views import (
     MedicosListCreateView,
-    MedicoAsignarUsuarioView,
+    LegacyMedicosListView,
     MedicoDetailView,
     MedicoEspecialidadesView,
     MedicoCentrosView,
@@ -26,17 +20,10 @@ urlpatterns = [
     # Catálogo
     path("medicos",                                           MedicosListCreateView.as_view(),       name="medicos-list-create"),
 
-    # Import masivo (Excel) -- declarado ANTES de `<int:medico_id>` para
-    # documentar intención (aunque "import" nunca matchea el converter
-    # `int`, así que no hay colisión real de rutas posible).
-    path("medicos/import/template",                           MedicoImportTemplateView.as_view(),     name="medico-import-template"),
-    path("medicos/import/preview",                             MedicoImportPreviewView.as_view(),      name="medico-import-preview"),
-    path("medicos/import/confirm",                             MedicoImportConfirmView.as_view(),      name="medico-import-confirm"),
-    path("medicos/import/jobs/<uuid:job_id>",                  MedicoImportJobStatusView.as_view(),    name="medico-import-job"),
+    # Archivo legado (solo lectura). Literal: no choca con `<int:medico_id>`.
+    path("medicos/legado",                                    LegacyMedicosListView.as_view(),       name="medicos-legado-list"),
 
     path("medicos/<int:medico_id>",                             MedicoDetailView.as_view(),             name="medico-detail"),
-
-    path("medicos/<int:medico_id>/asignar-usuario",              MedicoAsignarUsuarioView.as_view(),     name="medico-asignar-usuario"),
 
     # Disponibilidad (consumida por recepción y citas)
     path("medicos/disponibles",                               MedicosDisponiblesView.as_view(),       name="medicos-disponibles"),

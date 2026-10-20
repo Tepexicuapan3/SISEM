@@ -1,6 +1,3 @@
-import json
-import uuid
-
 from django.db import models
 
 
@@ -11,8 +8,6 @@ TIPO_MEDICO = [
     ("HOSPITAL", "Hospital"),
     ("AMBOS",    "Ambos"),
 ]
-
-SEXO = [("M", "Masculino"), ("F", "Femenino"), ("O", "Otro")]
 
 ESTATUS_MEDICO = [
     ("ACTIVO",       "Activo"),
@@ -74,47 +69,21 @@ class CatMedico(models.Model):
     Perfil médico especializado. Solo datos que usuarios no almacena.
 
     PK propia (`id`), independiente de `id_usuario` desde el cambio
-    `medico-pk-independiente` (ver Engram, topic_key
-    sdd/medico-pk-independiente/design). Desde `medicos-id-no-medico`,
-    `id` ES el "No. Médico" del legado (el import lo inserta explícito y
-    ajusta la secuencia). `id_usuario` bajó a FK nullable
-    (`SET_NULL`): un médico puede existir sin cuenta de usuario del sistema
-    (médico externo/invitado). Esquema físico realizado en
-    `medicos/migrations/0004_expand_surrogate_pk.py` .. `0007_switch_surrogate_pk.py`.
+    `medico-pk-independiente`. Desde `medicos-legado-archivo`, todo médico
+    tiene usuario: `id_usuario` es OneToOne NOT NULL con `PROTECT` (no se
+    puede borrar un usuario que es médico) y la identidad (nombre, cédula,
+    escuela, sexo, fecha de nacimiento) vive SOLO en DetUsuario /
+    DetUsuarioCedula; se lee vía `apps.medicos.identity`. El catálogo del
+    SISEM legado quedó archivado aparte en `LegacyMedico` (solo lectura) y
+    ningún código legado se interpreta como `id`.
     """
 
     id_usuario = models.OneToOneField(
         "authentication.SyUsuario",
         db_column="id_usuario",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="medico",
     )
-    # Datos personales: SOLO para médicos SIN usuario (los que entran por el
-    # import Excel). Con usuario, la fuente de verdad es DetUsuario /
-    # DetUsuarioCedula; el CheckConstraint de Meta lo garantiza. Lectura
-    # única vía apps.medicos.identity (display_name / nombre_partes /
-    # cedula_profesional). cedula_profesional=30 igual que
-    # DetUsuarioCedula.numero, para moverla al asignar usuario sin truncar.
-    nombre             = models.CharField(max_length=80, null=True, blank=True)
-    paterno            = models.CharField(max_length=80, null=True, blank=True)
-    materno            = models.CharField(max_length=80, null=True, blank=True)
-    cedula_profesional = models.CharField(max_length=30, null=True, blank=True)
-    # Escuela de egreso, igual que DetUsuario.id_escuela (misma regla: solo
-    # sin usuario; al asignar usuario se mueve a DetUsuario si está vacía).
-    id_escuela = models.ForeignKey(
-        "catalogos.Escuelas",
-        db_column="id_escuela",
-        db_constraint=False,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-    )
-    # Mismos valores que DetUsuario.sexo / fecha_nac (misma regla que arriba).
-    sexo      = models.CharField(max_length=1, null=True, blank=True, choices=SEXO)
-    fecha_nac = models.DateField(null=True, blank=True)
     tipo_medico  = models.CharField(max_length=10, choices=TIPO_MEDICO, default="CLINICA")
     servicio        = models.CharField(max_length=100, null=True, blank=True)
     observaciones   = models.TextField(null=True, blank=True)
@@ -128,23 +97,6 @@ class CatMedico(models.Model):
         db_table = "cat_medicos"
         verbose_name = "Médico"
         verbose_name_plural = "Médicos"
-        constraints = [
-            models.CheckConstraint(
-                condition=(
-                    models.Q(id_usuario__isnull=True)
-                    | models.Q(
-                        nombre__isnull=True,
-                        paterno__isnull=True,
-                        materno__isnull=True,
-                        cedula_profesional__isnull=True,
-                        id_escuela__isnull=True,
-                        sexo__isnull=True,
-                        fecha_nac__isnull=True,
-                    )
-                ),
-                name="cat_medicos_datos_personales_solo_sin_usuario",
-            ),
-        ]
 
     def __str__(self):
         return f"Médico #{self.id}"
@@ -292,80 +244,89 @@ class RelMedicoCoberturaHorario(models.Model):
         return f"Cobertura {self.cobertura_id} {self.dia_semana}"
 
 
-# ─── IMPORT MASIVO EN SEGUNDO PLANO ──────────────────────────────────────────
+# ─── ARCHIVO DEL CATÁLOGO LEGADO ─────────────────────────────────────────────
 
-class MedicoImportJob(models.Model):
+class LegacyMedico(models.Model):
     """
-    Import masivo de médicos por Excel ejecutado en segundo plano (Celery).
-    Calca `apps.administracion.models.UserImportJob`: el confirm síncrono no
-    escala (~2700 médicos exceden el timeout HTTP: frontend 30 s, nginx 60 s).
-    El confirm solo guarda el archivo aquí y encola
-    `apps.medicos.tasks.procesar_import_medicos`; el frontend consulta
-    `GET /medicos/import/jobs/<id>`.
+    Archivo de SOLO LECTURA de `cat_medicos` del SISEM legado (MySQL).
 
-    El archivo vive en la BD (`file_content`) porque `celery-worker` no
-    comparte volumen con `backend`; se vacía al terminar. `result_json` es
-    TEXT con JSON a mano (no `JSONField`): en la Postgres real hay columnas
-    `json` (no `jsonb`) que rompen la lectura por ORM.
+    Se carga por SQL (INSERT ... SELECT) a mano; SIRES no escribe aquí. Las
+    columnas espejan los nombres del legado para que esa carga sea directa.
+    Incluye a propósito filas que no son personas (clínicas/institutos): es un
+    archivo fiel, no un catálogo depurado.
 
-    El avance de la fase SAVING corre DENTRO de la transacción del lote, así
-    que no puede escribirse aquí (no sería visible hasta el commit): va a la
-    cache (Redis, compartida backend/worker) y la vista de estado lo combina.
+    REGLA DE ORO: un código legado nunca se interpreta como un id de SIRES.
+    `no_medico` / `cd_medico` solo se usan para buscar en esta tabla;
+    `medico_actual` es el único puente (N:1) hacia el médico vigente en SIRES.
     """
 
-    class Status(models.TextChoices):
-        PENDING = "PENDING", "En cola"
-        RUNNING = "RUNNING", "En proceso"
-        SUCCESS = "SUCCESS", "Completado"
-        VALIDATION_FAILED = "VALIDATION_FAILED", "Con errores de validacion"
-        ERROR = "ERROR", "Error"
-
-    class Phase(models.TextChoices):
-        QUEUED = "QUEUED", "En cola"
-        VALIDATING = "VALIDATING", "Validando archivo"
-        SAVING = "SAVING", "Guardando médicos"
-        DONE = "DONE", "Terminado"
-
-    STATUS_FINALES = (Status.SUCCESS, Status.VALIDATION_FAILED, Status.ERROR)
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    actor = models.ForeignKey(
-        "authentication.SyUsuario",
-        db_column="actor_id",
+    no_medico = models.IntegerField(primary_key=True)
+    cd_medico = models.CharField(max_length=10)  # clave RH (puede repetirse)
+    ds_paterno = models.CharField(max_length=45, null=True, blank=True)
+    ds_materno = models.CharField(max_length=45, null=True, blank=True)
+    ds_nombre = models.CharField(max_length=45, null=True, blank=True)
+    cd_sexo = models.CharField(max_length=1, null=True, blank=True)
+    fe_nac = models.DateField(null=True, blank=True)
+    no_cedula = models.CharField(max_length=20, null=True, blank=True)
+    cd_clinica = models.IntegerField(null=True, blank=True)
+    ds_clinica = models.CharField(max_length=150, null=True, blank=True)
+    cd_especialidad = models.IntegerField(null=True, blank=True)
+    ds_especialidad = models.CharField(max_length=150, null=True, blank=True)
+    sw_status = models.CharField(max_length=1)
+    cd_usuario = models.CharField(max_length=10, null=True, blank=True)
+    medico_actual = models.ForeignKey(
+        CatMedico,
+        db_column="id_medico_actual",
         null=True,
+        blank=True,
         on_delete=models.SET_NULL,
-        related_name="medico_import_jobs",
+        related_name="registros_legado",
     )
-    file_name = models.CharField(max_length=255)
-    file_content = models.BinaryField(null=True)
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True,
-    )
-    phase = models.CharField(max_length=20, choices=Phase.choices, default=Phase.QUEUED)
-    total_records = models.IntegerField(default=0)
-    processed = models.IntegerField(default=0)
-    phase_total = models.IntegerField(default=0)
-    inserted = models.IntegerField(default=0)
-    result_json = models.TextField(null=True, blank=True)
-    error_code = models.CharField(max_length=50, null=True, blank=True)
-    error_message = models.TextField(null=True, blank=True)
-    fch_alta = models.DateTimeField(auto_now_add=True)
-    fch_inicio = models.DateTimeField(null=True, blank=True)
-    fch_fin = models.DateTimeField(null=True, blank=True)
+    fch_carga = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "medico_import_jobs"
-        ordering = ["-fch_alta"]
+        db_table = "legacy_medico"
+        verbose_name = "Médico legado"
+        verbose_name_plural = "Médicos legado"
+        indexes = [
+            models.Index(fields=["cd_medico"], name="legacy_medico_cd_medico_idx"),
+            models.Index(fields=["no_cedula"], name="legacy_medico_no_cedula_idx"),
+        ]
 
     def __str__(self):
-        return f"{self.file_name} ({self.status})"
+        return f"Legado #{self.no_medico}"
 
-    @property
-    def is_final(self):
-        return self.status in self.STATUS_FINALES
 
-    def get_result(self):
-        return json.loads(self.result_json) if self.result_json else None
+# ─── MÉDICOS EXTERNOS ────────────────────────────────────────────────────────
 
-    def set_result(self, value):
-        self.result_json = json.dumps(value, default=str, ensure_ascii=False)
+class MedicoExterno(models.Model):
+    """
+    Profesional de salud externo (IMSS, alta manual, etc.). Solo la tabla; sin
+    endpoints ni UI todavía. Minimización de datos: sin fecha de nacimiento,
+    sexo ni escuela.
+    """
+
+    origen = models.CharField(max_length=20)  # IMSS, MANUAL, ...
+    id_externo = models.CharField(max_length=50)
+    nombre = models.CharField(max_length=80)
+    paterno = models.CharField(max_length=80, null=True, blank=True)
+    materno = models.CharField(max_length=80, null=True, blank=True)
+    cedula_profesional = models.CharField(max_length=30, null=True, blank=True, db_index=True)
+    institucion = models.CharField(max_length=150, null=True, blank=True)
+    especialidad_texto = models.CharField(max_length=150, null=True, blank=True)
+    activo = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "medico_externo"
+        verbose_name = "Médico externo"
+        verbose_name_plural = "Médicos externos"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["origen", "id_externo"], name="medico_externo_origen_id_externo_uniq",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.origen}:{self.id_externo}"

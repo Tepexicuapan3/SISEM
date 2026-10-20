@@ -8,7 +8,7 @@ import { ARRIVAL_TYPE } from "@api/types";
 import type { MedicoListItem } from "@api/types/medicos.types";
 import type { CheckinFormInput } from "@features/recepcion/modules/checkin/domain/checkin.schemas";
 import { DisponibilidadMedicoCard } from "./DisponibilidadMedicoCard";
-import { formatWeekRange, getMonday, SIN_USUARIO_HINT } from "../pages/RecepcionAgendaPage.helpers";
+import { formatWeekRange, getMonday } from "../pages/RecepcionAgendaPage.helpers";
 
 interface Props {
   centroOptions:          { id: number; nombre: string }[];
@@ -134,11 +134,6 @@ export function DisponibilidadView({
         <div>
           {calMedicoId ? (
             <>
-            {calMedicoUsuarioId == null ? (
-              <p className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700" role="status">
-                {SIN_USUARIO_HINT}. Puedes ver su agenda, pero no generar fichas.
-              </p>
-            ) : null}
             <SlotCalendar
               medicoId={calMedicoId}
               medicoNombre={calMedico?.nombreCompleto}

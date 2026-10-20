@@ -1,5 +1,6 @@
 from apps.authentication.models import SyUsuario
-from apps.medicos.models import CatMedico
+from apps.medicos import identity
+from apps.medicos.models import CatMedico, LegacyMedico
 
 
 class MedicoRepository:
@@ -29,7 +30,7 @@ class MedicoRepository:
         return qs.filter(pk=pk).first()
 
     DETAIL_SELECT_RELATED = [
-        "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela", "id_escuela",
+        "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela",
     ]
     DETAIL_PREFETCH_RELATED = [
         "id_usuario__cedulas",
@@ -50,7 +51,7 @@ class MedicoRepository:
     @staticmethod
     def list_queryset():
         return CatMedico.objects.select_related(
-            "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela", "id_escuela"
+            "id_usuario", "id_usuario__detalle", "id_usuario__detalle__id_escuela"
         ).prefetch_related(
             "id_usuario__cedulas",
             "especialidades__especialidad",
@@ -64,7 +65,7 @@ class MedicoRepository:
 
     @staticmethod
     def usuario_es_medico(usuario) -> bool:
-        """Regla única: el usuario debe tener tipo_personal "Médico" (alta manual, import, asignar-usuario)."""
+        """Regla única: el usuario debe tener tipo_personal "Médico" (alta manual)."""
         det = getattr(usuario, "detalle", None)
         return bool(det and det.id_tipo_personal and det.id_tipo_personal.name == "Médico")
 
@@ -75,40 +76,24 @@ class MedicoRepository:
     @staticmethod
     def create(
         *,
-        usuario=None,
-        id=None,
-        nombre=None,
-        paterno=None,
-        materno=None,
-        cedula_profesional=None,
-        escuela_id=None,
-        sexo=None,
-        fecha_nac=None,
+        usuario,
         tipo_medico,
         servicio,
         observaciones,
         created_by_id,
         estatus_medico=None,
     ):
-        # `id` explícito = No. Médico legado (import masivo); None deja que la
-        # secuencia asigne el siguiente. nombre/paterno/materno/cédula/escuela/
-        # sexo/fecha_nac solo aplican a médicos SIN usuario (CheckConstraint).
-        # `estatus_medico=None` deja el default del modelo ("ACTIVO").
+        # `usuario` es obligatorio: todo médico nace con cuenta de usuario
+        # (la identidad vive en DetUsuario / DetUsuarioCedula). `id` lo asigna
+        # la secuencia. `estatus_medico=None` deja el default del modelo.
+        if usuario is None:
+            raise ValueError("Un médico no puede crearse sin usuario.")
         kwargs = {}
-        if id is not None:
-            kwargs["id"] = id
         if estatus_medico is not None:
             kwargs["estatus_medico"] = estatus_medico
 
         return CatMedico.objects.create(
             id_usuario=usuario,
-            nombre=nombre,
-            paterno=paterno,
-            materno=materno,
-            cedula_profesional=cedula_profesional,
-            id_escuela_id=escuela_id,
-            sexo=sexo,
-            fecha_nac=fecha_nac,
             tipo_medico=tipo_medico,
             servicio=servicio,
             observaciones=observaciones,
@@ -119,3 +104,14 @@ class MedicoRepository:
     @staticmethod
     def save(medico, *, update_fields=None):
         medico.save(update_fields=update_fields)
+
+
+class LegacyMedicoRepository:
+    """Acceso de SOLO LECTURA al archivo `legacy_medico` (SIRES nunca escribe)."""
+
+    @staticmethod
+    def list_queryset():
+        # `with_identity` trae usuario+detalle del médico vigente en el mismo
+        # JOIN: evita N+1 al calcular `display_name`.
+        qs = LegacyMedico.objects.select_related("medico_actual")
+        return identity.with_identity(qs, prefix="medico_actual__")

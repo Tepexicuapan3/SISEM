@@ -22,14 +22,15 @@ from apps.catalogos.models import (
 from apps.cirugias.models import SurgerySchedule
 from apps.hospitalizacion.models import HospitalAdmission, HospitalAdmissionRevision
 from apps.medicos.models import CatMedico, RelMedicoCentro
+from apps.medicos.tests.factories import crear_medico
 from apps.recepcion.models import CitaMedica, HorarioDisponible
 
 
 class ResetCatalogoMedicosTests(TestCase):
     def setUp(self):
         self.db_name = str(connection.settings_dict["NAME"])
-        self.m1 = CatMedico.objects.create(id=10, nombre="Ana", paterno="Uno")
-        self.m2 = CatMedico.objects.create(id=20, nombre="Beto", paterno="Dos")
+        self.m1 = crear_medico(id=10, nombre="Ana", paterno="Uno")
+        self.m2 = crear_medico(id=20, nombre="Beto", paterno="Dos")
 
         self.centro = CatCentroAtencion.objects.create(
             name="Centro Reset", code="RST-001",
@@ -172,7 +173,7 @@ class ResetCatalogoMedicosTests(TestCase):
         self.assertIn("Conteos DESPUES", salida)
         self.assertIn("hsp_admission (con medico ingreso/alta): 1", salida)
         self.assertIn("resolve_hsp_doctor_codes", salida)
-        self.assertIn("2709 | 2726", salida)
+        self.assertIn("id_usuario IS NULL", salida)
 
     def test_catalogo_vacio_es_idempotente(self):
         self._run(execute=True)

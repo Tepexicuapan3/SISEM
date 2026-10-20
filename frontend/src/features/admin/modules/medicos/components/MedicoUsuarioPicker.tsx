@@ -13,9 +13,8 @@ interface Props {
 }
 
 /**
- * Buscador de usuarios con tipo de personal Médico. Compartido por el alta de
- * médico (`MedicoCreateDialog`) y por "Asignar usuario"
- * (`MedicoAsignarUsuarioDialog`). El estado de búsqueda es local: se reinicia
+ * Buscador de usuarios con tipo de personal Médico, usado por el alta de
+ * médico (`MedicoCreateDialog`). El estado de búsqueda es local: se reinicia
  * cuando el contenedor se desmonta.
  */
 export function MedicoUsuarioPicker({ value, onChange, enabled = true }: Props) {

@@ -68,6 +68,39 @@ class MedicosListCreateView(APIView):
         return Response(presenters.serialize_medico(medico), status=status.HTTP_201_CREATED)
 
 
+class LegacyMedicosListView(APIView):
+    """Archivo legado de médicos: SOLO lectura (sin POST/PUT/DELETE)."""
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        _, auth_error = _authorize(request, "admin:gestion:medicos:read")
+        if auth_error:
+            return auth_error
+
+        params = request.query_params
+        try:
+            page = int(params.get("page", 1))
+            page_size = int(params.get("pageSize", 20))
+        except (TypeError, ValueError):
+            return error_response(
+                "VALIDATION_ERROR", "page y pageSize deben ser enteros.", 400,
+                request_id=_request_id(request),
+            )
+
+        result = medico_usecase.list_legacy_medicos(
+            search=params.get("search"),
+            status=params.get("status"),
+            page=page,
+            page_size=page_size,
+        )
+        rows = result.pop("rows")
+        return Response({
+            "items": [presenters.serialize_legacy_medico(r) for r in rows],
+            **result,
+        })
+
+
 class MedicoDetailView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -99,29 +132,6 @@ class MedicoDetailView(APIView):
             return _domain_error_response(request, exc)
 
         return Response(presenters.serialize_medico(medico))
-
-
-class MedicoAsignarUsuarioView(APIView):
-    """POST /medicos/{medico_id}/asignar-usuario  body: {"usuarioId": int}"""
-
-    authentication_classes = []
-    permission_classes = []
-
-    def post(self, request, medico_id):
-        actor, auth_error = _authorize(request, "admin:gestion:medicos:update", require_csrf=True)
-        if auth_error:
-            return auth_error
-
-        try:
-            medico, descartados = medico_usecase.assign_usuario(
-                medico_id, request.data.get("usuarioId"), actor_id=actor.id_usuario,
-            )
-        except VisitDomainError as exc:
-            return _domain_error_response(request, exc)
-
-        data = presenters.serialize_medico(medico)
-        data["descartados"] = descartados
-        return Response(data)
 
 
 # ─── ESPECIALIDADES ──────────────────────────────────────────────────────────

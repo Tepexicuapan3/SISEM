@@ -107,7 +107,7 @@ class MedicoPatchApiTests(MedicoDetailAndRelationsApiTestsBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["medico"]["id"], self.medico.id)
         self.assertEqual(response.data["medico"]["usuarioId"], self.medico_user.id_usuario)
-        self.assertTrue(response.data["medico"]["tieneUsuario"])
+        self.assertNotIn("tieneUsuario", response.data["medico"])
         self.assertNotIn("medicoId", response.data["medico"])
 
     def test_get_detail_no_fallback_to_id_usuario(self):
@@ -162,20 +162,18 @@ class MedicoPatchApiTests(MedicoDetailAndRelationsApiTestsBase):
         self.assertEqual(total_mas, total_base + 4)
         self.assertEqual(con_mas, base)
 
-    def test_detail_serializes_medico_without_usuario(self):
-        sin_usuario = CatMedico.objects.create(
-            id=2726, nombre="Ana", paterno="Lopez", materno="Ruiz", cedula_profesional="123456",
-        )
+    def test_detail_serializes_identity_from_usuario(self):
+        user = self._create_user("medico_detalle", tipo_personal=self.tipo_medico)
+        medico = CatMedico.objects.create(id=2726, id_usuario=user)
 
-        response = self.client.get(f"{MEDICOS_URL}/{sin_usuario.id}", **self.auth_headers)
+        response = self.client.get(f"{MEDICOS_URL}/{medico.id}", **self.auth_headers)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.data["medico"]
         self.assertEqual(data["id"], 2726)
-        self.assertIsNone(data["usuarioId"])
-        self.assertFalse(data["tieneUsuario"])
-        self.assertEqual(data["nombreCompleto"], "Ana Lopez Ruiz")
-        self.assertEqual(data["cedulaProfesional"], "123456")
+        self.assertEqual(data["usuarioId"], user.id_usuario)
+        self.assertNotIn("tieneUsuario", data)
+        self.assertEqual(data["nombreCompleto"], user.detalle.nombre_completo)
 
 
 class MedicoEspecialidadesApiTests(MedicoDetailAndRelationsApiTestsBase):

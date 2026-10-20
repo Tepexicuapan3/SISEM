@@ -202,15 +202,9 @@ SEED_VISIT_FOLIOS = (
 DJANGO_MANAGED_FK_COLUMNS = {
     ("auditoria_eventos", "actor_id_usuario"),
     ("auditoria_eventos", "target_id_usuario"),
-    # cat_medicos.id_usuario pasó de on_delete=CASCADE a on_delete=SET_NULL
-    # con el cambio medico-pk-independiente (Fase 4, F4-10) -- SIGUE siendo
-    # una ForeignKey real de Django (el comentario de arriba ya cubre
-    # "CASCADE o SET_NULL declarado"), el ORM la resuelve sola al borrar vía
-    # `.delete()`. Lo que YA NO pasa es que el CatMedico se borre en
-    # cascada: ahora sobrevive con id_usuario=NULL. Por eso, más abajo
-    # (línea ~375), se agregó un `CatMedico.objects.filter(...).delete()`
-    # EXPLÍCITO para seguir purgando médicos huérfanos del seed -- ver
-    # Engram sdd/medico-pk-independiente/design, sección 9 (P2).
+    # cat_medicos.id_usuario es OneToOne NOT NULL con on_delete=PROTECT
+    # (cambio medicos-legado-archivo): no cascadea, por eso más abajo se borra
+    # el CatMedico EXPLÍCITAMENTE antes de borrar los usuarios.
     ("cat_medicos", "id_usuario"),
     ("det_usuario_administrativo", "id_usuario"),
     ("det_usuario_cedulas", "id_usuario"),
@@ -380,10 +374,8 @@ class Command(BaseCommand):
                             )
 
                 visits_qs.delete()
-                # F4-11 (medico-pk-independiente): id_usuario ya no cascadea
-                # (CASCADE -> SET_NULL, ver DJANGO_MANAGED_FK_COLUMNS arriba)
-                # -- un CatMedico seed sobreviviría con id_usuario=NULL si no
-                # se borra explícitamente ANTES de borrar los usuarios.
+                # id_usuario es PROTECT (ver DJANGO_MANAGED_FK_COLUMNS arriba):
+                # el CatMedico seed se borra ANTES de borrar los usuarios.
                 CatMedico.objects.filter(id_usuario_id__in=found_user_ids).delete()
                 users_qs.delete()
                 roles_qs.delete()

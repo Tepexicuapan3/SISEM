@@ -73,10 +73,9 @@ export interface MedicoConsultorioActivoItem {
 export interface MedicoListItem {
   /** CatMedico.id = No. Médico. Es el único id válido para URLs y payloads de médico. */
   id: number;
-  /** SyUsuario asociado; null en médicos sin usuario. NUNCA usarlo como id de médico. */
-  usuarioId: number | null;
-  tieneUsuario: boolean;
-  username: string | null;
+  /** SyUsuario asociado (siempre presente). NUNCA usarlo como id de médico. */
+  usuarioId: number;
+  username: string;
   nombreCompleto: string;
   nombre: string;
   paterno: string;
@@ -149,8 +148,8 @@ export interface MedicoCoberturaItem {
 export interface MedicoDisponible {
   /** CatMedico.id (No. Médico): espacio MÉDICO (agenda, slots, citas). */
   medicoId: number;
-  /** SyUsuario del médico: espacio USUARIO (Visit.doctorId). null = no puede atender visitas. */
-  usuarioId: number | null;
+  /** SyUsuario del médico: espacio USUARIO (Visit.doctorId). */
+  usuarioId: number;
   nombreCompleto: string;
   servicio: string | null;
   tipoMedico: TipoMedico;
@@ -179,28 +178,6 @@ export interface CreateMedicoRequest {
   tipoMedico?: TipoMedico;
   servicio?: string | null;
   observaciones?: string | null;
-}
-
-export interface AsignarUsuarioRequest {
-  usuarioId: number;
-}
-
-/**
- * Datos del CatMedico que NO se movieron porque el usuario ya tenía un valor
- * propio distinto. La cédula nunca aparece aquí: siempre se agrega a las
- * cédulas del usuario (o ya la tenía).
- */
-export interface AsignarUsuarioDescartados {
-  nombre?: string;
-  paterno?: string;
-  materno?: string;
-  escuelaId?: number;
-  sexo?: string;
-  fechaNac?: string;
-}
-
-export interface AsignarUsuarioResponse extends MedicoListItem {
-  descartados: AsignarUsuarioDescartados;
 }
 
 export interface UpdateMedicoRequest {
@@ -296,6 +273,49 @@ export interface MedicosListResponse {
   total: number;
 }
 
+// ─── ARCHIVO LEGADO (solo lectura) ───────────────────────────────────────────
+
+export interface LegacyMedicoClaveDescripcion {
+  clave: number | null;
+  descripcion: string | null;
+}
+
+export interface LegacyMedicoActual {
+  id: number;
+  nombreCompleto: string;
+}
+
+export interface LegacyMedicoItem {
+  noMedico: number;
+  claveRh: string;
+  nombreCompleto: string;
+  paterno: string | null;
+  materno: string | null;
+  nombre: string | null;
+  cedula: string | null;
+  sexo: string | null;
+  clinica: LegacyMedicoClaveDescripcion | null;
+  especialidad: LegacyMedicoClaveDescripcion | null;
+  estatus: string;
+  usuarioLegado: string | null;
+  medicoActual: LegacyMedicoActual | null;
+}
+
+export interface LegacyMedicosParams {
+  search?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface LegacyMedicosListResponse {
+  items: LegacyMedicoItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface MedicoDetailResponse {
   medico: MedicoDetail;
 }
@@ -306,126 +326,4 @@ export interface MedicoExcepcionesResponse {
 
 export interface MedicoCoberturasResponse {
   items: MedicoCoberturaItem[];
-}
-
-// ─── IMPORTACIÓN MASIVA (EXCEL) ───────────────────────────────────────────────
-
-/**
- * Datos normalizados de una fila del Excel de importación.
- * Columnas de origen (en este orden exacto):
- * No. Médico | Usuario (Login del sistema) | Nombre(s) | Apellido Paterno |
- * Apellido Materno | Cédula Profesional | Escuela (ID) | Sexo |
- * Fecha de Nacimiento | Especialidad (ID) | Servicio | Estatus del Médico
- *
- * `tipoMedico` y `observaciones` ya no vienen en la plantilla: el backend
- * devuelve siempre "CLINICA" y null. Tampoco hay Clave Clínica: el import no
- * asigna centro (se asigna después en la ficha del médico).
- *
- * `noMedico` (opcional) es el `CatMedico.id` explícito; null = toma el
- * siguiente de la secuencia. `usuario` vacío = médico sin usuario: paterno y
- * nombre son obligatorios y se guardan en el propio médico. Con usuario,
- * paterno/materno/nombre son null (se toman del usuario).
- * `especialidadId` / `escuelaId` son null cuando el ID no existe (la fila trae
- * un warning, no un error). Escuela, sexo y
- * fecha de nacimiento solo aplican sin usuario (con usuario llegan en null).
- */
-export interface MedicoImportRowData {
-  noMedico: number | null;
-  usuario: string;
-  usuarioId: number | null;
-  paterno: string | null;
-  materno: string | null;
-  nombre: string | null;
-  cedulaProfesional: string | null;
-  escuela: string | null;
-  escuelaId: number | null;
-  /** "M" | "F" | "O"; solo sin usuario. */
-  sexo: "M" | "F" | "O" | null;
-  /** ISO yyyy-mm-dd; solo sin usuario. */
-  fechaNac: string | null;
-  especialidad: string | null;
-  especialidadId: number | null;
-  tipoMedico: TipoMedico;
-  servicio: string | null;
-  estatusMedico: EstatusMedico;
-  observaciones: string | null;
-}
-
-/**
- * Fila procesada de la importación. `errors` bloquean el lote;
- * `warnings` son informativos y NO bloquean la confirmación.
- */
-export interface MedicoImportRow {
-  row: number;
-  data: MedicoImportRowData;
-  errors: string[];
-  warnings: string[];
-}
-
-/**
- * Response de preview/confirm de importación masiva.
- * POST /api/v1/medicos/import/preview
- * POST /api/v1/medicos/import/confirm
- *
- * A diferencia del import de usuarios, médicos no envía correos -- no hay
- * campo `emailFailures` en esta response.
- */
-export type MedicoImportWarningCode =
-  | "SIN_CEDULA"
-  | "NOMBRE_IGNORADO"
-  | "ESCUELA_IGNORADA"
-  | "SEXO_FECHA_IGNORADOS"
-  | "CEDULA_YA_REGISTRADA";
-
-/**
- * Resumen general de advertencias agrupado por tipo (solo los tipos
- * presentes). `rows` son los números de fila del Excel afectados.
- */
-export interface MedicoImportWarningSummaryItem {
-  code: MedicoImportWarningCode;
-  description: string;
-  count: number;
-  rows: number[];
-}
-
-export interface MedicoImportResult {
-  totalRecords: number;
-  totalErrores: number;
-  totalWarnings: number;
-  warningSummary: MedicoImportWarningSummaryItem[];
-  inserted: number;
-  rows: MedicoImportRow[];
-}
-
-export type MedicoImportJobStatus =
-  | "PENDING"
-  | "RUNNING"
-  | "SUCCESS"
-  | "VALIDATION_FAILED"
-  | "ERROR";
-
-export type MedicoImportJobPhase = "QUEUED" | "VALIDATING" | "SAVING" | "DONE";
-
-/**
- * Estado de un import de médicos en segundo plano (Celery).
- * POST /api/v1/medicos/import/confirm      -> 202 con este payload
- * GET  /api/v1/medicos/import/jobs/:jobId  -> polling hasta status final
- *
- * `processed`/`phaseTotal` son el avance DENTRO de la fase actual (en SAVING,
- * médicos guardados / total). `result` solo viene con status final.
- */
-export interface MedicoImportJob {
-  jobId: string;
-  status: MedicoImportJobStatus;
-  phase: MedicoImportJobPhase;
-  processed: number;
-  phaseTotal: number;
-  totalRecords: number;
-  inserted: number;
-  errorCode: string | null;
-  errorMessage: string | null;
-  createdAt: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  result: MedicoImportResult | null;
 }

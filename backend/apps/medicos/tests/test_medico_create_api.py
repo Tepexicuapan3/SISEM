@@ -138,8 +138,7 @@ class MedicoCreateApiTests(APITestCase):
         self.assertEqual(response.data["code"], "VALIDATION_ERROR")
 
     def test_post_medico_without_usuario_id_ignores_nombre_display(self):
-        # R7/S7.1: ya no existe el camino de alta sin usuario (ni con
-        # nombreDisplay): los médicos sin usuario entran solo por import Excel.
+        # No existe el camino de alta sin usuario (ni con nombreDisplay).
         response = self.client.post(
             MEDICOS_URL,
             {"nombreDisplay": "Dr. Sin Usuario"},

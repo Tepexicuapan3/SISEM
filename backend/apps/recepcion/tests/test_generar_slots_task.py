@@ -11,15 +11,15 @@ from unittest import mock
 from django.test import TestCase
 
 from apps.medicos.models import CatMedico
+from apps.medicos.tests.factories import crear_medico
 from apps.recepcion.tasks import generar_slots_todos_medicos
 
 
 class GenerarSlotsTodosMedicosTests(TestCase):
     def setUp(self):
-        # Médicos sin usuario (id_usuario None): el id es el No. Médico.
-        self.m1 = CatMedico.objects.create(nombre="Ana", paterno="Lopez")
-        self.m2 = CatMedico.objects.create(nombre="Beto", paterno="Ruiz")
-        self.m3 = CatMedico.objects.create(nombre="Carla", paterno="Diaz")
+        self.m1 = crear_medico(nombre="Ana", paterno="Lopez")
+        self.m2 = crear_medico(nombre="Beto", paterno="Ruiz")
+        self.m3 = crear_medico(nombre="Carla", paterno="Diaz")
 
     def test_error_en_un_medico_no_aborta_el_loop(self):
         llamados = []

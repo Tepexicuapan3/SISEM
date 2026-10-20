@@ -29,6 +29,7 @@ from apps.catalogos.models import (
 )
 from apps.cirugias.models import SurgerySchedule
 from apps.medicos.models import CatMedico
+from apps.medicos.tests.factories import crear_medico
 
 JSON_PRIMITIVES = (str, int, float, bool, type(None))
 
@@ -47,7 +48,7 @@ class SurgeryAuditApiTests(APITestCase):
         )
         self.writer = SyUsuario.objects.get(usuario="cirugias_audit_writer")
 
-        self.surgeon = CatMedico.objects.create(nombre="Auditoria", paterno="Dr")
+        self.surgeon = crear_medico(nombre="Auditoria", paterno="Dr")
         self.surgery_type = CatTipoCirugia.objects.create(name="Apendicectomia")
         self.classification = CatClasificacionCirugia.objects.create(name="Cirugia corta")
         self.reason = CatMotivoCancelacionCirugia.objects.create(name="Paciente no se presento")
