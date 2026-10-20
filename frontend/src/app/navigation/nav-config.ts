@@ -133,6 +133,11 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:autorizadores:designacion:read"],
           },
           {
+            title: "Parámetros por centro",
+            url: "/admin/catalogos/parametros",
+            permissions: ["admin:catalogos:parametros:read"],
+          },
+          {
             title: "Bajas",
             url: "/admin/catalogos/bajas",
             permissions: ["admin:catalogos:bajas:read"],
@@ -303,6 +308,11 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:catalogos:motivos_cancelacion_nota:read"],
           },
           {
+            title: "Motivos de Baja de Padrón",
+            url: "/admin/catalogos/motivos-baja-padron",
+            permissions: ["admin:catalogos:motivos_baja_padron:read"],
+          },
+          {
             title: "Motivos de Traslado",
             url: "/admin/catalogos/motivos-traslado",
             permissions: ["admin:catalogos:motivos_traslado:read"],
@@ -465,6 +475,12 @@ export const NAV_CONFIG: NavSection[] = [
         url: "/clinico/autorizacion-recetas",
         icon: ClipboardCheck,
         permissions: ["clinico:recetas:authorize"],
+      },
+      {
+        title: "Padrones clinicos",
+        url: "/clinico/padrones",
+        icon: ClipboardList,
+        permissions: ["clinico:padrones:read"],
       },
     ],
   },

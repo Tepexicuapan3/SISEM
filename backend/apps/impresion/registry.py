@@ -4,7 +4,7 @@ apps/impresion/registry.py
 Registro central de documentos imprimibles. Cada modulo aporta un builder
 (funcion pura y de solo lectura, referenciada por dotted path y cargada de
 forma perezosa) y una plantilla Django; el endpoint generico despacha por
-``documento``. Receta y nota (P1) se registran aca cuando se implementen.
+``documento``.
 """
 
 from dataclasses import dataclass, field
@@ -18,7 +18,8 @@ from apps.impresion.errors import PrintError
 class DocumentSpec:
     key: str  # "ficha" | "receta" | "nota"
     template: str
-    builder: str  # dotted path: fn(resource_id, actor) -> PrintContext
+    # dotted path: fn(resource_id, actor, *, permissions, roles) -> PrintContext
+    builder: str
     capability: str  # clave de CAPABILITY_REQUIREMENTS
     section: str  # RecordSection para BitacoraAcceso
     watermark_on_reprint: bool = True
@@ -52,6 +53,20 @@ REGISTRY = {
         section=RecordSection.FICHA,
         watermark_on_reprint=False,  # R2.3: se registra pero sin marca de agua
         legacy_renderer="apps.recepcion.impresion.ficha.render_ficha_docx",
+    ),
+    "receta": DocumentSpec(
+        key="receta",
+        template="consulta_medica/impresion/receta.html",
+        builder="apps.consulta_medica.impresion.receta.build_receta_context",
+        capability="documentos.receta.imprimir",
+        section=RecordSection.RECETA,
+    ),
+    "nota": DocumentSpec(
+        key="nota",
+        template="consulta_medica/impresion/nota.html",
+        builder="apps.consulta_medica.impresion.nota.build_nota_context",
+        capability="documentos.nota.imprimir",
+        section=RecordSection.NOTA,
     ),
 }
 

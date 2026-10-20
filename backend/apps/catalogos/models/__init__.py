@@ -13,12 +13,14 @@ from .cirugias_tipo import CatTipoCirugia
 from .cirugias_clasificacion import CatClasificacionCirugia
 from .cirugias_motivo_cancelacion import CatMotivoCancelacionCirugia
 from .motivo_cancelacion_nota import MotivoCancelacionNota
+from .motivo_baja_padron import MotivoBajaPadron
 from .ambulancias_motivo_traslado import CatMotivoTraslado
 from .ambulancias_tipo_traslado import CatTipoTraslado
 from .ambulancias_tipo_servicio import CatTipoServicioAmbulancia
 from .ambulancias_destino import CatDestinoAmbulancia
 from .consultorios import Consultorios
 from .designacion_autorizador import DesignacionAlcance, DesignacionAutorizador
+from .parametro_centro import ParametroCentro, ParametroDefinicion
 from .discapacidades import Discapacidades
 from .edo_civil import EdoCivil
 from .enfermedades import Enfermedades
@@ -81,12 +83,15 @@ __all__ = [
     "CatClasificacionCirugia",
     "CatMotivoCancelacionCirugia",
     "MotivoCancelacionNota",
+    "MotivoBajaPadron",
     "CatMotivoTraslado",
     "CatTipoTraslado",
     "CatTipoServicioAmbulancia",
     "CatDestinoAmbulancia",
     "Consultorios",
     "DesignacionAutorizador",
+    "ParametroDefinicion",
+    "ParametroCentro",
     "DesignacionAlcance",
     "Discapacidades",
     "EdoCivil",

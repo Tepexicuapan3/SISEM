@@ -1,19 +1,20 @@
 """
 Topes de citas: una por día por paciente y 3 por expediente por día (reglas
-del legado), más el tope de citas futuras del portal. Configurables en
-settings (0 desactiva).
+del legado), más el tope de citas futuras del portal. Configurables como
+parámetros generales en cat_parametro (0 desactiva).
 """
 
 from datetime import datetime, time, timedelta
 from unittest import mock
 
-from django.test import TestCase, override_settings
+from django.core.cache import cache
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import CatCentroAtencion, Consultorios, Turnos
+from apps.catalogos.models import CatCentroAtencion, Consultorios, ParametroDefinicion, Turnos
 from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
 from apps.portal_citas.models import PortalMiembro, PortalSesion
@@ -92,8 +93,10 @@ class TopesRecepcionTests(_Base, TestCase):
         with self.assertRaisesMessage(ValueError, "ya tiene 3 citas ese día"):
             self._agendar(3, "10:00")
 
-    @override_settings(CITAS_MAX_POR_PACIENTE_DIA=0)
     def test_tope_en_cero_queda_desactivado(self):
+        ParametroDefinicion.objects.filter(key="citas.max_por_paciente_dia").update(general_value="0")
+        cache.clear()
+        self.addCleanup(cache.clear)  # el valor cacheado no debe filtrarse a otros tests
         self._agendar(0, "09:00")
         self._agendar(0, "11:00")
 

@@ -1,6 +1,7 @@
 from django.db import transaction
-from django.utils import timezone
 
+from apps.folios.models import FolioType
+from apps.folios.services.folio_service import next_folio
 from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
@@ -110,9 +111,8 @@ def schedule_surgery(
             409,
         )
 
-    folio = f"CIR-{timezone.now().strftime('%Y%m%d%H%M%S')}-{no_exp}"
-
     with transaction.atomic():
+        folio = next_folio(FolioType.CIRUGIA)
         surgery = SurgeryRepository.create(
             folio=folio,
             no_exp=no_exp,

@@ -74,6 +74,8 @@ INSTALLED_APPS = [
     "apps.portal_citas",
     "apps.comunicados",
     "apps.impresion",
+    "apps.folios",
+    "apps.padrones",
 ]
 
 MIDDLEWARE = [

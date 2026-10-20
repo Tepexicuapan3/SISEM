@@ -383,8 +383,8 @@ def checkin_por_folio(
             # es FK a SyUsuario (espacio usuario). Antes de este fix se pasaba
             # cita.medico_id directo como doctor_id (R1: conflación de ids,
             # metía una PK de CatMedico en una FK a SyUsuario). Visit.doctor
-            # es null=True/on_delete=SET_NULL (verificado, recepcion/models.py),
-            # así que None es seguro si el médico no tiene usuario asociado.
+            # es null=True/on_delete=SET_NULL (verificado, recepcion/models.py).
+            # Todo médico tiene usuario, así que siempre resuelve un id.
             doctor_id=usuario_id_for_medico(cita.medico_id),
             medico_id=cita.medico_id,
             consultorio_id=cita.consultorio_id,

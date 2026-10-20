@@ -1,9 +1,11 @@
 from datetime import timedelta
 
 from django.db import transaction
-from django.utils import timezone
 
+from apps.folios.models import FolioType
+from apps.folios.services.folio_service import next_folio
 from apps.catalogos.models import Licencias
+from apps.catalogos.services.parametro_service import get_param
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.repositories.medical_leave_repository import MedicalLeaveRepository
 from apps.consulta_medica.services.visit_guards import (
@@ -15,11 +17,18 @@ from apps.recepcion.services.errors import VisitDomainError
 
 from .consultation_usecase import ensure_doctor_or_incapacidad_read_role, ensure_doctor_role
 
-# SIRES no tiene todavia una tabla de parametros por clinica (equivalente al
-# `ope_param` del legado) -- estos topes son un valor razonable de partida,
-# no una regla oficial. Ajustar si la institucion define otro criterio.
+# Topes por centro en cat_parametro (incapacidad.max_dias[_maternidad]); estas
+# constantes solo se usan si la definicion no existe (migracion sin correr).
 DEFAULT_MAX_DAYS = 60
 MATERNITY_MAX_DAYS = 90
+
+
+def _max_days(leave_type, visit):
+    consultorio = visit.consultorio
+    center_id = getattr(consultorio, "id_center_id", None) if consultorio else None
+    if _is_maternity(leave_type):
+        return get_param("incapacidad.max_dias_maternidad", center_id=center_id, default=MATERNITY_MAX_DAYS)
+    return get_param("incapacidad.max_dias", center_id=center_id, default=DEFAULT_MAX_DAYS)
 
 
 def _get_visit_or_error(visit_id):
@@ -81,7 +90,7 @@ def create_medical_leave(
             details={"leaveTypeId": ["El tipo de licencia no existe o no esta activo."]},
         )
 
-    max_days = MATERNITY_MAX_DAYS if _is_maternity(leave_type) else DEFAULT_MAX_DAYS
+    max_days = _max_days(leave_type, visit)
     if days > max_days:
         raise VisitDomainError(
             "VALIDATION_ERROR",
@@ -101,10 +110,9 @@ def create_medical_leave(
         )
 
     end_date = start_date + timedelta(days=days - 1)
-    folio = f"LIC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{visit.no_exp}"
-
     with transaction.atomic():
         lock_visit_not_cancelled(visit.id_visit)
+        folio = next_folio(FolioType.LICENCIA)
         leave = MedicalLeaveRepository.create(
             consultation=consultation,
             no_exp=visit.no_exp,

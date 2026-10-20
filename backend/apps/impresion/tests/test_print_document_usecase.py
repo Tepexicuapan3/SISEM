@@ -15,7 +15,7 @@ RENDER = "apps.impresion.uses_case.print_document_usecase.engine.render_pdf"
 BUILDER = "apps.impresion.tests.test_print_document_usecase.fake_builder"
 
 
-def fake_builder(resource_id, actor):
+def fake_builder(resource_id, actor, *, permissions=None, roles=None):
     if resource_id == 404:
         raise PrintError("VISIT_NOT_FOUND", "no", 404)
     return PrintContext(

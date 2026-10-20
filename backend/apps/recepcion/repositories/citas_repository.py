@@ -42,7 +42,7 @@ ESTATUS_CITA_ACTIVA = (EstatusCita.AGENDADA, EstatusCita.CONFIRMADA)
 
 
 class TopeCitaExcedido(Exception):
-    """Un tope de citas (``settings.CITAS_MAX_*`` / ``PORTAL_MAX_*``) impide agendar."""
+    """Un tope de citas (parametros ``citas.*`` / ``portal.max_citas_futuras``) impide agendar."""
 
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -58,10 +58,14 @@ def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bo
     """
     from django.conf import settings
 
+    from apps.catalogos.services.parametro_service import get_param
+
     activas = CitaMedica.objects.filter(no_exp=no_exp, estatus__in=ESTATUS_CITA_ACTIVA)
     del_dia = activas.filter(fecha_hora__date=timezone.localtime(fecha_hora).date())
 
-    max_paciente = settings.CITAS_MAX_POR_PACIENTE_DIA
+    # Topes generales (no por centro: se cuentan en todas las clinicas). El
+    # valor de settings solo aplica si la definicion no existe.
+    max_paciente = get_param("citas.max_por_paciente_dia", default=settings.CITAS_MAX_POR_PACIENTE_DIA)
     if max_paciente and del_dia.filter(pk_num=pk_num).count() >= max_paciente:
         raise TopeCitaExcedido(
             "CITA_MISMO_DIA",
@@ -70,7 +74,7 @@ def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bo
             else f"El paciente ya tiene {max_paciente} citas ese día.",
         )
 
-    max_expediente = settings.CITAS_MAX_POR_EXPEDIENTE_DIA
+    max_expediente = get_param("citas.max_por_expediente_dia", default=settings.CITAS_MAX_POR_EXPEDIENTE_DIA)
     if max_expediente and del_dia.count() >= max_expediente:
         raise TopeCitaExcedido(
             "TOPE_EXPEDIENTE_DIA",
@@ -78,7 +82,7 @@ def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bo
             "(contando titular y familiares).",
         )
 
-    max_futuras = settings.PORTAL_MAX_CITAS_FUTURAS
+    max_futuras = get_param("portal.max_citas_futuras", default=settings.PORTAL_MAX_CITAS_FUTURAS)
     if desde_portal and max_futuras:
         futuras = activas.filter(pk_num=pk_num, fecha_hora__gte=timezone.now()).count()
         if futuras >= max_futuras:

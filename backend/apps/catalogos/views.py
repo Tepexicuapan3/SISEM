@@ -21,7 +21,7 @@ from apps.catalogos.uses_case.upload_cies_use_case import PreviewCiesUseCase
 from .models import (
     Areas, Bajas, CalidadLaboral, CatAreaClinica, CatCentroAtencion,
     CatCentroAtencionHorario, CatCentroAtencionExcepcion, CatCie9Mc,
-    CatTipoCirugia, CatClasificacionCirugia, CatMotivoCancelacionCirugia, MotivoCancelacionNota,
+    CatTipoCirugia, CatClasificacionCirugia, CatMotivoCancelacionCirugia, MotivoCancelacionNota, MotivoBajaPadron,
     CatMotivoTraslado, CatTipoTraslado, CatTipoServicioAmbulancia, CatDestinoAmbulancia,
     CentroAreaClinica, Consultorios,
     Discapacidades, EdoCivil, Enfermedades, Escolaridad, Escuelas, Especialidades, EstudiosMed,
@@ -49,6 +49,7 @@ from .serializers import (
     ClasificacionCirugiaDetailSerializer, ClasificacionCirugiaListSerializer, ClasificacionCirugiaWriteSerializer,
     MotivoCancelacionCirugiaDetailSerializer, MotivoCancelacionCirugiaListSerializer, MotivoCancelacionCirugiaWriteSerializer,
     MotivoCancelacionNotaDetailSerializer, MotivoCancelacionNotaListSerializer, MotivoCancelacionNotaWriteSerializer,
+    MotivoBajaPadronDetailSerializer, MotivoBajaPadronListSerializer, MotivoBajaPadronWriteSerializer,
     MotivoTrasladoDetailSerializer, MotivoTrasladoListSerializer, MotivoTrasladoWriteSerializer,
     TipoTrasladoDetailSerializer, TipoTrasladoListSerializer, TipoTrasladoWriteSerializer,
     TipoServicioAmbulanciaDetailSerializer, TipoServicioAmbulanciaListSerializer, TipoServicioAmbulanciaWriteSerializer,
@@ -920,6 +921,33 @@ class MotivoCancelacionNotaDetailView(CatalogBaseDetailView):
     write_serializer = MotivoCancelacionNotaWriteSerializer
     wrapper_key = "motivoCancelacionNota"
     error_codes = MappingProxyType({"not_found": "NOTE_CANCELLATION_REASON_NOT_FOUND", "exists": "NOTE_CANCELLATION_REASON_EXISTS"})
+
+
+class MotivoBajaPadronListCreateView(CatalogBaseListCreateView):
+    catalog = "motivos_baja_padron"
+    model = MotivoBajaPadron
+    list_serializer = MotivoBajaPadronListSerializer
+    write_serializer = MotivoBajaPadronWriteSerializer
+    error_codes = MappingProxyType({"exists": "REGISTRY_DISCHARGE_REASON_EXISTS"})
+
+    def get_permissions(self):
+        # Quien da de baja una inscripcion (`clinico:padrones:write`, que no es
+        # admin de catalogos) necesita LEER los motivos. Mismo patron que
+        # MotivoCancelacionNotaListCreateView. Escritura: solo CRUD admin.
+        if getattr(self, "request", None) and self.request.method == "GET":
+            return [HasAnyOfPermissions(
+                "admin:catalogos:motivos_baja_padron:read",
+                "clinico:padrones:write",
+            )]
+        return super().get_permissions()
+
+class MotivoBajaPadronDetailView(CatalogBaseDetailView):
+    catalog = "motivos_baja_padron"
+    model = MotivoBajaPadron
+    detail_serializer = MotivoBajaPadronDetailSerializer
+    write_serializer = MotivoBajaPadronWriteSerializer
+    wrapper_key = "motivoBajaPadron"
+    error_codes = MappingProxyType({"not_found": "REGISTRY_DISCHARGE_REASON_NOT_FOUND", "exists": "REGISTRY_DISCHARGE_REASON_EXISTS"})
 
 
 class MotivoTrasladoListCreateView(CatalogBaseListCreateView):

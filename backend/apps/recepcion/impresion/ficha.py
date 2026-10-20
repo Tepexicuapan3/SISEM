@@ -23,7 +23,7 @@ def _center(visit):
     return getattr(consultorio, "id_center", None) if consultorio else None
 
 
-def build_ficha_context(visit_id, actor):
+def build_ficha_context(visit_id, actor, *, permissions=None, roles=None):
     visit = VisitRepository.get_by_id(visit_id)
     if visit is None:
         raise PrintError(

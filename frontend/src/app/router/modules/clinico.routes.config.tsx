@@ -11,6 +11,7 @@ import SomatometriaCapturePage from "@features/somatometria/modules/captura/page
 import CirugiasPage from "@features/cirugias/pages/CirugiasPage";
 import AmbulanciasPage from "@features/ambulancias/pages/AmbulanciasPage";
 import AutorizacionRecetasPage from "@features/autorizacion-recetas/pages/AutorizacionRecetasPage";
+import PadronesPage from "@features/padrones/pages/PadronesPage";
 import PlaceholderPage from "@shared/components/PlaceholderPage";
 
 // Clinico
@@ -126,6 +127,18 @@ export const clinicoRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute requiredPermission="clinico:recetas:authorize">
         <AutorizacionRecetasPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "padrones",
+    element: (
+      <ProtectedRoute
+        requiredCapability="clinico.padrones.read"
+        fallbackRequirement={{ allOf: ["clinico:padrones:read"] }}
+        dependencyAware
+      >
+        <PadronesPage />
       </ProtectedRoute>
     ),
   },

@@ -2,6 +2,7 @@ from django.urls import path
 
 from .designacion_views import DesignacionDetailView, DesignacionListCreateView
 from .imports.registry import CATALOG_IMPORT_REGISTRY
+from .parametros_views import ParametroCentroView, ParametroDetailView, ParametroListView
 from .views import *
 
 routes = [
@@ -16,6 +17,7 @@ routes = [
     ("surgery-classifications", ClasificacionCirugiaListCreateView, ClasificacionCirugiaDetailView, "int"),
     ("surgery-cancellation-reasons", MotivoCancelacionCirugiaListCreateView, MotivoCancelacionCirugiaDetailView, "int"),
     ("note-cancellation-reasons", MotivoCancelacionNotaListCreateView, MotivoCancelacionNotaDetailView, "int"),
+    ("registry-discharge-reasons", MotivoBajaPadronListCreateView, MotivoBajaPadronDetailView, "int"),
     ("transfer-reasons", MotivoTrasladoListCreateView, MotivoTrasladoDetailView, "int"),
     ("transfer-types", TipoTrasladoListCreateView, TipoTrasladoDetailView, "int"),
     ("ambulance-service-types", TipoServicioAmbulanciaListCreateView, TipoServicioAmbulanciaDetailView, "int"),
@@ -115,6 +117,15 @@ urlpatterns += [
         "authorizer-designations/<int:pk>/",
         DesignacionDetailView.as_view(),
         name="authorizer-designations-detail",
+    ),
+
+    # PARAMETROS OPERATIVOS (reemplazo de ope_param)
+    path("parameters/", ParametroListView.as_view(), name="parameters-list"),
+    path("parameters/<str:key>/", ParametroDetailView.as_view(), name="parameters-detail"),
+    path(
+        "parameters/<str:key>/centers/<int:center_id>/",
+        ParametroCentroView.as_view(),
+        name="parameters-center-value",
     ),
 
     # CODIGOS POSTALES

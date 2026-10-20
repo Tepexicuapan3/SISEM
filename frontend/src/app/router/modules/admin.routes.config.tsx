@@ -17,11 +17,13 @@ import TipoCirugiaPage from "@features/admin/modules/catalogos/tipos-cirugia/pag
 import ClasificacionCirugiaPage from "@features/admin/modules/catalogos/clasificaciones-cirugia/pages/ClasificacionCirugiaPage";
 import MotivoCancelacionCirugiaPage from "@features/admin/modules/catalogos/motivos-cancelacion-cirugia/pages/MotivoCancelacionCirugiaPage";
 import MotivoCancelacionNotaPage from "@features/admin/modules/catalogos/motivos-cancelacion-nota/pages/MotivoCancelacionNotaPage";
+import MotivoBajaPadronPage from "@features/admin/modules/catalogos/motivos-baja-padron/pages/MotivoBajaPadronPage";
 import MotivoTrasladoPage from "@features/admin/modules/catalogos/motivos-traslado/pages/MotivoTrasladoPage";
 import TipoTrasladoPage from "@features/admin/modules/catalogos/tipos-traslado/pages/TipoTrasladoPage";
 import TipoServicioAmbulanciaPage from "@features/admin/modules/catalogos/tipos-servicio-ambulancia/pages/TipoServicioAmbulanciaPage";
 import DestinoAmbulanciaPage from "@features/admin/modules/catalogos/destinos-ambulancia/pages/DestinoAmbulanciaPage";
 import DesignacionAutorizadoresPage from "@features/admin/modules/catalogos/designacion-autorizadores/pages/DesignacionAutorizadoresPage";
+import ParametrosPage from "@features/admin/modules/catalogos/parametros/pages/ParametrosPage";
 import BajasPage from "@features/admin/modules/catalogos/bajas/pages/BajasPage";
 import CalidadLaboralPage from "@features/admin/modules/catalogos/calidad-laboral/pages/CalidadLaboralPage";
 import EdoCivilPage from "@features/admin/modules/catalogos/edo-civil/pages/EdoCivilPage";
@@ -205,6 +207,20 @@ export const adminRoutes: RouteObject[] = [
             dependencyAware
           >
             <DesignacionAutorizadoresPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "parametros",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.parametros.read"
+            fallbackRequirement={{
+              allOf: ["admin:catalogos:parametros:read"],
+            }}
+            dependencyAware
+          >
+            <ParametrosPage />
           </ProtectedRoute>
         ),
       },
@@ -509,6 +525,18 @@ export const adminRoutes: RouteObject[] = [
             dependencyAware
           >
             <MotivoCancelacionNotaPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "motivos-baja-padron",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin.catalogs.motivosbajapadron.read"
+            fallbackRequirement={{ allOf: ["admin:catalogos:motivos_baja_padron:read"] }}
+            dependencyAware
+          >
+            <MotivoBajaPadronPage />
           </ProtectedRoute>
         ),
       },

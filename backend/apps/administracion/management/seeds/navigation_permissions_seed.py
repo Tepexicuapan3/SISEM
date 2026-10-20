@@ -218,3 +218,28 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:notas:cancel", "Cancelar una nota de consulta cerrada (requiere designacion de autorizador)"),
 ]
+
+# Decimotercera tanda (change `documentos-imprimibles-receta-nota`): imprimir
+# la receta de una consulta cerrada. Permiso APARTE de clinico:consultas:read
+# porque ese lo tienen tambien perfiles de apoyo y la receta impresa se canjea
+# en farmacia. Farmacia reimprime con farmacia:recetas:dispensar. Se asigna a
+# mano al rol de medico.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:recetas:imprimir", "Imprimir la receta de una consulta cerrada"),
+]
+
+# Decimocuarta tanda (change `parametros-centro`): parametros operativos por
+# centro (reemplazo de ope_param). Prefijo admin:catalogos: para que
+# seed_navigation_permissions los asigne a los roles admin.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:catalogos:parametros:read", "Ver parametros operativos por centro"),
+    ("admin:catalogos:parametros:update", "Modificar parametros operativos y sus valores por centro"),
+]
+
+# Decimoquinta tanda (change `padrones-clinicos`, P-04): padron de cronicos y
+# de discapacidad. Permisos propios (no clinico:consultas:read): se asignan a
+# mano al medico y a trabajo social.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:padrones:read", "Consultar los padrones de cronicos y discapacidad"),
+    ("clinico:padrones:write", "Inscribir y dar de baja pacientes en los padrones clinicos"),
+]

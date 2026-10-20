@@ -28,7 +28,7 @@ const PRINT_CAPABILITIES: Record<
   receta: {
     key: "documentos.receta.imprimir",
     fallback: {
-      anyOf: ["clinico:consultas:read", "farmacia:recetas:dispensar"],
+      anyOf: ["clinico:recetas:imprimir", "farmacia:recetas:dispensar"],
     },
   },
   nota: {

@@ -1,5 +1,8 @@
 from django.test import SimpleTestCase
 
+from apps.administracion.management.seeds.navigation_permissions_seed import (
+    NAVIGATION_PERMISSIONS_SEED,
+)
 from apps.authentication.services.permission_dependencies import (
     CAPABILITY_REQUIREMENTS,
     evaluate_permission_requirement,
@@ -32,10 +35,12 @@ class PrintCapabilityTests(SimpleTestCase):
         )
         self.assertTrue(self.granted(key, ["clinico:consultas:read"]))
 
-    def test_receta_granted_by_clinical_or_pharmacy_not_reception(self):
+    def test_receta_granted_by_own_permission_or_pharmacy(self):
         key = "documentos.receta.imprimir"
-        self.assertTrue(self.granted(key, ["clinico:consultas:read"]))
+        self.assertTrue(self.granted(key, ["clinico:recetas:imprimir"]))
         self.assertTrue(self.granted(key, ["farmacia:recetas:dispensar"]))
+        # Leer consultas no alcanza: lo tienen perfiles de apoyo.
+        self.assertFalse(self.granted(key, ["clinico:consultas:read"]))
         self.assertFalse(self.granted(key, ["recepcion:fichas:urgencias:create"]))
 
     def test_nota_requires_clinical_read(self):
@@ -48,8 +53,8 @@ class PrintCapabilityTests(SimpleTestCase):
             self.assertTrue(self.granted(f"documentos.{d}.imprimir", ["*"]))
 
     def test_no_new_permission_codes_invented(self):
-        # Solo permisos ya usados en otras capabilities (sin seeds nuevos).
-        used_elsewhere = set()
+        # Solo permisos que existen: usados en otras capabilities o sembrados.
+        used_elsewhere = {code for code, _ in NAVIGATION_PERMISSIONS_SEED}
         for key, req in CAPABILITY_REQUIREMENTS.items():
             if key.startswith("documentos."):
                 continue

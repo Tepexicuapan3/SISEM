@@ -236,6 +236,18 @@ NAV_SEED = [
         "permisos": ["admin:autorizadores:designacion:read"],
     },
     {
+        "clave": "administracion.catalogos.parametros",
+        "titulo": "Parámetros por centro",
+        "icono": None,
+        "url": "/admin/catalogos/parametros",
+        "badge": None,
+        "orden": 3,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:parametros:read"],
+    },
+    {
         "clave": "administracion.catalogos.bajas",
         "titulo": "Bajas",
         "icono": None,
@@ -652,6 +664,20 @@ NAV_SEED = [
         "permisos": ["admin:catalogos:motivos_cancelacion_nota:read"],
     },
     {
+        # Agregado 2026-10-16 (padrones-clinicos, P-04): motivos para dar de
+        # baja una inscripcion al padron de cronicos o de discapacidad.
+        "clave": "administracion.catalogos.motivos_baja_padron",
+        "titulo": "Motivos de Baja de Padron",
+        "icono": None,
+        "url": "/admin/catalogos/motivos-baja-padron",
+        "badge": None,
+        "orden": 42,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:motivos_baja_padron:read"],
+    },
+    {
         "clave": "administracion.catalogos.motivos_traslado",
         "titulo": "Motivos de Traslado",
         "icono": None,
@@ -899,6 +925,20 @@ NAV_SEED = [
         "grupo": "primary",
         "parent_clave": "clinico",
         "permisos": ["clinico:recetas:authorize"],
+    },
+    {
+        # Agregado 2026-10-16 (padrones-clinicos, P-04 del legado): padron de
+        # cronico-degenerativos y de discapacidad.
+        "clave": "clinico.padrones",
+        "titulo": "Padrones clinicos",
+        "icono": "clipboard-list",
+        "url": "/clinico/padrones",
+        "badge": None,
+        "orden": 6,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "clinico",
+        "permisos": ["clinico:padrones:read"],
     },
     # ── Recepcion ────────────────────────────────────────────────────────
     {

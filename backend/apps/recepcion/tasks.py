@@ -108,7 +108,7 @@ def generar_slots_todos_medicos(self):
 
     medicos = (
         CatMedico.objects.filter(estatus_medico="ACTIVO")
-        .order_by("id")  # id = No. Médico; hay médicos sin usuario, orden determinista
+        .order_by("id")  # orden determinista por id
     )
 
     total_slots = 0

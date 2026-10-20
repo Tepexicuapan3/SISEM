@@ -123,6 +123,10 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.catalogs.designacionAutorizadores.read": {"allOf": ["admin:autorizadores:designacion:read"]},
     "admin.catalogs.designacionAutorizadores.write": {"allOf": ["admin:autorizadores:designacion:write"]},
     "admin.catalogs.designacionAutorizadores.global": {"allOf": ["admin:autorizadores:designacion:global"]},
+    "admin.catalogs.parametros.read": {"allOf": ["admin:catalogos:parametros:read"]},
+    "admin.catalogs.parametros.update": {"allOf": ["admin:catalogos:parametros:update"]},
+    "clinico.padrones.read": {"allOf": ["clinico:padrones:read"]},
+    "clinico.padrones.write": {"allOf": ["clinico:padrones:write"]},
     "admin.catalogs.gruposMedicamentos.read": {"allOf": ["admin:catalogos:grupos_medicamentos:read"]},
     "admin.catalogs.gruposMedicamentos.create": {"allOf": ["admin:catalogos:grupos_medicamentos:create"]},
     "admin.catalogs.gruposMedicamentos.update": {"allOf": ["admin:catalogos:grupos_medicamentos:update"]},
@@ -236,6 +240,10 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.catalogs.motivoscancelacionnota.create": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:create"]},
     "admin.catalogs.motivoscancelacionnota.update": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:update"]},
     "admin.catalogs.motivoscancelacionnota.delete": {"allOf": ["admin:catalogos:motivos_cancelacion_nota:delete"]},
+    "admin.catalogs.motivosbajapadron.read": {"allOf": ["admin:catalogos:motivos_baja_padron:read"]},
+    "admin.catalogs.motivosbajapadron.create": {"allOf": ["admin:catalogos:motivos_baja_padron:create"]},
+    "admin.catalogs.motivosbajapadron.update": {"allOf": ["admin:catalogos:motivos_baja_padron:update"]},
+    "admin.catalogs.motivosbajapadron.delete": {"allOf": ["admin:catalogos:motivos_baja_padron:delete"]},
     "admin.catalogs.motivostraslado.read": {"allOf": ["admin:catalogos:motivos_traslado:read"]},
     "admin.catalogs.motivostraslado.create": {"allOf": ["admin:catalogos:motivos_traslado:create"]},
     "admin.catalogs.motivostraslado.update": {"allOf": ["admin:catalogos:motivos_traslado:update"]},
@@ -339,8 +347,10 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
             "clinico:consultas:read",
         ]
     },
+    # Receta: permiso propio (medico) o farmacia. `clinico:consultas:read` no
+    # basta: lo tienen perfiles de apoyo y la receta impresa se canjea.
     "documentos.receta.imprimir": {
-        "anyOf": ["clinico:consultas:read", "farmacia:recetas:dispensar"]
+        "anyOf": ["clinico:recetas:imprimir", "farmacia:recetas:dispensar"]
     },
     "documentos.nota.imprimir": {"allOf": ["clinico:consultas:read"]},
 }

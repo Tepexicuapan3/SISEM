@@ -167,11 +167,14 @@ def _emit_event_best_effort(request, user, spec, resource_id, log_id, copy_numbe
         )
 
 
-def print_document(*, documento, resource_id, user, permissions, request):
+def print_document(*, documento, resource_id, user, permissions, request, roles=None):
     spec = get_spec(documento)
     _ensure_capability(spec, permissions)
 
-    pctx = import_string(spec.builder)(resource_id, user)
+    # permisos/roles: la nota redacta diagnosticos sensibles segun quien imprime.
+    pctx = import_string(spec.builder)(
+        resource_id, user, permissions=permissions or [], roles=roles or []
+    )
     _ensure_center_access(pctx, user, permissions)
 
     semaphore = _get_semaphore()

@@ -1,6 +1,7 @@
 from django.db import transaction
-from django.utils import timezone
 
+from apps.folios.models import FolioType
+from apps.folios.services.folio_service import next_folio
 from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
@@ -151,10 +152,9 @@ def create_referral(
     )
 
     normalized_requested_care = (requested_care or "").strip() or None
-    folio = f"REF-{timezone.now().strftime('%Y%m%d%H%M%S')}-{visit.no_exp}"
-
     with transaction.atomic():
         lock_visit_not_cancelled(visit.id_visit)
+        folio = next_folio(FolioType.PASE)
         referral = ReferralRepository.create(
             consultation=consultation,
             no_exp=visit.no_exp,

@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Checkbox } from "@shared/ui/checkbox";
+import { PrintButton } from "@shared/components/print/PrintButton";
 import { Input } from "@shared/ui/input";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -178,6 +179,15 @@ export function DispensePrescriptionDialog({
         </div>
 
         <DialogFooter>
+          {previewQuery.data ? (
+            <PrintButton
+              documento="receta"
+              resourceId={previewQuery.data.visitId}
+              label="Reimprimir receta"
+              variant="outline"
+              className="sm:mr-auto"
+            />
+          ) : null}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>

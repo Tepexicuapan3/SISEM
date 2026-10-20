@@ -35,13 +35,14 @@ def handle_print(request, documento, resource_id):
             details=exc.details, request_id=request_id,
         )
 
-    permissions = UserRepository.build_auth_user(user).get("permissions", [])
+    auth_user = UserRepository.build_auth_user(user)
     try:
         result = print_document(
             documento=documento,
             resource_id=resource_id,
             user=user,
-            permissions=permissions,
+            permissions=auth_user.get("permissions", []),
+            roles=auth_user.get("roles", []),
             request=request,
         )
     except PrintError as exc:

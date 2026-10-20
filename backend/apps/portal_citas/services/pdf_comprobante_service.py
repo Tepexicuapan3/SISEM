@@ -248,7 +248,7 @@ def generar_pdf_comprobante(cita, miembro_objetivo) -> bytes:
     c.drawCentredString(width / 2, y - folio_pill_h + 3.3 * mm, folio_texto)
     y -= folio_pill_h + 8 * mm
 
-    # Médico sin usuario (alta por import Excel): display_name no revienta.
+    # display_name no revienta aunque el usuario no tenga detalle.
     nombre_medico = display_name(cita.medico)
 
     campos = [

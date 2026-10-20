@@ -1,6 +1,7 @@
 from django.db import transaction
-from django.utils import timezone
 
+from apps.folios.models import FolioType
+from apps.folios.services.folio_service import next_folio
 from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
@@ -106,9 +107,8 @@ def create_request(
             details={"schedules": ["Debes indicar al menos una fecha de traslado."]},
         )
 
-    folio = f"AMB-{timezone.now().strftime('%Y%m%d%H%M%S')}-{no_exp}"
-
     with transaction.atomic():
+        folio = next_folio(FolioType.AMBULANCIA)
         ambulance_request = AmbulanceRequestRepository.create(
             folio=folio,
             no_exp=no_exp,

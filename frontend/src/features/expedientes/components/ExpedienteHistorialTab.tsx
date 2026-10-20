@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Lock } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
+import { PrintButton } from "@shared/components/print/PrintButton";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import { CancelarNotaDialog } from "@features/expedientes/components/CancelarNotaDialog";
 import { usePatientConsultationsHistory } from "@features/expedientes/queries/usePatientConsultationsHistory";
@@ -77,7 +78,24 @@ export function ExpedienteHistorialTab({
                   {consulta.doctorName ?? "Médico sin identificar"}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <PrintButton
+                  documento="nota"
+                  resourceId={consulta.visitId}
+                  label="Imprimir nota"
+                  size="sm"
+                  variant="outline"
+                />
+                {/* Receta cancelada no se imprime (409): solo notas cerradas con receta. */}
+                {consulta.visitStatus === "cerrada" && consulta.prescriptionItems.length > 0 ? (
+                  <PrintButton
+                    documento="receta"
+                    resourceId={consulta.visitId}
+                    label="Imprimir receta"
+                    size="sm"
+                    variant="outline"
+                  />
+                ) : null}
                 {consulta.visitStatus === "cancelada" ? (
                   <Badge variant="critical" className="text-xs">
                     Cancelada

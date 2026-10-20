@@ -949,6 +949,19 @@ export type {
 } from "@api/types/catalogos/motivos-cancelacion-nota.types";
 
 export type {
+  MotivoBajaPadronListItem,
+  MotivoBajaPadronDetail,
+  CreateMotivoBajaPadronRequest,
+  UpdateMotivoBajaPadronRequest,
+  CreateMotivoBajaPadronResponse,
+  UpdateMotivoBajaPadronResponse,
+  DeleteMotivoBajaPadronResponse,
+  MotivoBajaPadronListParams,
+  MotivoBajaPadronListResponse,
+  MotivoBajaPadronDetailResponse,
+} from "@api/types/catalogos/motivos-baja-padron.types";
+
+export type {
   MotivoTrasladoListItem,
   MotivoTrasladoDetail,
   CreateMotivoTrasladoRequest,

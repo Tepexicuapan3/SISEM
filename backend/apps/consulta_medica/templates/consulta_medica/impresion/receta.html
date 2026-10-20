@@ -1,0 +1,64 @@
+{% extends "impresion/base.html" %}
+{% block page_css %}
+@page { size: 720pt 490pt; margin: 10mm 10mm 14mm 10mm; }
+.sheet { page-break-after: always; }
+.sheet:last-child { page-break-after: auto; }
+.sheet-head { display: flex; align-items: center; border-bottom: 1.5pt solid #1f4e79; padding-bottom: 3pt; margin-bottom: 5pt; }
+.sheet-head img.logo { height: 32pt; width: auto; margin-right: 8pt; }
+.sheet-head .titles { flex: 1; }
+.sheet-head .institution { font-size: 11pt; font-weight: bold; color: #1f4e79; }
+.sheet-head .doc-title { font-size: 9.5pt; text-transform: uppercase; letter-spacing: .5pt; }
+.sheet-label { font-size: 12pt; font-weight: bold; border: 1pt solid #1f4e79; padding: 2pt 8pt; }
+.sheet-label.controlado { color: #c00000; border-color: #c00000; }
+table.grid { width: 100%; border-collapse: collapse; margin-bottom: 5pt; }
+table.grid th, table.grid td { border: .5pt solid #888; padding: 2pt 4pt; text-align: left; font-size: 8.5pt; vertical-align: top; }
+table.grid th { background: #eef2f7; font-weight: bold; }
+table.data th { width: 14%; }
+.indications { font-size: 8.5pt; margin: 3pt 0; }
+.legend { margin-top: 6pt; text-align: center; font-size: 8pt; font-weight: bold; color: #1f4e79; }
+.signature { margin-top: 22pt; width: 45%; margin-left: auto; border-top: .75pt solid #111; text-align: center; font-size: 8pt; padding-top: 2pt; }
+{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+{% for sheet in sheets %}
+<div class="sheet">
+  <div class="sheet-head">
+    {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="">{% endif %}
+    <div class="titles">
+      <div class="institution">{{ institution_name }}</div>
+      <div class="doc-title">Receta médica &middot; {{ prescription_type }}</div>
+    </div>
+    <div class="sheet-label{% if sheet.label == 'CONTROLADO' %} controlado{% endif %}">{{ sheet.label }}</div>
+  </div>
+
+  <table class="grid data">
+    <tr><th>Folio</th><td>{{ folio }}</td><th>Fecha</th><td>{{ issued_date }}</td></tr>
+    <tr><th>Paciente</th><td>{{ patient.full_name }}</td><th>Expediente</th><td>{{ expediente }}{% if patient.age %} &middot; {{ patient.age }} años{% endif %}</td></tr>
+    <tr><th>Médico</th><td>{{ doctor.name }}</td><th>Cédula</th><td>{{ doctor.cedula }}</td></tr>
+    <tr><th>Centro</th><td>{{ center_name }}</td><th>Consultorio</th><td>{{ consultorio }}</td></tr>
+  </table>
+
+  <table class="grid">
+    <tr><th style="width:4%">#</th><th style="width:30%">Medicamento</th><th style="width:14%">Dosis</th><th style="width:8%">Cant.</th><th>Indicaciones</th></tr>
+    {% for item in sheet.items %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ item.name }}{% if item.generic_name %}<br><small>{{ item.generic_name }}</small>{% endif %}{% if item.presentation %}<br><small>{{ item.presentation }}</small>{% endif %}</td>
+      <td>{{ item.dose }}</td>
+      <td>{{ item.quantity }}</td>
+      <td>{{ item.indications }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  {% if general_indications and sheet.label != 'CONTROLADO' %}
+  <div class="indications"><strong>Indicaciones generales:</strong>
+    <ul>{% for text in general_indications %}<li>{{ text }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="signature">Firma del médico<br>{{ doctor.name }}{% if doctor.cedula %} &middot; Céd. {{ doctor.cedula }}{% endif %}</div>
+  {% if legend %}<div class="legend">{{ legend }}</div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

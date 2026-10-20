@@ -107,6 +107,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Motivos de Cancelación de Cirugía",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/motivos-baja-padron": {
+    label: "Motivos de Baja de Padrón",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/motivos-cancelacion-nota": {
     label: "Motivos de Cancelación de Nota",
     grupo: "Catálogos",
@@ -121,6 +125,10 @@ export const MENU_DESTINATION_LABELS: Record<
   },
   "/admin/catalogos/origen-consulta": {
     label: "Origen de Consulta",
+    grupo: "Catálogos",
+  },
+  "/admin/catalogos/parametros": {
+    label: "Parámetros por Centro",
     grupo: "Catálogos",
   },
   "/admin/catalogos/parentescos": {
@@ -238,6 +246,7 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Autorización de Recetas",
     grupo: "Clínico",
   },
+  "/clinico/padrones": { label: "Padrones Clínicos", grupo: "Clínico" },
   "/clinico/cirugias": { label: "Cirugías", grupo: "Clínico" },
   "/clinico/consultas": { label: "Consultas", grupo: "Clínico" },
   "/clinico/consultas/agenda": {

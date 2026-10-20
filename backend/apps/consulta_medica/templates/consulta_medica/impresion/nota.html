@@ -1,0 +1,70 @@
+{% extends "impresion/base.html" %}
+{% block page_css %}
+@page { size: 8.5in 5.5in; margin: 10mm 10mm 14mm 10mm; }
+table.grid { width: 100%; border-collapse: collapse; margin-bottom: 5pt; }
+table.grid th, table.grid td { border: .5pt solid #888; padding: 2pt 4pt; text-align: left; font-size: 8.5pt; vertical-align: top; }
+table.grid th { background: #eef2f7; font-weight: bold; }
+table.data th { width: 14%; }
+h3.sec { font-size: 9pt; margin: 6pt 0 2pt 0; color: #1f4e79; text-transform: uppercase; page-break-after: avoid; }
+.text { font-size: 8.5pt; white-space: pre-wrap; margin: 0 0 4pt 0; }
+.signature { margin-top: 18pt; width: 45%; margin-left: auto; border-top: .75pt solid #111; text-align: center; font-size: 8pt; padding-top: 2pt; page-break-inside: avoid; }
+{% endblock %}
+{% block content %}
+<table class="grid data">
+  <tr><th>Folio</th><td>{{ folio }}</td><th>Fecha</th><td>{{ attended_date }}</td></tr>
+  <tr><th>Paciente</th><td>{{ patient.full_name }}</td><th>Expediente</th><td>{{ expediente }}{% if patient.age %} &middot; {{ patient.age }} años{% endif %}{% if patient.sex %} &middot; {{ patient.sex }}{% endif %}</td></tr>
+  <tr><th>Médico</th><td>{{ doctor.name }}</td><th>Cédula</th><td>{{ doctor.cedula }}</td></tr>
+  <tr><th>Centro</th><td>{{ center_name }}{% if consultorio %} &middot; {{ consultorio }}{% endif %}</td><th>Servicio</th><td>{{ service }}</td></tr>
+</table>
+
+{% if vitals %}
+<h3 class="sec">Signos vitales</h3>
+<table class="grid">
+  <tr><th>Peso (kg)</th><td>{{ vitals.peso }}</td><th>Talla (cm)</th><td>{{ vitals.talla }}</td><th>IMC</th><td>{{ vitals.imc }}</td><th>T/A</th><td>{{ vitals.ta }}</td></tr>
+  <tr><th>Temp. (&deg;C)</th><td>{{ vitals.temperatura }}</td><th>FC</th><td>{{ vitals.fc }}</td><th>FR</th><td>{{ vitals.fr }}</td><th>SpO2 (%)</th><td>{{ vitals.spo2 }}</td></tr>
+</table>
+{% endif %}
+
+{% for section in sections %}
+<h3 class="sec">{{ section.label }}</h3>
+<p class="text">{{ section.text }}</p>
+{% endfor %}
+
+<h3 class="sec">Diagnósticos</h3>
+<table class="grid">
+  <tr><th style="width:12%">Tipo</th><th style="width:10%">CIE-10</th><th>Descripción</th><th style="width:30%">Notas</th></tr>
+  {% for dx in diagnoses %}
+  <tr><td>{{ dx.kind }}</td><td>{{ dx.code }}</td><td>{{ dx.description }}</td><td>{{ dx.notes }}</td></tr>
+  {% endfor %}
+</table>
+{% if morbidity %}<p class="text"><strong>Morbilidad:</strong> {{ morbidity }}</p>{% endif %}
+
+{% if referrals %}
+<h3 class="sec">Estudios e interconsultas</h3>
+<table class="grid">
+  <tr><th>Folio</th><th>Tipo</th><th>Especialidad / destino</th><th>Atención solicitada</th><th>Estado</th></tr>
+  {% for r in referrals %}
+  <tr><td>{{ r.folio }}</td><td>{{ r.type }}</td><td>{{ r.specialty }}{% if r.specialty and r.destination %} &middot; {% endif %}{{ r.destination }}</td><td>{{ r.requested_care }}</td><td>{{ r.status }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if medical_leaves %}
+<h3 class="sec">Incapacidad</h3>
+<table class="grid">
+  <tr><th>Folio</th><th>Tipo</th><th>Días</th><th>Del</th><th>Al</th><th>Estado</th></tr>
+  {% for l in medical_leaves %}
+  <tr><td>{{ l.folio }}</td><td>{{ l.type }}</td><td>{{ l.days }}</td><td>{{ l.start }}</td><td>{{ l.end }}</td><td>{{ l.status }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if follow_up_date %}<p class="text"><strong>Cita de seguimiento:</strong> {{ follow_up_date }}</p>{% endif %}
+
+{% if addenda %}
+<h3 class="sec">Notas de aclaración</h3>
+{% for a in addenda %}<p class="text"><strong>{{ a.date }}:</strong> {{ a.text }}</p>{% endfor %}
+{% endif %}
+
+<div class="signature">Firma del médico<br>{{ doctor.name }}{% if doctor.cedula %} &middot; Céd. {{ doctor.cedula }}{% endif %}</div>
+{% endblock %}
