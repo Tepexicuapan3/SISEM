@@ -28,7 +28,9 @@ Pasos (una sola transaccion; cualquier error revierte todo):
      revisiones (previous_*) y consumos de kardex. Los `*_code_legacy` crudos
      NO se tocan: son el puente para `resolve_hsp_doctor_codes`.
   4. CatMedico.objects.all().delete() (rel_* y slots cascadean por ORM).
-  5. Postgres: setval(secuencia, 1, false). SQLite: se omite.
+  5. Postgres: setval(secuencia, max(--seq-start, MAX(id)+1), false); por defecto
+     10000, nunca 1, para que un medico nuevo no parezca un No. Medico legado.
+     SQLite: se omite.
   6. Conteos DESPUES; hsp_admission / revisiones / consumos deben conservar
      el mismo total (solo se nulearon FKs) o se revierte.
 
@@ -114,6 +116,15 @@ class Command(BaseCommand):
             help="Aplica los cambios. Sin este flag solo reporta (dry-run).",
         )
         parser.add_argument(
+            "--seq-start",
+            type=int,
+            default=10000,
+            help=(
+                "Valor desde el que arranca la secuencia del id (default 10000): "
+                "los ids de SIRES nunca deben parecer un No. Medico legado."
+            ),
+        )
+        parser.add_argument(
             "--purge-citas-cirugias",
             action="store_true",
             help=(
@@ -132,6 +143,9 @@ class Command(BaseCommand):
 
         execute = options["execute"]
         purge = options["purge_citas_cirugias"]
+        seq_start = options["seq_start"]
+        if seq_start < 1:
+            raise CommandError("--seq-start debe ser un entero >= 1.")
 
         antes = _contar()
         self._imprimir("ANTES", antes)
@@ -151,12 +165,12 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING("DRY-RUN: no se escribio nada (usar --execute).")
             )
-            self._plan(antes, purge)
+            self._plan(antes, purge, seq_start)
             return
 
         try:
             with transaction.atomic():
-                despues, purgados = self._ejecutar(antes, purge)
+                despues, purgados = self._ejecutar(antes, purge, seq_start)
         except ProtectedError as exc:
             raise ResetAbortado(
                 "Otra tabla protege filas de cat_medicos (PROTECT no contemplado en "
@@ -174,7 +188,7 @@ class Command(BaseCommand):
 
     # -- pasos ------------------------------------------------------------
 
-    def _ejecutar(self, antes, purge):
+    def _ejecutar(self, antes, purge, seq_start):
         purgados = {"citas": 0, "cirugias": 0}
 
         if purge:
@@ -198,7 +212,7 @@ class Command(BaseCommand):
 
         CatMedico.objects.all().delete()
 
-        self._reiniciar_secuencia()
+        self._reiniciar_secuencia(seq_start)
 
         despues = _contar()
         for clave in _INVARIANTES:
@@ -211,8 +225,9 @@ class Command(BaseCommand):
             raise ResetAbortado("cat_medicos no quedo vacia. Se revirtio todo.")
         return despues, purgados
 
-    def _reiniciar_secuencia(self):
-        """setval(seq, 1, false): el siguiente nextval devuelve 1. Solo Postgres."""
+    def _reiniciar_secuencia(self, seq_start):
+        """setval(seq, max(seq_start, MAX(id)+1), false): el siguiente nextval
+        devuelve ese valor (nunca 1). Solo Postgres."""
         if connection.vendor != "postgresql":
             self.stdout.write("Secuencia: omitida (el motor no es PostgreSQL).")
             return
@@ -224,12 +239,16 @@ class Command(BaseCommand):
                     "cat_medicos.id no tiene secuencia asociada (ver migracion 0011). "
                     "Se revirtio todo."
                 )
-            cur.execute("SELECT setval(%s, 1, false)", [seq])
-        self.stdout.write(f"Secuencia {seq} reiniciada (proximo nextval = 1).")
+            cur.execute(
+                "SELECT setval(%s, GREATEST(%s, (SELECT COALESCE(MAX(id), 0) + 1 FROM cat_medicos)), false)",
+                [seq, seq_start],
+            )
+            proximo = cur.fetchone()[0]
+        self.stdout.write(f"Secuencia {seq} reiniciada (proximo nextval = {proximo}).")
 
     # -- salida -----------------------------------------------------------
 
-    def _plan(self, antes, purge):
+    def _plan(self, antes, purge, seq_start):
         self.stdout.write("Se haria, en una sola transaccion:")
         if purge:
             self.stdout.write(
@@ -241,7 +260,7 @@ class Command(BaseCommand):
             "kardex medico; *_code_legacy intactos"
         )
         self.stdout.write(f"  - borrar por ORM cat_medicos ({antes['cat_medicos']} filas) y rel_*/slots en cascada")
-        self.stdout.write("  - setval de la secuencia del id a 1 (solo PostgreSQL)")
+        self.stdout.write(f"  - setval de la secuencia del id a max({seq_start}, MAX(id)+1) (solo PostgreSQL)")
         self.stdout.write("  - verificar que hsp_admission / revisiones / consumos conservan su total")
 
     def _imprimir(self, titulo, conteos):
@@ -254,9 +273,10 @@ class Command(BaseCommand):
             "\nSiguientes pasos:\n"
             "  1. Dar de alta los medicos desde la UI (Medicos > Nuevo): cada uno\n"
             "     requiere un usuario existente con tipo de personal Medico.\n"
-            "     (El import por Excel fue retirado; el catalogo del SISEM legado\n"
-            "     vive en la tabla legacy_medico, solo lectura.)\n"
-            "  2. python manage.py resolve_hsp_doctor_codes            (dry-run)\n"
+            "     (El catalogo del SISEM legado vive en legacy_medico, solo lectura;\n"
+            "     sus codigos nunca son ids de SIRES.)\n"
+            "  2. Enlazar legacy_medico.id_medico_actual con los medicos dados de alta y luego:\n"
+            "     python manage.py resolve_hsp_doctor_codes            (dry-run)\n"
             "     python manage.py resolve_hsp_doctor_codes --execute\n"
             "  3. Verificar en SQL:\n"
             "       SELECT count(*) FROM cat_medicos WHERE id_usuario IS NULL;  -> 0\n"

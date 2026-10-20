@@ -25,8 +25,9 @@ No saltear pasos ni cambiar el orden — cada uno es prerequisito físico del si
 3. `python manage.py migrate hospitalizacion` — crea `hsp_admission` / `hsp_admission_revision`.
 4. `python manage.py seed_catalogos_hospitalizacion --confirm` — siembra los 29 valores de
    catálogo (correr primero sin `--confirm` para ver la vista previa).
-5. **Prerequisito del usuario**: los médicos hospitalarios deben tener `CatMedico.legacy_cd_medico`
-   poblado (carga manual por Excel, ya establecida en el proyecto). Sin esto, `admitting_doctor`/
+5. **Prerequisito del usuario**: los médicos hospitalarios deben existir en `legacy_medico` con
+   `id_medico_actual` enlazado al médico vigente de SIRES (`cat_medicos`; `cat_medicos.legacy_cd_medico`
+   ya no existe). Sin esto, `admitting_doctor`/
    `discharge_doctor` quedan `NULL` en la carga (el código crudo se conserva, se puede resolver
    después).
 6. **Prerequisito del usuario**: mapear `cat_clinicas.cd_clinica` (int, legado) → `CatCentroAtencion`
@@ -71,13 +72,13 @@ PK del legado `no_hservicio`. **NO se reutiliza como PK** — `hsp_admission.id_
 | 6 | `ds_motivo` | `varchar(3000)` NOT NULL | `reason` | `motivo` | `text` | Directo. **Reencodear `latin1_spanish_ci` → UTF-8** (exportar con `--default-character-set=latin1`). |
 | 7 | `fe_ingreso` | `date` NOT NULL | `admission_date` | `fecha_ingreso` | `date` INDEX | Directo. `'0000-00-00'` es válido en MySQL e inválido en Postgres → descartar/reportar. |
 | 8 | `hh_ingreso` | `varchar(10)` NOT NULL | `admission_time` | `hora_ingreso` | `time` NULL | `'HH:MM'` → `TIME`. Vacío/basura → `NULL` (por eso el campo es nullable aunque MySQL diga NOT NULL). |
-| 9 | `cd_medicoing` | `int(10)` NOT NULL | `admitting_doctor` (FK) + `admitting_doctor_code_legacy` | `id_medico_ingreso`, `clave_medico_ingreso_legado` | `bigint` FK NULL, `varchar(10)` | Crudo SIEMPRE (`CAST AS char`). FK: JOIN `cat_medicos.legacy_cd_medico` (comparar como texto). Sin match → FK NULL, crudo preservado, resolver luego con `resolve_pending_fk()`. |
+| 9 | `cd_medicoing` | `int(10)` NOT NULL | `admitting_doctor` (FK) + `admitting_doctor_code_legacy` | `id_medico_ingreso`, `clave_medico_ingreso_legado` | `bigint` FK NULL, `varchar(10)` | Crudo SIEMPRE (`CAST AS char`). FK: `legacy_medico.no_medico` → `legacy_medico.id_medico_actual` (nunca se interpreta como `cat_medicos.id`; `resolve_hsp_doctor_codes`). Sin match o sin `id_medico_actual` → FK NULL, crudo preservado, resolver luego con `resolve_pending_fk()`. |
 | 10 | `fe_registroing` | `datetime` NOT NULL | `registered_at` | `fch_registro_ingreso` | `timestamptz` NULL | Directo. Timestamp de CAPTURA, distinto de `fe_ingreso` (puede haber captura diferida). No versionado. |
 | 11 | `cd_usuarioing` | `varchar(20)` NOT NULL | `registered_by_code_legacy` | `clave_usuario_ingreso_legado` | `varchar(20)` NULL | Solo texto crudo, SIN FK. Valores mixtos (username / no. de empleado) de `cat_usuarios` (DBSIIM, otra base) — irrecuperable como FK. |
 | 12 | `cd_snota` | `varchar(20)` NULL | `clinical_note_code_legacy` | `folio_nota_legado` | `varchar(20)` NULL | Crudo. Liga a `his_notas` → `LegacyConsultationRecord.legacy_folio`, resoluble después. Casi siempre `NULL` en los datos reales. |
 | 13 | `fe_alta` | `date` NULL | `discharge_date` | `fecha_alta` | `date` NULL | Directo. `NULL` = sin alta registrada (frecuente). **Campo que el legado pisa in-place** (`body-altaing.jsp:410`) → el que más importa versionar en SIRES. |
 | 14 | `hh_alta` | `varchar(10)` NULL | `discharge_time` | `hora_alta` | `time` NULL | Igual que #8. |
-| 15 | `cd_medicoalta` | `int unsigned` NULL | `discharge_doctor` (FK) + `discharge_doctor_code_legacy` | `id_medico_alta`, `clave_medico_alta_legado` | `bigint` FK NULL, `varchar(10)` | Igual que #9. **Confirmado**: resuelve contra `cat_medicos.legacy_cd_medico`, NUNCA contra `SyUsuario` (el COMMENT del dump está equivocado). |
+| 15 | `cd_medicoalta` | `int unsigned` NULL | `discharge_doctor` (FK) + `discharge_doctor_code_legacy` | `id_medico_alta`, `clave_medico_alta_legado` | `bigint` FK NULL, `varchar(10)` | Igual que #9. **Confirmado**: también es un `no_medico` (`legacy_medico.no_medico` → `id_medico_actual`), NUNCA una clave de `SyUsuario`/CAT_USUARIOS: el COMMENT del dump está equivocado (Dump20260903: 537/537 `cd_medicoalta` coinciden con un `no_medico`, 0/537 con `cd_usuario`). |
 | 16 | `sw_programado` | `varchar(1)` NOT NULL | `is_scheduled` | `es_programado` | `boolean` DEFAULT false | `'S'→true`, `'N'→false`. |
 | 17 | `sw_status` | `varchar(1)` NOT NULL | `is_active` (+ `deleted_at`) | `est_activo`, `fch_baja` | `boolean` DEFAULT true, `timestamptz` NULL | `'A'→true`, `'B'→false`. Si `'B'`: setear también `deleted_at`. **Soft-delete: JAMÁS omitir la fila** (retención NOM-024, 5 años). |
 | 18 | `cd_origeno` | `int unsigned` NOT NULL | `origin_center` (FK) + `origin_center_code_legacy` | `id_centro_origen`, `clave_clinica_origen_legado` | `bigint` FK NULL, `integer` | Crudo siempre. FK: JOIN `cat_centros_atencion.legacy_cd_clinica` (columna nueva, migración 0029, paso 2 de este runbook). Valor dominante en los datos reales: `5`. |

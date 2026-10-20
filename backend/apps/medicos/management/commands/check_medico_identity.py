@@ -1,3 +1,6 @@
+# OBSOLETO: este chequeo pertenece al cambio `medico-pk-independiente` (ya cerrado).
+# Se conserva solo porque la migracion medicos/0006 importa `run_checks`; no borrar
+# ni cambiar su comportamiento.
 """
 check_medico_identity — chequeo READ-ONLY de integridad de identidad médico/usuario.
 

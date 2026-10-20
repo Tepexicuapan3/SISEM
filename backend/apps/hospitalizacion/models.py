@@ -151,8 +151,9 @@ class HospitalAdmission(models.Model):
         carga de datos. `field`/`code_field` son nombres de columna del
         modelo (ej. `"admitting_doctor"`, `"admitting_doctor_code_legacy"`).
         `lookup` es un dict {codigo_crudo: valor_pk_resuelto} ya calculado
-        por el caller (ej. `{"0512": 512}`: para medicos, `int(codigo)` ES
-        `CatMedico.id`, ver `hospital_admission_usecase.build_doctor_code_lookup`).
+        por el caller (ej. `{"0512": 87}`: para medicos el codigo legado NUNCA es
+        `CatMedico.id`; se resuelve via `LegacyMedico.medico_actual`, ver
+        `hospital_admission_usecase.build_doctor_code_lookup`).
 
         Deja un `AuditoriaEvento` de accion de SISTEMA (no una edicion
         clinica/administrativa normal) -- ver

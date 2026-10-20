@@ -4,6 +4,7 @@ Guard de --db-name, dry-run por defecto, abort sin --purge-citas-cirugias,
 FKs nuleadas con `*_code_legacy` intactos y totales invariantes."""
 
 import datetime
+import unittest
 from io import StringIO
 
 from django.core.management import call_command
@@ -179,3 +180,30 @@ class ResetCatalogoMedicosTests(TestCase):
         self._run(execute=True)
         self._run(execute=True)
         self.assertEqual(CatMedico.objects.count(), 0)
+
+    # -- secuencia --------------------------------------------------------
+
+    def test_seq_start_por_defecto_10000_en_el_plan(self):
+        salida = self._run()
+        self.assertIn("max(10000, MAX(id)+1)", salida)
+
+    def test_seq_start_personalizado_en_el_plan(self):
+        salida = self._run(seq_start=50000)
+        self.assertIn("max(50000, MAX(id)+1)", salida)
+
+    def test_seq_start_invalido_aborta(self):
+        with self.assertRaisesMessage(CommandError, "--seq-start"):
+            self._run(seq_start=0, execute=True)
+        self.assertEqual(CatMedico.objects.count(), 2)
+
+    @unittest.skipUnless(connection.vendor == "postgresql", "setval solo en PostgreSQL")
+    def test_execute_deja_la_secuencia_en_10000_nunca_en_1(self):
+        salida = self._run(execute=True)
+        self.assertIn("proximo nextval = 10000", salida)
+        nuevo = crear_medico(nombre="Nuevo", paterno="Medico")
+        self.assertEqual(nuevo.id, 10000)
+
+    @unittest.skipUnless(connection.vendor == "postgresql", "setval solo en PostgreSQL")
+    def test_execute_respeta_seq_start_mayor(self):
+        salida = self._run(execute=True, seq_start=20000)
+        self.assertIn("proximo nextval = 20000", salida)

@@ -6,7 +6,7 @@ from django.db import transaction
 from apps.administracion.models import AuditoriaEvento
 from apps.hospitalizacion.models import HospitalAdmission
 from apps.hospitalizacion.repositories.hospital_admission_repository import HospitalAdmissionRepository
-from apps.medicos.models import CatMedico
+from apps.medicos.models import LegacyMedico
 
 # Campos de texto largo: se auditan como longitud (`<campo>_len`), nunca el
 # contenido -- mismo criterio de minimizacion de datos que
@@ -120,30 +120,46 @@ DOCTOR_FK_FIELDS = (
 _DIGITS_RE = re.compile(r"[0-9]+")
 
 
+def _pending_doctor_rows(fk_field, code_field):
+    return HospitalAdmission.objects.filter(
+        **{f"{fk_field}__isnull": True, f"{code_field}__isnull": False}
+    )
+
+
 def build_doctor_code_lookup(code_field):
     """Arma `{codigo_crudo: CatMedico.id}` para `resolve_pending_fk`.
 
-    Desde el cambio `medicos-id-no-medico`, `CatMedico.id` ES el No. Medico
-    legado, asi que el puente es `int(codigo) == CatMedico.id` ("0512" -> 512).
-    Solo mira los codigos de filas pendientes (FK NULL y codigo no NULL).
-    Quedan FUERA (la FK sigue NULL): vacio, no numerico, 0 y numeros sin
-    medico existente. Las claves son las cadenas CRUDAS porque
+    REGLA DE ORO: un codigo legado nunca se interpreta como `CatMedico.id`;
+    siempre se pasa por `LegacyMedico` y su unico puente, `medico_actual`.
+    Ingreso (`cd_medicoing`) y alta (`cd_medicoalta`) son AMBOS un `no_medico`
+    legado (verificado en el dump: 537/537 `cd_medicoalta` coinciden con un
+    `no_medico`; el COMMENT del DDL "CAT_USUARIOS DBSIIM" es erroneo). Se limpia
+    el crudo (strip, solo digitos, "0512" -> 512), se busca en
+    `LegacyMedico.no_medico` y se toma `medico_actual_id` (si no es NULL).
+
+    Las claves son las cadenas CRUDAS porque
     `HospitalAdmission.resolve_pending_fk` filtra `code_field=<crudo>`.
+    Quedan FUERA (la FK sigue NULL): vacio, no numerico, sin `no_medico`
+    legado y legado sin `medico_actual`.
     """
     fk_field = next(fk for fk, code in DOCTOR_FK_FIELDS if code == code_field)
     raw_codes = (
-        HospitalAdmission.objects.filter(**{f"{fk_field}__isnull": True, f"{code_field}__isnull": False})
+        _pending_doctor_rows(fk_field, code_field)
         .values_list(code_field, flat=True)
         .distinct()
     )
     numeric = {}
     for raw in raw_codes:
         stripped = (raw or "").strip()
-        if _DIGITS_RE.fullmatch(stripped) and int(stripped) > 0:
+        if _DIGITS_RE.fullmatch(stripped):
             numeric[raw] = int(stripped)
 
-    existing = set(CatMedico.objects.filter(id__in=set(numeric.values())).values_list("id", flat=True))
-    return {raw: medico_id for raw, medico_id in numeric.items() if medico_id in existing}
+    actuales = dict(
+        LegacyMedico.objects.filter(
+            no_medico__in=set(numeric.values()), medico_actual__isnull=False
+        ).values_list("no_medico", "medico_actual_id")
+    )
+    return {raw: actuales[no_medico] for raw, no_medico in numeric.items() if no_medico in actuales}
 
 
 def preview_pending_doctors():
@@ -152,9 +168,7 @@ def preview_pending_doctors():
     report = {}
     for fk_field, code_field in DOCTOR_FK_FIELDS:
         lookup = build_doctor_code_lookup(code_field)
-        pending = HospitalAdmission.objects.filter(
-            **{f"{fk_field}__isnull": True, f"{code_field}__isnull": False}
-        )
+        pending = _pending_doctor_rows(fk_field, code_field)
         pending_count = pending.count()
         resolvable = pending.filter(**{f"{code_field}__in": list(lookup)}).count()
         report[fk_field] = {
@@ -173,9 +187,7 @@ def resolve_pending_doctors(request_id=None):
     report = {}
     for fk_field, code_field in DOCTOR_FK_FIELDS:
         lookup = build_doctor_code_lookup(code_field)
-        pending_count = HospitalAdmission.objects.filter(
-            **{f"{fk_field}__isnull": True, f"{code_field}__isnull": False}
-        ).count()
+        pending_count = _pending_doctor_rows(fk_field, code_field).count()
         resolved = resolve_pending_fk(
             field=fk_field, code_field=code_field, lookup=lookup, request_id=request_id,
         )

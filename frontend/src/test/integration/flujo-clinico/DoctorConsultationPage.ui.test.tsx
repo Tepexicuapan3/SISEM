@@ -768,11 +768,14 @@ describe("DoctorConsultationPage UI", () => {
           cieCode: "A090",
           ...EMPTY_NOTE_FIELDS,
           morbidity: "2",
+          followUpSlotId: null,
         },
       });
     });
 
-    expect(toast.success).toHaveBeenCalledWith("Consulta cerrada");
+    expect(toast.success).toHaveBeenCalledWith("Consulta cerrada", {
+      description: undefined,
+    });
   });
 
   it("mapea errores de dominio en cierre de consulta", async () => {

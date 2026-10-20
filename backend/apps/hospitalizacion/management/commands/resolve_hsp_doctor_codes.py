@@ -2,13 +2,17 @@
 resolve_hsp_doctor_codes -- puente de los codigos legados de medico en
 hospitalizacion (cambio `medicos-id-no-medico`, R8).
 
-`CatMedico.id` ES el No. Medico legado, asi que
-`HospitalAdmission.admitting_doctor_code_legacy` /
-`discharge_doctor_code_legacy` se resuelven con `int(codigo) == CatMedico.id`
-("0512" -> 512). Codigos vacios, "0", no numericos o sin medico existente
-quedan sin resolver (la FK sigue NULL).
+REGLA DE ORO: un codigo legado nunca es `CatMedico.id`. Todo pasa por
+`LegacyMedico` y su puente `medico_actual`:
 
-Uso (correr DESPUES de importar el catalogo de medicos):
+- `admitting_doctor_code_legacy` (`cd_medicoing`) y
+  `discharge_doctor_code_legacy` (`cd_medicoalta`) son AMBOS un `no_medico`
+  legado: se limpian ("0512" -> 512), se buscan en `LegacyMedico.no_medico` y
+  se toma `medico_actual`. Sin legado o sin `medico_actual` quedan sin resolver.
+  (El COMMENT del dump en `cd_medicoalta`, "CAT_USUARIOS DBSIIM", es erroneo:
+  verificado 537/537 contra `no_medico`.)
+
+Uso (correr DESPUES de cargar `legacy_medico` y enlazar `medico_actual`):
 
     python manage.py resolve_hsp_doctor_codes             # dry-run (default)
     python manage.py resolve_hsp_doctor_codes --execute   # aplica
@@ -29,7 +33,8 @@ _LABELS = {
 class Command(BaseCommand):
     help = (
         "Resuelve admitting_doctor / discharge_doctor de hospitalizacion desde "
-        "sus codigos legados (int(codigo) == CatMedico.id). Dry-run por defecto."
+        "sus codigos legados (no_medico) via LegacyMedico.medico_actual. "
+        "Dry-run por defecto."
     )
 
     def add_arguments(self, parser):
