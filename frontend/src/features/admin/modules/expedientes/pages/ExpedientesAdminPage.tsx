@@ -7,11 +7,20 @@ import { Badge } from "@shared/ui/badge";
 import { useExpediente } from "../queries/useExpediente";
 import { useBuscarPorNombre } from "../queries/useBuscarPorNombre";
 import { useActualizarExpediente } from "../mutations/useActualizarExpediente";
-import type { EmpleadoResumen } from "@api/types/expedientes.types";
+import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { formatCatalogDateTime } from "@features/admin/modules/catalogos/shared/utils/catalog-format";
+import type {
+  EmpleadoResumen,
+  UltimaActualizacionExpediente,
+} from "@api/types/expedientes.types";
 
 const esExpediente = (valor: string) => /^\d+$/.test(valor.trim());
 
 export default function ExpedientesAdminPage() {
+  const { hasCapability } = usePermissionDependencies();
+  const canActualizar = hasCapability("admin.expedientes.update", {
+    allOf: ["admin:gestion:expedientes:update"],
+  });
   const [input, setInput] = useState("");
   const [busqueda, setBusqueda] = useState("");         // expediente activo → useExpediente
   const [busquedaNombre, setBusquedaNombre] = useState(""); // nombre activo → useBuscarPorNombre
@@ -82,7 +91,13 @@ export default function ExpedientesAdminPage() {
   const modoNombre = busquedaNombre.length > 0;
   const modoExpediente = busqueda.length > 0 && !modoNombre;
   const cargando = isLoading || isFetching || isLoadingNombre || isFetchingNombre;
-  const puedeActualizar = modoExpediente && !!busqueda && !actualizar.isPending;
+  const puedeActualizar =
+    canActualizar && modoExpediente && !!busqueda && !actualizar.isPending;
+  const motivoSinActualizar = !canActualizar
+    ? "No tienes permiso para actualizar expedientes desde SERMED"
+    : modoNombre
+      ? "Solo se puede actualizar buscando por número de expediente"
+      : "";
 
   return (
     <div className="space-y-6 p-6">
@@ -110,7 +125,7 @@ export default function ExpedientesAdminPage() {
           variant="outline"
           onClick={handleActualizar}
           disabled={!puedeActualizar}
-          title={modoNombre ? "Solo se puede actualizar buscando por número de expediente" : ""}
+          title={motivoSinActualizar}
         >
           <RefreshCw
             className={`w-4 h-4 mr-2 ${actualizar.isPending ? "animate-spin" : ""}`}
@@ -244,11 +259,17 @@ function ExpedienteDetalle({
 }: {
   busqueda: string;
   personas: Persona[];
-  data: { empleados: { CD_LABORAL: string | null }[] } | undefined;
+  data:
+    | {
+        empleados: { CD_LABORAL: string | null }[];
+        ultima_actualizacion?: UltimaActualizacionExpediente | null;
+      }
+    | undefined;
 }) {
+  const ultima = data?.ultima_actualizacion ?? null;
   return (
     <>
-      <div className="flex items-center gap-6 px-4 py-3 rounded-lg border bg-muted/40 text-sm">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 rounded-lg border bg-muted/40 text-sm">
         <span>
           <span className="text-txt-muted">Expediente:</span>{" "}
           <span className="font-semibold">{busqueda}</span>
@@ -259,6 +280,24 @@ function ExpedienteDetalle({
             <span className="font-semibold">{data.empleados[0].CD_LABORAL}</span>
           </span>
         )}
+        {/* Antes de confiar en el estatus: ¿qué tan reciente es la copia de SERMED? */}
+        <span>
+          <span className="text-txt-muted">Última actualización desde SERMED:</span>{" "}
+          {ultima ? (
+            <>
+              <span className="font-semibold">{formatCatalogDateTime(ultima.fecha)}</span>
+              <span className="text-txt-muted"> por </span>
+              <span className="font-semibold">{ultima.usuario}</span>
+              {ultima.resultado === "PARCIAL" && (
+                <Badge variant="critical" className="ml-2">
+                  Parcial
+                </Badge>
+              )}
+            </>
+          ) : (
+            <span className="font-semibold">Sin registro en SIRES</span>
+          )}
+        </span>
       </div>
 
       <div className="overflow-x-auto rounded-lg border">

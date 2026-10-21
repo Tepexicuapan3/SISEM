@@ -24,6 +24,7 @@ from apps.authentication.services.token_service import CSRF_COOKIE
 from apps.catalogos.models import Permisos, Roles
 
 PERMISO_EXPEDIENTES = "admin:gestion:expedientes:read"
+PERMISO_ACTUALIZAR = "admin:gestion:expedientes:update"
 
 
 class ExpedientePermissionsApiTests(APITestCase):
@@ -41,6 +42,14 @@ class ExpedientePermissionsApiTests(APITestCase):
             is_active=True,
         )
         RelRolPermiso.objects.create(id_rol=self.role_con_permiso, id_permiso=self.perm_expedientes)
+        # Actualizar exige su propio permiso (change auditoria-sync-expedientes);
+        # el caso "solo lectura" esta en test_sync_expediente_auditoria.
+        # La migracion administracion 0015 ya lo da de alta.
+        self.perm_actualizar, _ = Permisos.objects.get_or_create(
+            codigo=PERMISO_ACTUALIZAR,
+            defaults={"descripcion": "Actualizar expedientes desde SERMED", "is_active": True},
+        )
+        RelRolPermiso.objects.create(id_rol=self.role_con_permiso, id_permiso=self.perm_actualizar)
 
         self.user_con_permiso = SyUsuario.objects.create(
             usuario="user_con_expedientes",
@@ -205,7 +214,12 @@ class ExpedientePermissionsApiTests(APITestCase):
 
         with mock.patch(
             "apps.administracion.views.expediente_view.actualizar_expediente",
-            return_value={"cat_empleados": {"actualizados": 1}, "errores": []},
+            return_value={
+                "estado": "OK",
+                "id_sync": 1,
+                "tablas": {"cat_empleados": {"actualizados": 1}},
+                "errores": [],
+            },
         ):
             response = self.client.post(
                 "/api/v1/expedientes/actualizar/",

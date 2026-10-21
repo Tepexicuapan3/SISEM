@@ -258,25 +258,43 @@ class SincronizarPacientesCommandTests(TestCase):
 class ActualizarExpedienteHookTests(TestCase):
     _BASE = "apps.administracion.use_cases.expedientes.actualizar_expediente"
 
+    def _replica_simulada(self):
+        """La conexion 'expedientes' no existe en tests: candado y transaccion
+        de la replica se reemplazan por contextos vacios."""
+        from contextlib import nullcontext
+
+        return [
+            patch(f"{self._BASE}.obtener_conexion_oracle", return_value=MagicMock()),
+            patch(f"{self._BASE}.sincronizar_tabla", return_value={"insertados": 0, "eliminados": 0, "actualizados": 0}),
+            patch(f"{self._BASE}.candado_expediente", side_effect=lambda _exp: nullcontext(True)),
+            patch(f"{self._BASE}._transaccion_replica", side_effect=nullcontext),
+        ]
+
     def test_actualizar_expediente_sincroniza_sus_pacientes(self):
         from apps.administracion.use_cases.expedientes.actualizar_expediente import actualizar_expediente
 
         Patient.objects.create(no_exp="100", pk_num=0)
-        with patch(f"{self._BASE}.obtener_conexion_oracle", return_value=MagicMock()), \
-             patch(f"{self._BASE}.sincronizar_tabla", return_value={"insertados": 0, "eliminados": 0, "actualizados": 0}), \
-             patch.object(sync, "ReplicaSermedSource", return_value=FakeSource([_emp()])):
+        mocks = self._replica_simulada()
+        for m in mocks:
+            m.start()
+        self.addCleanup(lambda: [m.stop() for m in mocks])
+        with patch.object(sync, "ReplicaSermedSource", return_value=FakeSource([_emp()])):
             resultado = actualizar_expediente("100")
 
+        self.assertEqual(resultado["estado"], "OK")
         self.assertEqual(resultado["pacientes"]["procesados"], 1)
         self.assertEqual(Patient.objects.get(no_exp="100").first_name, "JUAN")
 
-    def test_un_error_en_la_sincronizacion_no_invalida_la_actualizacion(self):
+    def test_si_falla_la_sincronizacion_de_pacientes_el_resultado_es_parcial(self):
         from apps.administracion.use_cases.expedientes.actualizar_expediente import actualizar_expediente
 
-        with patch(f"{self._BASE}.obtener_conexion_oracle", return_value=MagicMock()), \
-             patch(f"{self._BASE}.sincronizar_tabla", return_value={"insertados": 0, "eliminados": 0, "actualizados": 0}), \
-             patch.object(sync, "sync_no_exp", side_effect=RuntimeError("replica caida")):
+        mocks = self._replica_simulada()
+        for m in mocks:
+            m.start()
+        self.addCleanup(lambda: [m.stop() for m in mocks])
+        with patch.object(sync, "sync_no_exp", side_effect=RuntimeError("replica caida")):
             resultado = actualizar_expediente("100")
 
+        self.assertEqual(resultado["estado"], "PARCIAL")
         self.assertTrue(any("replica caida" in e for e in resultado["errores"]))
-        self.assertEqual(resultado["cat_empleados"], {"insertados": 0, "eliminados": 0, "actualizados": 0})
+        self.assertEqual(resultado["tablas"]["cat_empleados"], {"insertados": 0, "eliminados": 0, "actualizados": 0})

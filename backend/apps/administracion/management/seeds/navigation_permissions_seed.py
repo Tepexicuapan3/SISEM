@@ -243,3 +243,11 @@ NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:padrones:read", "Consultar los padrones de cronicos y discapacidad"),
     ("clinico:padrones:write", "Inscribir y dar de baja pacientes en los padrones clinicos"),
 ]
+
+# Decimosexta tanda (change `auditoria-sync-expedientes`): el boton Actualizar
+# de expedientes deja de colgar de admin:gestion:expedientes:read. La
+# migracion administracion 0015 lo asigna a los roles que ya tenian lectura;
+# despues se retira a mano de los roles que solo consultan.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:gestion:expedientes:update", "Actualizar expedientes desde SERMED (sincronizacion con Oracle)"),
+]

@@ -2,16 +2,28 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from apps.administracion.views.rbac_views import _authorize
+from apps.administracion.models import BitacoraAcceso, BitacoraSyncExpediente
+from apps.administracion.services import bitacora_acceso_service, sync_audit_service
+from apps.administracion.views.rbac_views import _authorize, _request_id
+from apps.authentication.services.response_service import error_response
 
 from ..use_cases.expedientes.buscar_expediente import buscar_expediente, buscar_por_nombre
 from ..use_cases.expedientes.actualizar_expediente import actualizar_expediente
 
-# Único permiso RBAC definido para el módulo de expedientes administrativos
-# (ver frontend/src/app/navigation/nav-config.ts y navigation_seed.py:
-# "administracion.panel.expedientes" gatea ver, actualizar y buscar por
-# nombre con este mismo código — no existe un código separado de escritura).
+# Consultar expedientes (ver, buscar por nombre). Ver frontend
+# nav-config.ts y navigation_seed.py: "administracion.panel.expedientes".
 PERMISO_EXPEDIENTES = "admin:gestion:expedientes:read"
+# Disparar la sincronizacion con SERMED: escribe en la replica y en los
+# pacientes de SIRES, por eso es un permiso aparte (change
+# auditoria-sync-expedientes, migracion administracion 0015).
+PERMISO_ACTUALIZAR_EXPEDIENTES = "admin:gestion:expedientes:update"
+
+# BITACORA_ACCESO.recurso de esta pantalla administrativa (datos personales
+# del trabajador y sus derechohabientes, no la historia clinica).
+RECURSO_EXPEDIENTE = "expediente_sermed"
+RECURSO_BUSQUEDA = "expediente_sermed_busqueda"
+
+Resultado = BitacoraSyncExpediente.Resultado
 
 
 class ExpedienteView(APIView):
@@ -20,7 +32,7 @@ class ExpedienteView(APIView):
     permission_classes = []
 
     def get(self, request):
-        _, auth_error = _authorize(request, PERMISO_EXPEDIENTES)
+        user, auth_error = _authorize(request, PERMISO_EXPEDIENTES)
         if auth_error:
             return auth_error
 
@@ -40,6 +52,11 @@ class ExpedienteView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        bitacora_acceso_service.registrar(
+            request, user, accion=BitacoraAcceso.Accion.VER,
+            recurso=RECURSO_EXPEDIENTE, no_exp=id_empleado,
+        )
+        resultado["ultima_actualizacion"] = sync_audit_service.ultima_actualizacion(id_empleado)
         return Response(resultado, status=status.HTTP_200_OK)
 
 
@@ -50,19 +67,48 @@ class ActualizarExpedienteView(APIView):
     permission_classes = []
 
     def post(self, request):
-        _, auth_error = _authorize(request, PERMISO_EXPEDIENTES, require_csrf=True)
+        user, auth_error = _authorize(request, PERMISO_ACTUALIZAR_EXPEDIENTES, require_csrf=True)
         if auth_error:
             return auth_error
 
-        expediente = request.data.get("expediente", "").strip()
+        expediente = str(request.data.get("expediente", "")).strip()
 
         if not expediente:
             return Response(
                 {"error": "Se requiere el campo expediente en el body."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if len(expediente) > 20:
+            return Response(
+                {"error": "El expediente no puede tener más de 20 caracteres."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        resultado = actualizar_expediente(expediente)
+        resultado = actualizar_expediente(
+            expediente,
+            usuario=user,
+            origen=BitacoraSyncExpediente.Origen.BOTON,
+            request=request,
+        )
+
+        estado = resultado["estado"]
+        if estado == Resultado.OCUPADO:
+            return error_response(
+                "SYNC_EN_CURSO",
+                resultado["errores"][0],
+                status.HTTP_409_CONFLICT,
+                details={"id_sync": resultado["id_sync"]},
+                request_id=_request_id(request),
+            )
+        if estado == Resultado.ERROR:
+            return error_response(
+                "SYNC_ERROR",
+                "No se pudo actualizar el expediente desde SERMED; no se aplicó ningún cambio.",
+                status.HTTP_502_BAD_GATEWAY,
+                details={"id_sync": resultado["id_sync"], "errores": resultado["errores"]},
+                request_id=_request_id(request),
+            )
+        # OK o PARCIAL: la replica quedo al dia; PARCIAL trae sus errores.
         return Response(resultado, status=status.HTTP_200_OK)
 
 
@@ -73,7 +119,7 @@ class BuscarPorNombreView(APIView):
     permission_classes = []
 
     def get(self, request):
-        _, auth_error = _authorize(request, PERMISO_EXPEDIENTES)
+        user, auth_error = _authorize(request, PERMISO_EXPEDIENTES)
         if auth_error:
             return auth_error
 
@@ -86,4 +132,7 @@ class BuscarPorNombreView(APIView):
             )
 
         resultados = buscar_por_nombre(nombre)
+        bitacora_acceso_service.registrar(
+            request, user, accion=BitacoraAcceso.Accion.VER, recurso=RECURSO_BUSQUEDA,
+        )
         return Response(resultados, status=status.HTTP_200_OK)

@@ -30,9 +30,18 @@ export interface FamiliarExpediente {
   FOTO: string | null;
 }
 
+/** Última actualización que dejó la réplica de SERMED al día (bitacora_sync_expediente). */
+export interface UltimaActualizacionExpediente {
+  id_sync: number;
+  fecha: string;
+  usuario: string;
+  resultado: 'OK' | 'PARCIAL';
+}
+
 export interface ExpedienteResponse {
   empleados: EmpleadoExpediente[];
   familiares: FamiliarExpediente[];
+  ultima_actualizacion: UltimaActualizacionExpediente | null;
 }
 
 export interface EmpleadoResumen {
@@ -60,4 +69,18 @@ export interface SyncConteos {
   actualizados: number;
 }
 
-export type ActualizarExpedienteResponse = Record<string, SyncConteos>;
+/**
+ * OK: réplica y pacientes al día. PARCIAL: la réplica se actualizó pero los
+ * pacientes de SIRES no (ver `errores`). ERROR (502, code SYNC_ERROR) y
+ * OCUPADO (409, code SYNC_EN_CURSO) llegan como ApiError.
+ */
+export type EstadoSyncExpediente = 'OK' | 'PARCIAL';
+
+export interface ActualizarExpedienteResponse {
+  estado: EstadoSyncExpediente;
+  id_sync: number;
+  tablas: Record<string, SyncConteos>;
+  cambios_registrados?: number;
+  pacientes?: Record<string, number>;
+  errores: string[];
+}

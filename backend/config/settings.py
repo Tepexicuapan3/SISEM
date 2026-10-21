@@ -116,7 +116,8 @@ ASGI_APPLICATION = "config.asgi.application"
 ORACLE_CONFIG = {
     "user": config("ORACLE_USER", default="SERMED"),
     "password": config("ORACLE_PASSWORD", default=""),
-    "host": config("ORACLE_HOST", default="11.121.252.12"),
+    # Sin host ni contrasenas por defecto en el codigo: salen del entorno.
+    "host": config("ORACLE_HOST", default=""),
     "port": config("ORACLE_PORT", default="1526"),
     "service_name": config("ORACLE_SERVICE", default="NOMINAP"),
     "instant_client_dir": config(
@@ -130,8 +131,8 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": config("POSTGRES_NAME", default="sermed"),
         "USER": config("POSTGRES_USER", default="sermed"),
-        "PASSWORD": config("POSTGRES_PASSWORD", default="112233"),
-        "HOST": config("POSTGRES_HOST", default="50.192.41.223"),
+        "PASSWORD": config("POSTGRES_PASSWORD", default=""),
+        "HOST": config("POSTGRES_HOST", default="127.0.0.1"),
         "PORT": config("POSTGRES_PORT", default="5432"),
         "OPTIONS": {"client_encoding": "UTF8", "options": "-c search_path=sires,public"},
     },
@@ -139,12 +140,28 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": config("EXPEDIENTES_NAME", default="sermed"),
         "USER": config("EXPEDIENTES_USER", default="sermed"),
-        "PASSWORD": config("EXPEDIENTES_PASSWORD", default="112233"),
+        "PASSWORD": config("EXPEDIENTES_PASSWORD", default=""),
         "HOST": config("EXPEDIENTES_HOST", default="127.0.0.1"),
         "PORT": config("EXPEDIENTES_PORT", default="5432"),
         "OPTIONS": {"client_encoding": "UTF8"},
     },
 }
+
+# Fuera de desarrollo, una contrasena de base faltante es un error de
+# despliegue: se detiene el arranque en vez de intentar una contrasena
+# escrita en el codigo.
+if not DEBUG and "test" not in sys.argv:
+    from django.core.exceptions import ImproperlyConfigured
+
+    _faltantes = [
+        variable
+        for variable, alias in (("POSTGRES_PASSWORD", "default"), ("EXPEDIENTES_PASSWORD", "expedientes"))
+        if not DATABASES[alias]["PASSWORD"]
+    ]
+    if _faltantes:
+        raise ImproperlyConfigured(
+            "Faltan variables de entorno obligatorias: " + ", ".join(_faltantes)
+        )
 
 if "test" in sys.argv:
     DATABASES = {

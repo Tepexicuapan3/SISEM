@@ -63,6 +63,10 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
             "admin:gestion:permisos:read",
         ]
     },
+    # Expedientes SERMED: consultar y disparar la sincronizacion son permisos
+    # distintos (change auditoria-sync-expedientes).
+    "admin.expedientes.read": {"allOf": ["admin:gestion:expedientes:read"]},
+    "admin.expedientes.update": {"allOf": ["admin:gestion:expedientes:update"]},
     "admin.roles.read": {"allOf": ["admin:gestion:roles:read"]},
     "admin.roles.create": {"allOf": ["admin:gestion:roles:create"]},
     "admin.roles.update": {"allOf": ["admin:gestion:roles:update"]},

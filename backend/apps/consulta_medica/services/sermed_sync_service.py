@@ -156,20 +156,30 @@ def plan_not_found(patient: Patient) -> PatientPlan:
     return plan
 
 
-def apply_plan(plan: PatientPlan) -> dict[str, bool]:
-    """Aplica un plan en una transaccion. Todo cambio queda en la bitacora."""
+def apply_plan(plan: PatientPlan, *, user: Any = PROCESS_SERMED_SYNC) -> dict[str, bool]:
+    """Aplica un plan en una transaccion. Todo cambio queda en la bitacora.
+
+    ``user``: el SyUsuario que pidio la actualizacion (boton Actualizar de
+    expedientes) o el nombre del proceso (comando). El motivo sigue siendo
+    SINCRONIZACION SERMED: el dato viene de SERMED, pero quien lo trajo queda
+    registrado."""
     patient = plan.patient
     applied = {"patient": False, "state": False, "identifier": False}
+    user_id = getattr(user, "pk", None)
     with transaction.atomic():
         if plan.fields:
             previous = snapshot(patient, plan.fields)
             for attr, value in plan.fields.items():
                 setattr(patient, attr, value)
-            patient.save(update_fields=[*plan.fields, "updated_at"])
+            update_fields = [*plan.fields, "updated_at"]
+            if user_id is not None:
+                patient.updated_by_id = user_id
+                update_fields.append("updated_by_id")
+            patient.save(update_fields=update_fields)
             record_change(
                 table="cns_paciente", key=build_key("id_paciente", patient.pk),
                 action=ChangeLog.Action.UPDATE, reason=ChangeLog.Reason.SERMED_SYNC,
-                user=PROCESS_SERMED_SYNC, previous=previous, new=dict(plan.fields),
+                user=user, previous=previous, new=dict(plan.fields),
             )
             applied["patient"] = True
 
@@ -187,7 +197,7 @@ def apply_plan(plan: PatientPlan) -> dict[str, bool]:
                 record_change(
                     table="cns_paciente_sermed", key=build_key("id_paciente", patient.pk),
                     action=ChangeLog.Action.UPDATE, reason=ChangeLog.Reason.SERMED_SYNC,
-                    user=PROCESS_SERMED_SYNC, previous=previous, new=dict(plan.state),
+                    user=user, previous=previous, new=dict(plan.state),
                 )
                 applied["state"] = True
 
@@ -195,7 +205,7 @@ def apply_plan(plan: PatientPlan) -> dict[str, bool]:
             try:
                 _, created = register_identifier(
                     patient, PatientIdentifier.IdType.PK_NUM, patient.pk_num,
-                    reason=ChangeLog.Reason.SERMED_SYNC, user=PROCESS_SERMED_SYNC,
+                    reason=ChangeLog.Reason.SERMED_SYNC, user=user,
                 )
                 applied["identifier"] = created
             except IdentifierConflict as exc:
@@ -213,7 +223,7 @@ class SyncResult:
 
 
 def sync_patients(patients: Iterable[Patient], *, source=None, dry_run: bool = False,
-                  chunk_size: int = 500) -> SyncResult:
+                  chunk_size: int = 500, user: Any = PROCESS_SERMED_SYNC) -> SyncResult:
     """Sincroniza los pacientes dados contra la replica de SERMED."""
     source = source or ReplicaSermedSource()
     result = SyncResult()
@@ -238,7 +248,7 @@ def sync_patients(patients: Iterable[Patient], *, source=None, dry_run: bool = F
             if plan.fields:
                 result.add("pacientes_actualizados")
             if not dry_run:
-                applied = apply_plan(plan)
+                applied = apply_plan(plan, user=user)
                 if applied["state"]:
                     result.add("estados_sermed_cambiados")
                 if applied["identifier"]:
@@ -257,7 +267,8 @@ def sync_patients(patients: Iterable[Patient], *, source=None, dry_run: bool = F
     return result
 
 
-def sync_no_exp(no_exp: str, *, source=None, dry_run: bool = False) -> SyncResult:
+def sync_no_exp(no_exp: str, *, source=None, dry_run: bool = False,
+                user: Any = PROCESS_SERMED_SYNC) -> SyncResult:
     """Sincroniza al titular y a los familiares de un expediente (tras actualizar_expediente)."""
     patients = Patient.objects.filter(no_exp=str(no_exp).strip()).order_by("id_patient")
-    return sync_patients(patients, source=source, dry_run=dry_run)
+    return sync_patients(patients, source=source, dry_run=dry_run, user=user)

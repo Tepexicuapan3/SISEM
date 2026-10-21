@@ -9,7 +9,9 @@ class BitacoraAcceso(models.Model):
 
     Tabla propia y append-only (nunca se edita ni se borra desde la app).
     `no_exp`/`tp_paciente` son NULL solo en exportaciones de reportes que
-    abarcan a muchos pacientes (el documento pide registrar TODA exportacion).
+    abarcan a muchos pacientes (el documento pide registrar TODA exportacion)
+    y en la busqueda de expedientes por nombre (recurso
+    expediente_sermed_busqueda), que devuelve varios titulares.
     `restringidos` > 0 = la respuesta ocultó diagnosticos sensibles (VIH,
     salud mental, sustancias) porque el usuario no tenia el permiso.
     """
