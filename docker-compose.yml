@@ -27,6 +27,8 @@ services:
       POSTGRES_DB: ${EXPEDIENTES_NAME}
       POSTGRES_USER: ${EXPEDIENTES_USER}
       POSTGRES_PASSWORD: ${EXPEDIENTES_PASSWORD}
+    ports:
+      - "5433:5433"
     volumes:
       - expedientes_db_data:/var/lib/postgresql/data
       - ./backend/storage/expedientes-ddl:/docker-entrypoint-initdb.d:ro
