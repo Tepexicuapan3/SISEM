@@ -66,7 +66,10 @@ export type {
   CreateUserResponse,
   UpdateUserResponse,
   UserStatusResponse,
+  ResetUserPasswordRequest,
   ResetUserPasswordResponse,
+  ForceLogoutUserResponse,
+  UnlockUserResponse,
   // Listados
   UsersListParams,
   UsersListResponse,

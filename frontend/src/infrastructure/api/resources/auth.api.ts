@@ -221,7 +221,8 @@ const authAPI = {
    * @permission Auth (Token válido + CSRF)
    *
    * @param data - Contraseña actual y nueva contraseña
-   * @returns Confirmación de operación exitosa
+   * @returns Confirmación de operación exitosa. `sessionRotated === false`
+   *          indica que la sesión no pudo rotarse y se debe avisar al usuario.
    */
   changePassword: async (
     data: ChangePasswordRequest,

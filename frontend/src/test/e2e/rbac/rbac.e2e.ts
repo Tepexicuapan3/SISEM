@@ -106,7 +106,7 @@ test.describe("RBAC UI (MSW)", () => {
       await rbacPage.openRoleDetails("Auditoria");
 
       const dialog = page.getByRole("dialog", { name: "Detalle de rol" });
-      await dialog.getByRole("tab", { name: /Permisos/i }).click();
+      await dialog.getByRole("tab", { name: /^Permisos(?!\s+por)/i }).click();
       await dialog
         .getByRole("button", {
           name: "Remover permiso admin:gestion:roles:read",
@@ -139,7 +139,7 @@ test.describe("RBAC UI (MSW)", () => {
         ),
       ).toBeVisible();
 
-      await dialog.getByRole("tab", { name: /Permisos/i }).click();
+      await dialog.getByRole("tab", { name: /^Permisos(?!\s+por)/i }).click();
       await expect(
         dialog.getByText(
           "Solo lectura: no puedes actualizar este rol porque es de sistema o no tienes permisos.",
@@ -183,7 +183,7 @@ test.describe("RBAC UI (MSW)", () => {
         dialog.getByRole("button", { name: "Agregar" }),
       ).toBeDisabled();
 
-      await dialog.getByRole("tab", { name: /^Permisos/ }).click();
+      await dialog.getByRole("tab", { name: /^Permisos(?!\s+por)/ }).click();
       await expect(
         dialog.getByText(
           "Solo lectura: no puedes actualizar este usuario porque no tienes permisos.",
@@ -257,7 +257,7 @@ test.describe("RBAC UI (MSW)", () => {
       await rbacPage.openFirstUserDetails();
 
       const dialog = page.getByRole("dialog", { name: "Detalle de usuario" });
-      await dialog.getByRole("tab", { name: /^Permisos/ }).click();
+      await dialog.getByRole("tab", { name: /^Permisos(?!\s+por)/ }).click();
 
       await dialog
         .getByRole("button", {
@@ -318,11 +318,15 @@ test.describe("RBAC UI (MSW)", () => {
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText("Sin cambios")).toBeVisible();
       await expect(
-        dialog.getByText("No puedes desactivar tu propia cuenta."),
-      ).toBeVisible();
-      await expect(
         dialog.getByRole("combobox", { name: "Estado de la cuenta" }),
-      ).toBeDisabled();
+      ).toHaveCount(0);
+      await dialog.getByRole("tab", { name: /Seguridad/i }).click();
+      await expect(
+        dialog.getByRole("button", { name: "Desactivar" }),
+      ).toHaveCount(0);
+      await expect(
+        dialog.getByRole("button", { name: "Generar y mostrar" }),
+      ).toHaveCount(0);
 
       await page.keyboard.press("Escape");
       await expect(dialog).not.toBeVisible();

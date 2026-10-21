@@ -2,11 +2,21 @@ from unittest.mock import patch
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
 
-from apps.authentication.models import DetUsuario, SyUsuario
-from apps.authentication.services.errors import AuthServiceError
+from apps.authentication.models import DetUsuario, SesionUsuario, SyUsuario
+from apps.authentication.services.errors import (
+    AuthServiceError,
+    PolicyStoreUnavailableError,
+)
+from apps.authentication.services.reset_token_guard import (
+    consume_reset_jti,
+    ensure_user_can_reset,
+)
+from apps.authentication.services.session_registry import start_session
 from apps.authentication.services.otp_service import OTP_TTL_SECONDS
 from apps.authentication.services.token_service import create_reset_token
 from apps.authentication.uses_case.change_password_usecase import change_password
@@ -226,3 +236,161 @@ class AuthUseCasesTests(TestCase):
             change_password(self.user, "Usecase_123456", "corta")
 
         self.assertEqual(ctx.exception.code, "PASSWORD_TOO_WEAK")
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
+)
+class ResetPasswordHardeningTests(TestCase):
+    """auth-session-revocation: reset token de un solo uso + estado del usuario."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = SyUsuario.objects.create(
+            usuario="reset_hardening",
+            correo="reset.hardening@example.com",
+            clave_hash=make_password("Reset_123456"),
+            est_activo=True,
+            cambiar_clave=False,
+            terminos_acept=True,
+        )
+        DetUsuario.objects.create(
+            id_usuario=self.user, nombre="Reset", paterno="Hardening", materno=""
+        )
+
+    def _password_unchanged(self):
+        self.user.refresh_from_db()
+        return check_password("Reset_123456", self.user.clave_hash)
+
+    # R5-S1
+    def test_reset_password_token_is_single_use(self):
+        token = create_reset_token(self.user)
+
+        result = reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+        self.assertIn("access_token", result)
+
+        with self.assertRaises(AuthServiceError) as ctx:
+            reset_password(token, "Otra_Clave_456", "127.0.0.1")
+
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.user.refresh_from_db()
+        self.assertTrue(check_password("Nueva_Clave_123", self.user.clave_hash))
+
+    # R5-S2
+    def test_reset_password_rejects_inactive_user(self):
+        token = create_reset_token(self.user)
+        self.user.est_activo = False
+        self.user.save(update_fields=["est_activo"])
+
+        with self.assertRaises(AuthServiceError) as ctx:
+            reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
+        self.assertTrue(self._password_unchanged())
+
+    def test_reset_password_rejects_user_with_fch_baja(self):
+        token = create_reset_token(self.user)
+        self.user.fch_baja = timezone.now()
+        self.user.save(update_fields=["fch_baja"])
+
+        with self.assertRaises(AuthServiceError) as ctx:
+            reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
+        self.assertTrue(self._password_unchanged())
+
+    def test_reset_password_rejects_blocked_user(self):
+        token = create_reset_token(self.user)
+        self.user.est_bloqueado = True
+        self.user.save(update_fields=["est_bloqueado"])
+
+        with self.assertRaises(AuthServiceError) as ctx:
+            reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
+        self.assertTrue(self._password_unchanged())
+
+    def test_reset_password_rejected_for_inactive_user_does_not_consume_jti(self):
+        # El estado se valida antes de consumir: el jti no se quema.
+        token = create_reset_token(self.user)
+        self.user.est_activo = False
+        self.user.save(update_fields=["est_activo"])
+        with self.assertRaises(AuthServiceError):
+            reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+
+        self.user.est_activo = True
+        self.user.save(update_fields=["est_activo"])
+
+        result = reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+        self.assertIn("access_token", result)
+
+    # R5-S3
+    def test_reset_password_fail_closed_when_jti_store_unavailable(self):
+        token = create_reset_token(self.user)
+
+        with patch(
+            "apps.authentication.services.reset_token_guard.reset_token_store.mark_consumed",
+            side_effect=PolicyStoreUnavailableError("down"),
+        ):
+            with self.assertRaises(AuthServiceError) as ctx:
+                reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+
+        self.assertEqual(ctx.exception.code, "SERVICE_UNAVAILABLE")
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertTrue(self._password_unchanged())
+
+    # R5-S4: password debil no quema el token
+    def test_reset_password_weak_password_does_not_burn_token(self):
+        token = create_reset_token(self.user)
+
+        with patch(
+            "apps.authentication.uses_case.reset_password_usecase.validate_password",
+            side_effect=ValidationError(["weak"]),
+        ):
+            with self.assertRaises(AuthServiceError) as ctx:
+                reset_password(token, "corta", "127.0.0.1")
+        self.assertEqual(ctx.exception.code, "PASSWORD_TOO_WEAK")
+
+        result = reset_password(token, "Nueva_Clave_123", "127.0.0.1")
+        self.assertIn("access_token", result)
+
+    # R5-S6
+    def test_reset_password_closes_previous_sessions_and_opens_single_new_one(self):
+        _a, _r, old_sid = start_session(self.user, "127.0.0.1", "ua")
+        token = create_reset_token(self.user)
+
+        reset_password(token, "Nueva_Clave_123", "127.0.0.1", "ua")
+
+        old_row = SesionUsuario.objects.get(usuario=self.user, session_id=old_sid)
+        self.assertEqual(old_row.cerrada_por, SesionUsuario.CierrePor.REVOCADA)
+        self.assertIsNotNone(old_row.fch_fin)
+        self.assertEqual(
+            SesionUsuario.objects.filter(
+                usuario=self.user, fch_fin__isnull=True
+            ).count(),
+            1,
+        )
+
+    # Guard unit tests
+    def test_consume_reset_jti_second_use_is_rejected(self):
+        payload = {"jti": "jti-guard-1"}
+
+        consume_reset_jti(payload)
+
+        with self.assertRaises(AuthServiceError) as ctx:
+            consume_reset_jti(payload)
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
+
+    def test_consume_reset_jti_without_jti_is_invalid(self):
+        with self.assertRaises(AuthServiceError) as ctx:
+            consume_reset_jti({})
+
+        self.assertEqual(ctx.exception.code, "TOKEN_INVALID")
+
+    def test_ensure_user_can_reset_accepts_active_user(self):
+        ensure_user_can_reset(self.user)

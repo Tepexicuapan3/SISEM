@@ -53,7 +53,7 @@ class MedicoCreateApiTests(APITestCase):
             usuario=username,
             correo=f"{username}@example.com",
             clave_hash=make_password("x"),
-            est_activo=True,
+            est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         DetUsuario.objects.create(
             id_usuario=user,
@@ -193,7 +193,7 @@ class MedicoSearchApiTests(APITestCase):
             usuario="dra_gonzalez",
             correo="dra.gonzalez@example.com",
             clave_hash=make_password("x"),
-            est_activo=True,
+            est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         DetUsuario.objects.create(
             id_usuario=self.medico_user,
@@ -209,7 +209,7 @@ class MedicoSearchApiTests(APITestCase):
             usuario=username,
             correo=f"{username}@example.com",
             clave_hash=make_password("x"),
-            est_activo=True,
+            est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         DetUsuario.objects.create(id_usuario=user, nombre=username, paterno="Test", materno="User")
         RelUsuarioRol.objects.create(id_usuario=user, id_rol=self.read_role, is_primary=True)

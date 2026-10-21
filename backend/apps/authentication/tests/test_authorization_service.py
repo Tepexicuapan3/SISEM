@@ -39,13 +39,18 @@ class AuthorizationServiceTests(SimpleTestCase):
         )
 
     def test_get_capability_state_reports_missing_any_of_dependencies(self):
-        state = get_capability_state(
-            ["recepcion:fichas:medicina_general:create"],
-            "flow.visits.queue.read",
-        )
+        state = get_capability_state([], "flow.visits.queue.read")
 
         self.assertFalse(state["granted"])
-        self.assertIn("recepcion:fichas:medicina_general:read", state["missingAnyOf"])
+        self.assertIn("recepcion:fichas:medicina_general:create", state["missingAnyOf"])
+
+    def test_fichas_create_alone_grants_reception_capabilities(self):
+        # Regresion: antes exigia `recepcion:fichas:*:read` (inexistente) y
+        # bloqueaba la creacion de fichas a roles no-admin.
+        for resource in ("medicina_general", "especialidad", "urgencias"):
+            perms = [f"recepcion:fichas:{resource}:create"]
+            self.assertTrue(has_capability(perms, "flow.recepcion.queue.write"))
+            self.assertTrue(has_capability(perms, "flow.visits.queue.read"))
 
     def test_single_change_point_updates_runtime_behavior(self):
         original_requirement = CAPABILITY_REQUIREMENTS["flow.somatometria.capture"]

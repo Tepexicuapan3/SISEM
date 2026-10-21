@@ -58,7 +58,7 @@ export interface NavigationMenuResponse {
  * `_serialize_module_node` (change `menu-modulos-crud-ui`, Fase 2) para
  * que la pantalla de gestion de menus (Fase 5) pueda editar/mover/ocultar
  * un nodo sin tener que resolver esos datos por otro lado -- la tab
- * "Modulos" del detalle de rol (`RoleDetailsModulesTab`) los ignora, solo
+ * "Permisos por modulo" del detalle de rol (`RolePermissionMatrixTab`) los ignora, solo
  * le importan `key`/`title`/`icon`/`permissions`/`items`.
  */
 export interface ModuleCatalogNodeDTO {

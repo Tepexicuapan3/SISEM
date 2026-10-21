@@ -19,7 +19,7 @@ import type { RoleListItem } from "@api/types";
  * Tests de integracion de Fase 7 (`RolePreviewPanel`, "Ver el menu como").
  * Monta el componente REAL con hooks REALES (`useRolesList`, `useRoleDetail`,
  * `useNavigationMenu`) contra MSW -- misma estrategia que
- * `RoleDetailsModulesTab.ui.test.tsx`. `filterNavigation` en si ya tiene
+ * `RolePermissionMatrixTab.ui.test.tsx`. `filterNavigation` en si ya tiene
  * cobertura unitaria propia; lo que se prueba aca es el WIRING: que el rol
  * elegido se traduce correctamente en el arbol filtrado, incluyendo el caso
  * `isAdmin` (D5/design de `menu-modulos-crud-ui`).

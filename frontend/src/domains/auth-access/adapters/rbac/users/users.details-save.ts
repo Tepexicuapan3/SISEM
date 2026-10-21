@@ -7,16 +7,12 @@ import type {
 
 interface UserDetailsSavePlan {
   profilePayload: Partial<UpdateUserRequest>;
-  hasStatusChanges: boolean;
-  nextIsActive: boolean;
   rolesDiff: UserRolesDiff;
   overridesDiff: UserOverridesDiff;
 }
 
 interface UserDetailsSaveExecutors {
   updateProfile: (payload: Partial<UpdateUserRequest>) => Promise<unknown>;
-  activateUser: () => Promise<unknown>;
-  deactivateUser: () => Promise<unknown>;
   assignRoles: (roleIds: number[]) => Promise<unknown>;
   setPrimaryRole: (roleId: number) => Promise<unknown>;
   revokeRole: (roleId: number) => Promise<unknown>;
@@ -34,12 +30,7 @@ export const hasUserDetailsChanges = (plan: UserDetailsSavePlan) => {
     plan.overridesDiff.toUpsert.length > 0 ||
     plan.overridesDiff.toRemove.length > 0;
 
-  return (
-    hasProfileChanges ||
-    plan.hasStatusChanges ||
-    hasRolesChanges ||
-    hasOverridesChanges
-  );
+  return hasProfileChanges || hasRolesChanges || hasOverridesChanges;
 };
 
 export const applyUserDetailsSavePlan = async (
@@ -50,15 +41,6 @@ export const applyUserDetailsSavePlan = async (
 
   if (Object.keys(plan.profilePayload).length > 0) {
     await executors.updateProfile(plan.profilePayload);
-    completedGroups += 1;
-  }
-
-  if (plan.hasStatusChanges) {
-    if (plan.nextIsActive) {
-      await executors.activateUser();
-    } else {
-      await executors.deactivateUser();
-    }
     completedGroups += 1;
   }
 

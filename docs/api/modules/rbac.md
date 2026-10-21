@@ -90,6 +90,7 @@ http://localhost:5000/api/v1
 | `code` | `cat_permisos.codigo` | formato `grupo:modulo:submodulo:accion` |
 | `description` | `cat_permisos.descripcion` | |
 | `isSystem` | `cat_permisos.es_sistema` | |
+| `dependsOn` | calculado (`get_permission_direct_dependencies`) | codigos de dependencias DIRECTAS, ordenadas; `[]` si no tiene (ej. cualquier `:read`). Ver "Dependencias de permisos" |
 
 #### UserListItem / UserDetail
 
@@ -323,6 +324,10 @@ Matriz de `accion` recomendada:
 10. Dependencias de permisos:
    - Si se asigna `:create/:update/:delete`, garantizar `:read` del mismo recurso.
    - Si se intenta revocar `:read` y quedan permisos de escritura del mismo recurso, rechazar (`PERMISSION_DEPENDENCY`).
+   - `GET /permissions` (ambos serializers, legacy y S1) incluye `dependsOn` por permiso: dependencias directas (explicitas + `X:read` inferido para acciones `create|update|delete|manage|assign|revoke`). Es un campo aditivo; no es el cierre transitivo. Las excepciones sin `:read` en catalogo (`recepcion:fichas:*:create`) no lo infieren.
+   - `POST /permissions/assign` (`ensure_read_dependencies`): el backend agrega al set pedido el cierre transitivo de dependencias (`get_permission_dependency_closure`) de cada permiso activo pedido. Ejemplo: asignar solo `X:update` deja el rol con `X:update` y `X:read`; asignar `admin:gestion:usuarios:update` agrega tambien `admin:gestion:roles:read`, `admin:gestion:permisos:read` y `admin:gestion:usuarios:read`. Los codigos de dependencia que no existen (o estan inactivos) en el catalogo se ignoran sin error. Idempotente.
+   - Las dependencias agregadas pasan por la misma validacion de alcance que los permisos pedidos: si el actor (sin `*`) no posee alguna, responde `403 PERMISSION_GRANT_NOT_ALLOWED` y no se persiste nada.
+   - El frontend (tab "Permisos por modulo") usa `dependsOn` para auto-marcar dependencias y cascadear al desmarcar; la fuente de verdad del cierre sigue siendo el backend.
 11. `CreateUser` debe dejar onboarding forzado:
     - `cambiar_clave = true`
     - `terminos_acept = false`
@@ -342,6 +347,7 @@ Estos codigos adicionales ya son consumidos por frontend RBAC:
 | `ROLE_SYSTEM_PROTECTED` | 403 | intento de modificar rol de sistema |
 | `ROLE_HAS_USERS` | 400 | intento de eliminar rol con usuarios activos |
 | `PERMISSION_DEPENDENCY` | 400 | violacion de dependencia `read`/escritura |
+| `PERMISSION_GRANT_NOT_ALLOWED` | 403 | el actor intenta asignar (o, por cierre de dependencias, implicar) permisos que no posee |
 
 ### Seed E2E relevante (`backend/seed_e2e.py`)
 

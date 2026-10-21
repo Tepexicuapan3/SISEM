@@ -1,14 +1,22 @@
+import logging
 from http.cookies import SimpleCookie
 from typing import cast
 from urllib.parse import parse_qs, urlparse
 
+from asgiref.sync import sync_to_async
 from channels.middleware import BaseMiddleware
 from django.conf import settings
 from django.http.request import validate_host
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.settings import api_settings
 
+from apps.authentication.infrastructure.policy_store import PolicyStore
+from apps.authentication.repositories.user_repository import UserRepository
+from apps.authentication.services.errors import PolicyStoreUnavailableError
 from apps.authentication.services.token_service import ACCESS_COOKIE, decode_access_token
+
+logger = logging.getLogger(__name__)
+policy_store = PolicyStore()
 
 REALTIME_USER_SCOPE_KEY = "realtime_user"
 REALTIME_QUERY_TOKEN_SCOPE_KEY = "realtime_query_token_present"
@@ -43,6 +51,10 @@ async def authenticate_websocket_scope(scope):
     if user_id in (None, ""):
         return None
 
+    # Valida estado del usuario y sesion vigente (sid) contra DB/Redis.
+    if not await sync_to_async(_is_ws_session_valid)(user_id, payload.get("sid")):
+        return None
+
     roles = payload.get("roles") or []
     permissions = payload.get("permissions") or []
     return {
@@ -50,6 +62,24 @@ async def authenticate_websocket_scope(scope):
         "roles": roles,
         "permissions": permissions,
     }
+
+
+def _is_ws_session_valid(user_id, sid) -> bool:
+    user = UserRepository.get_by_id(user_id)
+    if not user or not user.est_activo or user.est_bloqueado or user.fch_baja:
+        return False
+    if user.cambiar_clave or not user.terminos_acept:
+        # Onboarding pendiente: sin acceso a canales realtime.
+        return False
+    if not sid:
+        return False
+
+    try:
+        return sid == policy_store.get_active_session(user.id_usuario)
+    except PolicyStoreUnavailableError:
+        # Redis caido: fail-open, igual que authenticate_request (HTTP).
+        logger.warning("WS_SESSION_CHECK_REDIS_UNAVAILABLE user_id=%s", user_id)
+        return True
 
 
 def has_forbidden_query_token(scope):

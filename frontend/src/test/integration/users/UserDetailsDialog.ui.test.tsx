@@ -370,7 +370,7 @@ describe("UserDetailsDialog UI", () => {
     );
   });
 
-  it("shows account and audit summary data in general tab", () => {
+  it("shows audit summary data in general tab without status editing", () => {
     const userDetail = createMockUserDetail({
       id: 77,
       firstName: "Maria",
@@ -406,7 +406,7 @@ describe("UserDetailsDialog UI", () => {
     );
 
     expect(screen.getByText("Centro de atención")).toBeVisible();
-    expect(screen.getByText("Estado de la cuenta")).toBeVisible();
+    expect(screen.queryByText("Estado de la cuenta")).toBeNull();
     expect(screen.getByText("Ultimo acceso")).toBeVisible();
     expect(screen.getByText("Ultima IP")).toBeVisible();
     expect(screen.getByText("Creado por")).toBeVisible();
@@ -570,6 +570,52 @@ describe("UserDetailsDialog UI", () => {
       screen.getByRole("button", { name: "Reintentar catalogo" }),
     );
     expect(retryCatalog).toHaveBeenCalled();
+  });
+
+  it("shows the Seguridad tab only when the actor can act on the account", async () => {
+    vi.mocked(useUserDetail).mockReturnValue({
+      data: {
+        user: createMockUserDetail({ id: 77 }),
+        roles: [createMockUserRole({ id: 1, name: "Admin", isPrimary: true })],
+        overrides: [],
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    } as ReturnType<typeof useUserDetail>);
+
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <UserDetailsDialog
+        open
+        onOpenChange={onOpenChange}
+        onClose={onClose}
+        userSummary={userSummary}
+        roleOptions={roleOptions}
+        clinicOptions={clinicOptions}
+        canEdit={false}
+        canManageCredentials={false}
+      />,
+    );
+    expect(screen.queryByRole("tab", { name: /Seguridad/i })).toBeNull();
+
+    rerender(
+      <UserDetailsDialog
+        open
+        onOpenChange={onOpenChange}
+        onClose={onClose}
+        userSummary={userSummary}
+        roleOptions={roleOptions}
+        clinicOptions={clinicOptions}
+        canEdit={false}
+        canManageCredentials
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: /Seguridad/i }));
+    expect(
+      screen.getByRole("button", { name: "Generar y mostrar" }),
+    ).toBeVisible();
+    expect(screen.queryByText("Estado de la cuenta")).toBeNull();
   });
 
   it("closes the dialog from footer", async () => {

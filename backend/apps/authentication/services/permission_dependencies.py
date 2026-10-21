@@ -44,10 +44,30 @@ EXPLICIT_PERMISSION_DEPENDENCIES: Dict[str, List[str]] = {
 }
 
 
+# Permisos de escritura cuyo `:read` hermano NO existe en el catalogo real
+# (cat_permisos). Sin esto, `_infer_read_dependency` exigiria un permiso
+# inexistente -> imposible de conceder -> `project_effective_permissions` y
+# `has_capability` los descartaban para roles no-admin (la recepcionista no
+# podia crear fichas aunque su rol tuviera el permiso). Para estos codigos NO
+# se infiere dependencia: el permiso se basta a si mismo (no concede nada mas).
+# Change `fichas-permission-dependency-bug`. Mantener en sync con
+# frontend `domains/auth-access/types/permission-dependencies.ts`.
+NO_INFERRED_READ_DEPENDENCY = frozenset(
+    {
+        "recepcion:fichas:medicina_general:create",
+        "recepcion:fichas:especialidad:create",
+        "recepcion:fichas:urgencias:create",
+    }
+)
+
+
 CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.users.read": {"allOf": ["admin:gestion:usuarios:read"]},
     "admin.users.create": {"allOf": ["admin:gestion:usuarios:create"]},
     "admin.users.update": {"allOf": ["admin:gestion:usuarios:update"]},
+    # Credenciales (restablecer contrasena, forzar cierre de sesion, desbloquear):
+    # permiso propio, solo admin (change auth-session-revocation).
+    "admin.users.credentials": {"allOf": ["admin:gestion:usuarios:credenciales"]},
     "admin.users.rolesCatalog.read": {"allOf": ["admin:gestion:roles:read"]},
     "admin.users.permissionsCatalog.read": {
         "allOf": ["admin:gestion:permisos:read"]
@@ -397,7 +417,11 @@ def get_permission_direct_dependencies(permission_code: str) -> List[str]:
     explicit = EXPLICIT_PERMISSION_DEPENDENCIES.get(normalized_permission, [])
     dependencies = set(explicit)
 
-    inferred = _infer_read_dependency(normalized_permission)
+    inferred = (
+        None
+        if normalized_permission in NO_INFERRED_READ_DEPENDENCY
+        else _infer_read_dependency(normalized_permission)
+    )
     if inferred and inferred != normalized_permission:
         dependencies.add(inferred)
 

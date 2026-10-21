@@ -51,7 +51,7 @@ class MedicoDetailAndRelationsApiTestsBase(APITestCase):
             usuario=username,
             correo=f"{username}@example.com",
             clave_hash=make_password("x"),
-            est_activo=True,
+            est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         DetUsuario.objects.create(
             id_usuario=user, nombre=username, paterno="Test", materno="User",

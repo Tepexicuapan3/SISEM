@@ -39,6 +39,10 @@ export const createMockPermission = (
     code,
     description: `Permite ${action} ${submodule}`,
     isSystem: true,
+    dependsOn:
+      action === "read"
+        ? []
+        : [`${group}:${moduleName}:${submodule}:read`],
     ...overrides,
   };
 };

@@ -28,6 +28,7 @@ export const ERROR_CODES = {
   REFRESH_TOKEN_EXPIRED: "REFRESH_TOKEN_EXPIRED",
   SESSION_EXPIRED: "SESSION_EXPIRED",
   PERMISSION_DENIED: "PERMISSION_DENIED",
+  ONBOARDING_REQUIRED: "ONBOARDING_REQUIRED",
   ACCOUNT_LOCKED: "ACCOUNT_LOCKED",
   USER_INACTIVE: "USER_INACTIVE",
   ACCOUNT_EXPIRED: "ACCOUNT_EXPIRED",
@@ -53,6 +54,9 @@ export const ERROR_CODES = {
   CLINIC_NOT_FOUND: "CLINIC_NOT_FOUND",
   CANNOT_DELETE_SYSTEM_ROLE: "CANNOT_DELETE_SYSTEM_ROLE",
   CANNOT_REMOVE_LAST_ROLE: "CANNOT_REMOVE_LAST_ROLE",
+  SELF_FORCE_LOGOUT_NOT_ALLOWED: "SELF_FORCE_LOGOUT_NOT_ALLOWED",
+  USER_EMAIL_MISSING: "USER_EMAIL_MISSING",
+  EMAIL_SEND_FAILED: "EMAIL_SEND_FAILED",
 
   // Sistema (5xx)
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
@@ -90,6 +94,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ERROR_CODES.REFRESH_TOKEN_EXPIRED]: "Tu sesión ha expirado",
   [ERROR_CODES.SESSION_EXPIRED]: "Tu sesión ha expirado",
   [ERROR_CODES.PERMISSION_DENIED]: "No tienes permiso para esta acción",
+  [ERROR_CODES.ONBOARDING_REQUIRED]:
+    "Debes cambiar tu contraseña temporal y aceptar los términos antes de continuar",
   [ERROR_CODES.ACCOUNT_LOCKED]: "Cuenta bloqueada por intentos fallidos",
   [ERROR_CODES.USER_INACTIVE]: "Cuenta desactivada por un administrador",
   [ERROR_CODES.ACCOUNT_EXPIRED]: "Tu cuenta ha expirado. Contacta a soporte",
@@ -113,6 +119,11 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "No se puede eliminar un rol de sistema",
   [ERROR_CODES.CANNOT_REMOVE_LAST_ROLE]:
     "El usuario debe conservar al menos un rol",
+  [ERROR_CODES.SELF_FORCE_LOGOUT_NOT_ALLOWED]:
+    "No puedes forzar el cierre de tu propia sesión",
+  [ERROR_CODES.USER_EMAIL_MISSING]: "El usuario no tiene correo registrado",
+  [ERROR_CODES.EMAIL_SEND_FAILED]:
+    "No se pudo enviar el correo; la contraseña no fue modificada",
   [ERROR_CODES.INTERNAL_SERVER_ERROR]: "Error del servidor, intenta nuevamente",
   [ERROR_CODES.DATABASE_ERROR]: "Error de base de datos",
   [ERROR_CODES.EXTERNAL_SERVICE_ERROR]: "Error en servicio externo",
@@ -173,6 +184,7 @@ const EXPECTED_AUTH_ERROR_CODES = new Set<string>([
   ERROR_CODES.SESSION_EXPIRED,
   ERROR_CODES.REFRESH_TOKEN_EXPIRED,
   ERROR_CODES.PERMISSION_DENIED,
+  ERROR_CODES.ONBOARDING_REQUIRED,
 ]);
 
 export const isExpectedAuthErrorForTelemetry = (error: unknown): boolean => {

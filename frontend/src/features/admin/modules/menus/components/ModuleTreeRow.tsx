@@ -73,7 +73,7 @@ export function ModuleTreeRow({
   const protectedNode = node.isSystem;
   const hasActions = canUpdate || canDelete;
   const hasChildren = node.items.length > 0;
-  // Ver comentario en RoleDetailsModulesTab.tsx: se envuelve en un objeto
+  // Ver comentario en `NavMain.tsx`: se envuelve en un objeto
   // para no romper react-hooks/static-components con `resolveNavIcon`.
   const icon = { Component: resolveNavIcon(node.icon) };
 

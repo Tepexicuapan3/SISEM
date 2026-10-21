@@ -40,19 +40,9 @@ interface UserDetailsGeneralTabProps {
   especialidadOptions?: CatalogOption[];
   isClinicsCatalogLoading?: boolean;
   userDetail: UserDetail;
-  accountIsActive: boolean;
   onSubmit: (values: UserDetailsFormValues) => void;
-  onAccountStatusChange: (nextActive: boolean) => void;
   isEditable?: boolean;
-  canChangeAccountStatus?: boolean;
 }
-
-const ACCOUNT_STATUS = {
-  ACTIVE: "active",
-  INACTIVE: "inactive",
-} as const;
-
-type AccountStatusValue = (typeof ACCOUNT_STATUS)[keyof typeof ACCOUNT_STATUS];
 
 interface ClinicSelectOption {
   id: number;
@@ -71,16 +61,9 @@ export function UserDetailsGeneralTab({
   tipoPersonalOptions = [],
   isClinicsCatalogLoading = false,
   userDetail,
-  accountIsActive,
   onSubmit,
-  onAccountStatusChange,
   isEditable = true,
-  canChangeAccountStatus = true,
 }: UserDetailsGeneralTabProps) {
-  const accountStatusValue: AccountStatusValue = accountIsActive
-    ? ACCOUNT_STATUS.ACTIVE
-    : ACCOUNT_STATUS.INACTIVE;
-
   const clinicSelectOptions: ClinicSelectOption[] = clinicOptions.map(
     (clinic) => ({ id: clinic.id, name: clinic.name, code: clinic.code, isActive: clinic.isActive }),
   );
@@ -358,40 +341,6 @@ export function UserDetailsGeneralTab({
               </FormItem>
             )}
           />
-
-          <div className="space-y-2">
-            <p
-              id="user-account-status-label"
-              className="text-xs font-semibold tracking-wide text-txt-muted uppercase"
-            >
-              Estado de la cuenta
-            </p>
-            <Select
-              value={accountStatusValue}
-              onValueChange={(value) =>
-                onAccountStatusChange(value === ACCOUNT_STATUS.ACTIVE)
-              }
-              disabled={!canChangeAccountStatus}
-            >
-              <FormControl>
-                <SelectTrigger
-                  className="h-11"
-                  aria-labelledby="user-account-status-label"
-                >
-                  <SelectValue placeholder="Selecciona estado" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value={ACCOUNT_STATUS.ACTIVE}>Activo</SelectItem>
-                <SelectItem value={ACCOUNT_STATUS.INACTIVE}>Inactivo</SelectItem>
-              </SelectContent>
-            </Select>
-            {!canChangeAccountStatus && isEditable ? (
-              <p className="text-xs text-txt-muted">
-                No puedes desactivar tu propia cuenta.
-              </p>
-            ) : null}
-          </div>
 
           <FormField
             control={form.control}

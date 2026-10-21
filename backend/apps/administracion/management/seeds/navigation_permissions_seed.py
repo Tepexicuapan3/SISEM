@@ -251,3 +251,14 @@ NAVIGATION_PERMISSIONS_SEED += [
 NAVIGATION_PERMISSIONS_SEED += [
     ("admin:gestion:expedientes:update", "Actualizar expedientes desde SERMED (sincronizacion con Oracle)"),
 ]
+
+# Decimoseptima tanda (change `auth-session-revocation`): credenciales de
+# usuarios (restablecer contrasena, forzar cierre de sesion, desbloquear)
+# separadas de admin:gestion:usuarios:update. La migracion administracion 0016
+# lo asigna solo a los roles admin (is_admin=True).
+NAVIGATION_PERMISSIONS_SEED += [
+    (
+        "admin:gestion:usuarios:credenciales",
+        "Gestionar credenciales de usuarios: restablecer contrasena, forzar cierre de sesion y desbloquear",
+    ),
+]

@@ -46,7 +46,7 @@ export function NavIconPicker({
 
   const options = useMemo(() => buildNavIconOptions(), []);
   const selectedLabel = value ? (NAV_ICON_LABELS[value] ?? value) : null;
-  // Ver comentario en `ModuleTreeRow.tsx`/`RoleDetailsModulesTab.tsx`: se
+  // Ver comentario en `ModuleTreeRow.tsx`/`NavMain.tsx`: se
   // envuelve en un objeto para no romper react-hooks/static-components con
   // `resolveNavIcon`.
   const selectedIcon = { Component: resolveNavIcon(value) };

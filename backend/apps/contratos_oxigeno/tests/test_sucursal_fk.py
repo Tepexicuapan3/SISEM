@@ -70,7 +70,7 @@ class ContratoOxigenoApiTests(APITestCase):
         self.matriz = CatSucursal.objects.create(name="MATRIZ")
         self.norte = CatSucursal.objects.create(name="NORTE")
         user = SyUsuario.objects.create(
-            usuario="oxigeno_user", correo="oxigeno@example.com", clave_hash="x", est_activo=True,
+            usuario="oxigeno_user", correo="oxigeno@example.com", clave_hash="x", est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         access, _refresh, _sid = start_session(user, ip_address="127.0.0.1", user_agent="test-agent")
         self.client.cookies["access_token_cookie"] = access

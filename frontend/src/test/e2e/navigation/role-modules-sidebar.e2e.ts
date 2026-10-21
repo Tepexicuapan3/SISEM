@@ -20,7 +20,7 @@ import { RoleModulesPage } from "./role-modules-page";
  *    motivo explicito si no es `"db"`. Asi nunca se muta el rol sembrado
  *    si el test va a saltearse de todas formas -- evita dejar estado sucio
  *    en una corrida que no iba a verificar nada igual. El endpoint
- *    `GET /api/v1/modules` (catalogo de modulos de la tab "Modulos") NO
+ *    `GET /api/v1/modules` (catalogo de modulos de la tab "Permisos por modulo") NO
  *    depende de este flag -- siempre devuelve el arbol completo -- pero el
  *    SIDEBAR (`GET /api/v1/navigation-menu`) si depende de el.
  *
@@ -43,7 +43,8 @@ import { RoleModulesPage } from "./role-modules-page";
  *    ver `ROLE_DEFS` en `seed_e2e.py`) y porque es el UNICO nodo del arbol
  *    que declara ese codigo de permiso -- tildarlo no dispara
  *    `ModuleImpactDialog` (sin colaterales), lo que simplifica el flujo
- *    principal. `RoleModulesPage.setModuleChecked` igual maneja el dialogo
+ *    principal. En la matriz "tildar el modulo" es tildar la celda
+ *    "Ver usuarios en Usuarios" (ver `RoleModulesPage.moduleCheckbox`). `RoleModulesPage.setModuleChecked` igual maneja el dialogo
  *    si aparece, para no romper si el seed cambia y el permiso pasa a
  *    compartirse con otro nodo.
  *

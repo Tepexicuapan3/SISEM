@@ -1,6 +1,9 @@
 from datetime import timezone as dt_timezone
 
 from apps.authentication.repositories.user_repository import UserRepository
+from apps.authentication.services.permission_dependencies import (
+    get_permission_direct_dependencies,
+)
 
 
 def _to_utc_iso(value):
@@ -106,6 +109,7 @@ def serialize_permission_catalog(data):
             "code": permission.codigo,
             "description": permission.descripcion,
             "isSystem": bool(permission.es_sistema),
+            "dependsOn": get_permission_direct_dependencies(permission.codigo),
         }
         for permission in data["permissions"]
     ]

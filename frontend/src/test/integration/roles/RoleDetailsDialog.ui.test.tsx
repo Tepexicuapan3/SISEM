@@ -112,6 +112,36 @@ describe("RoleDetailsDialog UI", () => {
     expect(refetch).toHaveBeenCalled();
   });
 
+  it("renders the matrix tab as 'Permisos por módulo' next to the flat 'Permisos' tab", async () => {
+    vi.mocked(useRoleDetail).mockReturnValue({
+      data: {
+        role: createMockRoleDetail({ id: 77, name: "Auditoria" }),
+        permissions: [createMockRolePermission({ id: 1 })],
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    } as ReturnType<typeof useRoleDetail>);
+
+    render(
+      <RoleDetailsDialog
+        open
+        onOpenChange={onOpenChange}
+        onClose={onClose}
+        roleSummary={roleSummary}
+        canEdit
+      />,
+    );
+
+    expect(
+      screen.getByRole("tab", { name: /^Permisos por módulo/ }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("tab", { name: /^Permisos(?!\s+por)/ }),
+    ).toBeVisible();
+    expect(screen.queryByRole("tab", { name: /^Módulos/i })).toBeNull();
+  });
+
   it("saves updated fields", async () => {
     const roleDetail = createMockRoleDetail({
       id: 77,
@@ -279,7 +309,7 @@ describe("RoleDetailsDialog UI", () => {
       />,
     );
 
-    await user.click(screen.getByRole("tab", { name: /Permisos/i }));
+    await user.click(screen.getByRole("tab", { name: /^Permisos(?!\s+por)/i }));
     await user.click(
       screen.getByRole("button", { name: "Agregar permiso perm:b" }),
     );
@@ -364,7 +394,7 @@ describe("RoleDetailsDialog UI", () => {
       />,
     );
 
-    await user.click(screen.getByRole("tab", { name: /Permisos/i }));
+    await user.click(screen.getByRole("tab", { name: /^Permisos(?!\s+por)/i }));
 
     expect(
       screen.getByText(/No tienes acceso al catalogo de permisos/i),
@@ -415,7 +445,7 @@ describe("RoleDetailsDialog UI", () => {
       />,
     );
 
-    await user.click(screen.getByRole("tab", { name: /Permisos/i }));
+    await user.click(screen.getByRole("tab", { name: /^Permisos(?!\s+por)/i }));
 
     expect(
       screen.getByText(

@@ -10,8 +10,8 @@ const IMPACT_DIALOG_NAME_PATTERN = /Efecto colateral/i;
 
 /**
  * Page Object para el flujo "admin tilda/destilda un modulo en un rol"
- * dentro del detalle de rol (`RoleDetailsDialog` -> tab "Modulos" ->
- * `RoleDetailsModulesTab`), usado por el E2E de la tarea 7.1 de
+ * dentro del detalle de rol (`RoleDetailsDialog` -> tab "Permisos por
+ * modulo" -> `RolePermissionMatrixTab`), usado por el E2E de la tarea 7.1 de
  * `menu-modulos-rol-ui`: tildar un modulo en un rol lo hace aparecer en el
  * sidebar de un usuario con ese rol.
  *
@@ -97,13 +97,20 @@ export class RoleModulesPage {
 
   async openModulesTab() {
     await this.roleDetailsDialog
-      .getByRole("tab", { name: /Modulos/i })
+      .getByRole("tab", { name: /Permisos por m[oó]dulo/i })
       .click();
   }
 
+  /**
+   * En la matriz, "tildar un modulo" equivale a tildar la celda "Ver" de su
+   * fila: el aria-label es `"{Accion} {recurso} en {modulo}"` (ej. "Ver
+   * usuarios en Usuarios"). Las celdas de escritura y los tri-estado de
+   * fila/seccion no empiezan con "Ver ", asi que el patron es inequivoco.
+   */
   moduleCheckbox(moduleTitle: string) {
+    const escapedTitle = moduleTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return this.roleDetailsDialog.getByRole("checkbox", {
-      name: new RegExp(moduleTitle, "i"),
+      name: new RegExp(`^Ver .+ en ${escapedTitle}$`, "i"),
     });
   }
 
@@ -115,7 +122,7 @@ export class RoleModulesPage {
    * falta un click, para que el caller sepa si debe guardar.
    *
    * Si el modulo comparte permiso con otros nodos del arbol,
-   * `RoleDetailsModulesTab` abre `ModuleImpactDialog` ANTES de mutar el
+   * `RolePermissionMatrixTab` abre `ModuleImpactDialog` ANTES de mutar el
    * draft -- este helper lo confirma automaticamente si aparece. El
    * modulo "Usuarios" usado en el spec no tiene colaterales (es el unico
    * nodo del seed con el permiso `admin:gestion:usuarios:read`), pero se

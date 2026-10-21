@@ -141,7 +141,13 @@ export function setupErrorInterceptor(client: AxiosInstance): void {
         );
 
       if (!isRefreshableUnauthorized) {
-        throw transformToApiError(error);
+        const apiError = transformToApiError(error);
+        if (apiError.code === ERROR_CODES.ONBOARDING_REQUIRED) {
+          // El backend exige onboarding: refrescar la sesión cacheada para que
+          // ProtectedRoute redirija a /onboarding.
+          void queryClient.invalidateQueries({ queryKey: authKeys.session() });
+        }
+        throw apiError;
       }
 
       // Ya se reintentó con credenciales renovadas y sigue 401 (o la sesión

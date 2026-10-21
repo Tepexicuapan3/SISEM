@@ -111,6 +111,43 @@ class RbacContractTests(APITestCase):
         self.assertIn("code", item)
         self.assertIn("description", item)
         self.assertIn("isSystem", item)
+        self.assertIn("dependsOn", item)
+
+    @override_settings(RBAC_READ_S1_ENABLED=False)
+    def test_permissions_catalog_depends_on_parity_legacy_vs_s1(self):
+        Permisos.objects.create(
+            codigo="admin:gestion:usuarios:update",
+            descripcion="Actualizar usuarios",
+            is_active=True,
+        )
+        Permisos.objects.create(
+            codigo="admin:gestion:usuarios:read",
+            descripcion="Leer usuarios",
+            is_active=True,
+        )
+
+        legacy = self.client.get("/api/v1/permissions")
+        with self.settings(RBAC_READ_S1_ENABLED=True):
+            s1 = self.client.get("/api/v1/permissions")
+
+        self.assertEqual(legacy.status_code, status.HTTP_200_OK)
+        self.assertEqual(s1.status_code, status.HTTP_200_OK)
+        expected_keys = {"id", "code", "description", "isSystem", "dependsOn"}
+        for response in (legacy, s1):
+            for item in response.data["items"]:
+                self.assertEqual(set(item.keys()), expected_keys)
+
+        for response in (legacy, s1):
+            by_code = {item["code"]: item for item in response.data["items"]}
+            self.assertEqual(by_code["admin:gestion:usuarios:read"]["dependsOn"], [])
+            update_deps = by_code["admin:gestion:usuarios:update"]["dependsOn"]
+            self.assertIn("admin:gestion:roles:read", update_deps)
+            self.assertIn("admin:gestion:permisos:read", update_deps)
+            self.assertIn("admin:gestion:usuarios:read", update_deps)
+
+        legacy_deps = {i["code"]: i["dependsOn"] for i in legacy.data["items"]}
+        s1_deps = {i["code"]: i["dependsOn"] for i in s1.data["items"]}
+        self.assertEqual(legacy_deps, s1_deps)
 
     def test_users_list_contract(self):
         response = self.client.get("/api/v1/users")

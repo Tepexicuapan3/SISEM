@@ -75,14 +75,18 @@ def send_reset_code_email(recipient_email, code, user_name=None):
 
 
 def send_user_credentials_email(
-    recipient_email, username, temporary_password, user_name=None
+    recipient_email, username, temporary_password, user_name=None, is_reset=False
 ):
     if not _smtp_is_configured():
         logger.error("SMTP no configurado para enviar credenciales de usuario")
         return False
 
     safe_name = user_name or username or recipient_email
-    subject = "Credenciales de acceso a SISEM"
+    subject = (
+        "Restablecimiento de contraseña en SISEM"
+        if is_reset
+        else "Credenciales de acceso a SISEM"
+    )
     login_url = _setting_value(
         "SISEM_LOGIN_URL",
         "http://localhost:5173/login",
@@ -105,8 +109,18 @@ def send_user_credentials_email(
         "https://i.ibb.co/zhdc3v4c/metro-logo-borde.jpg",
     )
 
+    greeting = (
+        f"Hola {safe_name}, un administrador restableció tu contraseña de SISEM."
+        if is_reset
+        else f"Hola {safe_name}, tu cuenta de SISEM fue creada."
+    )
+    report_hint = (
+        "Si no solicitaste este cambio, repórtalo de inmediato."
+        if is_reset
+        else "Si no reconoces esta alta, repórtala de inmediato."
+    )
     message = (
-        f"Hola {safe_name}, tu cuenta de SISEM fue creada.\n\n"
+        f"{greeting}\n\n"
         f"Usuario: {username}\n"
         f"Contraseña temporal: {temporary_password}\n\n"
         "Pasos para acceder:\n"
@@ -116,7 +130,7 @@ def send_user_credentials_email(
         "Recomendaciones de seguridad:\n"
         "- No compartas estas credenciales.\n"
         "- Usa una contraseña única al cambiarla.\n"
-        "- Si no reconoces esta alta, repórtala de inmediato.\n"
+        f"- {report_hint}\n"
         f"- Soporte: {support_email}\n"
     )
     html_message = render_to_string(
@@ -125,6 +139,7 @@ def send_user_credentials_email(
             "user_name": safe_name,
             "username": username,
             "temporary_password": temporary_password,
+            "is_reset": is_reset,
             "login_url": login_url,
             "support_email": support_email,
             "company_name": company_name,

@@ -44,9 +44,7 @@ const renderGeneralTab = () => {
         formId="user-details-form"
         clinicOptions={clinicOptions}
         userDetail={userDetail}
-        accountIsActive
         onSubmit={vi.fn()}
-        onAccountStatusChange={vi.fn()}
       />
     );
   };
@@ -63,52 +61,14 @@ describe("UserDetailsGeneralTab", () => {
     expect(screen.getByLabelText("Nombre")).toBeVisible();
     expect(screen.getByLabelText("Correo")).toBeVisible();
     expect(screen.getByText("Centro de atención")).toBeVisible();
-    expect(screen.getByText("Estado de la cuenta")).toBeVisible();
   });
 
-  it("notifies account status change", async () => {
-    const onAccountStatusChange = vi.fn();
-    const user = userEvent.setup();
+  it("does not offer account status editing", () => {
+    renderGeneralTab();
 
-    const userDetail = createMockUserDetail({
-      id: 17,
-      username: "jperez",
-      primaryRole: "Clinico",
-      isActive: true,
-    });
-    const clinicOptions = [createClinicOption({ id: 1, name: "Centro 1" })];
-
-    const Wrapper = () => {
-      const form = useForm<UserDetailsFormValues>({
-        defaultValues: {
-          firstName: userDetail.firstName,
-          paternalName: userDetail.paternalName,
-          maternalName: userDetail.maternalName,
-          email: userDetail.email,
-          clinicId: userDetail.clinic?.id ?? null,
-        },
-      });
-
-      return (
-        <UserDetailsGeneralTab
-          form={form}
-          formId="user-details-form"
-          clinicOptions={clinicOptions}
-          userDetail={userDetail}
-          accountIsActive
-          onSubmit={vi.fn()}
-          onAccountStatusChange={onAccountStatusChange}
-        />
-      );
-    };
-
-    render(<Wrapper />);
-
-    await user.click(
-      screen.getByRole("combobox", { name: "Estado de la cuenta" }),
-    );
-    await user.click(screen.getByRole("option", { name: "Inactivo" }));
-
-    expect(onAccountStatusChange).toHaveBeenCalledWith(false);
+    expect(screen.queryByText("Estado de la cuenta")).toBeNull();
+    expect(
+      screen.queryByRole("combobox", { name: "Estado de la cuenta" }),
+    ).toBeNull();
   });
 });

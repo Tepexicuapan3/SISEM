@@ -22,8 +22,15 @@ from apps.authentication.models import DetUsuario, DetUsuarioCedula, SyUsuario
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.auth_revision import touch_users_auth_revision
 from apps.authentication.services.csrf_service import validate_csrf
-from apps.authentication.services.email_service import send_notification_email_batch
+from apps.authentication.services.email_service import (
+    send_notification_email_batch,
+    send_user_credentials_email,
+)
 from apps.authentication.services.errors import AuthServiceError
+from apps.authentication.services.permission_dependencies import (
+    get_permission_direct_dependencies,
+)
+from apps.authentication.services.session_revocation import revoke_user_sessions
 from apps.authentication.services.response_service import (
     error_response,
     get_client_ip,
@@ -244,6 +251,7 @@ def _serialize_permission(permission):
         "code": permission.codigo,
         "description": permission.descripcion,
         "isSystem": bool(permission.es_sistema),
+        "dependsOn": get_permission_direct_dependencies(permission.codigo),
     }
 
 
@@ -1864,13 +1872,17 @@ class UserStatusView(APIView):
         user.save(update_fields=["est_activo", "fch_modf", "usr_modf"])
 
         payload = {"id": user.id_usuario, "isActive": bool(user.est_activo)}
+        audit_after = dict(payload)
+        if not self.activate:
+            # Desactivar corta la sesion en curso (solo va a la auditoria).
+            audit_after["sessionRevoked"] = revoke_user_sessions(user)
         _audit(
             request,
             action,
             "user",
             resource_id=user.id_usuario,
             result="SUCCESS",
-            after=payload,
+            after=audit_after,
             target_user=user,
         )
         return Response(payload, status=status.HTTP_200_OK)
@@ -1884,13 +1896,19 @@ class UserDeactivateView(UserStatusView):
     activate = False
 
 
+class _PasswordEmailFailed(Exception):
+    # Aborta el savepoint del reset cuando el correo no pudo enviarse.
+    pass
+
+
 class UserResetPasswordView(APIView):
     # Reset administrativo de contraseña: metodo de fallback para cuando no
     # hay internet (no se puede enviar correo) pero si hay acceso al
     # sistema/base de datos. Genera una password temporal nueva y la
     # devuelve en texto plano en la respuesta HTTP -- unico lugar donde esa
-    # password existe en texto plano, de forma transitoria. NUNCA se envia
-    # por correo ni se loguea en claro (ver `_audit` mas abajo).
+    # password existe en texto plano, de forma transitoria. NUNCA se loguea
+    # en claro (ver `_audit` mas abajo). Con `sendEmail: true` la password
+    # viaja solo por correo y la respuesta no la incluye.
     authentication_classes = []
     permission_classes = []
 
@@ -1898,7 +1916,7 @@ class UserResetPasswordView(APIView):
     def post(self, request, user_id):
         actor, auth_error = _authorize(
             request,
-            "admin:gestion:usuarios:update",
+            "admin:gestion:usuarios:credenciales",
             require_csrf=True,
         )
         if auth_error:
@@ -1946,14 +1964,66 @@ class UserResetPasswordView(APIView):
                 request_id=_request_id(request),
             )
 
+        send_email = request.data.get("sendEmail") is True
+        if send_email and not user.correo:
+            _audit(
+                request,
+                "RBAC_USER_PASSWORD_RESET",
+                "user",
+                resource_id=user.id_usuario,
+                result="FAIL",
+                error_code="USER_EMAIL_MISSING",
+                target_user=user,
+            )
+            return error_response(
+                "USER_EMAIL_MISSING",
+                "El usuario no tiene correo registrado",
+                status.HTTP_400_BAD_REQUEST,
+                request_id=_request_id(request),
+            )
+
         temporary_password = generate_temporary_password()
-        user.clave_hash = make_password(temporary_password)
-        user.cambiar_clave = True
-        user.fch_modf = timezone.now()
-        user.usr_modf = actor
-        user.save(
-            update_fields=["clave_hash", "cambiar_clave", "fch_modf", "usr_modf"]
-        )
+        try:
+            # Savepoint propio: si el correo falla, la clave nueva se revierte.
+            with transaction.atomic():
+                user.clave_hash = make_password(temporary_password)
+                user.cambiar_clave = True
+                user.fch_modf = timezone.now()
+                user.usr_modf = actor
+                user.save(
+                    update_fields=[
+                        "clave_hash",
+                        "cambiar_clave",
+                        "fch_modf",
+                        "usr_modf",
+                    ]
+                )
+                if send_email and not send_user_credentials_email(
+                    user.correo,
+                    user.usuario,
+                    temporary_password,
+                    is_reset=True,
+                ):
+                    raise _PasswordEmailFailed()
+        except _PasswordEmailFailed:
+            _audit(
+                request,
+                "RBAC_USER_PASSWORD_RESET",
+                "user",
+                resource_id=user.id_usuario,
+                result="FAIL",
+                error_code="EMAIL_SEND_FAILED",
+                target_user=user,
+            )
+            return error_response(
+                "EMAIL_SEND_FAILED",
+                "No se pudo enviar el correo; la contraseña no fue modificada",
+                status.HTTP_502_BAD_GATEWAY,
+                request_id=_request_id(request),
+            )
+
+        # La clave anterior deja de valer: se corta la sesion en curso.
+        revoked = revoke_user_sessions(user)
 
         _audit(
             request,
@@ -1961,9 +2031,18 @@ class UserResetPasswordView(APIView):
             "user",
             resource_id=user.id_usuario,
             result="SUCCESS",
-            after={"passwordReset": True},
+            after={
+                "passwordReset": True,
+                "sessionRevoked": revoked,
+                **({"emailSent": True} if send_email else {}),
+            },
             target_user=user,
         )
+        if send_email:
+            return Response(
+                {"emailSent": True, "mustChangePassword": True},
+                status=status.HTTP_200_OK,
+            )
         return Response(
             {
                 "temporaryPassword": temporary_password,

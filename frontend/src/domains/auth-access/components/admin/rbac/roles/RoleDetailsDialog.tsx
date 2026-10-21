@@ -17,7 +17,7 @@ import { useModuleCatalog } from "@features/navigation/queries/useModuleCatalog"
 import { RoleDetailsGeneralTab } from "@/domains/auth-access/components/admin/rbac/roles/RoleDetailsGeneralTab";
 import { RoleDetailsFooter } from "@/domains/auth-access/components/admin/rbac/roles/RoleDetailsFooter";
 import { RoleDetailsPermissionsTab } from "@/domains/auth-access/components/admin/rbac/roles/RoleDetailsPermissionsTab";
-import { RoleDetailsModulesTab } from "@/domains/auth-access/components/admin/rbac/roles/RoleDetailsModulesTab";
+import { RolePermissionMatrixTab } from "@/domains/auth-access/components/admin/rbac/roles/RolePermissionMatrixTab";
 import { RoleDetailsSidePanel } from "@/domains/auth-access/components/admin/rbac/roles/RoleDetailsSidePanel";
 import { RoleDialogHeader } from "@/domains/auth-access/components/admin/rbac/roles/RoleDialogHeader";
 import {
@@ -176,7 +176,7 @@ export function RoleDetailsDialog({
     : "Solo lectura: no puedes actualizar este rol porque no tienes permisos.";
   // El rol admin tiene acceso total dinamico via el RBACResolver (wildcard
   // "*"), independiente de lo que haya en RelRolPermiso. Las tabs de
-  // Permisos y Modulos se fuerzan a solo-lectura para este rol -- no tiene
+  // Permisos y Permisos por módulo se fuerzan a solo-lectura para este rol -- no tiene
   // sentido dejar "agregar/quitar" en una asignacion que el resolver ignora
   // por completo. El tab General (nombre/descripcion/estado) sigue editable.
   const isPermissionsModulesEditable = isEditable && !isAdmin;
@@ -460,7 +460,7 @@ export function RoleDetailsDialog({
         },
         {
           id: "modules",
-          label: "Modulos",
+          label: "Permisos por módulo",
           icon: <Boxes className="size-4" />,
           badge: moduleTree.length > 0 ? (
             <Badge
@@ -471,7 +471,7 @@ export function RoleDetailsDialog({
             </Badge>
           ) : null,
           content: (
-            <RoleDetailsModulesTab
+            <RolePermissionMatrixTab
               modules={moduleTree}
               isLoadingModules={isLoadingModules}
               workingPermissions={workingPermissions}

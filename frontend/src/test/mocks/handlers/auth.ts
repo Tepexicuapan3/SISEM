@@ -756,7 +756,7 @@ export const authHandlers = [
       );
     }
 
-    return HttpResponse.json({ success: true });
+    return HttpResponse.json({ success: true, sessionRotated: true });
   }),
 
   // ============================================================

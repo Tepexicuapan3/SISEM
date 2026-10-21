@@ -240,9 +240,34 @@ export interface UserStatusResponse {
  * (nunca localStorage, nunca logs).
  * POST /api/v1/users/:id/reset-password
  */
+export interface ResetUserPasswordRequest {
+  /** true: la temporal se envia por correo y NO viaja en la respuesta. */
+  sendEmail?: boolean;
+}
+
 export interface ResetUserPasswordResponse {
-  temporaryPassword: string;
+  /** Ausente cuando se pidio `sendEmail: true`. */
+  temporaryPassword?: string;
+  emailSent?: boolean;
   mustChangePassword: boolean;
+}
+
+/**
+ * Response al forzar el cierre de sesion de un usuario.
+ * POST /api/v1/users/:id/force-logout
+ */
+export interface ForceLogoutUserResponse {
+  id: number;
+  sessionRevoked: boolean;
+}
+
+/**
+ * Response al desbloquear el login de un usuario.
+ * POST /api/v1/users/:id/unlock
+ */
+export interface UnlockUserResponse {
+  id: number;
+  unlocked: boolean;
 }
 
 // =============================================================================

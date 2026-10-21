@@ -207,6 +207,7 @@ class SesionUsuario(models.Model):
     class CierrePor(models.TextChoices):
         LOGOUT = "LOGOUT", "Logout"
         EXPIRACION = "EXPIRACION", "Expiración"
+        REVOCADA = "REVOCADA", "Revocada"
 
     id_sesion = models.BigAutoField(primary_key=True, db_column="id_sesion")
     usuario = models.ForeignKey(

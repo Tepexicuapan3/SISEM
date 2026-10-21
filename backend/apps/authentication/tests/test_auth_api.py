@@ -1,8 +1,12 @@
+from http.cookies import SimpleCookie
 from unittest.mock import patch
 
 from apps.administracion.models import AuditoriaEvento, RelRolPermiso, RelUsuarioRol
-from apps.authentication.models import DetUsuario, SyUsuario
-from apps.authentication.services.errors import AuthServiceError
+from apps.authentication.models import DetUsuario, SesionUsuario, SyUsuario
+from apps.authentication.services.errors import (
+    AuthServiceError,
+    PolicyStoreUnavailableError,
+)
 from apps.authentication.services.otp_service import store_code
 from apps.authentication.services.token_service import (
     ACCESS_COOKIE,
@@ -536,6 +540,74 @@ class AuthApiTests(APITestCase):
         self.assertIn(ACCESS_COOKIE, response.cookies)
         self.assertTrue(response.data["requiresOnboarding"])
 
+    def test_reset_password_token_is_single_use(self):
+        # R5-S1: el mismo reset token no puede usarse dos veces.
+        reset_token = create_reset_token(self.user)
+        csrf_token = generate_csrf_token()
+
+        def _post_reset(new_password):
+            self.client.cookies[RESET_COOKIE] = reset_token
+            self.client.cookies[CSRF_COOKIE] = csrf_token
+            return self.client.post(
+                "/api/v1/auth/reset-password",
+                {"newPassword": new_password},
+                format="json",
+                HTTP_X_CSRF_TOKEN=csrf_token,
+            )
+
+        first = _post_reset("Nueva_Clave_123")
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+
+        second = _post_reset("Otra_Clave_456")
+        self.assertEqual(second.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(second.data["code"], "TOKEN_INVALID")
+        self.user.refresh_from_db()
+        self.assertTrue(check_password("Nueva_Clave_123", self.user.clave_hash))
+
+    def test_reset_password_inactive_user_returns_token_invalid(self):
+        # R5-S2: no se revela el estado de la cuenta; la clave no cambia.
+        reset_token = create_reset_token(self.user)
+        self.user.est_activo = False
+        self.user.save(update_fields=["est_activo"])
+        self.client.cookies[RESET_COOKIE] = reset_token
+        csrf_token = generate_csrf_token()
+        self.client.cookies[CSRF_COOKIE] = csrf_token
+
+        response = self.client.post(
+            "/api/v1/auth/reset-password",
+            {"newPassword": "Nueva_Clave_123"},
+            format="json",
+            HTTP_X_CSRF_TOKEN=csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "TOKEN_INVALID")
+        self.user.refresh_from_db()
+        self.assertTrue(check_password("Abel_180903", self.user.clave_hash))
+
+    def test_reset_password_fail_closed_when_jti_store_unavailable(self):
+        # R5-S3: Redis caido al consumir el jti -> 503 y clave sin cambios.
+        reset_token = create_reset_token(self.user)
+        self.client.cookies[RESET_COOKIE] = reset_token
+        csrf_token = generate_csrf_token()
+        self.client.cookies[CSRF_COOKIE] = csrf_token
+
+        with patch(
+            "apps.authentication.services.reset_token_guard.reset_token_store.mark_consumed",
+            side_effect=PolicyStoreUnavailableError("down"),
+        ):
+            response = self.client.post(
+                "/api/v1/auth/reset-password",
+                {"newPassword": "Nueva_Clave_123"},
+                format="json",
+                HTTP_X_CSRF_TOKEN=csrf_token,
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "SERVICE_UNAVAILABLE")
+        self.user.refresh_from_db()
+        self.assertTrue(check_password("Abel_180903", self.user.clave_hash))
+
     def test_reset_password_requires_csrf(self):
         reset_token = create_reset_token(self.user)
         self.client.cookies[RESET_COOKIE] = reset_token
@@ -624,6 +696,7 @@ class AuthApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["success"])
+        self.assertTrue(response.data["sessionRotated"])
 
         self.user.refresh_from_db()
         self.assertTrue(check_password("Nueva_Clave_123", self.user.clave_hash))
@@ -632,6 +705,107 @@ class AuthApiTests(APITestCase):
                 accion="PASSWORD_CHANGE_SUCCESS",
                 resultado="SUCCESS",
                 request_id="req-change-password-success",
+            ).exists()
+        )
+
+    def test_change_password_rotates_session_and_invalidates_old_cookies(self):
+        # R4-S1: cookies nuevas en la respuesta; el sid viejo deja de valer.
+        login_response = self._login()
+        csrf_token = login_response.cookies.get(CSRF_COOKIE).value
+        old_access = login_response.cookies[ACCESS_COOKIE].value
+
+        response = self.client.post(
+            "/api/v1/auth/change-password",
+            {
+                "currentPassword": "Abel_180903",
+                "newPassword": "Nueva_Clave_123",
+            },
+            format="json",
+            HTTP_X_CSRF_TOKEN=csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["sessionRotated"])
+        self.assertIn(ACCESS_COOKIE, response.cookies)
+        self.assertIn(REFRESH_COOKIE, response.cookies)
+        self.assertIn(CSRF_COOKIE, response.cookies)
+        new_access = response.cookies[ACCESS_COOKIE].value
+        self.assertNotEqual(new_access, old_access)
+
+        # Request con el access viejo -> sesion reemplazada.
+        self.client.cookies = SimpleCookie({ACCESS_COOKIE: old_access})
+        old_response = self.client.get("/api/v1/auth/me")
+        self.assertEqual(old_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(old_response.data["code"], "SESSION_EXPIRED")
+
+        # Request con las cookies nuevas -> OK.
+        self.client.cookies = SimpleCookie({ACCESS_COOKIE: new_access})
+        new_response = self.client.get("/api/v1/auth/me")
+        self.assertEqual(new_response.status_code, status.HTTP_200_OK)
+
+        # Historial: una sola fila abierta, la anterior REVOCADA.
+        self.assertEqual(
+            SesionUsuario.objects.filter(
+                usuario=self.user, fch_fin__isnull=True
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            SesionUsuario.objects.filter(
+                usuario=self.user, cerrada_por=SesionUsuario.CierrePor.REVOCADA
+            ).count(),
+            1,
+        )
+
+    def test_change_password_invalid_current_keeps_session_and_sets_no_cookies(self):
+        # R4-S2: la sesion queda intacta y no se emiten cookies nuevas.
+        login_response = self._login()
+        csrf_token = login_response.cookies.get(CSRF_COOKIE).value
+
+        response = self.client.post(
+            "/api/v1/auth/change-password",
+            {
+                "currentPassword": "ClaveMala1",
+                "newPassword": "Nueva_Clave_123",
+            },
+            format="json",
+            HTTP_X_CSRF_TOKEN=csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn(ACCESS_COOKIE, response.cookies)
+        me_response = self.client.get("/api/v1/auth/me")
+        self.assertEqual(me_response.status_code, status.HTTP_200_OK)
+
+    def test_change_password_returns_session_rotated_false_when_rotation_fails(self):
+        # Redis caido al rotar: la clave ya cambio -> 200 sin cookies nuevas.
+        login_response = self._login()
+        csrf_token = login_response.cookies.get(CSRF_COOKIE).value
+
+        with patch("apps.authentication.views.rotate_user_session") as rotate_mock:
+            rotate_mock.side_effect = AuthServiceError(
+                "SERVICE_UNAVAILABLE", "Servicio temporalmente no disponible", 503
+            )
+            response = self.client.post(
+                "/api/v1/auth/change-password",
+                {
+                    "currentPassword": "Abel_180903",
+                    "newPassword": "Nueva_Clave_123",
+                },
+                format="json",
+                HTTP_X_CSRF_TOKEN=csrf_token,
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertFalse(response.data["sessionRotated"])
+        self.assertNotIn(ACCESS_COOKIE, response.cookies)
+        self.user.refresh_from_db()
+        self.assertTrue(check_password("Nueva_Clave_123", self.user.clave_hash))
+        self.assertTrue(
+            AuditoriaEvento.objects.filter(
+                accion="PASSWORD_CHANGE_SESSION_ROTATION_FAILED",
+                resultado="FAIL",
             ).exists()
         )
 

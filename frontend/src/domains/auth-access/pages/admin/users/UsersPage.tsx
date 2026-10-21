@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
 import { FileDown, Mail, Plus, RotateCcw, ShieldUser, Upload } from "lucide-react";
 import { useAuthSession } from "@/domains/auth-access/hooks/useAuthSession";
 import { useAuthCapabilities } from "@/domains/auth-access/hooks/useAuthCapabilities";
@@ -23,10 +21,6 @@ import { TableSearch } from "@features/admin/shared/components/TableSearch";
 import { AdminPageIntro } from "@features/admin/shared/components/AdminPageIntro";
 import { useUsersList } from "@/domains/auth-access/hooks/rbac/users/useUsersList";
 import { useExportUsers } from "@/domains/auth-access/hooks/rbac/users/useExportUsers";
-import { useActivateUser } from "@/domains/auth-access/hooks/rbac/users/useActivateUser";
-import { useDeactivateUser } from "@/domains/auth-access/hooks/rbac/users/useDeactivateUser";
-import { useResetUserPassword } from "@/domains/auth-access/hooks/rbac/users/useResetUserPassword";
-import { usersKeys } from "@/domains/auth-access/hooks/rbac/users/users.keys";
 import { useRolesList } from "@/domains/auth-access/hooks/rbac/roles/useRolesList";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
 import { useAreasClinicasList } from "@features/admin/modules/catalogos/areas-clinicas/queries/useAreasClinicasList";
@@ -39,8 +33,6 @@ import { UserDetailsDialog } from "@/domains/auth-access/components/admin/rbac/u
 import { UserCreateDialog } from "@/domains/auth-access/components/admin/rbac/users/UserCreateDialog";
 import { UserNotifyDialog } from "@/domains/auth-access/components/admin/rbac/users/UserNotifyDialog";
 import { UserImportDialog } from "@/domains/auth-access/components/admin/rbac/users/UserImportDialog";
-import { UserResetPasswordResultDialog } from "@/domains/auth-access/components/admin/rbac/users/UserResetPasswordResultDialog";
-import { ConfirmDestructiveDialog } from "@features/admin/shared/components/ConfirmDestructiveDialog";
 import {
   buildUsersTableColumns,
   buildUsersVisibilityOptions,
@@ -50,7 +42,7 @@ import {
   RBAC_CAPABILITIES_DEGRADED_MESSAGE,
 } from "@/domains/auth-access/adapters/rbac/capabilities-gating";
 import { getUserErrorMessage } from "@/domains/auth-access/adapters/rbac/users/users.feedback";
-import type { ResetUserPasswordResponse, UserListItem } from "@api/types";
+import type { UserListItem } from "@api/types";
 
 const USER_STATUS_FILTER = {
   ALL: "all",
@@ -98,19 +90,10 @@ export function UsersPage() {
       cedulas: true,
       primaryRole: true,
       isActive: true,
-      actions: true,
     });
   const [createOpen, setCreateOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [resetPasswordConfirmOpen, setResetPasswordConfirmOpen] =
-    useState(false);
-  const [resetPasswordTarget, setResetPasswordTarget] =
-    useState<UserListItem | null>(null);
-  const [resetPasswordResult, setResetPasswordResult] =
-    useState<ResetUserPasswordResponse | null>(null);
-  const [resetPasswordResultOpen, setResetPasswordResultOpen] =
-    useState(false);
   const {
     open: detailsOpen,
     selectedItem: selectedUser,
@@ -119,10 +102,6 @@ export function UsersPage() {
     setOpen: setDetailsOpen,
   } = useTableDetailsDialog<UserListItem>();
   const debouncedSearch = useDebounce(search, 400);
-  const queryClient = useQueryClient();
-  const activateUser = useActivateUser();
-  const deactivateUser = useDeactivateUser();
-  const resetUserPassword = useResetUserPassword();
   const { exportUsers, isExporting } = useExportUsers();
   const { resolveCapability } = createCapabilityResolver({
     hasCapability,
@@ -154,6 +133,11 @@ export function UsersPage() {
   });
   const canUpdateUser = resolveCapability("admin.users.update", {
     allOf: ["admin:gestion:usuarios:update"],
+  });
+  // Restablecer contraseña, forzar cierre de sesión y desbloquear: permiso
+  // propio, separado de editar usuarios.
+  const canManageCredentials = resolveCapability("admin.users.credentials", {
+    allOf: ["admin:gestion:usuarios:credenciales"],
   });
   const canReadUser = resolveCapability("admin.users.read", {
     allOf: ["admin:gestion:usuarios:read"],
@@ -260,67 +244,8 @@ export function UsersPage() {
   });
 
   const canUpdateUserAccess = canManageUsersFully || canUpdateUser;
-  const showActions = canReadUser || canUpdateUser;
-  const isStatusPending = activateUser.isPending || deactivateUser.isPending;
-
-  const handleToggleStatus = async (user: UserListItem) => {
-    try {
-      if (user.isActive) {
-        await deactivateUser.mutateAsync({ userId: user.id });
-        toast.success("Usuario desactivado");
-      } else {
-        await activateUser.mutateAsync({ userId: user.id });
-        toast.success("Usuario activado");
-      }
-    } catch (error) {
-      toast.error("No se pudo actualizar el estado", {
-        description: getUserErrorMessage(error, "Error al actualizar estado"),
-      });
-    }
-  };
-
-  const handleConfirmResetPassword = async () => {
-    if (!resetPasswordTarget) return;
-    try {
-      const result = await resetUserPassword.mutateAsync({
-        userId: resetPasswordTarget.id,
-      });
-      setResetPasswordConfirmOpen(false);
-      setResetPasswordResult(result);
-      setResetPasswordResultOpen(true);
-    } catch (error) {
-      toast.error("No se pudo restablecer la contraseña", {
-        description: getUserErrorMessage(
-          error,
-          "Error al restablecer la contraseña",
-        ),
-      });
-    }
-  };
-
-  const handleCloseResetPasswordResult = (nextOpen: boolean) => {
-    setResetPasswordResultOpen(nextOpen);
-    if (!nextOpen) {
-      setResetPasswordResult(null);
-      setResetPasswordTarget(null);
-      void queryClient.invalidateQueries({ queryKey: usersKeys.list() });
-    }
-  };
-
-  const columns = buildUsersTableColumns({
-    canReadUser,
-    canUpdateUser,
-    isStatusPending,
-    onOpenDetails: handleOpenDetails,
-    onToggleStatus: (user) => {
-      void handleToggleStatus(user);
-    },
-    onRequestResetPassword: (user) => {
-      setResetPasswordTarget(user);
-      setResetPasswordConfirmOpen(true);
-    },
-  });
-  const visibilityOptions = buildUsersVisibilityOptions(showActions);
+  const columns = buildUsersTableColumns();
+  const visibilityOptions = buildUsersVisibilityOptions();
 
   const visibleColumns = columns.filter(
     (column) => columnVisibility[column.key] ?? true,
@@ -602,6 +527,7 @@ export function UsersPage() {
           isLoadingClinicsCatalog || isFetchingClinicsCatalog
         }
         canEdit={canUpdateUserAccess}
+        canManageCredentials={canManageCredentials}
         canReadRolesCatalog={canReadRolesCatalog}
         canReadPermissionsCatalog={canReadPermissionsCatalog}
         currentUserId={authUser?.id ?? null}
@@ -623,32 +549,6 @@ export function UsersPage() {
         clinicOptions={clinicOptions}
       />
       <UserImportDialog open={importOpen} onOpenChange={setImportOpen} />
-      <ConfirmDestructiveDialog
-        open={resetPasswordConfirmOpen}
-        onOpenChange={(nextOpen) => {
-          setResetPasswordConfirmOpen(nextOpen);
-          if (!nextOpen) {
-            setResetPasswordTarget(null);
-          }
-        }}
-        title="Restablecer contraseña"
-        description={
-          resetPasswordTarget
-            ? `¿Restablecer la contraseña de ${resetPasswordTarget.fullname || resetPasswordTarget.username}? La contraseña actual dejará de funcionar de inmediato.`
-            : "¿Restablecer la contraseña de este usuario? La contraseña actual dejará de funcionar de inmediato."
-        }
-        confirmLabel="Restablecer"
-        onConfirm={() => {
-          void handleConfirmResetPassword();
-        }}
-        confirmDisabled={resetUserPassword.isPending}
-      />
-      <UserResetPasswordResultDialog
-        open={resetPasswordResultOpen}
-        onOpenChange={handleCloseResetPasswordResult}
-        temporaryPassword={resetPasswordResult?.temporaryPassword ?? null}
-        username={resetPasswordTarget?.username}
-      />
     </div>
   );
 }

@@ -20,7 +20,10 @@ import type {
   UpdateUserRequest,
   UpdateUserResponse,
   UserStatusResponse,
+  ResetUserPasswordRequest,
   ResetUserPasswordResponse,
+  ForceLogoutUserResponse,
+  UnlockUserResponse,
   UsersListParams,
   UsersListResponse,
   UserDetailResponse,
@@ -165,14 +168,44 @@ export const usersAPI = {
    * Restablecer contraseña: genera una temporal y la devuelve en texto plano
    * (solo en esta respuesta, transitoria). El usuario debera cambiarla al
    * iniciar sesion (mustChangePassword: true).
+   * Con `sendEmail: true` la temporal se envia por correo y la respuesta no la
+   * incluye (409/400/502: SELF_PASSWORD_RESET_NOT_ALLOWED, USER_EMAIL_MISSING,
+   * EMAIL_SEND_FAILED).
    * @endpoint POST /api/v1/users/:id/reset-password
-   * @permission admin:gestion:usuarios:update
+   * @permission admin:gestion:usuarios:credenciales
    */
   resetPassword: async (
     userId: number,
+    data: ResetUserPasswordRequest = {},
   ): Promise<ResetUserPasswordResponse> => {
     const response = await apiClient.post<ResetUserPasswordResponse>(
       `/users/${userId}/reset-password`,
+      data,
+    );
+    return response.data;
+  },
+
+  /**
+   * Forzar el cierre de sesion de otro usuario (revoca su sesion activa y
+   * corta sus WebSockets). 409 SELF_FORCE_LOGOUT_NOT_ALLOWED si es uno mismo.
+   * @endpoint POST /api/v1/users/:id/force-logout
+   * @permission admin:gestion:usuarios:update
+   */
+  forceLogout: async (userId: number): Promise<ForceLogoutUserResponse> => {
+    const response = await apiClient.post<ForceLogoutUserResponse>(
+      `/users/${userId}/force-logout`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Desbloquear el login de una cuenta bloqueada por intentos fallidos.
+   * @endpoint POST /api/v1/users/:id/unlock
+   * @permission admin:gestion:usuarios:update
+   */
+  unlock: async (userId: number): Promise<UnlockUserResponse> => {
+    const response = await apiClient.post<UnlockUserResponse>(
+      `/users/${userId}/unlock`,
     );
     return response.data;
   },

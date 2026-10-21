@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ApiError,
   ERROR_CODES,
+  ERROR_MESSAGES,
   isExpectedAuthErrorForTelemetry,
 } from "@api/utils/errors";
 
@@ -24,5 +25,16 @@ describe("auth telemetry error classification", () => {
     );
 
     expect(isExpectedAuthErrorForTelemetry(error)).toBe(false);
+  });
+});
+
+describe("session revocation error messages", () => {
+  it("has a Spanish message for self force-logout", () => {
+    expect(ERROR_MESSAGES[ERROR_CODES.SELF_FORCE_LOGOUT_NOT_ALLOWED]).toBe(
+      "No puedes forzar el cierre de tu propia sesión",
+    );
+    expect(
+      ApiError.getMessage(ERROR_CODES.SELF_FORCE_LOGOUT_NOT_ALLOWED),
+    ).toBe("No puedes forzar el cierre de tu propia sesión");
   });
 });

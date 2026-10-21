@@ -31,7 +31,7 @@ class MedicamentoInsumoApiTests(APITestCase):
 
         actor = SyUsuario.objects.create(
             usuario="medins_user", correo="medins@example.com", clave_hash=make_password("x"),
-            est_activo=True,
+            est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         access, _refresh, _sid = start_session(actor, ip_address="127.0.0.1", user_agent="test-agent")
         self.client.cookies["access_token_cookie"] = access

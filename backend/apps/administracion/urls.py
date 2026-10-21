@@ -22,6 +22,7 @@ from .views.rbac_views import (
     UsersNotifyView,
 )
 
+from .views.rbac_session_views import UserForceLogoutView, UserUnlockView
 from .views.expediente_view import ExpedienteView, ActualizarExpedienteView, BuscarPorNombreView
 from .views.user_import_views import (
     UserImportConfirmView,
@@ -103,6 +104,8 @@ urlpatterns = [
     path("users/<int:user_id>/activate", UserActivateView.as_view(), name="rbac-user-activate"),
     path("users/<int:user_id>/deactivate", UserDeactivateView.as_view(), name="rbac-user-deactivate"),
     path("users/<int:user_id>/reset-password", UserResetPasswordView.as_view(), name="rbac-user-reset-password"),
+    path("users/<int:user_id>/force-logout", UserForceLogoutView.as_view(), name="rbac-user-force-logout"),
+    path("users/<int:user_id>/unlock", UserUnlockView.as_view(), name="rbac-user-unlock"),
     path("users/<int:user_id>/roles", UserRolesView.as_view(), name="rbac-user-roles-assign"),
     path("users/<int:user_id>/roles/primary", UserPrimaryRoleView.as_view(), name="rbac-user-role-primary"),
     path("users/<int:user_id>/roles/<int:role_id>", UserRoleRevokeView.as_view(), name="rbac-user-role-revoke"),

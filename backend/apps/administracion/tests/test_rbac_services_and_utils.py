@@ -20,6 +20,9 @@ from apps.administracion.models import (
     RelUsuarioRol,
 )
 from apps.administracion.services.audit_service import AuditService
+from apps.administracion.services.rbac_permission_rules import (
+    ensure_read_dependencies,
+)
 from apps.administracion.services.rbac_resolver import RBACResolver
 from apps.administracion.services.rbac_feature_flags import (
     is_rbac_read_s1_enabled,
@@ -749,3 +752,70 @@ class RbacRolePermissionToggleTests(SimpleTestCase):
     @override_settings(RBAC_ROLE_PERMISSION_S3_ENABLED=False)
     def test_role_permission_toggle_returns_false_when_disabled(self):
         self.assertFalse(rbac_views._is_rbac_role_permission_s3_enabled())
+
+
+class EnsureReadDependenciesTests(TestCase):
+    def _perm(self, code, is_active=True):
+        return Permisos.objects.create(
+            codigo=code, descripcion=code, is_active=is_active
+        )
+
+    def test_transitive_closure_adds_explicit_and_inferred_read(self):
+        update = self._perm("admin:gestion:usuarios:update")
+        users_read = self._perm("admin:gestion:usuarios:read")
+        roles_read = self._perm("admin:gestion:roles:read")
+        permisos_read = self._perm("admin:gestion:permisos:read")
+
+        result = ensure_read_dependencies({update.id_permiso})
+
+        self.assertEqual(
+            result,
+            {
+                update.id_permiso,
+                users_read.id_permiso,
+                roles_read.id_permiso,
+                permisos_read.id_permiso,
+            },
+        )
+
+    def test_nonexistent_dependency_is_ignored(self):
+        update = self._perm("admin:gestion:usuarios:update")
+        users_read = self._perm("admin:gestion:usuarios:read")
+
+        result = ensure_read_dependencies({update.id_permiso})
+
+        self.assertEqual(result, {update.id_permiso, users_read.id_permiso})
+
+    def test_inactive_dependency_is_ignored(self):
+        update = self._perm("pacientes:update")
+        self._perm("pacientes:read", is_active=False)
+
+        self.assertEqual(
+            ensure_read_dependencies({update.id_permiso}), {update.id_permiso}
+        )
+
+    def test_manage_assign_revoke_add_read(self):
+        read = self._perm("modulo_x:read")
+        for action in ("manage", "assign", "revoke"):
+            perm = self._perm(f"modulo_x:{action}")
+            result = ensure_read_dependencies({perm.id_permiso})
+            self.assertEqual(result, {perm.id_permiso, read.id_permiso}, action)
+
+    def test_read_only_adds_nothing_and_is_idempotent(self):
+        read = self._perm("pacientes:read")
+        update = self._perm("pacientes:update")
+
+        self.assertEqual(ensure_read_dependencies({read.id_permiso}), {read.id_permiso})
+
+        first = ensure_read_dependencies({update.id_permiso})
+        self.assertEqual(ensure_read_dependencies(first), first)
+
+    def test_requested_unknown_ids_are_kept_for_downstream_404(self):
+        self.assertEqual(ensure_read_dependencies({999999}), {999999})
+
+    def test_fichas_create_does_not_infer_missing_read(self):
+        create = self._perm("recepcion:fichas:urgencias:create")
+
+        self.assertEqual(
+            ensure_read_dependencies({create.id_permiso}), {create.id_permiso}
+        )

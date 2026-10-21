@@ -15,7 +15,7 @@ const MOCK_DELAY = {
   mutate: 400,
 };
 
-export const permissionsCatalog: Permission[] = [
+const baseCatalog: Array<Omit<Permission, "dependsOn">> = [
   {
     id: 1,
     code: "admin:gestion:usuarios:read",
@@ -143,6 +143,48 @@ export const permissionsCatalog: Permission[] = [
     isSystem: true,
   },
 ];
+
+/**
+ * Espejo simplificado de `get_permission_direct_dependencies` (backend):
+ * dependencias explicitas + `X:read` inferido para acciones de escritura,
+ * siempre que ese `read` exista en el catalogo (las fichas `:create` no
+ * infieren read). El mock emite `dependsOn` igual que `GET /permissions`.
+ */
+const WRITE_ACTIONS = new Set([
+  "create",
+  "update",
+  "delete",
+  "manage",
+  "assign",
+  "revoke",
+]);
+const EXPLICIT_DEPENDENCIES: Record<string, string[]> = {
+  "admin:gestion:usuarios:update": [
+    "admin:gestion:roles:read",
+    "admin:gestion:permisos:read",
+  ],
+};
+
+const buildDependsOn = (code: string): string[] => {
+  const segments = code.split(":");
+  const action = segments[segments.length - 1];
+  const inferred =
+    segments.length > 1 && WRITE_ACTIONS.has(action)
+      ? [`${segments.slice(0, -1).join(":")}:read`]
+      : [];
+  const known = new Set(baseCatalog.map((permission) => permission.code));
+
+  return [...new Set([...(EXPLICIT_DEPENDENCIES[code] ?? []), ...inferred])]
+    .filter((dependency) => known.has(dependency))
+    .sort();
+};
+
+export const permissionsCatalog: Permission[] = baseCatalog.map(
+  (permission) => ({
+    ...permission,
+    dependsOn: buildDependsOn(permission.code),
+  }),
+);
 
 const requirePermission = (permission: string) => {
   const sessionUser = getMockSessionUser();

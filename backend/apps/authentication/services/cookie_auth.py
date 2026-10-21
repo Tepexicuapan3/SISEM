@@ -9,7 +9,7 @@ Por qué existe:
 """
 
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 
 from .errors import AuthServiceError
 from .session_service import authenticate_request
@@ -25,6 +25,11 @@ class CookieJWTAuthentication(BaseAuthentication):
         except AuthServiceError as exc:
             if exc.status_code == 401:
                 raise AuthenticationFailed(exc.message) from exc
+            if exc.code == "ONBOARDING_REQUIRED":
+                # No degradar a "sin credenciales": responder 403 explicito.
+                raise PermissionDenied(
+                    {"code": exc.code, "message": exc.message}
+                ) from exc
             return None
 
     def authenticate_header(self, request):

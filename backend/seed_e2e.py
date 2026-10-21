@@ -43,6 +43,7 @@ PERMISSIONS = [
     ("admin:gestion:usuarios:create", "Admin - Crear usuarios"),
     ("admin:gestion:usuarios:update", "Admin - Editar usuarios"),
     ("admin:gestion:usuarios:delete", "Admin - Eliminar usuarios"),
+    ("admin:gestion:usuarios:credenciales", "Admin - Credenciales de usuarios (restablecer, cerrar sesion, desbloquear)"),
     ("admin:gestion:medicos:read",        "Admin - Ver catalogo de medicos"),
     ("admin:gestion:medicos:create",      "Admin - Registrar medico desde usuario"),
     ("admin:gestion:medicos:update",      "Admin - Editar perfil medico"),
@@ -157,6 +158,7 @@ ROLE_DEFS = [
             "admin:gestion:usuarios:create",
             "admin:gestion:usuarios:update",
             "admin:gestion:usuarios:delete",
+            "admin:gestion:usuarios:credenciales",
         ],
     },
     {

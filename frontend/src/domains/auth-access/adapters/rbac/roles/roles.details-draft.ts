@@ -63,7 +63,7 @@ export const removePermissionFromDraft = (
 };
 
 /**
- * Variantes plurales usadas por `RoleDetailsModulesTab`: un nodo del arbol
+ * Variantes plurales usadas por `RolePermissionMatrixTab`: un nodo del arbol
  * de modulos puede declarar VARIOS codigos de permiso a la vez, asi que
  * tildar/destildar ese nodo agrega/quita varios ids en un solo golpe de
  * draft -- nunca uno por uno.

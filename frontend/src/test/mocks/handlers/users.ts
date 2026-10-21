@@ -713,6 +713,106 @@ export const usersHandlers = [
     return HttpResponse.json({ id, isActive: false });
   }),
 
+  // Forzar cierre de sesion (409 si el objetivo es el usuario logueado)
+  http.post(getApiUrl("users/:id/force-logout"), async ({ params }) => {
+    await delay(MOCK_DELAY.fast);
+    const permissionError = requirePermission("admin:gestion:usuarios:credenciales");
+    if (permissionError) return permissionError;
+
+    const id = Number(params.id);
+
+    if (!userExists(id)) {
+      return HttpResponse.json(
+        { code: "USER_NOT_FOUND", message: "Usuario no encontrado" },
+        { status: 404 },
+      );
+    }
+
+    if (id === getMockSessionUser()?.id) {
+      return HttpResponse.json(
+        {
+          code: "SELF_FORCE_LOGOUT_NOT_ALLOWED",
+          message: "No puedes forzar el cierre de tu propia sesión",
+        },
+        { status: 409 },
+      );
+    }
+
+    return HttpResponse.json({ id, sessionRevoked: true });
+  }),
+
+  // Desbloquear login
+  http.post(getApiUrl("users/:id/unlock"), async ({ params }) => {
+    await delay(MOCK_DELAY.fast);
+    const permissionError = requirePermission("admin:gestion:usuarios:credenciales");
+    if (permissionError) return permissionError;
+
+    const id = Number(params.id);
+
+    if (!userExists(id)) {
+      return HttpResponse.json(
+        { code: "USER_NOT_FOUND", message: "Usuario no encontrado" },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json({ id, unlocked: true });
+  }),
+
+  // Restablecer contraseña (con sendEmail la temporal no viaja en la respuesta)
+  http.post(
+    getApiUrl("users/:id/reset-password"),
+    async ({ params, request }) => {
+      await delay(MOCK_DELAY.fast);
+      const permissionError = requirePermission(
+        "admin:gestion:usuarios:credenciales",
+      );
+      if (permissionError) return permissionError;
+
+      const id = Number(params.id);
+      const user = usersDB.find((u) => u.id === id);
+
+      if (!user) {
+        return HttpResponse.json(
+          { code: "USER_NOT_FOUND", message: "Usuario no encontrado" },
+          { status: 404 },
+        );
+      }
+
+      if (id === getMockSessionUser()?.id) {
+        return HttpResponse.json(
+          {
+            code: "SELF_PASSWORD_RESET_NOT_ALLOWED",
+            message: "No puedes restablecer tu propia contraseña por esta vía",
+          },
+          { status: 409 },
+        );
+      }
+
+      const body = (await request.json().catch(() => ({}))) as {
+        sendEmail?: boolean;
+      };
+
+      if (body.sendEmail) {
+        if (!user.email) {
+          return HttpResponse.json(
+            {
+              code: "USER_EMAIL_MISSING",
+              message: "El usuario no tiene correo registrado",
+            },
+            { status: 400 },
+          );
+        }
+        return HttpResponse.json({ emailSent: true, mustChangePassword: true });
+      }
+
+      return HttpResponse.json({
+        temporaryPassword: "Temp0-Pass!",
+        mustChangePassword: true,
+      });
+    },
+  ),
+
   // --- GESTIÓN DE ROLES DEL USUARIO ---
 
   // Obtener roles (Redundante con detalle, pero por si se llama directo)

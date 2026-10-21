@@ -32,6 +32,7 @@ from apps.authentication.services.response_service import (
     get_request_id,
 )
 from apps.authentication.services.session_registry import close_session
+from apps.authentication.services.session_revocation import rotate_user_session
 from apps.authentication.services.session_service import authenticate_request
 from apps.authentication.services.token_service import (
     REFRESH_COOKIE,
@@ -1010,7 +1011,35 @@ class ChangePasswordView(APIView):
             target_user=user,
             meta={"endpoint": "/auth/change-password"},
         )
-        return Response({"success": True}, status=status.HTTP_200_OK)
+
+        # La clave ya cambio: se rota la sesion (cierra la vieja, emite cookies).
+        try:
+            access_token, refresh_token, _sid = rotate_user_session(
+                user,
+                get_client_ip(request),
+                request.META.get("HTTP_USER_AGENT"),
+            )
+        except AuthServiceError:
+            # La clave ya esta guardada: se responde 200 sin cookies nuevas.
+            log_event(
+                request,
+                "PASSWORD_CHANGE_SESSION_ROTATION_FAILED",
+                "FAIL",
+                actor_user=user,
+                target_user=user,
+                error_code="SERVICE_UNAVAILABLE",
+                meta={"endpoint": "/auth/change-password"},
+            )
+            return Response(
+                {"success": True, "sessionRotated": False},
+                status=status.HTTP_200_OK,
+            )
+
+        response = Response(
+            {"success": True, "sessionRotated": True}, status=status.HTTP_200_OK
+        )
+        set_auth_cookies(response, access_token, refresh_token, generate_csrf_token())
+        return response
 
 
 @method_decorator(csrf_exempt, name="dispatch")

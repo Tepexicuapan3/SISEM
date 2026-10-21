@@ -481,6 +481,122 @@ class RbacRolesPermissionsApiTests(APITestCase):
         self.assertIn("pacientes:read", codes)
         self.assertIn("pacientes:update", codes)
 
+    def _active_codes(self, role):
+        return set(
+            RelRolPermiso.objects.filter(
+                id_rol=role, fch_baja__isnull=True
+            ).values_list("id_permiso__codigo", flat=True)
+        )
+
+    def _assign(self, role, permission_ids):
+        return self.client.post(
+            "/api/v1/permissions/assign",
+            {"roleId": role.id_rol, "permissionIds": list(permission_ids)},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+    def test_assign_only_update_persists_read_dependency(self):
+        response = self._assign(self.target_role, [self.perm_update.id_permiso])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._active_codes(self.target_role),
+            {"pacientes:update", "pacientes:read"},
+        )
+
+    def test_assign_usuarios_update_adds_explicit_and_inferred_dependencies(self):
+        users_update = Permisos.objects.create(
+            codigo="admin:gestion:usuarios:update", descripcion="u", is_active=True
+        )
+        for code in (
+            "admin:gestion:usuarios:read",
+            "admin:gestion:roles:read",
+            "admin:gestion:permisos:read",
+        ):
+            Permisos.objects.create(codigo=code, descripcion=code, is_active=True)
+
+        response = self._assign(self.target_role, [users_update.id_permiso])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._active_codes(self.target_role),
+            {
+                "admin:gestion:usuarios:update",
+                "admin:gestion:usuarios:read",
+                "admin:gestion:roles:read",
+                "admin:gestion:permisos:read",
+            },
+        )
+
+    def test_assign_ignores_nonexistent_dependency_code(self):
+        users_update = Permisos.objects.create(
+            codigo="admin:gestion:usuarios:update", descripcion="u", is_active=True
+        )
+
+        response = self._assign(self.target_role, [users_update.id_permiso])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._active_codes(self.target_role), {"admin:gestion:usuarios:update"}
+        )
+
+    def test_assign_fichas_create_does_not_require_read(self):
+        create = Permisos.objects.create(
+            codigo="recepcion:fichas:medicina_general:create",
+            descripcion="c",
+            is_active=True,
+        )
+
+        response = self._assign(self.target_role, [create.id_permiso])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._active_codes(self.target_role),
+            {"recepcion:fichas:medicina_general:create"},
+        )
+
+    def test_assign_actor_without_dependency_gets_403_and_persists_nothing(self):
+        users_update = Permisos.objects.create(
+            codigo="admin:gestion:usuarios:update", descripcion="u", is_active=True
+        )
+        Permisos.objects.create(
+            codigo="admin:gestion:roles:read", descripcion="r", is_active=True
+        )
+        roles_update = Permisos.objects.create(
+            codigo="admin:gestion:roles:update", descripcion="ru", is_active=True
+        )
+        # El actor puede asignar usuarios:update, pero NO posee roles:read.
+        actor_role = Roles.objects.create(
+            rol="ACTOR_SIN_DEP",
+            desc_rol="Actor sin dependencia",
+            landing_route="/admin/roles",
+            is_active=True,
+        )
+        for permission in (users_update, roles_update):
+            RelRolPermiso.objects.create(id_rol=actor_role, id_permiso=permission)
+        actor = SyUsuario.objects.create(
+            usuario="actor_sin_dep",
+            correo="actor.sin.dep@example.com",
+            clave_hash=make_password("Actor_123456"),
+            est_activo=True,
+            cambiar_clave=False,
+            terminos_acept=True,
+        )
+        DetUsuario.objects.create(
+            id_usuario=actor, nombre="Actor", paterno="Sin", materno=""
+        )
+        RelUsuarioRol.objects.create(
+            id_usuario=actor, id_rol=actor_role, is_primary=True
+        )
+
+        self._login_as("actor_sin_dep", "Actor_123456")
+        response = self._assign(self.target_role, [users_update.id_permiso])
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "PERMISSION_GRANT_NOT_ALLOWED")
+        self.assertEqual(self._active_codes(self.target_role), set())
+
     def test_assign_role_permissions_reactivates_soft_deleted_relation(self):
         relation = RelRolPermiso.objects.create(
             id_rol=self.target_role,

@@ -9,6 +9,30 @@ from .token_service import ACCESS_COOKIE, ACTIVE_SESSION_TTL_SECONDS, decode_acc
 
 policy_store = PolicyStore()
 
+# Endpoints (paths exactos, sin query) que un usuario con onboarding pendiente
+# (cambiar_clave o terminos sin aceptar) SI puede usar: terminar el onboarding,
+# validar/renovar sesion o salir. Todo lo demas responde 403 ONBOARDING_REQUIRED.
+ONBOARDING_ALLOWED_PATHS = frozenset(
+    {
+        "/api/v1/auth/me",
+        "/api/v1/auth/capabilities",
+        "/api/v1/auth/verify",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/complete-onboarding",
+        "/api/v1/auth/change-password",
+    }
+)
+
+
+def user_requires_onboarding(user) -> bool:
+    return bool(user.cambiar_clave or not user.terminos_acept)
+
+
+def _is_onboarding_allowed_path(request) -> bool:
+    path = getattr(request, "path_info", None) or getattr(request, "path", "") or ""
+    return path.rstrip("/") in ONBOARDING_ALLOWED_PATHS
+
 
 def authenticate_request(request):
     # Valida access token desde cookie.
@@ -58,6 +82,13 @@ def authenticate_request(request):
         # proposito -- degradar el control de sesion es preferible a tirar
         # abajo el acceso de todo el sistema por un blip de infraestructura.
         pass
+
+    if user_requires_onboarding(user) and not _is_onboarding_allowed_path(request):
+        raise AuthServiceError(
+            "ONBOARDING_REQUIRED",
+            "Debes cambiar tu contraseña temporal y aceptar los términos antes de continuar",
+            403,
+        )
 
     request.user = user
     request.session_id = sid

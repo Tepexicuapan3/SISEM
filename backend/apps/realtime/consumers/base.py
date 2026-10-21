@@ -22,7 +22,9 @@ class BaseRealtimeConsumer(AsyncJsonWebsocketConsumer):
             return
 
         self._joined_groups = []
-        for group_name in self.get_group_names():
+        # Grupo por usuario: permite cortar el socket al revocar su sesion.
+        group_names = [f"user.{user['id']}", *self.get_group_names()]
+        for group_name in group_names:
             await self.channel_layer.group_add(group_name, self.channel_name)
             self._joined_groups.append(group_name)
 
@@ -40,6 +42,10 @@ class BaseRealtimeConsumer(AsyncJsonWebsocketConsumer):
     async def realtime_event(self, event):
         payload = event.get("event", {})
         await self.send_json(payload)
+
+    async def session_revoked(self, event):
+        # Sesion revocada (admin/reset/desactivacion): se corta el socket.
+        await self.close(code=WS_CLOSE_UNAUTHORIZED)
 
     def get_group_names(self) -> list[str]:
         return []

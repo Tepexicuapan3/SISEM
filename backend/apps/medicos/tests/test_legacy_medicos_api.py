@@ -28,7 +28,7 @@ class LegacyMedicosApiTests(APITestCase):
         RelRolPermiso.objects.get_or_create(id_rol=role, id_permiso=permiso)
         user = SyUsuario.objects.create(
             usuario="admin_legado", correo="admin_legado@example.com",
-            clave_hash=make_password("x"), est_activo=True,
+            clave_hash=make_password("x"), est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         DetUsuario.objects.create(id_usuario=user, nombre="Admin", paterno="Legado")
         RelUsuarioRol.objects.create(id_usuario=user, id_rol=role, is_primary=True)

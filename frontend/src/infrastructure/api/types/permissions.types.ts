@@ -34,6 +34,8 @@ export interface Permission {
   code: string; // (ej: "GRUPO:MODULO:SUBMODULO:ACCION")
   description: string;
   isSystem: boolean;
+  /** Dependencias directas (codigos) que el backend exige junto con este permiso. Ausente en backends viejos. */
+  dependsOn?: string[];
 }
 
 // =============================================================================

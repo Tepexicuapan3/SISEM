@@ -4,6 +4,7 @@ from apps.authentication.services.permission_dependencies import (
     build_permission_context,
     evaluate_permission_dependencies,
     get_permission_dependency_closure,
+    get_permission_direct_dependencies,
 )
 
 
@@ -87,35 +88,32 @@ class PermissionDependenciesServiceTests(SimpleTestCase):
             context["capabilities"]["flow.doctor.consultation.close"]["granted"]
         )
 
-    def test_build_permission_context_denies_flow_visits_when_dependencies_are_incomplete(self):
-        context = build_permission_context(["recepcion:fichas:medicina_general:create"])
+    def test_fichas_create_is_self_sufficient_without_nonexistent_read(self):
+        # Bug fichas-permission-dependency-bug: `recepcion:fichas:<x>:read` no
+        # existe en el catalogo, asi que la dependencia inferida dejaba el
+        # permiso `create` sin efecto para roles no-admin.
+        for resource in ("medicina_general", "especialidad", "urgencias"):
+            code = f"recepcion:fichas:{resource}:create"
+            self.assertEqual(get_permission_dependency_closure(code), [code])
 
-        self.assertFalse(context["capabilities"]["flow.visits.queue.read"]["granted"])
-        self.assertFalse(context["capabilities"]["flow.somatometria.capture"]["granted"])
+            context = build_permission_context([code])
 
-        complete_context = build_permission_context(
-            [
-                "recepcion:fichas:medicina_general:create",
-                "recepcion:fichas:medicina_general:read",
-            ]
+            self.assertEqual(context["effectivePermissions"], [code])
+            self.assertTrue(context["capabilities"]["flow.visits.queue.read"]["granted"])
+            self.assertTrue(context["capabilities"]["flow.recepcion.queue.write"]["granted"])
+            self.assertTrue(context["capabilities"]["documentos.ficha.imprimir"]["granted"])
+            # No concede nada mas de lo debido.
+            self.assertFalse(context["capabilities"]["flow.somatometria.capture"]["granted"])
+            self.assertFalse(context["capabilities"]["flow.doctor.queue.read"]["granted"])
+
+    def test_fichas_create_exemption_does_not_affect_other_write_permissions(self):
+        self.assertEqual(
+            get_permission_direct_dependencies("clinico:somatometria:update"),
+            ["clinico:somatometria:read"],
         )
-
-        self.assertTrue(complete_context["capabilities"]["flow.visits.queue.read"]["granted"])
-
-    def test_build_permission_context_denies_flow_recepcion_write_when_dependencies_are_incomplete(self):
-        context = build_permission_context(["recepcion:fichas:especialidad:create"])
-
-        self.assertFalse(context["capabilities"]["flow.recepcion.queue.write"]["granted"])
-
-        complete_context = build_permission_context(
-            [
-                "recepcion:fichas:especialidad:create",
-                "recepcion:fichas:especialidad:read",
-            ]
-        )
-
-        self.assertTrue(
-            complete_context["capabilities"]["flow.recepcion.queue.write"]["granted"]
+        self.assertEqual(
+            get_permission_direct_dependencies("admin:gestion:roles:update"),
+            ["admin:gestion:permisos:read", "admin:gestion:roles:read"],
         )
 
     def test_evaluate_permission_dependencies_handles_empty_permission_code(self):

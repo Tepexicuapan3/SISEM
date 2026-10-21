@@ -195,7 +195,17 @@ export type CompleteOnboardingResponse = LoginResponse;
  * Respuesta de cambio de contraseña.
  * POST /api/v1/auth/change-password
  */
-export type ChangePasswordResponse = SuccessResponse;
+export interface ChangePasswordResponse extends SuccessResponse {
+  /**
+   * false cuando el backend cambio la contrasena pero no pudo rotar la
+   * sesion actual (Redis caido): hay que avisar al usuario que cierre
+   * sesion y vuelva a entrar. Ver CHANGE_PASSWORD_SESSION_NOT_ROTATED_MESSAGE.
+   */
+  sessionRotated?: boolean;
+}
+
+export const CHANGE_PASSWORD_SESSION_NOT_ROTATED_MESSAGE =
+  "Tu contraseña se cambió. Por seguridad, cerrá sesión y volvé a entrar";
 
 /**
  * Respuesta de GET /api/v1/auth/me

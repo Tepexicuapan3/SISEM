@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  KeyRound,
   ShieldAlert,
   ShieldCheck,
   UserRound,
@@ -16,6 +17,7 @@ import { UserDetailsFooter } from "@/domains/auth-access/components/admin/rbac/u
 import { UserDetailsGeneralTab } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsGeneralTab";
 import { UserDetailsPermissionsTab } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsPermissionsTab";
 import { UserDetailsRolesTab } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsRolesTab";
+import { UserDetailsSecurityTab } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsSecurityTab";
 import { UserDetailsSidePanel } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsSidePanel";
 import { UserDialogHeader } from "@/domains/auth-access/components/admin/rbac/users/UserDialogHeader";
 import {
@@ -23,9 +25,7 @@ import {
   type UserDetailsFormValues,
 } from "@/domains/auth-access/types/rbac/users.schemas";
 import { useAddUserOverride } from "@/domains/auth-access/hooks/rbac/users/useAddUserOverride";
-import { useActivateUser } from "@/domains/auth-access/hooks/rbac/users/useActivateUser";
 import { useAssignRoles } from "@/domains/auth-access/hooks/rbac/users/useAssignRoles";
-import { useDeactivateUser } from "@/domains/auth-access/hooks/rbac/users/useDeactivateUser";
 import { useRemoveUserOverride } from "@/domains/auth-access/hooks/rbac/users/useRemoveUserOverride";
 import { useRevokeUserRole } from "@/domains/auth-access/hooks/rbac/users/useRevokeUserRole";
 import { useSetPrimaryRole } from "@/domains/auth-access/hooks/rbac/users/useSetPrimaryRole";
@@ -96,6 +96,7 @@ interface UserDetailsDialogProps {
   especialidadOptions?: CatalogOption[];
   isClinicsCatalogLoading?: boolean;
   canEdit: boolean;
+  canManageCredentials?: boolean;
   canReadRolesCatalog?: boolean;
   canReadPermissionsCatalog?: boolean;
   currentUserId?: number | null;
@@ -140,6 +141,7 @@ export function UserDetailsDialog({
   especialidadOptions = [],
   isClinicsCatalogLoading = false,
   canEdit,
+  canManageCredentials = false,
   canReadRolesCatalog = true,
   canReadPermissionsCatalog = true,
   currentUserId = null,
@@ -167,8 +169,6 @@ export function UserDetailsDialog({
   const overrides = userDetailResponse?.overrides ?? [];
 
   const updateUser = useUpdateUser();
-  const activateUser = useActivateUser();
-  const deactivateUser = useDeactivateUser();
   const assignRoles = useAssignRoles();
   const setPrimaryRole = useSetPrimaryRole();
   const revokeUserRole = useRevokeUserRole();
@@ -177,9 +177,6 @@ export function UserDetailsDialog({
 
   const [draftRoles, setDraftRoles] = useState<UserRole[]>([]);
   const [draftOverrides, setDraftOverrides] = useState<UserOverride[]>([]);
-  const [draftAccountIsActive, setDraftAccountIsActive] = useState<
-    boolean | null
-  >(null);
   const [draftUserId, setDraftUserId] = useState<number | null>(null);
   const [isSavingAll, setIsSavingAll] = useState(false);
   const draftOverrideIdRef = useRef(-1);
@@ -252,9 +249,6 @@ export function UserDetailsDialog({
     userDetail !== undefined && draftUserId === userDetail.id;
   const workingRoles = hasDraftForCurrentUser ? draftRoles : roles;
   const workingOverrides = hasDraftForCurrentUser ? draftOverrides : overrides;
-  const workingAccountIsActive = hasDraftForCurrentUser
-    ? (draftAccountIsActive ?? userDetail?.isActive ?? false)
-    : (userDetail?.isActive ?? false);
   const viewedUserId = userDetail?.id ?? userSummary?.id ?? null;
   const isSelfUser = viewedUserId !== null && currentUserId === viewedUserId;
 
@@ -264,11 +258,7 @@ export function UserDetailsDialog({
   const overridesDirty = userDetail
     ? !areUserOverridesEquivalent(overrides, workingOverrides)
     : false;
-  const accountStatusDirty = userDetail
-    ? workingAccountIsActive !== userDetail.isActive
-    : false;
-  const isDirty =
-    isFormDirty || rolesDirty || overridesDirty || accountStatusDirty;
+  const isDirty = isFormDirty || rolesDirty || overridesDirty;
 
   useEffect(() => {
     const justOpened = open && !prevOpenRef.current;
@@ -289,7 +279,6 @@ export function UserDetailsDialog({
     setDraftUserId(userDetailResponse.user.id);
     setDraftRoles(userDetailResponse.roles);
     setDraftOverrides(userDetailResponse.overrides);
-    setDraftAccountIsActive(userDetailResponse.user.isActive);
   }, [open, userDetailResponse]);
 
   const closeDialog = () => {
@@ -299,7 +288,6 @@ export function UserDetailsDialog({
     );
     setDraftRoles([]);
     setDraftOverrides([]);
-    setDraftAccountIsActive(null);
     setDraftUserId(null);
     onClose?.();
     onOpenChange(false);
@@ -310,6 +298,8 @@ export function UserDetailsDialog({
     open && !isClosing && (isError || (!isLoading && !userDetail));
 
   const isEditable = canEdit;
+  const canChangeAccountStatus = isEditable && !isSelfUser;
+  const showSecurityTab = canChangeAccountStatus || canManageCredentials;
   const readOnlyUserMessage =
     "Solo lectura: no puedes actualizar este usuario porque no tienes permisos.";
   const roleCatalogAccessMessage = canReadRolesCatalog
@@ -325,23 +315,8 @@ export function UserDetailsDialog({
     revokeUserRole.isPending ||
     addUserOverride.isPending ||
     removeUserOverride.isPending;
-  const isStatusMutating = activateUser.isPending || deactivateUser.isPending;
   const isSaving =
-    isSavingAll || updateUser.isPending || isAccessMutating || isStatusMutating;
-
-  const handleAccountStatusChangeDraft = (nextActive: boolean) => {
-    if (!isEditable || !userDetail) return;
-    if (isSelfUser && !nextActive) {
-      toast.error("No puedes desactivar tu propia cuenta", {
-        description:
-          "Usa otra cuenta administradora para cambiar el estado de este usuario.",
-      });
-      return;
-    }
-
-    setDraftUserId(userDetail.id);
-    setDraftAccountIsActive(nextActive);
-  };
+    isSavingAll || updateUser.isPending || isAccessMutating;
 
   const handleAddRoleDraft = (roleId: number) => {
     if (!isEditable || !userDetail) return;
@@ -437,7 +412,6 @@ export function UserDetailsDialog({
     setDraftUserId(nextData.user.id);
     setDraftRoles(nextData.roles);
     setDraftOverrides(nextData.overrides);
-    setDraftAccountIsActive(nextData.user.isActive);
     return true;
   };
 
@@ -451,20 +425,9 @@ export function UserDetailsDialog({
 
     const rolesDiff = buildUserRolesDiff(roles, workingRoles);
     const overridesDiff = buildUserOverridesDiff(overrides, workingOverrides);
-    const hasStatusChanges = workingAccountIsActive !== userDetail.isActive;
-
-    if (isSelfUser && hasStatusChanges && !workingAccountIsActive) {
-      toast.error("No puedes desactivar tu propia cuenta", {
-        description:
-          "Usa otra cuenta administradora para cambiar el estado de este usuario.",
-      });
-      return;
-    }
 
     const savePlan = {
       profilePayload: payload,
-      hasStatusChanges,
-      nextIsActive: workingAccountIsActive,
       rolesDiff,
       overridesDiff,
     };
@@ -483,9 +446,6 @@ export function UserDetailsDialog({
             userId: userDetail.id,
             data: profilePayload,
           }),
-        activateUser: () => activateUser.mutateAsync({ userId: userDetail.id }),
-        deactivateUser: () =>
-          deactivateUser.mutateAsync({ userId: userDetail.id }),
         assignRoles: (roleIds) =>
           assignRoles.mutateAsync({
             userId: userDetail.id,
@@ -559,7 +519,7 @@ export function UserDetailsDialog({
 
   const statusSource = userDetail
     ? {
-        isActive: workingAccountIsActive,
+        isActive: userDetail.isActive,
         termsAccepted: userDetail.termsAccepted,
         mustChangePassword: userDetail.mustChangePassword,
       }
@@ -659,11 +619,8 @@ export function UserDetailsDialog({
                 especialidadOptions={especialidadOptions}
                 isClinicsCatalogLoading={isClinicsCatalogLoading}
                 userDetail={userDetail}
-                accountIsActive={workingAccountIsActive}
                 onSubmit={handleSave}
-                onAccountStatusChange={handleAccountStatusChangeDraft}
                 isEditable={isEditable}
-                canChangeAccountStatus={isEditable && !isSelfUser}
               />
               {!isEditable ? (
                 <AdminReadOnlyNotice
@@ -743,6 +700,29 @@ export function UserDetailsDialog({
             />
           ),
         },
+        ...(showSecurityTab
+          ? [
+              {
+                id: "security",
+                label: "Seguridad",
+                icon: <KeyRound className="size-4" />,
+                content: (
+                  <UserDetailsSecurityTab
+                    user={{
+                      id: userDetail.id,
+                      username: userDetail.username,
+                      fullname: userDetail.fullname,
+                      email: userDetail.email,
+                      isActive: userDetail.isActive,
+                    }}
+                    isSelfUser={isSelfUser}
+                    canChangeStatus={canChangeAccountStatus}
+                    canManageCredentials={canManageCredentials}
+                  />
+                ),
+              },
+            ]
+          : []),
       ]
     : [];
 

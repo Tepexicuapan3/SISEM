@@ -23,7 +23,7 @@ from apps.medicos.tests.factories import crear_medico
 def _make_medico(username, nombre_completo):
     user = SyUsuario.objects.create(
         usuario=username, correo=f"{username}@example.com", clave_hash=make_password("x"),
-        est_activo=True,
+        est_activo=True, cambiar_clave=False, terminos_acept=True,
     )
     partes = nombre_completo.split()
     nombre, paterno = partes[0], partes[1] if len(partes) > 1 else ""
@@ -126,7 +126,7 @@ class ConsumoConsultaCreateApiTests(APITestCase):
 
         actor = SyUsuario.objects.create(
             usuario="almacen_user", correo="almacen@example.com", clave_hash=make_password("x"),
-            est_activo=True,
+            est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         access, _refresh, _sid = start_session(actor, ip_address="127.0.0.1", user_agent="test-agent")
         self.client.cookies["access_token_cookie"] = access
@@ -188,7 +188,7 @@ class MedicoNombreKardexTests(APITestCase):
         )
         actor = SyUsuario.objects.create(
             usuario="almacen_user_sin", correo="almacen_sin@example.com",
-            clave_hash=make_password("x"), est_activo=True,
+            clave_hash=make_password("x"), est_activo=True, cambiar_clave=False, terminos_acept=True,
         )
         access, _refresh, _sid = start_session(actor, ip_address="127.0.0.1", user_agent="test-agent")
         self.client.cookies["access_token_cookie"] = access

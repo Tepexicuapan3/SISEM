@@ -19,7 +19,16 @@ const EXPLICIT_PERMISSION_DEPENDENCIES = {
   "admin:gestion:roles:update": ["admin:gestion:permisos:read"],
 } as const satisfies Record<string, readonly string[]>;
 
-const normalizePermission = (permissionCode: string) => permissionCode.trim();
+// Permisos de escritura cuyo `:read` hermano NO existe en el catalogo real:
+// no se infiere dependencia (mirror de NO_INFERRED_READ_DEPENDENCY en
+// backend/apps/authentication/services/permission_dependencies.py).
+const NO_INFERRED_READ_DEPENDENCY = new Set<string>([
+  "recepcion:fichas:medicina_general:create",
+  "recepcion:fichas:especialidad:create",
+  "recepcion:fichas:urgencias:create",
+]);
+
+const normalizePermission =(permissionCode: string) => permissionCode.trim();
 
 const inferReadDependency = (permissionCode: string): string | null => {
   const segments = permissionCode.split(":").map((segment) => segment.trim());
@@ -42,7 +51,9 @@ const getDirectDependencies = (permissionCode: string): string[] => {
       normalizedPermission as keyof typeof EXPLICIT_PERMISSION_DEPENDENCIES
     ] ?? [];
 
-  const inferredDependency = inferReadDependency(normalizedPermission);
+  const inferredDependency = NO_INFERRED_READ_DEPENDENCY.has(normalizedPermission)
+    ? null
+    : inferReadDependency(normalizedPermission);
   const dependencySet = new Set<string>(explicitDependencies);
 
   if (inferredDependency && inferredDependency !== normalizedPermission) {

@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from apps.administracion.models import (
     AuditoriaEvento,
@@ -16,8 +16,10 @@ from apps.administracion.models import (
     RelUsuarioOverride,
     RelUsuarioRol,
 )
+from apps.authentication.application.auth_policy_service import AuthPolicyService
 from apps.authentication.infrastructure.policy_store import PolicyStore
-from apps.authentication.models import DetUsuario, SyUsuario
+from apps.authentication.models import DetUsuario, SesionUsuario, SyUsuario
+from apps.authentication.services.errors import PolicyStoreUnavailableError
 from apps.authentication.services.token_service import CSRF_COOKIE
 from apps.catalogos.models import CatCentroAtencion, CatPermiso, CatRol, Escuelas, Permisos, Roles
 
@@ -714,6 +716,625 @@ class RbacUsersApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data["code"], "USER_NOT_FOUND")
+
+    # ------------------------------------------------------------------
+    # auth-session-revocation: revocacion, force-logout y unlock
+    # ------------------------------------------------------------------
+    def _login_target(self, username="target_user", password="Target_123456"):
+        # Cliente independiente con la sesion del usuario objetivo.
+        target = SyUsuario.objects.get(usuario=username)
+        PolicyStore().clear_active_session(target.id_usuario)
+        client = APIClient()
+        response = client.post(
+            "/api/v1/auth/login",
+            {"username": username, "password": password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        client.cookies = response.cookies
+        return client
+
+    def _create_plain_user(self):
+        plain = SyUsuario.objects.create(
+            usuario="plain_no_perms",
+            correo="plain.no.perms@example.com",
+            clave_hash=make_password("Plain_123456"),
+            est_activo=True,
+            cambiar_clave=False,
+            terminos_acept=True,
+        )
+        DetUsuario.objects.create(
+            id_usuario=plain, nombre="Plain", paterno="User", materno=""
+        )
+        RelUsuarioRol.objects.create(
+            id_usuario=plain, id_rol=self.role_recepcion, is_primary=True
+        )
+        return plain
+
+    def test_reset_password_revokes_target_session(self):
+        target_client = self._login_target()
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/reset-password",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        temporary_password = response.data["temporaryPassword"]
+        self.assertIsNone(PolicyStore().get_active_session(self.target_user.id_usuario))
+        self.assertFalse(
+            SesionUsuario.objects.filter(
+                usuario=self.target_user, fch_fin__isnull=True
+            ).exists()
+        )
+        self.assertTrue(
+            SesionUsuario.objects.filter(
+                usuario=self.target_user,
+                cerrada_por=SesionUsuario.CierrePor.REVOCADA,
+            ).exists()
+        )
+
+        # La cookie vieja deja de valer.
+        old_cookie_response = target_client.get("/api/v1/auth/me")
+        self.assertEqual(old_cookie_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(old_cookie_response.data["code"], "SESSION_EXPIRED")
+
+        # Login con la temporal no choca con SESSION_ALREADY_ACTIVE.
+        login_response = APIClient().post(
+            "/api/v1/auth/login",
+            {"username": "target_user", "password": temporary_password},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_PASSWORD_RESET"
+        ).latest("id_evento")
+        self.assertTrue(event.datos_despues.get("sessionRevoked"))
+
+    @patch("apps.administracion.views.rbac_views.send_user_credentials_email")
+    def test_reset_password_send_email_success_hides_password_and_revokes(
+        self, send_email_mock
+    ):
+        send_email_mock.return_value = True
+        target_client = self._login_target()
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/reset-password",
+            {"sendEmail": True},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["emailSent"])
+        self.assertTrue(response.data["mustChangePassword"])
+        self.assertNotIn("temporaryPassword", response.data)
+
+        send_email_mock.assert_called_once()
+        sent_password = send_email_mock.call_args.args[2]
+        self.assertEqual(send_email_mock.call_args.args[0], self.target_user.correo)
+        self.assertTrue(send_email_mock.call_args.kwargs["is_reset"])
+        self.target_user.refresh_from_db()
+        self.assertTrue(check_password(sent_password, self.target_user.clave_hash))
+        self.assertTrue(self.target_user.cambiar_clave)
+
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_PASSWORD_RESET"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.SUCCESS)
+        self.assertTrue(event.datos_despues.get("emailSent"))
+        self.assertNotIn(sent_password, str(event.datos_despues))
+
+    @patch("apps.administracion.views.rbac_views.send_user_credentials_email")
+    def test_reset_password_send_email_failure_rolls_back(self, send_email_mock):
+        send_email_mock.return_value = False
+        old_hash = self.target_user.clave_hash
+        target_client = self._login_target()
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/reset-password",
+            {"sendEmail": True},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.data["code"], "EMAIL_SEND_FAILED")
+        self.assertNotIn("temporaryPassword", response.data)
+        self.target_user.refresh_from_db()
+        self.assertEqual(self.target_user.clave_hash, old_hash)
+        self.assertFalse(self.target_user.cambiar_clave)
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+        self.assertFalse(
+            SesionUsuario.objects.filter(
+                usuario=self.target_user,
+                cerrada_por=SesionUsuario.CierrePor.REVOCADA,
+            ).exists()
+        )
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_PASSWORD_RESET"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+        self.assertEqual(event.codigo_error, "EMAIL_SEND_FAILED")
+
+    @patch("apps.administracion.views.rbac_views.send_user_credentials_email")
+    def test_reset_password_send_email_without_correo_returns_400(
+        self, send_email_mock
+    ):
+        old_hash = self.target_user.clave_hash
+        SyUsuario.objects.filter(id_usuario=self.target_user.id_usuario).update(
+            correo=None
+        )
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/reset-password",
+            {"sendEmail": True},
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "USER_EMAIL_MISSING")
+        send_email_mock.assert_not_called()
+        self.target_user.refresh_from_db()
+        self.assertEqual(self.target_user.clave_hash, old_hash)
+
+    def test_reset_password_own_user_does_not_revoke_session(self):
+        response = self.client.post(
+            f"/api/v1/users/{self.admin.id_usuario}/reset-password",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertIsNotNone(PolicyStore().get_active_session(self.admin.id_usuario))
+        self.assertEqual(self.client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK)
+
+    def test_reset_password_user_not_found_does_not_revoke_anything(self):
+        target_client = self._login_target()
+
+        response = self.client.post(
+            "/api/v1/users/999999/reset-password",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+
+    def test_deactivate_user_revokes_target_session(self):
+        target_client = self._login_target()
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}/deactivate",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(PolicyStore().get_active_session(self.target_user.id_usuario))
+        self.assertTrue(
+            SesionUsuario.objects.filter(
+                usuario=self.target_user,
+                cerrada_por=SesionUsuario.CierrePor.REVOCADA,
+            ).exists()
+        )
+        after = target_client.get("/api/v1/auth/me")
+        self.assertIn(
+            after.status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )
+
+    def test_activate_user_does_not_revoke_session(self):
+        target_client = self._login_target()
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}/activate",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(
+            PolicyStore().get_active_session(self.target_user.id_usuario)
+        )
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+
+    def test_deactivate_then_activate_allows_immediate_login(self):
+        self._login_target()
+        self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}/deactivate",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+        self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}/activate",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        login_response = APIClient().post(
+            "/api/v1/auth/login",
+            {"username": "target_user", "password": "Target_123456"},
+            format="json",
+        )
+
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+    def test_deactivate_without_csrf_does_not_revoke(self):
+        target_client = self._login_target()
+
+        response = self.client.patch(
+            f"/api/v1/users/{self.target_user.id_usuario}/deactivate",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+
+    def test_force_logout_success_frees_single_session_lock(self):
+        target_client = self._login_target()
+        blocked = APIClient().post(
+            "/api/v1/auth/login",
+            {"username": "target_user", "password": "Target_123456"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_409_CONFLICT)
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/force-logout",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["sessionRevoked"])
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        relogin = APIClient().post(
+            "/api/v1/auth/login",
+            {"username": "target_user", "password": "Target_123456"},
+            format="json",
+        )
+        self.assertEqual(relogin.status_code, status.HTTP_200_OK)
+
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_FORCE_LOGOUT"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.SUCCESS)
+        self.assertEqual(event.recurso_id, self.target_user.id_usuario)
+        self.assertEqual(event.target_usuario_id, self.target_user.id_usuario)
+
+    def test_force_logout_own_user_returns_conflict(self):
+        response = self.client.post(
+            f"/api/v1/users/{self.admin.id_usuario}/force-logout",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "SELF_FORCE_LOGOUT_NOT_ALLOWED")
+        self.assertIsNotNone(PolicyStore().get_active_session(self.admin.id_usuario))
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_FORCE_LOGOUT"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+        self.assertEqual(event.codigo_error, "SELF_FORCE_LOGOUT_NOT_ALLOWED")
+
+    def test_force_logout_without_permission_returns_forbidden(self):
+        target_client = self._login_target()
+        self._create_plain_user()
+        self._login_as("plain_no_perms", "Plain_123456")
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/force-logout",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_FORCE_LOGOUT"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+        self.assertEqual(event.codigo_error, "PERMISSION_DENIED")
+
+    def test_force_logout_without_csrf_returns_forbidden(self):
+        target_client = self._login_target()
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/force-logout",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+
+    def test_force_logout_without_session_returns_unauthorized(self):
+        self.client.cookies.clear()
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/force-logout",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_FORCE_LOGOUT"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+
+    def test_force_logout_user_not_found(self):
+        response = self.client.post(
+            "/api/v1/users/999999/force-logout",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["code"], "USER_NOT_FOUND")
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_FORCE_LOGOUT"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+        self.assertEqual(event.codigo_error, "USER_NOT_FOUND")
+
+    def test_force_logout_returns_503_when_redis_is_down(self):
+        self._login_target()
+
+        with patch(
+            "apps.authentication.services.session_revocation.policy_store.clear_active_session",
+            side_effect=PolicyStoreUnavailableError("down"),
+        ):
+            response = self.client.post(
+                f"/api/v1/users/{self.target_user.id_usuario}/force-logout",
+                format="json",
+                HTTP_X_CSRF_TOKEN=self.csrf_token,
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "SERVICE_UNAVAILABLE")
+        # Fail-soft del helper: las filas DB si se cerraron.
+        self.assertFalse(
+            SesionUsuario.objects.filter(
+                usuario=self.target_user, fch_fin__isnull=True
+            ).exists()
+        )
+        event = AuditoriaEvento.objects.filter(
+            accion="RBAC_USER_FORCE_LOGOUT"
+        ).latest("id_evento")
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+        self.assertEqual(event.codigo_error, "SERVICE_UNAVAILABLE")
+
+    def test_unlock_clears_account_lock_and_allows_login(self):
+        username_key = "target_user"
+        store = PolicyStore()
+        store.set_lock(AuthPolicyService._login_account_lock_key(username_key), 600)
+        store.increment_counter(
+            AuthPolicyService._login_account_counter_key(username_key), 600
+        )
+        locked = APIClient().post(
+            "/api/v1/auth/login",
+            {"username": "target_user", "password": "Target_123456"},
+            format="json",
+        )
+        self.assertEqual(locked.status_code, status.HTTP_423_LOCKED)
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/unlock",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["unlocked"])
+        self.assertFalse(
+            store.is_locked(AuthPolicyService._login_account_lock_key(username_key))
+        )
+        self.assertEqual(
+            store.get_counter(AuthPolicyService._login_account_counter_key(username_key)),
+            0,
+        )
+        PolicyStore().clear_active_session(self.target_user.id_usuario)
+        login_response = APIClient().post(
+            "/api/v1/auth/login",
+            {"username": "target_user", "password": "Target_123456"},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        event = AuditoriaEvento.objects.filter(accion="RBAC_USER_UNLOCK").latest(
+            "id_evento"
+        )
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.SUCCESS)
+        self.assertEqual(event.target_usuario_id, self.target_user.id_usuario)
+
+    def test_unlock_is_idempotent_when_account_is_not_locked(self):
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/unlock",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_unlock_without_permission_returns_forbidden(self):
+        self._create_plain_user()
+        self._login_as("plain_no_perms", "Plain_123456")
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/unlock",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        event = AuditoriaEvento.objects.filter(accion="RBAC_USER_UNLOCK").latest(
+            "id_evento"
+        )
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+
+    def test_unlock_without_csrf_returns_forbidden(self):
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/unlock",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unlock_user_not_found(self):
+        response = self.client.post(
+            "/api/v1/users/999999/unlock",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["code"], "USER_NOT_FOUND")
+        event = AuditoriaEvento.objects.filter(accion="RBAC_USER_UNLOCK").latest(
+            "id_evento"
+        )
+        self.assertEqual(event.codigo_error, "USER_NOT_FOUND")
+
+    def test_unlock_returns_503_when_redis_is_down(self):
+        with patch(
+            "apps.authentication.services.login_unlock.policy_store.clear_counter",
+            side_effect=PolicyStoreUnavailableError("down"),
+        ):
+            response = self.client.post(
+                f"/api/v1/users/{self.target_user.id_usuario}/unlock",
+                format="json",
+                HTTP_X_CSRF_TOKEN=self.csrf_token,
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "SERVICE_UNAVAILABLE")
+        event = AuditoriaEvento.objects.filter(accion="RBAC_USER_UNLOCK").latest(
+            "id_evento"
+        )
+        self.assertEqual(event.resultado, AuditoriaEvento.Resultado.FAIL)
+        self.assertEqual(event.codigo_error, "SERVICE_UNAVAILABLE")
+
+    # Option A: credenciales exige su propio permiso; usuarios:update no basta.
+    def _login_update_only_actor(self):
+        users_update = self._ensure_permission(
+            "admin:gestion:usuarios:update",
+            "Actualizar usuarios",
+        )
+        users_read = self._ensure_permission(
+            "admin:gestion:usuarios:read",
+            "Leer usuarios",
+        )
+        limited_role = CatRol.objects.create(
+            rol="USERS_UPDATE_SIN_CREDENCIALES",
+            desc_rol="Gestor usuarios sin credenciales",
+            landing_route="/admin/users",
+            is_active=True,
+        )
+        actor = SyUsuario.objects.create(
+            usuario="update_sin_credenciales",
+            correo="update.sin.credenciales@example.com",
+            clave_hash=make_password("Limited_123456"),
+            est_activo=True,
+            cambiar_clave=False,
+            terminos_acept=True,
+        )
+        DetUsuario.objects.create(
+            id_usuario=actor, nombre="Update", paterno="Only", materno=""
+        )
+        RelUsuarioRol.objects.create(
+            id_usuario=actor, id_rol=limited_role, is_primary=True
+        )
+        RelRolPermiso.objects.create(id_rol=limited_role, id_permiso=users_update)
+        RelRolPermiso.objects.create(id_rol=limited_role, id_permiso=users_read)
+        self._login_as("update_sin_credenciales", "Limited_123456")
+        return actor
+
+    def test_reset_password_with_update_but_without_credenciales_is_forbidden(self):
+        self._login_update_only_actor()
+        hash_before = SyUsuario.objects.get(pk=self.target_user.pk).clave_hash
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/reset-password",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(
+            SyUsuario.objects.get(pk=self.target_user.pk).clave_hash, hash_before
+        )
+
+    def test_force_logout_with_update_but_without_credenciales_is_forbidden(self):
+        target_client = self._login_target()
+        self._login_update_only_actor()
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/force-logout",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        # La sesion del objetivo sigue viva.
+        self.assertIsNotNone(
+            PolicyStore().get_active_session(self.target_user.id_usuario)
+        )
+        self.assertEqual(
+            target_client.get("/api/v1/auth/me").status_code, status.HTTP_200_OK
+        )
+        self.assertFalse(
+            SesionUsuario.objects.filter(
+                usuario=self.target_user,
+                cerrada_por=SesionUsuario.CierrePor.REVOCADA,
+            ).exists()
+        )
+
+    def test_unlock_with_update_but_without_credenciales_is_forbidden(self):
+        username_key = "target_user"
+        store = PolicyStore()
+        lock_key = AuthPolicyService._login_account_lock_key(username_key)
+        store.set_lock(lock_key, 600)
+        self._login_update_only_actor()
+
+        response = self.client.post(
+            f"/api/v1/users/{self.target_user.id_usuario}/unlock",
+            format="json",
+            HTTP_X_CSRF_TOKEN=self.csrf_token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        # El bloqueo sigue intacto.
+        self.assertTrue(store.is_locked(lock_key))
+        store.clear_counter(lock_key)
 
     def test_assign_roles_and_set_primary(self):
         before_assign_revision = self.target_user.fch_modf

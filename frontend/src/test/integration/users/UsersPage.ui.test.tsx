@@ -2,18 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent, {
   PointerEventsCheckLevel,
 } from "@testing-library/user-event";
-import { fireEvent, render, screen, waitFor, within } from "@/test/utils";
+import { render, screen, waitFor, within } from "@/test/utils";
 import UsersPage from "@/domains/auth-access/pages/admin/users/UsersPage";
 import { createMockUser } from "@/test/factories/users";
-import { toast } from "sonner";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import { useAuthCapabilities } from "@/domains/auth-access/hooks/useAuthCapabilities";
 import { useUsersList } from "@/domains/auth-access/hooks/rbac/users/useUsersList";
 import { useRolesList } from "@/domains/auth-access/hooks/rbac/roles/useRolesList";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
-import { useActivateUser } from "@/domains/auth-access/hooks/rbac/users/useActivateUser";
-import { useDeactivateUser } from "@/domains/auth-access/hooks/rbac/users/useDeactivateUser";
-import { useResetUserPassword } from "@/domains/auth-access/hooks/rbac/users/useResetUserPassword";
+import { useAuthSession } from "@/domains/auth-access/hooks/useAuthSession";
 import type { CentroAtencionListItem, RoleListItem } from "@api/types";
 import { ApiError } from "@api/utils/errors";
 
@@ -23,30 +20,26 @@ vi.mock("@shared/hooks/useDebounce", () => ({
   useDebounce: (value: string) => value,
 }));
 
-vi.mock("sonner", () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
 vi.mock(
   "@/domains/auth-access/components/admin/rbac/users/UserDetailsDialog",
   () => ({
     UserDetailsDialog: ({
       open,
       canEdit,
+      canManageCredentials,
       canReadRolesCatalog,
       canReadPermissionsCatalog,
     }: {
       open: boolean;
       canEdit?: boolean;
+      canManageCredentials?: boolean;
       canReadRolesCatalog?: boolean;
       canReadPermissionsCatalog?: boolean;
     }) => {
       userDetailsDialogPropsSpy({
         open,
         canEdit,
+        canManageCredentials,
         canReadRolesCatalog,
         canReadPermissionsCatalog,
       });
@@ -86,23 +79,9 @@ vi.mock(
   }),
 );
 
-vi.mock("@/domains/auth-access/hooks/rbac/users/useActivateUser", () => ({
-  useActivateUser: vi.fn(),
+vi.mock("@/domains/auth-access/hooks/useAuthSession", () => ({
+  useAuthSession: vi.fn(),
 }));
-
-vi.mock(
-  "@/domains/auth-access/hooks/rbac/users/useDeactivateUser",
-  () => ({
-    useDeactivateUser: vi.fn(),
-  }),
-);
-
-vi.mock(
-  "@/domains/auth-access/hooks/rbac/users/useResetUserPassword",
-  () => ({
-    useResetUserPassword: vi.fn(),
-  }),
-);
 
 const createRoleOption = (
   overrides: Partial<RoleListItem> = {},
@@ -132,9 +111,6 @@ const createClinicOption = (
 describe("UsersPage UI", () => {
   const refetch = vi.fn();
   const refetchCapabilities = vi.fn();
-  const activateMutate = vi.fn();
-  const deactivateMutate = vi.fn();
-  const resetPasswordMutate = vi.fn();
   const defaultPermissionDeps = {
     hasCapability: () => true,
     hasPermission: () => true,
@@ -201,26 +177,10 @@ describe("UsersPage UI", () => {
       refetch: refetchCapabilities,
     } as ReturnType<typeof useAuthCapabilities>);
 
-    vi.mocked(useActivateUser).mockReturnValue({
-      mutateAsync: activateMutate,
-      isPending: false,
-    } as ReturnType<typeof useActivateUser>);
+    vi.mocked(useAuthSession).mockReturnValue({
+      data: { id: 1 },
+    } as ReturnType<typeof useAuthSession>);
 
-    vi.mocked(useDeactivateUser).mockReturnValue({
-      mutateAsync: deactivateMutate,
-      isPending: false,
-    } as ReturnType<typeof useDeactivateUser>);
-
-    vi.mocked(useResetUserPassword).mockReturnValue({
-      mutateAsync: resetPasswordMutate,
-      isPending: false,
-    } as ReturnType<typeof useResetUserPassword>);
-
-    activateMutate.mockResolvedValue({ id: 2, isActive: true });
-    deactivateMutate.mockResolvedValue({ id: 1, isActive: false });
-    resetPasswordMutate.mockReset();
-    vi.mocked(toast.success).mockClear();
-    vi.mocked(toast.error).mockClear();
     userDetailsDialogPropsSpy.mockClear();
   });
 
@@ -338,128 +298,13 @@ describe("UsersPage UI", () => {
     });
   });
 
-  it("executes activate/deactivate actions", async () => {
-    const user = userEvent.setup();
+  it("does not render an actions column or row action menu", () => {
     render(<UsersPage />);
-
-    const activeRow = screen.getByText("Juan Perez").closest("tr");
-    expect(activeRow).not.toBeNull();
-    const activeActions = within(activeRow as HTMLElement).getByLabelText(
-      "Acciones",
-    );
-
-    fireEvent.pointerDown(activeActions);
-    fireEvent.click(activeActions);
-    await user.click(screen.getByRole("menuitem", { name: "Desactivar" }));
-
-    await waitFor(() => {
-      expect(deactivateMutate).toHaveBeenCalledWith({ userId: 1 });
-      expect(toast.success).toHaveBeenCalledWith("Usuario desactivado");
-    });
-
-    const inactiveRow = screen.getByText("Roberto Bloqueado").closest("tr");
-    expect(inactiveRow).not.toBeNull();
-    const inactiveActions = within(inactiveRow as HTMLElement).getByLabelText(
-      "Acciones",
-    );
-
-    fireEvent.pointerDown(inactiveActions);
-    fireEvent.click(inactiveActions);
-    await user.click(screen.getByRole("menuitem", { name: "Activar" }));
-
-    await waitFor(() => {
-      expect(activateMutate).toHaveBeenCalledWith({ userId: 2 });
-      expect(toast.success).toHaveBeenCalledWith("Usuario activado");
-    });
-  });
-
-  it("resets a user's password, shows it in a modal, and copies it", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-
-    resetPasswordMutate.mockResolvedValue({
-      temporaryPassword: "Temp0-Pass!",
-      mustChangePassword: true,
-    });
-
-    const user = userEvent.setup({
-      pointerEventsCheck: PointerEventsCheckLevel.Never,
-    });
-    render(<UsersPage />);
-
-    const row = screen.getByText("Juan Perez").closest("tr");
-    expect(row).not.toBeNull();
-    const actions = within(row as HTMLElement).getByLabelText("Acciones");
-
-    fireEvent.pointerDown(actions);
-    fireEvent.click(actions);
-    await user.click(
-      screen.getByRole("menuitem", { name: "Restablecer contraseña" }),
-    );
 
     expect(
-      screen.getByRole("heading", { name: "Restablecer contraseña" }),
-    ).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Restablecer" }));
-
-    await waitFor(() => {
-      expect(resetPasswordMutate).toHaveBeenCalledWith({ userId: 1 });
-    });
-
-    expect(await screen.findByDisplayValue("Temp0-Pass!")).toBeVisible();
-
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Copiar" }));
-
-    await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("Temp0-Pass!");
-    });
-    expect(await screen.findByText("¡Copiado!")).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Cerrar" }));
-
-    await waitFor(() => {
-      expect(screen.queryByDisplayValue("Temp0-Pass!")).toBeNull();
-    });
-  });
-
-  it("shows a clear error when self password reset is blocked", async () => {
-    resetPasswordMutate.mockRejectedValue(
-      new ApiError(
-        "SELF_PASSWORD_RESET_NOT_ALLOWED",
-        "No permitido",
-        409,
-      ),
-    );
-
-    const user = userEvent.setup({
-      pointerEventsCheck: PointerEventsCheckLevel.Never,
-    });
-    render(<UsersPage />);
-
-    const row = screen.getByText("Juan Perez").closest("tr");
-    expect(row).not.toBeNull();
-    const actions = within(row as HTMLElement).getByLabelText("Acciones");
-
-    fireEvent.pointerDown(actions);
-    fireEvent.click(actions);
-    await user.click(
-      screen.getByRole("menuitem", { name: "Restablecer contraseña" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Restablecer" }));
-
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        "No se pudo restablecer la contraseña",
-        expect.objectContaining({
-          description: expect.stringContaining(
-            "No podes restablecer tu propia contrasena",
-          ),
-        }),
-      );
-    });
+      screen.queryByRole("columnheader", { name: "Acciones" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Acciones")).toBeNull();
   });
 
   it("opens details in read-only when update permission is missing", async () => {
@@ -476,6 +321,37 @@ describe("UsersPage UI", () => {
 
     expect(userDetailsDialogPropsSpy).toHaveBeenCalledWith(
       expect.objectContaining({ open: true, canEdit: false }),
+    );
+  });
+
+  it("passes the credentials capability to the details dialog", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(usePermissionDependencies).mockReturnValue({
+      ...defaultPermissionDeps,
+      hasCapability: (capabilityKey) =>
+        capabilityKey === "admin.users.read" ||
+        capabilityKey === "admin.users.update",
+    });
+
+    const { unmount } = render(<UsersPage />);
+    await user.click(screen.getByText("Juan Perez"));
+    expect(userDetailsDialogPropsSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, canManageCredentials: false }),
+    );
+    unmount();
+
+    vi.mocked(usePermissionDependencies).mockReturnValue({
+      ...defaultPermissionDeps,
+      hasCapability: (capabilityKey) =>
+        capabilityKey === "admin.users.read" ||
+        capabilityKey === "admin.users.credentials",
+    });
+
+    render(<UsersPage />);
+    await user.click(screen.getByText("Juan Perez"));
+    expect(userDetailsDialogPropsSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, canManageCredentials: true }),
     );
   });
 

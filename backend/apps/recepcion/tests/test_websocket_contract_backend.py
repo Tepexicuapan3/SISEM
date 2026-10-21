@@ -5,6 +5,7 @@ from django.contrib.auth.hashers import make_password
 from django.test import TestCase, override_settings
 
 from apps.administracion.models import RelUsuarioRol
+from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import SyUsuario
 from apps.authentication.services.token_service import ACCESS_COOKIE, create_access_refresh_tokens
 from apps.catalogos.models import Roles
@@ -74,10 +75,13 @@ class VisitWebSocketContractsTests(TestCase):
             defaults={"is_primary": True},
         )
 
-        access_token, _, _ = create_access_refresh_tokens(self.user)
+        # El handshake exige que el sid del token sea la sesion activa (Redis).
+        access_token, _, user_sid = create_access_refresh_tokens(self.user)
         self.cookie_header = f"{ACCESS_COOKIE}={access_token}".encode()
-        admin_access_token, _, _ = create_access_refresh_tokens(self.admin_user)
+        admin_access_token, _, admin_sid = create_access_refresh_tokens(self.admin_user)
         self.admin_cookie_header = f"{ACCESS_COOKIE}={admin_access_token}".encode()
+        PolicyStore().set_active_session(self.user.id_usuario, user_sid, 600)
+        PolicyStore().set_active_session(self.admin_user.id_usuario, admin_sid, 600)
 
     def test_handshake_requires_valid_cookie_auth(self):
         response = self._connect_once(
