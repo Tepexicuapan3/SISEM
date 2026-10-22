@@ -46,11 +46,15 @@ Migraciones: `administracion 0013, 0014, 0015` y `consulta_medica 0055`.
 ## Después de desplegar
 
 ```sql
--- Triggers de inmutabilidad (base principal): deben salir 10 filas
-SELECT event_object_table, trigger_name
-FROM information_schema.triggers
-WHERE trigger_name LIKE '%\_inmutable' OR trigger_name LIKE '%\_sin\_truncate'
+-- Triggers de inmutabilidad (base principal): deben salir 10 filas.
+-- Se consulta pg_trigger: information_schema.triggers NO muestra los de TRUNCATE.
+SELECT tgrelid::regclass AS tabla, tgname
+FROM pg_trigger
+WHERE tgname LIKE '%\_inmutable' OR tgname LIKE '%\_sin\_truncate'
 ORDER BY 1, 2;
+
+-- Prueba de fuego: DEBE fallar con "es una bitacora" (SQL state 42501)
+DELETE FROM bitacora_sync_expediente WHERE id = (SELECT max(id) FROM bitacora_sync_expediente);
 
 -- Roles que recibieron el permiso nuevo (los que ya tenían lectura)
 SELECT r.rol
