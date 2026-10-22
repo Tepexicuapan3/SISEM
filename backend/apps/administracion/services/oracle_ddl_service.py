@@ -112,6 +112,9 @@ class Esquema:
     no_copiados: dict[str, int] = field(default_factory=dict)
     # (sinonimo, owner real, tabla real) de las tablas traidas por sinonimo.
     sinonimos: list[tuple[str, str, str]] = field(default_factory=list)
+    # Lo que no se pudo leer (p. ej. un DEFAULT LONG ilegible): va al final
+    # del script para completarlo a mano.
+    avisos: list[str] = field(default_factory=list)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -282,6 +285,10 @@ def generar_script(esquema: Esquema, *, encabezado: str, incluir_indices: bool =
     if esquema.no_copiados:
         partes.append("-- ===== No copiado (crear a mano si las pruebas lo necesitan) =====")
         partes += [f"--   {tipo}: {n}" for tipo, n in sorted(esquema.no_copiados.items())]
+        partes.append("")
+    if esquema.avisos:
+        partes.append(f"-- ===== Avisos: revisar a mano ({len(esquema.avisos)}) =====")
+        partes += [f"--   {aviso}" for aviso in esquema.avisos]
     return "\n".join(partes).rstrip() + "\n"
 
 
@@ -293,6 +300,22 @@ def _filas(cursor, sql: str, params=()) -> list[dict]:
     cursor.execute(sql, params)
     nombres = [d[0].lower() for d in cursor.description]
     return [dict(zip(nombres, fila)) for fila in cursor.fetchall()]
+
+
+def _leer_long(cursor, sql: str, params) -> tuple[str | None, str | None]:
+    """
+    Un valor LONG del diccionario (DATA_DEFAULT, SEARCH_CONDITION), de a una
+    fila. Traer LONG en lote contra el Oracle de SERMED (anterior a 10g, con
+    cliente 11.2) rompe el fetch con ORA-03149, asi que las consultas grandes
+    nunca piden columnas LONG. Devuelve (valor, error): un valor ilegible no
+    detiene el script, queda como aviso.
+    """
+    try:
+        cursor.execute(sql, params)
+        fila = cursor.fetchone()
+        return (_texto(fila[0]) if fila else None), None
+    except Exception as exc:
+        return None, str(exc).splitlines()[0]
 
 
 def usuario_actual(conn) -> str:
@@ -426,6 +449,19 @@ def leer_esquema(conn, owners: list[str], *, incluir_sinonimos: bool = True) -> 
     return esquema
 
 
+def _es_not_null_de_sistema(r: Restriccion, tabla: Tabla | None) -> bool:
+    """
+    Oracle guarda cada NOT NULL tambien como un CHECK con nombre de sistema
+    (SYS_C...). Hay uno por columna obligatoria, asi que leer su condicion
+    LONG de a una fila seria lentisimo: se reconocen sin leerla (una sola
+    columna, nombre de sistema y la columna ya es NOT NULL). Limite conocido:
+    un CHECK sin nombre sobre una sola columna NOT NULL tambien se omite.
+    """
+    if tabla is None or not r.nombre_de_sistema or len(r.columnas) != 1:
+        return False
+    return any(c.nombre == r.columnas[0] and not c.nullable for c in tabla.columnas)
+
+
 def _leer_owner(cursor, esquema: Esquema, owner: str, dic: Diccionario) -> None:
     def tabla(nombre):
         return esquema.tablas.get((owner, nombre))
@@ -449,21 +485,36 @@ def _leer_owner(cursor, esquema: Esquema, owner: str, dic: Diccionario) -> None:
         if (t := tabla(f["table_name"])):
             t.comentario = _texto(f["comments"])
 
+    # Sin DATA_DEFAULT (LONG): solo DEFAULT_LENGTH dice si hay que leerlo.
+    con_default: list[tuple[Tabla, Columna]] = []
     for f in _filas(cursor, f"""
         SELECT table_name, column_name, data_type, data_type_owner, data_length, data_precision,
-               data_scale, char_length, char_used, nullable, data_default, {columna_virtual}
+               data_scale, char_length, char_used, nullable, default_length, {columna_virtual}
         FROM {vista_columnas}
         WHERE owner = :1 {solo_visibles}
         ORDER BY table_name, column_id
     """, (owner,)):
         if (t := tabla(f["table_name"])):
-            t.columnas.append(Columna(
+            columna = Columna(
                 nombre=f["column_name"], tipo=f["data_type"], tipo_owner=_texto(f["data_type_owner"]),
                 longitud=f["data_length"], precision=f["data_precision"], escala=f["data_scale"],
                 char_length=f["char_length"], char_used=_texto(f["char_used"]),
-                nullable=f["nullable"] == "Y", default=_texto(f["data_default"]),
-                virtual=f["virtual_column"] == "YES",
-            ))
+                nullable=f["nullable"] == "Y", virtual=f["virtual_column"] == "YES",
+            )
+            t.columnas.append(columna)
+            if f["default_length"]:
+                con_default.append((t, columna))
+
+    for t, columna in con_default:
+        valor, error = _leer_long(cursor, f"""
+            SELECT data_default FROM {vista_columnas}
+            WHERE owner = :1 AND table_name = :2 AND column_name = :3
+        """, (owner, t.nombre, columna.nombre))
+        if error:
+            esquema.avisos.append(
+                f"{t.destino}.{columna.nombre}: no se pudo leer su DEFAULT ({error}); se creo sin DEFAULT."
+            )
+        columna.default = valor
 
     for f in _filas(cursor, """
         SELECT table_name, column_name, comments FROM all_col_comments
@@ -481,22 +532,35 @@ def _leer_owner(cursor, esquema: Esquema, owner: str, dic: Diccionario) -> None:
 
     # Se leen todas las restricciones del owner (aunque su tabla no se copie):
     # una foranea de la copia puede referenciar su llave primaria.
+    # Sin SEARCH_CONDITION (LONG): la condicion de cada CHECK se lee despues.
     for f in _filas(cursor, f"""
         SELECT table_name, constraint_name, constraint_type, r_owner, r_constraint_name,
-               delete_rule, search_condition, generated, status, {columna_indice}
+               delete_rule, generated, status, {columna_indice}
         FROM all_constraints
         WHERE owner = :1 AND constraint_type IN ('P', 'U', 'R', 'C')
     """, (owner,)):
         if tabla(f["table_name"]) is None and f["constraint_type"] not in ("P", "U"):
             continue
-        esquema.restricciones.append(Restriccion(
+        restriccion = Restriccion(
             owner=owner, tabla=f["table_name"], nombre=f["constraint_name"], tipo=f["constraint_type"],
             columnas=columnas_restriccion.get(f["constraint_name"], []),
             ref_owner=_texto(f["r_owner"]), ref_nombre=_texto(f["r_constraint_name"]),
-            regla_borrado=_texto(f["delete_rule"]), condicion=_texto(f["search_condition"]),
+            regla_borrado=_texto(f["delete_rule"]),
             nombre_de_sistema=f["generated"] == "GENERATED NAME",
             habilitada=f["status"] == "ENABLED", indice=_texto(f["index_name"]),
-        ))
+        )
+        esquema.restricciones.append(restriccion)
+        if restriccion.tipo == "C" and not _es_not_null_de_sistema(restriccion, tabla(f["table_name"])):
+            condicion, error = _leer_long(cursor, """
+                SELECT search_condition FROM all_constraints
+                WHERE owner = :1 AND constraint_name = :2
+            """, (owner, restriccion.nombre))
+            restriccion.condicion = condicion
+            if error:
+                esquema.avisos.append(
+                    f"{tabla(f['table_name']).destino}: CHECK {restriccion.nombre} omitido, "
+                    f"no se pudo leer su condicion ({error})."
+                )
 
     columnas_indice: dict[tuple[str, str], list[tuple[str, bool]]] = defaultdict(list)
     for f in _filas(cursor, """

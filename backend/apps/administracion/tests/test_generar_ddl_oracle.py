@@ -90,6 +90,7 @@ DICCIONARIO = {
         {"owner": "SERMED", "constraint_name": "FK_FAM_EMP", "column_name": "NO_EXPF"},
         {"owner": "SERMED", "constraint_name": "FK_FAM_NOMINA", "column_name": "NO_EXPF"},
         {"owner": "SERMED", "constraint_name": "SYS_C0011", "column_name": "NO_EXP"},
+        {"owner": "SERMED", "constraint_name": "CK_FAM_PK_POSITIVO", "column_name": "PK_NUM"},
         {"owner": "RH", "constraint_name": "PK_LICENCIAS", "column_name": "NO_FOLIO"},
         {"owner": "RH", "constraint_name": "PK_NOMINA", "column_name": "SUELDO"},
     ],
@@ -114,6 +115,10 @@ DICCIONARIO = {
          "constraint_type": "R", "r_owner": "RH", "r_constraint_name": "PK_NOMINA",
          "delete_rule": "NO ACTION", "search_condition": None, "generated": "USER NAME",
          "status": "DISABLED", "index_name": None},
+        {"owner": "SERMED", "table_name": "CAT_FAMILIAR", "constraint_name": "CK_FAM_PK_POSITIVO",
+         "constraint_type": "C", "r_owner": None, "r_constraint_name": None, "delete_rule": None,
+         "search_condition": "PK_NUM > 0", "generated": "USER NAME", "status": "ENABLED",
+         "index_name": None},
         {"owner": "RH", "table_name": "LICENCIAS", "constraint_name": "PK_LICENCIAS",
          "constraint_type": "P", "r_owner": None, "r_constraint_name": None, "delete_rule": None,
          "search_condition": None, "generated": "USER NAME", "status": "ENABLED",
@@ -143,23 +148,44 @@ DICCIONARIO = {
 }
 
 
+# DEFAULT_LENGTH: lo unico que la consulta en lote sabe del DEFAULT (LONG).
+for _fila in DICCIONARIO["FROM all_tab_cols"]:
+    _fila["default_length"] = len(_fila["data_default"]) if _fila["data_default"] else 0
 # Antes de 9i (o sin visibilidad de ALL_TAB_COLS) las columnas salen de aqui.
 DICCIONARIO["FROM all_tab_columns"] = DICCIONARIO["FROM all_tab_cols"]
+
+ORA_03149 = "ORA-03149: Invalid Oracle error code"
 
 
 class CursorDiccionario:
     """Responde por la tabla del diccionario que aparece en el SQL y filtra
-    por owner (primer parametro) cuando la consulta lo recibe."""
+    por owner (primer parametro) cuando la consulta lo recibe. Con
+    ``fallar_long`` simula el ORA-03149 del Oracle de SERMED al leer LONG."""
 
-    def __init__(self, vistas=None):
+    def __init__(self, vistas=None, fallar_long=False):
         self.description = None
         self._filas = []
         self.arraysize = 100
         self.sql = []
         self._vistas = VISTAS_MODERNAS if vistas is None else vistas
+        self._fallar_long = fallar_long
+
+    def _long(self, columna, filas, coincide):
+        if self._fallar_long:
+            raise RuntimeError(ORA_03149)
+        self.description = [(columna.upper(),)]
+        self._filas = [(f[columna],) for f in filas if coincide(f)][:1]
 
     def execute(self, sql, params=()):
         self.sql.append(sql)
+        if "SELECT data_default FROM" in sql:
+            owner, tabla, columna = params
+            return self._long("data_default", DICCIONARIO["FROM all_tab_cols"], lambda f: (
+                f["owner"], f["table_name"], f["column_name"]) == (owner, tabla, columna))
+        if "SELECT search_condition FROM" in sql:
+            owner, nombre = params
+            return self._long("search_condition", DICCIONARIO["FROM all_constraints"], lambda f: (
+                f["owner"], f["constraint_name"]) == (owner, nombre))
         if "SELECT USER FROM dual" in sql:
             self.description = [("USER",)]
             self._filas = [("SERMED",)]
@@ -189,12 +215,13 @@ class CursorDiccionario:
 
 
 class ConexionDiccionario:
-    def __init__(self, vistas=None):
+    def __init__(self, vistas=None, fallar_long=False):
         self.cursores = []
         self._vistas = vistas
+        self._fallar_long = fallar_long
 
     def cursor(self):
-        cursor = CursorDiccionario(self._vistas)
+        cursor = CursorDiccionario(self._vistas, self._fallar_long)
         self.cursores.append(cursor)
         return cursor
 
@@ -249,6 +276,42 @@ class VersionesDeOracleTests(SimpleTestCase):
 
     def test_sin_join_ansi(self):
         self.assertNotIn(" JOIN ", self._sql(VISTAS_9I).upper())
+
+
+class ColumnasLongTests(SimpleTestCase):
+    """DATA_DEFAULT y SEARCH_CONDITION son LONG: traerlos en lote dio
+    ORA-03149 contra el Oracle de SERMED. Se leen de a una fila y solo
+    cuando hacen falta."""
+
+    def test_ninguna_consulta_en_lote_pide_columnas_long(self):
+        conn = ConexionDiccionario(VISTAS_9I)
+        ddl.leer_esquema(conn, ["SERMED"])
+        for sql in conn.sql_ejecutado():
+            if "data_default" in sql or "search_condition" in sql:
+                # Solo las lecturas puntuales, filtradas hasta una fila.
+                self.assertTrue("column_name = :3" in sql or "constraint_name = :2" in sql, sql)
+
+    def test_lee_defaults_y_checks_de_usuario_de_a_uno(self):
+        conn = ConexionDiccionario(VISTAS_9I)
+        esquema = ddl.leer_esquema(conn, ["SERMED"])
+        script = ddl.generar_script(esquema, encabezado="-- prueba")
+        self.assertIn('"FEC_VIG" DATE DEFAULT SYSDATE', script)
+        self.assertIn('ALTER TABLE "CAT_FAMILIAR" ADD CONSTRAINT "CK_FAM_PK_POSITIVO" CHECK (PK_NUM > 0);', script)
+        lecturas = [s for s in conn.sql_ejecutado() if "SELECT data_default" in s or "SELECT search_condition" in s]
+        # 1 DEFAULT (FEC_VIG) + 1 CHECK de usuario: el NOT NULL de sistema no se lee.
+        self.assertEqual(len(lecturas), 2)
+        self.assertEqual(esquema.avisos, [])
+
+    def test_un_long_ilegible_no_detiene_el_script_y_queda_como_aviso(self):
+        esquema = ddl.leer_esquema(ConexionDiccionario(VISTAS_9I, fallar_long=True), ["SERMED"])
+        script = ddl.generar_script(esquema, encabezado="-- prueba")
+
+        self.assertIn('"FEC_VIG" DATE\n', script)
+        self.assertNotIn("CK_FAM_PK_POSITIVO\" CHECK", script)
+        self.assertEqual(len(esquema.avisos), 2)
+        self.assertIn("-- ===== Avisos: revisar a mano (2) =====", script)
+        self.assertIn("CAT_EMPLEADOS.FEC_VIG: no se pudo leer su DEFAULT (ORA-03149", script)
+        self.assertIn("CHECK CK_FAM_PK_POSITIVO omitido", script)
 
 
 class LeerEsquemaTests(SimpleTestCase):
