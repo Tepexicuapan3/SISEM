@@ -41,7 +41,10 @@ class CitaMedica(models.Model):
 
     # Paciente (núcleo familiar — mismo esquema que rcp_visits)
     no_exp       = models.CharField(max_length=20, db_index=True)
-    pk_num       = models.SmallIntegerField(default=0)
+    # IntegerField, no smallint: los PK_NUM de SERMED pasan de 32 767 (p. ej.
+    # 48411) y en Postgres la cita fallaba con "smallint out of range". Mismo
+    # arreglo que rcp_visits (recepcion.0006).
+    pk_num       = models.IntegerField(default=0)
 
     # Médico y consultorio
     medico       = models.ForeignKey(
