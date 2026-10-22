@@ -38,8 +38,33 @@ class Command(BaseCommand):
         )
         parser.add_argument("--sin-indices", action="store_true", help="No generar indices.")
         parser.add_argument("--sin-foraneas", action="store_true", help="No generar llaves foraneas.")
+        parser.add_argument(
+            "--tablas-sync",
+            action="store_true",
+            help=(
+                "Modo describir para las tablas que sincroniza el boton Actualizar, con sus llaves "
+                "como PK. No usa el diccionario: sirve aunque el usuario no lo vea."
+            ),
+        )
+        parser.add_argument(
+            "--describir",
+            action="append",
+            dest="describir",
+            default=None,
+            help=(
+                "Modo describir: tabla (o sinonimo/vista) a describir con SELECT * ... WHERE 1 = 0, "
+                "sin leer filas. Repetir la bandera para varias; se suma a --tablas-sync."
+            ),
+        )
 
     def handle(self, *args, **options):
+        from apps.administracion.use_cases.expedientes.actualizar_expediente import TABLAS_SYNC
+
+        modo_describir = options["tablas_sync"] or bool(options["describir"])
+        nombres = [t.upper() for t in TABLAS_SYNC] if options["tablas_sync"] else []
+        nombres += [t.strip().upper() for t in options["describir"] or [] if t.strip() and t.strip().upper() not in nombres]
+        llaves = {tabla: cols for tabla, (cols, _, _) in TABLAS_SYNC.items()}
+
         try:
             conn = obtener_conexion_oracle()
         except Exception as exc:
@@ -48,21 +73,36 @@ class Command(BaseCommand):
         try:
             usuario = ddl.usuario_actual(conn)
             version = ddl.version_oracle(conn) or "desconocida"
-            owners = [o.strip().upper() for o in (options["owners"] or [usuario]) if o.strip()]
-            esquema = ddl.leer_esquema(conn, owners, incluir_sinonimos=not options["sin_sinonimos"])
+            if modo_describir:
+                owners = []
+                esquema = ddl.describir_tablas(conn, nombres, llaves)
+            else:
+                owners = [o.strip().upper() for o in (options["owners"] or [usuario]) if o.strip()]
+                esquema = ddl.leer_esquema(conn, owners, incluir_sinonimos=not options["sin_sinonimos"])
         finally:
             conn.close()
 
         if not esquema.tablas:
+            for aviso in esquema.avisos:
+                self.stderr.write(aviso)
+            origen = ", ".join(nombres) if modo_describir else ", ".join(owners)
             raise CommandError(
-                f"No se encontraron tablas para {', '.join(owners)}: el esquema no existe o el "
-                f"usuario {usuario} no tiene visibilidad sobre el."
+                f"No se encontraron tablas para {origen}: no existen o el usuario {usuario} no "
+                f"tiene acceso."
             )
 
+        if modo_describir:
+            origen = (
+                f"-- Modo describir (SELECT * ... WHERE 1 = 0, sin leer filas) de: {', '.join(nombres)}.\n"
+                "-- Sin DEFAULT, comentarios, checks ni indices. PK = llaves del sync. Textos en CHAR."
+            )
+        else:
+            origen = f"-- Esquema(s) de origen: {', '.join(owners)}."
         encabezado = "\n".join([
             "-- Estructura del Oracle de SERMED para una COPIA DE PRUEBAS. Sin datos.",
             f"-- Generado por manage.py generar_ddl_oracle el {timezone.localtime():%Y-%m-%d %H:%M}",
-            f"-- Esquema(s) de origen: {', '.join(owners)} (usuario {usuario}, Oracle {version}).",
+            f"-- Usuario {usuario}, Oracle {version}.",
+            origen,
             "-- NO EJECUTAR EN PRODUCCION: correrlo conectado al usuario de la copia.",
             "-- Las tablas se crean en el esquema del usuario que ejecuta el script.",
         ])
@@ -82,8 +122,12 @@ class Command(BaseCommand):
             f"PK: {conteo['P']} UK: {conteo['U']} FK: {conteo['R']} CHECK: {conteo['C']} | "
             f"Indices leidos: {len(esquema.indices)}"
         )
+        if modo_describir:
+            self.stdout.write("Tablas descritas: " + ", ".join(sorted(t.destino for t in esquema.tablas.values())))
         if esquema.no_copiados:
             self.stdout.write(
                 "No copiado: " + ", ".join(f"{t}={n}" for t, n in sorted(esquema.no_copiados.items()))
             )
+        for aviso in esquema.avisos:
+            self.stdout.write(self.style.WARNING(f"Aviso: {aviso}"))
         self.stdout.write(self.style.SUCCESS(f"Script escrito en {options['output']}"))

@@ -582,6 +582,99 @@ def _leer_owner(cursor, esquema: Esquema, owner: str, dic: Diccionario) -> None:
         ))
 
 
+# ──────────────────────────────────────────────────────────────
+# Modo describir: sin diccionario, por la descripcion de un SELECT vacio
+# ──────────────────────────────────────────────────────────────
+
+_NOMBRE_ORACLE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,29}(\.[A-Za-z][A-Za-z0-9_$#]{0,29})?$")
+
+# Tipos que el driver informa (DbType.name sin "DB_TYPE_") con DDL fijo.
+_TIPOS_FIJOS = {
+    "DATE": "DATE", "BLOB": "BLOB", "CLOB": "CLOB", "NCLOB": "NCLOB", "BFILE": "BFILE",
+    "LONG": "LONG", "LONG_RAW": "LONG RAW", "ROWID": "ROWID",
+    "BINARY_FLOAT": "BINARY_FLOAT", "BINARY_DOUBLE": "BINARY_DOUBLE",
+    "TIMESTAMP_TZ": "TIMESTAMP WITH TIME ZONE", "TIMESTAMP_LTZ": "TIMESTAMP WITH LOCAL TIME ZONE",
+    "INTERVAL_DS": "INTERVAL DAY TO SECOND", "INTERVAL_YM": "INTERVAL YEAR TO MONTH",
+}
+
+
+def columna_desde_descripcion(info) -> Columna:
+    """
+    Columna a partir de la descripcion que da el driver (FetchInfo). Los
+    textos van en semantica CHAR con el largo en caracteres: la copia puede
+    estar en UTF-8 y un acento ocupa 2 bytes (en el Oracle 9i de SERMED, 1).
+    """
+    tipo = getattr(info.type_code, "name", str(info.type_code)).removeprefix("DB_TYPE_")
+    largo = info.display_size or info.internal_size
+    base = dict(nombre=info.name, nullable=bool(info.null_ok))
+    if tipo in ("VARCHAR", "CHAR"):
+        return Columna(tipo="VARCHAR2" if tipo == "VARCHAR" else "CHAR", char_length=largo, char_used="C", **base)
+    if tipo in ("NVARCHAR", "NCHAR"):
+        return Columna(tipo="NVARCHAR2" if tipo == "NVARCHAR" else "NCHAR", char_length=largo, **base)
+    if tipo == "NUMBER":
+        if info.scale == -127:
+            # NUMBER sin precision (precision 0) o FLOAT(p).
+            if info.precision:
+                return Columna(tipo="FLOAT", precision=info.precision, **base)
+            return Columna(tipo="NUMBER", **base)
+        if not info.precision:
+            return Columna(tipo="NUMBER", escala=info.scale, **base)
+        return Columna(tipo="NUMBER", precision=info.precision, escala=info.scale, **base)
+    if tipo == "TIMESTAMP":
+        escala = info.scale if info.scale is not None and 0 <= info.scale <= 9 else 6
+        return Columna(tipo=f"TIMESTAMP({escala})", **base)
+    if tipo in ("RAW", "UROWID"):
+        return Columna(tipo=tipo, longitud=info.internal_size, **base)
+    if tipo in _TIPOS_FIJOS:
+        return Columna(tipo=_TIPOS_FIJOS[tipo], **base)
+    # Tipo de objeto u otro que no se puede escribir como DDL: queda comentado.
+    return Columna(tipo=tipo, tipo_owner="DESCONOCIDO", **base)
+
+
+def describir_tablas(conn, nombres: list[str], llaves: dict[str, list[str]] | None = None) -> Esquema:
+    """
+    Estructura de tablas que el usuario puede consultar aunque el diccionario
+    no se las muestre (sinonimo publico, vista, permiso sin acceso al
+    catalogo). Ejecuta SELECT * FROM <tabla> WHERE 1 = 0: Oracle describe las
+    columnas sin devolver ninguna fila. SOLO LECTURA.
+
+    No trae DEFAULT, comentarios, checks ni indices. La llave primaria se toma
+    de ``llaves`` (las que usa el sync), si todas sus columnas existen. Una
+    tabla sin acceso queda como aviso, sin detener el resto.
+    """
+    llaves = {k.upper(): [c.upper() for c in v] for k, v in (llaves or {}).items()}
+    esquema = Esquema(owners=[])
+    cursor = conn.cursor()
+    try:
+        for nombre in nombres:
+            nombre = nombre.strip().upper()
+            if not _NOMBRE_ORACLE.match(nombre):
+                esquema.avisos.append(f"{nombre}: nombre invalido, no se consulto.")
+                continue
+            try:
+                # El nombre ya se valido: no se puede enlazar como parametro.
+                cursor.execute(f"SELECT * FROM {nombre} WHERE 1 = 0")
+                descripcion = list(cursor.description or [])
+            except Exception as exc:
+                esquema.avisos.append(f"{nombre}: sin acceso ({str(exc).splitlines()[0]}).")
+                continue
+            destino = nombre.split(".")[-1]
+            tabla = Tabla(owner="", nombre=destino, destino=destino,
+                          columnas=[columna_desde_descripcion(info) for info in descripcion])
+            esquema.tablas[("", destino)] = tabla
+            llave = llaves.get(destino)
+            existentes = {c.nombre for c in tabla.columnas}
+            if llave and set(llave) <= existentes:
+                esquema.restricciones.append(Restriccion(
+                    owner="", tabla=destino, nombre=f"PK_{destino}"[:30], tipo="P", columnas=llave,
+                ))
+            elif llave:
+                esquema.avisos.append(f"{destino}: sin PK, faltan columnas de la llave {llave}.")
+    finally:
+        cursor.close()
+    return esquema
+
+
 def copiables(esquema: Esquema) -> list[Restriccion]:
     """Restricciones de tablas que si van en la copia (las P/U de tablas no
     copiadas solo se leen para resolver foraneas)."""

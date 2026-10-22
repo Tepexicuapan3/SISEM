@@ -6,6 +6,7 @@ cursor falso responde las consultas al diccionario de datos.
 import os
 import tempfile
 from io import StringIO
+from types import SimpleNamespace
 from unittest import mock
 
 from django.core.management import call_command
@@ -437,3 +438,154 @@ class ComandoTests(SimpleTestCase):
         self.assertIn("NO EJECUTAR EN PRODUCCION", script)
         self.assertIn('CREATE TABLE "CAT_EMPLEADOS"', script)
         self.assertIn("Tablas: 4 (por sinonimo: 1)", out.getvalue())
+
+
+# ──────────────────────────────────────────────────────────────
+# Modo describir: SELECT * ... WHERE 1 = 0 (el usuario de SERMED no ve las
+# tablas en el diccionario, pero si puede consultarlas)
+# ──────────────────────────────────────────────────────────────
+
+class _Tipo:
+    def __init__(self, nombre):
+        self.name = f"DB_TYPE_{nombre}"
+
+
+def _info_nombrada(nombre, tipo, *, display=None, internal=None, precision=0, scale=0, null_ok=True):
+    """Como oracledb.FetchInfo: los atributos que usa columna_desde_descripcion."""
+    return SimpleNamespace(
+        name=nombre, type_code=_Tipo(tipo), display_size=display, internal_size=internal,
+        precision=precision, scale=scale, null_ok=null_ok,
+    )
+
+
+DESCRIPCIONES = {
+    "CAT_EMPLEADOS": [
+        _info_nombrada("NO_EXP", "NUMBER", precision=10, scale=0, null_ok=False),
+        _info_nombrada("DS_PATERNO", "VARCHAR", display=40, internal=40),
+        _info_nombrada("FE_NAC", "DATE"),
+        _info_nombrada("FEC_ULT_ACTUALIZACION", "DATE"),
+    ],
+    "DNT_FOTOS_CREDENCIALES": [
+        _info_nombrada("ID_EMPLEADO", "VARCHAR", display=40, internal=40, null_ok=False),
+        _info_nombrada("FOTO", "BLOB"),
+        _info_nombrada("ID_CLAVE_FOTO", "NUMBER", precision=0, scale=-127, null_ok=False),
+    ],
+}
+
+
+class CursorDescribir:
+    def __init__(self):
+        self.description = None
+        self.sql = []
+
+    def execute(self, sql, params=()):
+        self.sql.append(sql)
+        if "SELECT USER FROM dual" in sql:
+            self.description, self._fila = [("USER",)], ("SERMED",)
+            return
+        if "product_component_version" in sql:
+            self.description, self._fila = [("VERSION",)], ("9.2.0.1.0",)
+            return
+        tabla = sql.split("FROM ")[1].split(" WHERE")[0]
+        if tabla not in DESCRIPCIONES:
+            raise RuntimeError("ORA-00942: table or view does not exist")
+        self.description = DESCRIPCIONES[tabla]
+
+    def fetchone(self):
+        return self._fila
+
+    def close(self):
+        pass
+
+
+class ConexionDescribir:
+    def __init__(self):
+        self.cursores = []
+
+    def cursor(self):
+        cursor = CursorDescribir()
+        self.cursores.append(cursor)
+        return cursor
+
+    def close(self):
+        pass
+
+
+class ColumnaDesdeDescripcionTests(SimpleTestCase):
+    def _tipo(self, *args, **kw):
+        return ddl.tipo_sql(ddl.columna_desde_descripcion(_info_nombrada("X", *args, **kw)))
+
+    def test_tipos(self):
+        self.assertEqual(self._tipo("VARCHAR", display=40, internal=40), "VARCHAR2(40 CHAR)")
+        self.assertEqual(self._tipo("CHAR", display=1, internal=1), "CHAR(1 CHAR)")
+        self.assertEqual(self._tipo("NUMBER", precision=10, scale=0), "NUMBER(10)")
+        self.assertEqual(self._tipo("NUMBER", precision=12, scale=2), "NUMBER(12,2)")
+        self.assertEqual(self._tipo("NUMBER", precision=0, scale=-127), "NUMBER")
+        self.assertEqual(self._tipo("NUMBER", precision=126, scale=-127), "FLOAT(126)")
+        self.assertEqual(self._tipo("DATE"), "DATE")
+        self.assertEqual(self._tipo("TIMESTAMP", scale=6), "TIMESTAMP(6)")
+        self.assertEqual(self._tipo("BLOB"), "BLOB")
+        self.assertEqual(self._tipo("LONG_RAW"), "LONG RAW")
+        self.assertEqual(self._tipo("RAW", internal=16), "RAW(16)")
+        self.assertIsNone(self._tipo("OBJECT"))
+
+    def test_not_null(self):
+        col = ddl.columna_desde_descripcion(_info_nombrada("X", "DATE", null_ok=False))
+        self.assertFalse(col.nullable)
+
+
+class DescribirTablasTests(SimpleTestCase):
+    def test_solo_select_sin_filas_y_pk_de_las_llaves_del_sync(self):
+        conn = ConexionDescribir()
+        esquema = ddl.describir_tablas(
+            conn, ["cat_empleados", "dnt_fotos_credenciales"],
+            {"cat_empleados": ["no_exp"], "dnt_fotos_credenciales": ["id_empleado", "id_clave_foto"]},
+        )
+        for sql in conn.cursores[0].sql:
+            self.assertRegex(sql, r"^SELECT \* FROM [A-Z_]+ WHERE 1 = 0$")
+        script = ddl.generar_script(esquema, encabezado="-- prueba")
+        self.assertIn('CREATE TABLE "CAT_EMPLEADOS" (\n'
+                      '  "NO_EXP" NUMBER(10) NOT NULL,\n'
+                      '  "DS_PATERNO" VARCHAR2(40 CHAR),\n'
+                      '  "FE_NAC" DATE,\n'
+                      '  "FEC_ULT_ACTUALIZACION" DATE\n'
+                      ');', script)
+        self.assertIn('ALTER TABLE "CAT_EMPLEADOS" ADD CONSTRAINT "PK_CAT_EMPLEADOS" PRIMARY KEY ("NO_EXP");', script)
+        self.assertIn('ADD CONSTRAINT "PK_DNT_FOTOS_CREDENCIALES" PRIMARY KEY ("ID_EMPLEADO", "ID_CLAVE_FOTO");', script)
+        self.assertIn('"FOTO" BLOB', script)
+
+    def test_tabla_sin_acceso_queda_como_aviso_y_sigue(self):
+        esquema = ddl.describir_tablas(ConexionDescribir(), ["CAT_FAMILIAR2", "CAT_EMPLEADOS"])
+        self.assertEqual(list(esquema.tablas), [("", "CAT_EMPLEADOS")])
+        self.assertEqual(esquema.avisos, ["CAT_FAMILIAR2: sin acceso (ORA-00942: table or view does not exist)."])
+
+    def test_nombre_invalido_no_se_consulta(self):
+        conn = ConexionDescribir()
+        esquema = ddl.describir_tablas(conn, ["CAT_EMPLEADOS; DROP TABLE X"])
+        self.assertEqual(conn.cursores[0].sql, [])
+        self.assertIn("nombre invalido", esquema.avisos[0])
+
+    def test_llave_con_columnas_faltantes_no_genera_pk(self):
+        esquema = ddl.describir_tablas(ConexionDescribir(), ["CAT_EMPLEADOS"], {"CAT_EMPLEADOS": ["PK_NUM"]})
+        self.assertEqual(esquema.restricciones, [])
+        self.assertIn("sin PK", esquema.avisos[0])
+
+
+class ComandoDescribirTests(SimpleTestCase):
+    def test_tablas_sync_reporta_las_descritas_y_las_sin_acceso(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = os.path.join(tmp, "copia.sql")
+            out = StringIO()
+            with mock.patch(
+                "apps.administracion.management.commands.generar_ddl_oracle.obtener_conexion_oracle",
+                return_value=ConexionDescribir(),
+            ):
+                call_command("generar_ddl_oracle", "--output", ruta, "--tablas-sync", stdout=out)
+            with open(ruta, encoding="utf-8") as fh:
+                script = fh.read()
+
+        salida = out.getvalue()
+        self.assertIn("Tablas descritas: CAT_EMPLEADOS, DNT_FOTOS_CREDENCIALES", salida)
+        self.assertIn("Aviso: CAT_FAMILIAR: sin acceso", salida)
+        self.assertIn("Modo describir", script)
+        self.assertIn("Oracle 9.2.0.1.0", script)
