@@ -231,7 +231,7 @@ def render_indice(indice: Indice, esquema: Esquema) -> str:
 
 
 def generar_script(esquema: Esquema, *, encabezado: str, incluir_indices: bool = True,
-                   incluir_foraneas: bool = True) -> str:
+                   incluir_foraneas: bool = True, guardia: str | None = None) -> str:
     # Todas (tambien las de tablas no copiadas) para resolver foraneas; solo
     # las de tablas copiadas se escriben.
     por_nombre = {(r.owner, r.nombre): r for r in esquema.restricciones}
@@ -248,6 +248,8 @@ def generar_script(esquema: Esquema, *, encabezado: str, incluir_indices: bool =
     }
 
     partes = [encabezado.rstrip(), ""]
+    if guardia:
+        partes += [guardia, ""]
     if esquema.sinonimos:
         partes.append("-- Tablas traidas por sinonimo (se crean con el nombre del sinonimo):")
         partes += [f"--   {s} -> {o}.{t}" for s, o, t in sorted(esquema.sinonimos)]
@@ -340,6 +342,54 @@ def version_oracle(conn) -> str | None:
         return None
     finally:
         cursor.close()
+
+
+def identidad_base(conn) -> tuple[str, str]:
+    """
+    (DB_NAME, GLOBAL_NAME) de la base a la que se esta conectado: la de
+    ORIGEN (produccion). Con eso el script se niega a correr ahi. Si no se
+    puede leer, la excepcion sube: sin identidad no hay guardia, y sin
+    guardia no se genera el script.
+    """
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT SYS_CONTEXT('USERENV', 'DB_NAME'), (SELECT global_name FROM global_name) FROM dual"
+        )
+        db_name, global_name = cursor.fetchone()
+    finally:
+        cursor.close()
+    db_name, global_name = _texto(db_name), _texto(global_name)
+    if not db_name or not global_name:
+        raise ValueError("Oracle no informo DB_NAME / GLOBAL_NAME de la base de origen.")
+    return db_name.upper(), global_name.upper()
+
+
+def guardia_produccion(db_name: str, global_name: str) -> str:
+    """
+    Primer bloque del script: si se ejecuta en la base de origen, aborta
+    antes de crear nada. WHENEVER SQLERROR EXIT hace que SQL Developer (F5)
+    y sqlplus corten el script completo ante ese error (y ante cualquier
+    otro: el script no sigue a medias).
+    """
+    return "\n".join([
+        "-- ===== 0. Guardia: este script NO puede correr en PRODUCCION =====",
+        f"-- Base de origen (produccion): DB_NAME={db_name}, GLOBAL_NAME={global_name}.",
+        "-- Si se ejecuta ahi, aborta antes del primer CREATE.",
+        "WHENEVER SQLERROR EXIT SQL.SQLCODE",
+        "DECLARE",
+        "  v_db_name     VARCHAR2(200) := UPPER(SYS_CONTEXT('USERENV', 'DB_NAME'));",
+        "  v_global_name VARCHAR2(4000);",
+        "BEGIN",
+        "  SELECT UPPER(global_name) INTO v_global_name FROM global_name;",
+        f"  IF v_db_name = {_literal(db_name)} OR v_global_name = {_literal(global_name)} THEN",
+        "    RAISE_APPLICATION_ERROR(-20001,",
+        f"      'ALTO: esta es la base de PRODUCCION ({db_name}). '",
+        "      || 'Este script solo se ejecuta en la COPIA DE PRUEBAS.');",
+        "  END IF;",
+        "END;",
+        "/",
+    ])
 
 
 # Vistas del diccionario cuyas columnas cambian entre versiones de Oracle.

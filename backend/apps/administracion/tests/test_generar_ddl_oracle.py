@@ -9,7 +9,7 @@ from io import StringIO
 from types import SimpleNamespace
 from unittest import mock
 
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase
 
 from apps.administracion.services import oracle_ddl_service as ddl
@@ -194,6 +194,10 @@ class CursorDiccionario:
         if "product_component_version" in sql:
             self.description = [("VERSION",)]
             self._filas = [("9.2.0.8.0",)]
+            return
+        if "FROM global_name" in sql:
+            self.description = [("DB_NAME",), ("GLOBAL_NAME",)]
+            self._filas = [("nominap", "NOMINAP.WORLD")]
             return
         clave = next(k for k in DICCIONARIO if k in sql)
         filas = self._vistas if clave == "owner = 'SYS'" else DICCIONARIO[clave]
@@ -486,6 +490,11 @@ class CursorDescribir:
         if "product_component_version" in sql:
             self.description, self._fila = [("VERSION",)], ("9.2.0.1.0",)
             return
+        if "FROM global_name" in sql:
+            if getattr(self, "sin_identidad", False):
+                raise RuntimeError("ORA-00942: table or view does not exist")
+            self.description, self._fila = [("DB_NAME",), ("GLOBAL_NAME",)], ("NOMINAP", "NOMINAP.WORLD")
+            return
         tabla = sql.split("FROM ")[1].split(" WHERE")[0]
         if tabla not in DESCRIPCIONES:
             raise RuntimeError("ORA-00942: table or view does not exist")
@@ -589,3 +598,52 @@ class ComandoDescribirTests(SimpleTestCase):
         self.assertIn("Aviso: CAT_FAMILIAR: sin acceso", salida)
         self.assertIn("Modo describir", script)
         self.assertIn("Oracle 9.2.0.1.0", script)
+
+
+class GuardiaProduccionTests(SimpleTestCase):
+    """El script se niega a correr en la base de origen (produccion)."""
+
+    def _generar(self, conexion):
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = os.path.join(tmp, "copia.sql")
+            with mock.patch(
+                "apps.administracion.management.commands.generar_ddl_oracle.obtener_conexion_oracle",
+                return_value=conexion,
+            ):
+                call_command("generar_ddl_oracle", "--output", ruta, "--tablas-sync", stdout=StringIO())
+            with open(ruta, encoding="utf-8") as fh:
+                return fh.read()
+
+    def test_la_guardia_va_antes_de_cualquier_create(self):
+        script = self._generar(ConexionDescribir())
+
+        guardia = script.index("WHENEVER SQLERROR EXIT SQL.SQLCODE")
+        self.assertLess(guardia, script.index("CREATE TABLE"))
+        self.assertLess(guardia, script.index("ALTER TABLE"))
+        self.assertIn("IF v_db_name = 'NOMINAP' OR v_global_name = 'NOMINAP.WORLD' THEN", script)
+        self.assertIn("RAISE_APPLICATION_ERROR(-20001,", script)
+        # El bloque PL/SQL se cierra con "/" para que sqlplus y SQL Developer lo ejecuten.
+        self.assertIn("END;\n/\n", script)
+
+    def test_sin_identidad_de_produccion_no_se_genera_el_script(self):
+        conexion = ConexionDescribir()
+        cursor_original = conexion.cursor
+
+        def cursor_sin_identidad():
+            cursor = cursor_original()
+            cursor.sin_identidad = True
+            return cursor
+
+        conexion.cursor = cursor_sin_identidad
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = os.path.join(tmp, "copia.sql")
+            with mock.patch(
+                "apps.administracion.management.commands.generar_ddl_oracle.obtener_conexion_oracle",
+                return_value=conexion,
+            ), self.assertRaisesMessage(CommandError, "sin la guardia contra produccion"):
+                call_command("generar_ddl_oracle", "--output", ruta, "--tablas-sync", stdout=StringIO())
+            self.assertFalse(os.path.exists(ruta))
+
+    def test_comillas_en_el_nombre_no_rompen_la_guardia(self):
+        guardia = ddl.guardia_produccion("PRO'D", "PRO'D.WORLD")
+        self.assertIn("v_db_name = 'PRO''D'", guardia)

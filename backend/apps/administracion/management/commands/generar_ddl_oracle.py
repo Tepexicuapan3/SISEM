@@ -73,6 +73,15 @@ class Command(BaseCommand):
         try:
             usuario = ddl.usuario_actual(conn)
             version = ddl.version_oracle(conn) or "desconocida"
+            # Sin la identidad de produccion no hay guardia, y sin guardia
+            # no se entrega un script que podria correrse ahi por error.
+            try:
+                db_name, global_name = ddl.identidad_base(conn)
+            except Exception as exc:
+                raise CommandError(
+                    f"No se pudo leer la identidad de la base de origen ({exc}); "
+                    "no se genera el script sin la guardia contra produccion."
+                ) from exc
             if modo_describir:
                 owners = []
                 esquema = ddl.describir_tablas(conn, nombres, llaves)
@@ -104,11 +113,14 @@ class Command(BaseCommand):
             f"-- Usuario {usuario}, Oracle {version}.",
             origen,
             "-- NO EJECUTAR EN PRODUCCION: correrlo conectado al usuario de la copia.",
+            "-- Ejecutarlo COMPLETO como script (F5 en SQL Developer, @archivo en sqlplus):",
+            "-- la guardia de abajo solo protege si corre antes que todo lo demas.",
             "-- Las tablas se crean en el esquema del usuario que ejecuta el script.",
         ])
         script = ddl.generar_script(
             esquema,
             encabezado=encabezado,
+            guardia=ddl.guardia_produccion(db_name, global_name),
             incluir_indices=not options["sin_indices"],
             incluir_foraneas=not options["sin_foraneas"],
         )
@@ -130,4 +142,5 @@ class Command(BaseCommand):
             )
         for aviso in esquema.avisos:
             self.stdout.write(self.style.WARNING(f"Aviso: {aviso}"))
+        self.stdout.write(f"Guardia: el script aborta si se ejecuta en {db_name} ({global_name}).")
         self.stdout.write(self.style.SUCCESS(f"Script escrito en {options['output']}"))
