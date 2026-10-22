@@ -47,6 +47,7 @@ class Command(BaseCommand):
 
         try:
             usuario = ddl.usuario_actual(conn)
+            version = ddl.version_oracle(conn) or "desconocida"
             owners = [o.strip().upper() for o in (options["owners"] or [usuario]) if o.strip()]
             esquema = ddl.leer_esquema(conn, owners, incluir_sinonimos=not options["sin_sinonimos"])
         finally:
@@ -61,7 +62,7 @@ class Command(BaseCommand):
         encabezado = "\n".join([
             "-- Estructura del Oracle de SERMED para una COPIA DE PRUEBAS. Sin datos.",
             f"-- Generado por manage.py generar_ddl_oracle el {timezone.localtime():%Y-%m-%d %H:%M}",
-            f"-- Esquema(s) de origen: {', '.join(owners)} (usuario {usuario}).",
+            f"-- Esquema(s) de origen: {', '.join(owners)} (usuario {usuario}, Oracle {version}).",
             "-- NO EJECUTAR EN PRODUCCION: correrlo conectado al usuario de la copia.",
             "-- Las tablas se crean en el esquema del usuario que ejecuta el script.",
         ])
@@ -77,7 +78,7 @@ class Command(BaseCommand):
         restricciones = ddl.copiables(esquema)
         conteo = {tipo: sum(1 for r in restricciones if r.tipo == tipo) for tipo in "PURC"}
         self.stdout.write(
-            f"Tablas: {len(esquema.tablas)} (por sinonimo: {len(esquema.sinonimos)}) | "
+            f"Oracle {version} | Tablas: {len(esquema.tablas)} (por sinonimo: {len(esquema.sinonimos)}) | "
             f"PK: {conteo['P']} UK: {conteo['U']} FK: {conteo['R']} CHECK: {conteo['C']} | "
             f"Indices leidos: {len(esquema.indices)}"
         )

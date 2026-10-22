@@ -237,6 +237,12 @@ def generar_script(esquema: Esquema, *, encabezado: str, incluir_indices: bool =
         copiables(esquema), key=lambda r: (esquema.tablas[(r.owner, r.tabla)].destino, r.nombre),
     )
     indices_de_restriccion = {(r.owner, r.indice) for r in restricciones if r.indice and r.tipo in "PU"}
+    # Antes de 10g no hay ALL_CONSTRAINTS.INDEX_NAME: un indice con las mismas
+    # columnas que una PK/UK de su tabla es el que la respalda. La llave crea
+    # el suyo en la copia; repetirlo daria ORA-01408.
+    columnas_de_llaves = {
+        (r.owner, r.tabla, tuple(r.columnas)) for r in restricciones if r.tipo in "PU"
+    }
 
     partes = [encabezado.rstrip(), ""]
     if esquema.sinonimos:
@@ -261,7 +267,9 @@ def generar_script(esquema: Esquema, *, encabezado: str, incluir_indices: bool =
     if incluir_indices:
         indices = [
             i for i in sorted(esquema.indices, key=lambda i: i.nombre)
-            if (i.tabla_owner, i.tabla) in esquema.tablas and (i.owner, i.nombre) not in indices_de_restriccion
+            if (i.tabla_owner, i.tabla) in esquema.tablas
+            and (i.owner, i.nombre) not in indices_de_restriccion
+            and (i.tabla_owner, i.tabla, tuple(c for c, _ in i.columnas)) not in columnas_de_llaves
         ]
         partes.append(f"-- ===== 4. Indices ({len(indices)}) =====")
         partes += [render_indice(i, esquema) for i in indices]
@@ -296,23 +304,84 @@ def usuario_actual(conn) -> str:
         cursor.close()
 
 
+def version_oracle(conn) -> str | None:
+    """Version del servidor, solo informativa (None si no hay permiso)."""
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT version FROM product_component_version WHERE product LIKE 'Oracle%'"
+        )
+        fila = cursor.fetchone()
+        return fila[0] if fila else None
+    except Exception:
+        return None
+    finally:
+        cursor.close()
+
+
+# Vistas del diccionario cuyas columnas cambian entre versiones de Oracle.
+_VISTAS_VERSIONADAS = ("ALL_TABLES", "ALL_TAB_COLS", "ALL_CONSTRAINTS", "ALL_MVIEWS", "ALL_EXTERNAL_TABLES")
+
+
+@dataclass(frozen=True)
+class Diccionario:
+    """
+    Que ofrece el diccionario de ESTA version de Oracle. El de SERMED es
+    anterior a 10g (no tiene ALL_TABLES.DROPPED): en vez de suponer una
+    version, se pregunta que columnas existen y las consultas se arman con
+    lo que hay. Un diccionario vacio = la version mas antigua posible.
+    """
+    columnas: dict[str, frozenset[str]]
+
+    def tiene(self, vista: str, columna: str | None = None) -> bool:
+        disponibles = self.columnas.get(vista)
+        if disponibles is None:
+            return False
+        return columna is None or columna in disponibles
+
+
+def leer_diccionario(cursor) -> Diccionario:
+    vistas: dict[str, set[str]] = defaultdict(set)
+    marcadores = ", ".join(f":{i + 1}" for i in range(len(_VISTAS_VERSIONADAS)))
+    for f in _filas(cursor, f"""
+        SELECT table_name, column_name FROM all_tab_columns
+        WHERE owner = 'SYS' AND table_name IN ({marcadores})
+    """, _VISTAS_VERSIONADAS):
+        vistas[f["table_name"]].add(f["column_name"])
+    return Diccionario({vista: frozenset(cols) for vista, cols in vistas.items()})
+
+
 def leer_esquema(conn, owners: list[str], *, incluir_sinonimos: bool = True) -> Esquema:
     esquema = Esquema(owners=list(owners))
     cursor = conn.cursor()
     cursor.arraysize = 1000
     try:
+        dic = leer_diccionario(cursor)
+        # Papelera (10g+): por DROPPED si existe; los nombres BIN$ siempre.
+        sin_papelera = "AND t.dropped = 'NO' " if dic.tiene("ALL_TABLES", "DROPPED") else ""
+        sin_papelera += "AND t.table_name NOT LIKE 'BIN$%'"
+        excluir_mviews = (
+            "AND NOT EXISTS (SELECT 1 FROM all_mviews m "
+            "WHERE m.owner = t.owner AND m.mview_name = t.table_name)"
+            if dic.tiene("ALL_MVIEWS") else ""
+        )
+        excluir_externas = (
+            "AND NOT EXISTS (SELECT 1 FROM all_external_tables e "
+            "WHERE e.owner = t.owner AND e.table_name = t.table_name)"
+            if dic.tiene("ALL_EXTERNAL_TABLES") else ""
+        )
+
         # Tablas reales: sin papelera, anidadas, secundarias, overflow de IOT,
         # contenedores de vistas materializadas ni tablas externas.
         for owner in owners:
-            for f in _filas(cursor, """
+            for f in _filas(cursor, f"""
                 SELECT t.table_name, t.temporary, t.duration
                 FROM all_tables t
-                WHERE t.owner = :1 AND t.dropped = 'NO' AND t.nested = 'NO' AND t.secondary = 'N'
+                WHERE t.owner = :1 AND t.nested = 'NO' AND t.secondary = 'N'
                   AND (t.iot_type IS NULL OR t.iot_type = 'IOT')
-                  AND NOT EXISTS (SELECT 1 FROM all_mviews m
-                                  WHERE m.owner = t.owner AND m.mview_name = t.table_name)
-                  AND NOT EXISTS (SELECT 1 FROM all_external_tables e
-                                  WHERE e.owner = t.owner AND e.table_name = t.table_name)
+                  {sin_papelera}
+                  {excluir_mviews}
+                  {excluir_externas}
             """, (owner,)):
                 esquema.tablas[(owner, f["table_name"])] = Tabla(
                     owner=owner, nombre=f["table_name"], destino=f["table_name"],
@@ -321,11 +390,13 @@ def leer_esquema(conn, owners: list[str], *, incluir_sinonimos: bool = True) -> 
 
         if incluir_sinonimos:
             destinos = {t.destino for t in esquema.tablas.values()}
-            for f in _filas(cursor, """
+            # Join con sintaxis clasica de Oracle: funciona en cualquier version.
+            for f in _filas(cursor, f"""
                 SELECT s.synonym_name, s.table_owner, s.table_name, t.temporary, t.duration
-                FROM user_synonyms s
-                JOIN all_tables t ON t.owner = s.table_owner AND t.table_name = s.table_name
-                WHERE s.db_link IS NULL AND t.dropped = 'NO'
+                FROM user_synonyms s, all_tables t
+                WHERE t.owner = s.table_owner AND t.table_name = s.table_name
+                  AND s.db_link IS NULL
+                  {sin_papelera}
             """):
                 clave = (f["table_owner"], f["table_name"])
                 if clave in esquema.tablas or f["synonym_name"] in destinos:
@@ -338,7 +409,7 @@ def leer_esquema(conn, owners: list[str], *, incluir_sinonimos: bool = True) -> 
                 esquema.sinonimos.append((f["synonym_name"], f["table_owner"], f["table_name"]))
 
         for owner in sorted({o for o, _ in esquema.tablas}):
-            _leer_owner(cursor, esquema, owner)
+            _leer_owner(cursor, esquema, owner, dic)
 
         conteos: dict[str, int] = defaultdict(int)
         for owner in owners:
@@ -355,9 +426,21 @@ def leer_esquema(conn, owners: list[str], *, incluir_sinonimos: bool = True) -> 
     return esquema
 
 
-def _leer_owner(cursor, esquema: Esquema, owner: str) -> None:
+def _leer_owner(cursor, esquema: Esquema, owner: str, dic: Diccionario) -> None:
     def tabla(nombre):
         return esquema.tablas.get((owner, nombre))
+
+    # ALL_TAB_COLS (9i+) muestra columnas ocultas y, desde 11g, virtuales;
+    # sin ella, ALL_TAB_COLUMNS ya trae solo las visibles.
+    if dic.tiene("ALL_TAB_COLS", "HIDDEN_COLUMN"):
+        vista_columnas, solo_visibles = "all_tab_cols", "AND hidden_column = 'NO'"
+    else:
+        vista_columnas, solo_visibles = "all_tab_columns", ""
+    columna_virtual = (
+        "virtual_column" if dic.tiene("ALL_TAB_COLS", "VIRTUAL_COLUMN") and vista_columnas == "all_tab_cols"
+        else "'NO' AS virtual_column"
+    )
+    columna_indice = "index_name" if dic.tiene("ALL_CONSTRAINTS", "INDEX_NAME") else "NULL AS index_name"
 
     for f in _filas(cursor, """
         SELECT table_name, comments FROM all_tab_comments
@@ -366,11 +449,11 @@ def _leer_owner(cursor, esquema: Esquema, owner: str) -> None:
         if (t := tabla(f["table_name"])):
             t.comentario = _texto(f["comments"])
 
-    for f in _filas(cursor, """
+    for f in _filas(cursor, f"""
         SELECT table_name, column_name, data_type, data_type_owner, data_length, data_precision,
-               data_scale, char_length, char_used, nullable, data_default, virtual_column
-        FROM all_tab_cols
-        WHERE owner = :1 AND hidden_column = 'NO'
+               data_scale, char_length, char_used, nullable, data_default, {columna_virtual}
+        FROM {vista_columnas}
+        WHERE owner = :1 {solo_visibles}
         ORDER BY table_name, column_id
     """, (owner,)):
         if (t := tabla(f["table_name"])):
@@ -398,9 +481,9 @@ def _leer_owner(cursor, esquema: Esquema, owner: str) -> None:
 
     # Se leen todas las restricciones del owner (aunque su tabla no se copie):
     # una foranea de la copia puede referenciar su llave primaria.
-    for f in _filas(cursor, """
+    for f in _filas(cursor, f"""
         SELECT table_name, constraint_name, constraint_type, r_owner, r_constraint_name,
-               delete_rule, search_condition, generated, status, index_name
+               delete_rule, search_condition, generated, status, {columna_indice}
         FROM all_constraints
         WHERE owner = :1 AND constraint_type IN ('P', 'U', 'R', 'C')
     """, (owner,)):

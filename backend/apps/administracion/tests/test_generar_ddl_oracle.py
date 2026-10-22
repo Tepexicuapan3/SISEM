@@ -16,7 +16,31 @@ from apps.administracion.services.oracle_ddl_service import Columna, Esquema, In
 
 # Diccionario simulado: SERMED tiene CAT_EMPLEADOS y CAT_FAMILIAR; un sinonimo
 # privado DNT_LICENCIAS_MEDICAS apunta a RH.LICENCIAS.
+def _vistas(**vistas):
+    """Filas de ALL_TAB_COLUMNS (owner SYS) que describen las vistas del diccionario."""
+    return [{"table_name": v, "column_name": c} for v, cols in vistas.items() for c in cols]
+
+
+# Diccionario de 11g+: todas las columnas que el comando sabe aprovechar.
+VISTAS_MODERNAS = _vistas(
+    ALL_TABLES=["TABLE_NAME", "DROPPED"],
+    ALL_TAB_COLS=["COLUMN_NAME", "HIDDEN_COLUMN", "VIRTUAL_COLUMN"],
+    ALL_CONSTRAINTS=["CONSTRAINT_NAME", "INDEX_NAME"],
+    ALL_MVIEWS=["MVIEW_NAME"],
+    ALL_EXTERNAL_TABLES=["TABLE_NAME"],
+)
+# Como el Oracle de SERMED (anterior a 10g): sin DROPPED, sin VIRTUAL_COLUMN
+# y sin ALL_CONSTRAINTS.INDEX_NAME.
+VISTAS_9I = _vistas(
+    ALL_TABLES=["TABLE_NAME"],
+    ALL_TAB_COLS=["COLUMN_NAME", "HIDDEN_COLUMN"],
+    ALL_CONSTRAINTS=["CONSTRAINT_NAME"],
+    ALL_MVIEWS=["MVIEW_NAME"],
+)
+
 DICCIONARIO = {
+    # Primero: la deteccion de version tambien lee all_tab_columns.
+    "owner = 'SYS'": VISTAS_MODERNAS,
     "FROM all_tables t": [
         {"owner": "SERMED", "table_name": "CAT_EMPLEADOS", "temporary": "N", "duration": None},
         {"owner": "SERMED", "table_name": "CAT_FAMILIAR", "temporary": "N", "duration": None},
@@ -119,15 +143,20 @@ DICCIONARIO = {
 }
 
 
+# Antes de 9i (o sin visibilidad de ALL_TAB_COLS) las columnas salen de aqui.
+DICCIONARIO["FROM all_tab_columns"] = DICCIONARIO["FROM all_tab_cols"]
+
+
 class CursorDiccionario:
     """Responde por la tabla del diccionario que aparece en el SQL y filtra
     por owner (primer parametro) cuando la consulta lo recibe."""
 
-    def __init__(self):
+    def __init__(self, vistas=None):
         self.description = None
         self._filas = []
         self.arraysize = 100
         self.sql = []
+        self._vistas = VISTAS_MODERNAS if vistas is None else vistas
 
     def execute(self, sql, params=()):
         self.sql.append(sql)
@@ -135,8 +164,12 @@ class CursorDiccionario:
             self.description = [("USER",)]
             self._filas = [("SERMED",)]
             return
+        if "product_component_version" in sql:
+            self.description = [("VERSION",)]
+            self._filas = [("9.2.0.8.0",)]
+            return
         clave = next(k for k in DICCIONARIO if k in sql)
-        filas = DICCIONARIO[clave]
+        filas = self._vistas if clave == "owner = 'SYS'" else DICCIONARIO[clave]
         if params:
             filas = [f for f in filas if f.get("owner", params[0]) == params[0]]
         columnas = [k for k in (filas[0] if filas else {}) if k != "owner" or "SELECT owner" in sql]
@@ -156,21 +189,66 @@ class CursorDiccionario:
 
 
 class ConexionDiccionario:
-    def __init__(self):
+    def __init__(self, vistas=None):
         self.cursores = []
+        self._vistas = vistas
 
     def cursor(self):
-        cursor = CursorDiccionario()
+        cursor = CursorDiccionario(self._vistas)
         self.cursores.append(cursor)
         return cursor
 
     def close(self):
         pass
 
+    def sql_ejecutado(self):
+        return [s for c in self.cursores for s in c.sql]
 
-def _script(**kw):
-    esquema = ddl.leer_esquema(ConexionDiccionario(), ["SERMED"])
+
+def _script(vistas=None, **kw):
+    esquema = ddl.leer_esquema(ConexionDiccionario(vistas), ["SERMED"])
     return esquema, ddl.generar_script(esquema, encabezado="-- prueba", **kw)
+
+
+class VersionesDeOracleTests(SimpleTestCase):
+    """El Oracle de SERMED es anterior a 10g: ORA-00904 "T"."DROPPED" en la
+    primera corrida real. Las consultas se arman con lo que el diccionario
+    tiene."""
+
+    def _sql(self, vistas):
+        conn = ConexionDiccionario(vistas)
+        ddl.leer_esquema(conn, ["SERMED"])
+        return "\n".join(conn.sql_ejecutado())
+
+    def test_9i_no_usa_columnas_que_no_existen(self):
+        sql = self._sql(VISTAS_9I)
+        self.assertNotIn("dropped", sql)
+        self.assertNotIn(" virtual_column", sql.replace("'NO' AS virtual_column", ""))
+        self.assertIn("NULL AS index_name", sql)
+        self.assertNotIn("all_external_tables", sql)
+        self.assertIn("NOT LIKE 'BIN$%'", sql)
+
+    def test_moderno_aprovecha_las_columnas_nuevas(self):
+        sql = self._sql(VISTAS_MODERNAS)
+        self.assertIn("t.dropped = 'NO'", sql)
+        self.assertIn("all_tab_cols", sql)
+        self.assertIn("virtual_column", sql)
+        self.assertNotIn("NULL AS index_name", sql)
+
+    def test_diccionario_vacio_usa_lo_minimo(self):
+        sql = self._sql([])
+        self.assertNotIn("all_tab_cols", sql)
+        self.assertNotIn("all_mviews", sql)
+        self.assertNotIn("hidden_column", sql)
+
+    def test_9i_genera_el_mismo_script_sin_repetir_el_indice_de_la_llave(self):
+        _, moderno = _script(VISTAS_MODERNAS)
+        _, viejo = _script(VISTAS_9I)
+        self.assertEqual(moderno, viejo)
+        self.assertNotIn('INDEX "PK_CAT_EMPLEADOS"', viejo)
+
+    def test_sin_join_ansi(self):
+        self.assertNotIn(" JOIN ", self._sql(VISTAS_9I).upper())
 
 
 class LeerEsquemaTests(SimpleTestCase):
