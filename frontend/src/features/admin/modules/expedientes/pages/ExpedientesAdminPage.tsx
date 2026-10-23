@@ -9,6 +9,7 @@ import { useBuscarPorNombre } from "../queries/useBuscarPorNombre";
 import { useActualizarExpediente } from "../mutations/useActualizarExpediente";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import { formatCatalogDateTime } from "@features/admin/modules/catalogos/shared/utils/catalog-format";
+import { ApiError } from "@api/utils/errors";
 import type {
   EmpleadoResumen,
   UltimaActualizacionExpediente,
@@ -26,12 +27,18 @@ export default function ExpedientesAdminPage() {
   const [busquedaNombre, setBusquedaNombre] = useState(""); // nombre activo → useBuscarPorNombre
   const [seleccionado, setSeleccionado] = useState<string | null>(null);
 
-  const { data, isLoading, isFetching } = useExpediente(busqueda);
+  const { data, isLoading, isFetching, error: errorExpediente } = useExpediente(busqueda);
   const {
     data: resultadosNombre,
     isLoading: isLoadingNombre,
     isFetching: isFetchingNombre,
+    error: errorNombre,
   } = useBuscarPorNombre(busquedaNombre);
+  // 404 = el expediente no existe. Cualquier otro error (p. ej. 503
+  // EXPEDIENTES_NO_DISPONIBLE) es una falla tecnica: no decir "no encontrado".
+  const errorTecnico = [errorExpediente, errorNombre].find(
+    (e) => e && !(e instanceof ApiError && e.status === 404),
+  );
   const actualizar = useActualizarExpediente();
 
   const personas = [
@@ -144,6 +151,14 @@ export default function ExpedientesAdminPage() {
 
       {cargando && <p className="text-txt-muted text-sm">Buscando...</p>}
 
+      {!cargando && errorTecnico && (
+        <div role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {errorTecnico instanceof ApiError && errorTecnico.message
+            ? errorTecnico.message
+            : "No se pudo consultar SERMED en este momento. No significa que el expediente no exista: avisá a sistemas."}
+        </div>
+      )}
+
       {/* Resultados por nombre */}
       {!cargando && modoNombre && (
         <>
@@ -221,7 +236,7 @@ export default function ExpedientesAdminPage() {
       {/* Resultados por expediente */}
       {!cargando && modoExpediente && (
         <>
-          {personas.length === 0 && (
+          {personas.length === 0 && !errorTecnico && (
             <p className="text-txt-muted text-sm">
               No se encontraron registros para <strong>{busqueda}</strong>.
             </p>

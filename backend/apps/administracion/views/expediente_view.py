@@ -7,7 +7,11 @@ from apps.administracion.services import bitacora_acceso_service, sync_audit_ser
 from apps.administracion.views.rbac_views import _authorize, _request_id
 from apps.authentication.services.response_service import error_response
 
-from ..use_cases.expedientes.buscar_expediente import buscar_expediente, buscar_por_nombre
+from ..use_cases.expedientes.buscar_expediente import (
+    ExpedientesNoDisponible,
+    buscar_expediente,
+    buscar_por_nombre,
+)
 from ..use_cases.expedientes.actualizar_expediente import actualizar_expediente
 
 # Consultar expedientes (ver, buscar por nombre). Ver frontend
@@ -24,6 +28,21 @@ RECURSO_EXPEDIENTE = "expediente_sermed"
 RECURSO_BUSQUEDA = "expediente_sermed_busqueda"
 
 Resultado = BitacoraSyncExpediente.Resultado
+
+MENSAJE_NO_DISPONIBLE = (
+    "No se pudo consultar SERMED en este momento. No significa que el expediente "
+    "no exista: avisá a sistemas."
+)
+
+
+def _expedientes_no_disponibles(request):
+    """La replica fallo: distinto de "no encontrado" (incidente 2026-10-23)."""
+    return error_response(
+        "EXPEDIENTES_NO_DISPONIBLE",
+        MENSAJE_NO_DISPONIBLE,
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        request_id=_request_id(request),
+    )
 
 
 class ExpedienteView(APIView):
@@ -44,7 +63,10 @@ class ExpedienteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        resultado = buscar_expediente(id_empleado)
+        try:
+            resultado = buscar_expediente(id_empleado)
+        except ExpedientesNoDisponible:
+            return _expedientes_no_disponibles(request)
 
         if not resultado["empleados"]:
             return Response(
@@ -131,7 +153,10 @@ class BuscarPorNombreView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        resultados = buscar_por_nombre(nombre)
+        try:
+            resultados = buscar_por_nombre(nombre)
+        except ExpedientesNoDisponible:
+            return _expedientes_no_disponibles(request)
         bitacora_acceso_service.registrar(
             request, user, accion=BitacoraAcceso.Accion.VER, recurso=RECURSO_BUSQUEDA,
         )

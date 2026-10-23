@@ -2,7 +2,7 @@ from django.db import transaction
 
 import logging
 
-from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
+from apps.administracion.use_cases.expedientes.buscar_expediente import ExpedientesNoDisponible, buscar_expediente
 from apps.authentication.services.authorization_service import has_capability
 from apps.medicos.identity import medico_id_for_usuario
 from apps.recepcion.models import HorarioDisponible, Visit
@@ -98,7 +98,16 @@ def lookup_patient(no_exp: str, historico: bool = False) -> dict:
     if not no_exp:
         raise VisitDomainError("VALIDATION_ERROR", "El número de expediente es requerido.", 400)
 
-    resultado  = buscar_expediente(no_exp)
+    try:
+        resultado = buscar_expediente(no_exp)
+    except ExpedientesNoDisponible as exc:
+        # Falla tecnica de la replica, NO "expediente inexistente".
+        raise VisitDomainError(
+            "EXPEDIENTES_NO_DISPONIBLE",
+            "No se pudo consultar SERMED en este momento. No significa que el expediente "
+            "no exista: avisá a sistemas.",
+            503,
+        ) from exc
     empleados  = resultado.get("empleados",  [])
     familiares = resultado.get("familiares", [])
 

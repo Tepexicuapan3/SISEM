@@ -15,7 +15,7 @@ caída de SERMED no debe dejar sin atención a todos.
 
 import logging
 
-from apps.administracion.use_cases.expedientes.buscar_expediente import buscar_expediente
+from apps.administracion.use_cases.expedientes.buscar_expediente import ExpedientesNoDisponible, buscar_expediente
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,16 @@ MENSAJE_SIN_VIGENCIA_PORTAL = "No encontramos vigencia activa. Acudí a tu clín
 
 def buscar_fila_paciente(no_exp: str, pk_num: int) -> dict | None:
     """Fila de ``buscar_expediente`` del titular (pk_num 0) o del familiar."""
-    resultado = buscar_expediente(no_exp, incluir_fotos=False)
+    try:
+        resultado = buscar_expediente(no_exp, incluir_fotos=False)
+    except ExpedientesNoDisponible:
+        # Misma regla que antes (no bloquear si SERMED no responde), pero ya no
+        # en silencio: es una falla tecnica que alguien tiene que atender.
+        logger.error(
+            "VIGENCIA NO VERIFICADA: la replica de SERMED no respondio para %s/%s; "
+            "se permite continuar.", no_exp, pk_num,
+        )
+        return None
     if pk_num == 0:
         empleados = resultado.get("empleados", [])
         return empleados[0] if empleados else None

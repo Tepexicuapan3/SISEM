@@ -126,6 +126,17 @@ def _dictfetchall(cursor) -> list[dict]:
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
 
 
+class ExpedientesNoDisponible(Exception):
+    """
+    La replica de SERMED no respondio (base caida, tabla faltante, permisos).
+    Antes se devolvia vacio y el expediente aparecia como "no encontrado":
+    el incidente del 2026-10-23 (cat_clinicas borrada) estuvo un dia oculto y
+    la vigencia quedo sin verificar sin que nadie lo supiera. Quien llama
+    decide: las pantallas muestran "no se pudo consultar" (503) y la vigencia
+    sigue sin bloquear, pero lo registra como error.
+    """
+
+
 # ──────────────────────────────────────────────────────────────
 # Caso de uso principal
 # ──────────────────────────────────────────────────────────────
@@ -159,7 +170,7 @@ def buscar_expediente(id_empleado: str, incluir_fotos: bool = True) -> dict:
 
     except Exception as exc:
         logger.error("Error consultando expediente %s: %s", id_empleado, exc)
-        return {'empleados': [], 'familiares': []}
+        raise ExpedientesNoDisponible(str(exc)) from exc
 
     # ── Procesar fotos → base64 ──────────────────────────────
     fotos_procesadas = []
@@ -278,7 +289,7 @@ def buscar_por_nombre(nombre: str) -> list[dict]:
             resultados = _dictfetchall(cursor)
     except Exception as exc:
         logger.error("Error buscando por nombre '%s': %s", nombre, exc)
-        return []
+        raise ExpedientesNoDisponible(str(exc)) from exc
 
     logger.info("Búsqueda por nombre '%s' → %d resultado(s)", nombre, len(resultados))
     return resultados
