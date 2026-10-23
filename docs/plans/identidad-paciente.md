@@ -1,6 +1,6 @@
 # Plan: identidad única del paciente (persona + afiliaciones)
 
-> Estado: **Fase 0 en curso** (2026-10-22). Las decisiones de diseño se acordaron
+> Estado: **Fase 1 en curso** (2026-10-22). Fase 0 cerrada. Las decisiones de diseño se acordaron
 > con el usuario en la conversación del 2026-10-22; este archivo es el plan de
 > implementación y el inventario de la Fase 0. El documento de diseño detallado se
 > escribe aparte, cuando el usuario lo pida.
@@ -151,3 +151,74 @@ docker compose exec -e TESTS_EN_POSTGRES=1 backend \
 
 Django crea y destruye su propia base `test_<nombre>`: **no toca los datos reales**.
 El usuario de Postgres necesita permiso para crear bases (el de la imagen oficial lo tiene).
+
+✅ **Fase 0 cerrada (2026-10-22):** prueba de concurrencia 2/2 OK en el servidor.
+
+---
+
+## Fase 1 — Función central de alta
+
+### Qué cambia
+
+`PatientRepository.get_or_create` (y por lo tanto `get_or_create_for_patient`)
+es la **única puerta de entrada** y aplica las reglas de
+`consulta_medica/services/patient_registry_service.py`:
+
+1. **Normaliza el `no_exp`** (`" 040041 "` → `"40041"`). Si ya existe un registro
+   anterior guardado sin normalizar, se usa ese: nunca nace un segundo registro de
+   la misma afiliación. La cabecera de historia clínica usa el `no_exp` guardado en
+   el paciente.
+2. **Verifica en SERMED antes de crear** (nunca cuando el registro ya existe), según
+   `IDENTIDAD_VERIFICAR_SERMED`:
+
+| Modo | Comportamiento |
+|---|---|
+| `apagado` (default) | Como antes: no se consulta SERMED |
+| `observar` | Se crea igual y queda un `AuditoriaEvento` `PatientCreatedNotInSermed` |
+| `bloquear` | No se crea: 409 `PATIENT_NOT_IN_SERMED` con mensaje para el usuario |
+
+| Origen | ¿Se verifica? | Quién |
+|---|---|---|
+| `ATENCION` (default) | Sí | Historia clínica, ficha, grupo sanguíneo, estomatología, odontograma, padrones |
+| `LEGADO` | No: historia de personas que pueden ya no estar en SERMED (retención legal) | `legacy_history_import_service`, `migrar_historial_clinico_legacy` |
+| `REGULARIZACION` | No: los registros clínicos ya existen | `vincular_id_paciente` (`link_existing`) |
+
+Si la réplica no responde, **no se bloquea** (mismo criterio que la vigencia en recepción).
+
+**Excepción documentada:** `family_key_fix_service` sigue creando con
+`Patient.objects.create` porque crea registros del legado con `cd_familiar`
+(herramienta de migración, origen legado). Se integra a la función central en la
+Fase 6, cuando esta soporte `cd_familiar`.
+
+### Despliegue
+
+1. Antes de desplegar, revisar si hay `no_exp` guardados sin normalizar (solo lectura):
+
+   ```sql
+   SELECT id_paciente, no_exp, pk_num FROM cns_paciente
+   WHERE no_exp <> btrim(no_exp) OR no_exp ~ '^0[0-9]+$';
+   ```
+
+   Si devuelve filas, igual es seguro: se reutilizan, no se duplican.
+2. Desplegar con `IDENTIDAD_VERIFICAR_SERMED=apagado` (default): sin cambio visible.
+3. Encender la observación: `IDENTIDAD_VERIFICAR_SERMED=observar` en el `.env` y
+   `docker compose up -d backend`.
+
+### Revisar lo observado (después de unos días)
+
+`auditoria_eventos.meta` es `json` (no `jsonb`): se lee con `->>`.
+
+```sql
+SELECT fch_evento, meta->>'noExp' AS no_exp, meta->>'pkNum' AS pk_num,
+       meta->>'origen' AS origen, actor_id_usuario
+FROM auditoria_eventos
+WHERE accion = 'PatientCreatedNotInSermed'
+ORDER BY fch_evento DESC;
+```
+
+- **Sin filas:** pasar a `bloquear` es seguro.
+- **Con filas:** revisar cada una. Si son expedientes reales que faltaban en la
+  réplica, se resuelven con el botón Actualizar; si son errores de captura, el modo
+  `bloquear` es justamente lo que los evita.
+
+**Reversa:** `IDENTIDAD_VERIFICAR_SERMED=apagado`.

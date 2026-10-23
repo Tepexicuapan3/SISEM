@@ -45,6 +45,7 @@ from apps.consulta_medica.models import ClinicalHistory
 from apps.consulta_medica.repositories.clinical_history_repository import ClinicalHistoryRepository
 from apps.consulta_medica.services.legacy_history_import_service import LegacyHistoryImporter
 from apps.consulta_medica.services.legacy_migration_control_service import track_run
+from apps.consulta_medica.services.patient_registry_service import ORIGEN_LEGADO
 from apps.consulta_medica.services.legacy_family_map import LegacyFamilyMap
 from django.core.management.base import BaseCommand
 from django.db import DatabaseError, transaction
@@ -194,7 +195,9 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
 
             try:
                 with transaction.atomic():
-                    history, created = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, pk_num)
+                    history, created = ClinicalHistoryRepository.get_or_create_for_patient(
+                        no_exp, pk_num, origen=ORIGEN_LEGADO,
+                    )
                     importer.patient_fields(
                         history.patient, patient_fields,
                         legacy_ref=f"his_clinica:{row.get('no_hisclin')}", legacy_date=fe_hisclin,

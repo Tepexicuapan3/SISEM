@@ -90,6 +90,7 @@ def link_existing(*, dry_run=False, create_missing=True, progress=None) -> dict[
     """
     # Import diferido: el repositorio usa find_patient_by_record_key de este modulo.
     from apps.consulta_medica.repositories.clinical_history_repository import PatientRepository
+    from apps.consulta_medica.services.patient_registry_service import ORIGEN_REGULARIZACION
 
     report: dict[str, dict[str, int]] = {}
     for model in linked_models():
@@ -102,7 +103,11 @@ def link_existing(*, dry_run=False, create_missing=True, progress=None) -> dict[
             pending = model.objects.filter(no_exp=no_exp, pk_num=pk_num, patient__isnull=True)
             patient = find_patient_by_record_key(no_exp, pk_num)
             if patient is None and create_missing and not dry_run:
-                patient, created = PatientRepository.get_or_create(no_exp, pk_num)
+                # Regularizacion: los registros clinicos ya existen; no se
+                # verifica en SERMED (ver patient_registry_service).
+                patient, created = PatientRepository.get_or_create(
+                    no_exp, pk_num, origen=ORIGEN_REGULARIZACION,
+                )
                 stats["patients_created"] += int(created)
             if patient is None:
                 if dry_run and create_missing:

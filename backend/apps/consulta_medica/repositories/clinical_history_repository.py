@@ -10,6 +10,11 @@ from apps.consulta_medica.services.patient_identifier_service import (
     register_column_identifiers,
 )
 from apps.consulta_medica.services.patient_link_service import find_patient_by_record_key
+from apps.consulta_medica.services.patient_registry_service import (
+    ORIGEN_ATENCION,
+    normalizar_no_exp,
+    verificar_alta,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +37,31 @@ class PatientRepository:
     """PACIENTE: datos de la persona (1 por no_exp + pk_num, o por cd_familiar)."""
 
     @staticmethod
-    def get_or_create(no_exp, pk_num, *, created_by_id=None):
+    def get_or_create(no_exp, pk_num, *, created_by_id=None, origen=ORIGEN_ATENCION):
+        """
+        Unica puerta de entrada para crear un registro de paciente (plan
+        identidad, Fase 1): normaliza el no_exp y, antes de crear, verifica en
+        SERMED segun el origen (ver services/patient_registry_service.py).
+        Segura ante concurrencia: la restriccion unica (no_exp, pk_num) mas
+        get_or_create dejan un solo registro (test_concurrencia_paciente).
+        """
+        recibido = str(no_exp).strip()
+        no_exp = normalizar_no_exp(no_exp)
         with transaction.atomic():
             # Incluye al familiar del legado sin PK_NUM (pk_num NULL, registros
             # con el cd_familiar como llave): ver find_patient_by_record_key.
             existing = find_patient_by_record_key(no_exp, pk_num)
+            if existing is None and recibido != no_exp:
+                # Un registro anterior guardado sin normalizar ("040041"):
+                # se usa ese, nunca se crea un segundo de la misma afiliacion.
+                existing = find_patient_by_record_key(recibido, pk_num)
+                if existing:
+                    logger.warning(
+                        "Paciente %s guardado con no_exp sin normalizar %r", existing.pk, recibido,
+                    )
             if existing:
                 return existing, False
+            verificar_alta(no_exp, pk_num, origen=origen, created_by_id=created_by_id)
             patient, created = Patient.objects.get_or_create(no_exp=no_exp, pk_num=pk_num)
             if created:
                 PatientRepository._register_identifiers(patient, created_by_id)
@@ -114,11 +137,15 @@ class ClinicalHistoryRepository:
 
     @staticmethod
     def get_or_create_for_patient(no_exp, pk_num, *, opened_on=None, clinic_code=None,
-                                  doctor_code=None, created_by_id=None):
+                                  doctor_code=None, created_by_id=None, origen=ORIGEN_ATENCION):
         with transaction.atomic():
-            patient, _ = PatientRepository.get_or_create(no_exp, pk_num, created_by_id=created_by_id)
+            patient, _ = PatientRepository.get_or_create(
+                no_exp, pk_num, created_by_id=created_by_id, origen=origen,
+            )
             history, created = ClinicalHistory.objects.get_or_create(
-                no_exp=no_exp,
+                # El no_exp tal como quedo guardado en el paciente (normalizado,
+                # o el anterior sin normalizar): la cabecera usa la misma llave.
+                no_exp=patient.no_exp,
                 pk_num=pk_num,
                 defaults={
                     "patient": patient,

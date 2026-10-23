@@ -29,6 +29,8 @@ from apps.consulta_medica.models import (
 )
 from apps.consulta_medica.repositories.clinical_history_repository import ClinicalHistoryRepository
 from apps.consulta_medica.services.legacy_migration_control_service import apply_patient_fields
+# Legado: historia de personas que pueden ya no estar en SERMED; no se verifica el alta.
+from apps.consulta_medica.services.patient_registry_service import ORIGEN_LEGADO
 from apps.consulta_medica.services.legacy_history_parsing import (
     format_legacy_vitals,
     is_negative_allergy,
@@ -147,7 +149,7 @@ class LegacyHistoryImporter:
         if not annotations:
             return annotations
         # NOTA_HISTORICA pertenece a la HISTORIA_CLINICA del paciente.
-        history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, pk_num)
+        history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, pk_num, origen=ORIGEN_LEGADO)
         for content, noted_on, author in annotations:
             HistoricalNote.objects.create(
                 clinical_history=history,
@@ -200,7 +202,7 @@ class LegacyHistoryImporter:
         text = format_legacy_vitals({label: row.get(column) for column, label in VITALS_COLUMNS.items()})
         if not text or LegacyVitalSigns.objects.filter(legacy_ref=ref).exists():
             return
-        history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, pk_num)
+        history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, pk_num, origen=ORIGEN_LEGADO)
         LegacyVitalSigns.objects.create(
             clinical_history=history, no_exp=no_exp, pk_num=pk_num, specialty=specialty,
             raw_text=text, legacy_ref=ref,
@@ -250,6 +252,7 @@ class LegacyHistoryImporter:
             opened_on=row.get("fe_hisclin"),
             clinic_code=row.get("cd_clinica"),
             doctor_code=_text(row.get("cd_medico")) or None,
+            origen=ORIGEN_LEGADO,
         )
         # Origen (5.2): his_clinica manda; esta fila solo lo llena si esta vacio.
         ClinicalHistory.objects.filter(pk=history.pk, legacy_source_table__isnull=True).update(
