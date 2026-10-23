@@ -7,6 +7,9 @@ class ConsultaMedicaConfig(AppConfig):
 
     def ready(self):
         # 5.1 paso 7c: todo registro clinico nuevo se guarda con su id_paciente.
+        from apps.consulta_medica.services.operational_link_service import connect_operational_signals
         from apps.consulta_medica.services.patient_link_service import connect_signals
 
         connect_signals()
+        # Plan identidad, Fase 5: lo mismo en las tablas operativas.
+        connect_operational_signals()

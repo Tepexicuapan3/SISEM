@@ -1,6 +1,6 @@
 # Plan: identidad única del paciente (persona + afiliaciones)
 
-> Estado: **Bloque A (fases 2 y 3) en cierre** (2026-10-22). Fases 0 y 1 cerradas. Las decisiones de diseño se acordaron
+> Estado: **Bloque B (fases 4 y 5) en cierre** (2026-10-23). Fases 0, 1 y bloque A cerrados. Las decisiones de diseño se acordaron
 > con el usuario en la conversación del 2026-10-22; este archivo es el plan de
 > implementación y el inventario de la Fase 0. El documento de diseño detallado se
 > escribe aparte, cuando el usuario lo pida.
@@ -267,6 +267,63 @@ SELECT applied FROM django_migrations
 WHERE app = 'consulta_medica' AND name = '0056_sexo_convencion_sermed';
 ```
 
-**Reversa:** `migrate consulta_medica 0055` (la 0058 vuelve opcional `id_persona`; la
+**Reversa del bloque A:** `migrate consulta_medica 0055` (la 0058 vuelve opcional `id_persona`; la
 0057 quita `id_persona` y `cns_persona`; la 0056 convierte M/F→H/M). Hay que desplegar
 también el código anterior: el actual exige la persona.
+
+
+✅ **Bloque A cerrado (2026-10-23):** verificado en el servidor (sexo convertido, una
+persona por registro, la ficha muestra Masculino/Femenino).
+
+---
+
+## Bloque B — Fases 4 (lecturas por persona) y 5 (`id_paciente` operativo)
+
+### Fase 4: lecturas clínicas por persona
+
+- `for_patient()` (la función central de lectura de las tablas clínicas) lee **todas
+  las afiliaciones de la persona**: alergias, notas, signos del legado, estudios,
+  incapacidades, odontograma y consultas del legado.
+- Las consultas leen por las llaves `(no_exp, pk_num)` de todos los registros de la
+  persona (`keys_for_person`), porque las visitas se identifican así.
+- El grupo sanguíneo lee por persona.
+- **Sin cambio visible hoy:** cada persona tiene un solo registro.
+- **Movido a la Fase 7:** el origen de cada dato y las alertas de contradicción
+  (recién ahí hay más de un registro por persona).
+
+### Fase 5: `id_paciente` en las 10 tablas operativas
+
+| Paso | Qué |
+|---|---|
+| Expandir | `id_paciente` opcional en `rcp_visits`, `citas_medicas`, `smt_visit_vitals`, `smt_patient_latest_vitals`, `cir_surgery`, `hsp_admission`, `amb_request`, `ref_referral`, `contratos_oxigeno`, `portal_miembros` (8 migraciones) |
+| Doble escritura | Señal `pre_save` (`operational_link_service`): al guardar, resuelve el registro por la puerta central (lo crea si no existe, con la verificación de la Fase 1). El portal solo vincula, no crea. Se siguen guardando `no_exp`/`pk_num` |
+| Llenar | `vincular_id_paciente` ahora también llena las tablas operativas |
+| Leer por id | Interruptor `IDENTIDAD_LECTURA_OPERATIVA_POR_ID`: suma la lectura por `id_paciente` a la de por llave (encenderlo no hace perder nada) |
+| `pk_num` | En visitas y citas acepta nulo (para el recién nacido de la Fase 6), **conservando el 0 por defecto** para quien lo omite (todo el código actual lo pasa explícito) |
+
+### Despliegue del bloque B
+
+1. Respaldo de la base principal.
+2. `git pull` y `docker compose up -d --build backend` (8 migraciones: solo agregan
+   columnas opcionales).
+3. Llenar `id_paciente` en lo existente, primero en simulacro:
+
+   ```bash
+   docker compose exec backend python manage.py vincular_id_paciente --dry-run
+   docker compose exec backend python manage.py vincular_id_paciente
+   ```
+
+4. Verificación (solo lectura): filas operativas sin `id_paciente` (deberían dar 0
+   salvo portal sin registro):
+
+   ```sql
+   SELECT 'rcp_visits' t, count(*) FROM rcp_visits WHERE id_paciente IS NULL
+   UNION ALL SELECT 'citas_medicas', count(*) FROM citas_medicas WHERE id_paciente IS NULL
+   UNION ALL SELECT 'smt_visit_vitals', count(*) FROM smt_visit_vitals WHERE id_paciente IS NULL
+   UNION ALL SELECT 'portal_miembros', count(*) FROM portal_miembros WHERE id_paciente IS NULL;
+   ```
+
+5. (Opcional) `IDENTIDAD_LECTURA_OPERATIVA_POR_ID=True` en el `.env`.
+
+**Reversa:** interruptor en `False`; las columnas nuevas son opcionales y el código
+anterior las ignora.

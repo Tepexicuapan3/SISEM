@@ -30,6 +30,12 @@ class ContratoOxigeno(models.Model):
     # pk_num > 0 → derechohabiente (cat_familiar.pk_num), ya que el mismo
     # expediente se repite entre varios familiares de un mismo trabajador.
     pk_num        = models.IntegerField(default=0)
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
+    # solo al guardar: consulta_medica.services.operational_link_service.
+    patient = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="+",
+    )
     # Capturada al seleccionar el derechohabiente/trabajador en el buscador.
     # Se persiste porque cat_empleados/cat_familiar.no_edad puede quedar
     # desactualizado; la fecha de nacimiento nunca cambia, así que la edad

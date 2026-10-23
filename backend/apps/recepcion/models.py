@@ -44,7 +44,15 @@ class CitaMedica(models.Model):
     # IntegerField, no smallint: los PK_NUM de SERMED pasan de 32 767 (p. ej.
     # 48411) y en Postgres la cita fallaba con "smallint out of range". Mismo
     # arreglo que rcp_visits (recepcion.0006).
-    pk_num       = models.IntegerField(default=0)
+    # Nulo solo si se pasa None explicito (recien nacido provisional, Fase 6);
+    # el 0 por defecto (titular) se conserva para quien lo omite.
+    pk_num = models.IntegerField(default=0, null=True, blank=True)
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
+    # solo al guardar: consulta_medica.services.operational_link_service.
+    patient = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="+",
+    )
 
     # Médico y consultorio
     medico       = models.ForeignKey(
@@ -239,7 +247,15 @@ class Visit(models.Model):
     # pk_num = 0 → el propio trabajador (titular).
     # pk_num > 0 → derechohabiente (cat_familiar.pk_num).
     no_exp     = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num     = models.IntegerField(db_column="pk_num", default=0)
+    # Nulo solo si se pasa None explicito (recien nacido provisional, Fase 6);
+    # el 0 por defecto (titular) se conserva para quien lo omite.
+    pk_num = models.IntegerField(default=0, null=True, blank=True, db_column="pk_num")
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
+    # solo al guardar: consulta_medica.services.operational_link_service.
+    patient = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="+",
+    )
     arrival_type = models.CharField(
         max_length=16,
         choices=ArrivalType.choices,

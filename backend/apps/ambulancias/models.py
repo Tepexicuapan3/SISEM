@@ -39,6 +39,12 @@ class AmbulanceRequest(models.Model):
 
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
+    # solo al guardar: consulta_medica.services.operational_link_service.
+    patient = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="+",
+    )
 
     # CharField y NO ForeignKey: CatClinica vive en la base de datos
     # "expedientes" (ver routers.ExpedientesRouter), fisicamente distinta de

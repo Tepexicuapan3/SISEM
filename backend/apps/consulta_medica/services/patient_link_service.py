@@ -36,21 +36,51 @@ def find_patient_by_record_key(no_exp, pk_num) -> Patient | None:
     return patient
 
 
+def _record_key(patient: Patient) -> tuple:
+    """Llave con la que sus filas clinicas identifican a un registro: el
+    familiar del legado sin PK_NUM usa su cd_familiar como pk_num."""
+    return patient.no_exp, patient.pk_num if patient.pk_num is not None else patient.legacy_family_code
+
+
+def records_for_key(no_exp, pk_num) -> list[Patient]:
+    """
+    Plan identidad, Fase 4: todos los registros (afiliaciones) de la PERSONA
+    a la que pertenece esta llave, incluido el propio. Hoy cada persona tiene
+    un solo registro; con la vinculacion (Fase 7) aparecen los demas (como
+    hijo, como trabajador, como recien nacido).
+    """
+    patient = find_patient_by_record_key(no_exp, pk_num)
+    if patient is None:
+        return []
+    return list(Patient.objects.filter(person_id=patient.person_id).order_by("id_patient"))
+
+
+def keys_for_person(no_exp, pk_num) -> list[tuple]:
+    """Llaves (no_exp, pk_num) de todos los registros de la persona, incluida
+    la pedida. Para tablas que todavia no tienen id_paciente (visitas)."""
+    keys = {(no_exp, pk_num)}
+    keys.update(_record_key(record) for record in records_for_key(no_exp, pk_num))
+    return sorted(keys, key=str)
+
+
 def for_patient(queryset, no_exp, pk_num):
     """
-    7d: registros de un paciente leidos por id_paciente. Asi tambien aparecen
-    los que cuelgan del paciente con otra llave (familiar sin PK_NUM, y mas
-    adelante pacientes fusionados).
+    7d + Fase 4 del plan identidad: filas clinicas de la PERSONA (todas sus
+    afiliaciones), leidas por id_paciente. Hoy da exactamente lo mismo que
+    antes porque cada persona tiene un solo registro.
 
-    Transitorio hasta 7e (NOT NULL): incluye ademas las filas de esa llave que
-    todavia no tienen id_paciente, para que ninguna pantalla pierda datos
+    Transitorio hasta 7e (NOT NULL): incluye ademas las filas de esas llaves
+    que todavia no tienen id_paciente, para que ninguna pantalla pierda datos
     mientras vincular_id_paciente no haya corrido.
     """
     unlinked = Q(patient__isnull=True, no_exp=no_exp, pk_num=pk_num)
-    patient = find_patient_by_record_key(no_exp, pk_num)
-    if patient is None:
+    records = records_for_key(no_exp, pk_num)
+    if not records:
         return queryset.filter(unlinked)
-    return queryset.filter(Q(patient=patient) | unlinked)
+    condition = Q(patient__in=records) | unlinked
+    for record_no_exp, record_key in {_record_key(record) for record in records}:
+        condition |= Q(patient__isnull=True, no_exp=record_no_exp, pk_num=record_key)
+    return queryset.filter(condition)
 
 
 def linked_models():
@@ -90,19 +120,30 @@ def link_existing(*, dry_run=False, create_missing=True, progress=None) -> dict[
     """
     # Import diferido: el repositorio usa find_patient_by_record_key de este modulo.
     from apps.consulta_medica.repositories.clinical_history_repository import PatientRepository
+    from apps.consulta_medica.services.operational_link_service import (
+        creates_record, no_exp_field, operational_models,
+    )
     from apps.consulta_medica.services.patient_registry_service import ORIGEN_REGULARIZACION
 
     report: dict[str, dict[str, int]] = {}
-    for model in linked_models():
+    # Tablas clinicas (7b) y operativas (plan identidad, Fase 5).
+    for model in linked_models() + operational_models():
+        create_for_model = create_missing and creates_record(model)
+        campo = no_exp_field(model)
         stats = {"rows": 0, "patients_created": 0, "unresolved": 0}
         keys = list(
             model.objects.filter(patient__isnull=True)
-            .values_list("no_exp", "pk_num").distinct()
+            .values_list(campo, "pk_num").distinct()
         )
         for index, (no_exp, pk_num) in enumerate(keys, start=1):
-            pending = model.objects.filter(no_exp=no_exp, pk_num=pk_num, patient__isnull=True)
+            if pk_num is None:
+                # Sin pk_num no hay llave que resolver (p. ej. un recien nacido
+                # provisional de la Fase 6 ya nace con su id_paciente).
+                stats["unresolved"] += 1
+                continue
+            pending = model.objects.filter(**{campo: no_exp}, pk_num=pk_num, patient__isnull=True)
             patient = find_patient_by_record_key(no_exp, pk_num)
-            if patient is None and create_missing and not dry_run:
+            if patient is None and create_for_model and not dry_run:
                 # Regularizacion: los registros clinicos ya existen; no se
                 # verifica en SERMED (ver patient_registry_service).
                 patient, created = PatientRepository.get_or_create(
@@ -110,7 +151,7 @@ def link_existing(*, dry_run=False, create_missing=True, progress=None) -> dict[
                 )
                 stats["patients_created"] += int(created)
             if patient is None:
-                if dry_run and create_missing:
+                if dry_run and create_for_model:
                     stats["patients_created"] += 1
                     stats["rows"] += pending.count()
                 else:
@@ -125,4 +166,9 @@ def link_existing(*, dry_run=False, create_missing=True, progress=None) -> dict[
 
 def unlinked_counts() -> dict[str, int]:
     """Filas sin id_paciente por tabla (tiene que dar cero antes del NOT NULL)."""
-    return {model._meta.db_table: model.objects.filter(patient__isnull=True).count() for model in linked_models()}
+    from apps.consulta_medica.services.operational_link_service import operational_models
+
+    return {
+        model._meta.db_table: model.objects.filter(patient__isnull=True).count()
+        for model in linked_models() + operational_models()
+    }

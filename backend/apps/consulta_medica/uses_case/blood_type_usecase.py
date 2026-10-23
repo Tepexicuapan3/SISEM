@@ -42,8 +42,11 @@ def _to_contract(record):
 
 
 def _payload(patient):
+    # Plan identidad, Fase 4: el grupo sanguineo es de la PERSONA (todas sus
+    # afiliaciones). Una contradiccion entre registros vinculados se alerta en
+    # la Fase 7; hoy cada persona tiene un solo registro.
     records = list(
-        BloodType.objects.filter(patient=patient)
+        BloodType.objects.filter(patient__person_id=patient.person_id)
         .select_related("blood_type")
         .order_by("-created_at", "-id_blood_type")
     )

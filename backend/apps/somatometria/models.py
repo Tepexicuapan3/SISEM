@@ -17,6 +17,12 @@ class VisitVitalSigns(models.Model):
     # cambian una vez que existe.
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
+    # solo al guardar: consulta_medica.services.operational_link_service.
+    patient = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="+",
+    )
     weight_kg = models.DecimalField(max_digits=6, decimal_places=2, db_column="weight_kg")
     height_cm = models.DecimalField(max_digits=6, decimal_places=2, db_column="height_cm")
     temperature_c = models.DecimalField(
@@ -137,6 +143,12 @@ class PatientLatestVitals(models.Model):
     id_latest = models.BigAutoField(primary_key=True, db_column="id_latest")
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
+    # solo al guardar: consulta_medica.services.operational_link_service.
+    patient = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="+",
+    )
     weight_kg = models.DecimalField(max_digits=6, decimal_places=2, db_column="weight_kg")
     height_cm = models.DecimalField(max_digits=6, decimal_places=2, db_column="height_cm")
     temperature_c = models.DecimalField(
