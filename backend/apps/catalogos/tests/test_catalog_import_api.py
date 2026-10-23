@@ -56,16 +56,8 @@ class _AuthenticatedImportTestCase(APITestCase):
             landing_route="/admin/catalogos",
             is_active=True,
         )
-        self.perm_read = CatPermiso.objects.create(
-            codigo="admin:catalogos:especialidades:read",
-            descripcion="Leer especialidades",
-            is_active=True,
-        )
-        self.perm_create = CatPermiso.objects.create(
-            codigo="admin:catalogos:especialidades:create",
-            descripcion="Crear especialidades",
-            is_active=True,
-        )
+        self.perm_read = CatPermiso.objects.get_or_create(codigo="admin:catalogos:especialidades:read", defaults=dict(descripcion="Leer especialidades", is_active=True))[0]
+        self.perm_create = CatPermiso.objects.get_or_create(codigo="admin:catalogos:especialidades:create", defaults=dict(descripcion="Crear especialidades", is_active=True))[0]
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_read)
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_create)
 

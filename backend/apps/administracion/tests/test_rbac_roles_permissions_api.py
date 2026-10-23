@@ -57,21 +57,9 @@ class RbacRolesPermissionsApiTests(APITestCase):
             is_active=True,
         )
 
-        self.perm_read = Permisos.objects.create(
-            codigo="pacientes:read",
-            descripcion="Leer pacientes",
-            is_active=True,
-        )
-        self.perm_update = Permisos.objects.create(
-            codigo="pacientes:update",
-            descripcion="Actualizar pacientes",
-            is_active=True,
-        )
-        self.perm_extra = Permisos.objects.create(
-            codigo="agenda:read",
-            descripcion="Leer agenda",
-            is_active=True,
-        )
+        self.perm_read = Permisos.objects.get_or_create(codigo="pacientes:read", defaults=dict(descripcion="Leer pacientes", is_active=True))[0]
+        self.perm_update = Permisos.objects.get_or_create(codigo="pacientes:update", defaults=dict(descripcion="Actualizar pacientes", is_active=True))[0]
+        self.perm_extra = Permisos.objects.get_or_create(codigo="agenda:read", defaults=dict(descripcion="Leer agenda", is_active=True))[0]
 
         # Redis (sesion unica) no se limpia entre tests como la DB -- un
         # user_id reciclado puede arrastrar una sesion "activa" de una
@@ -506,15 +494,13 @@ class RbacRolesPermissionsApiTests(APITestCase):
         )
 
     def test_assign_usuarios_update_adds_explicit_and_inferred_dependencies(self):
-        users_update = Permisos.objects.create(
-            codigo="admin:gestion:usuarios:update", descripcion="u", is_active=True
-        )
+        users_update = Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="u", is_active=True))[0]
         for code in (
             "admin:gestion:usuarios:read",
             "admin:gestion:roles:read",
             "admin:gestion:permisos:read",
         ):
-            Permisos.objects.create(codigo=code, descripcion=code, is_active=True)
+            Permisos.objects.get_or_create(codigo=code, defaults=dict(descripcion=code, is_active=True))[0]
 
         response = self._assign(self.target_role, [users_update.id_permiso])
 
@@ -530,9 +516,16 @@ class RbacRolesPermissionsApiTests(APITestCase):
         )
 
     def test_assign_ignores_nonexistent_dependency_code(self):
-        users_update = Permisos.objects.create(
-            codigo="admin:gestion:usuarios:update", descripcion="u", is_active=True
-        )
+        # La migracion 0017 ya siembra las dependencias de usuarios:update:
+        # se quitan para probar que un codigo inexistente se ignora.
+        Permisos.objects.filter(
+            codigo__in=(
+                "admin:gestion:usuarios:read",
+                "admin:gestion:roles:read",
+                "admin:gestion:permisos:read",
+            )
+        ).delete()
+        users_update = Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="u", is_active=True))[0]
 
         response = self._assign(self.target_role, [users_update.id_permiso])
 
@@ -542,11 +535,7 @@ class RbacRolesPermissionsApiTests(APITestCase):
         )
 
     def test_assign_fichas_create_does_not_require_read(self):
-        create = Permisos.objects.create(
-            codigo="recepcion:fichas:medicina_general:create",
-            descripcion="c",
-            is_active=True,
-        )
+        create = Permisos.objects.get_or_create(codigo="recepcion:fichas:medicina_general:create", defaults=dict(descripcion="c", is_active=True))[0]
 
         response = self._assign(self.target_role, [create.id_permiso])
 
@@ -557,15 +546,9 @@ class RbacRolesPermissionsApiTests(APITestCase):
         )
 
     def test_assign_actor_without_dependency_gets_403_and_persists_nothing(self):
-        users_update = Permisos.objects.create(
-            codigo="admin:gestion:usuarios:update", descripcion="u", is_active=True
-        )
-        Permisos.objects.create(
-            codigo="admin:gestion:roles:read", descripcion="r", is_active=True
-        )
-        roles_update = Permisos.objects.create(
-            codigo="admin:gestion:roles:update", descripcion="ru", is_active=True
-        )
+        users_update = Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="u", is_active=True))[0]
+        Permisos.objects.get_or_create(codigo="admin:gestion:roles:read", defaults=dict(descripcion="r", is_active=True))[0]
+        roles_update = Permisos.objects.get_or_create(codigo="admin:gestion:roles:update", defaults=dict(descripcion="ru", is_active=True))[0]
         # El actor puede asignar usuarios:update, pero NO posee roles:read.
         actor_role = Roles.objects.create(
             rol="ACTOR_SIN_DEP",
@@ -727,16 +710,8 @@ class RbacRolesPermissionsApiTests(APITestCase):
         self.assertEqual(response.data["code"], "ROLE_NOT_FOUND")
 
     def test_assign_role_permissions_blocks_self_role_escalation(self):
-        roles_update = CatPermiso.objects.create(
-            codigo="admin:gestion:roles:update",
-            descripcion="Actualizar roles",
-            is_active=True,
-        )
-        users_update = CatPermiso.objects.create(
-            codigo="admin:gestion:usuarios:update",
-            descripcion="Actualizar usuarios",
-            is_active=True,
-        )
+        roles_update = CatPermiso.objects.get_or_create(codigo="admin:gestion:roles:update", defaults=dict(descripcion="Actualizar roles", is_active=True))[0]
+        users_update = CatPermiso.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="Actualizar usuarios", is_active=True))[0]
         limited_role = CatRol.objects.create(
             rol="LIMITED_ROLE_MANAGER",
             desc_rol="Gestor limitado",
@@ -786,11 +761,7 @@ class RbacRolesPermissionsApiTests(APITestCase):
         )
 
     def test_assign_role_permissions_blocks_updating_admin_role_without_wildcard(self):
-        roles_update = CatPermiso.objects.create(
-            codigo="admin:gestion:roles:update",
-            descripcion="Actualizar roles",
-            is_active=True,
-        )
+        roles_update = CatPermiso.objects.get_or_create(codigo="admin:gestion:roles:update", defaults=dict(descripcion="Actualizar roles", is_active=True))[0]
         limited_role = CatRol.objects.create(
             rol="LIMITED_ADMIN_ROLE_EDITOR",
             desc_rol="Editor de roles admin",
@@ -835,16 +806,8 @@ class RbacRolesPermissionsApiTests(APITestCase):
     def test_assign_role_permissions_blocks_granting_permissions_actor_does_not_have(
         self,
     ):
-        roles_update = CatPermiso.objects.create(
-            codigo="admin:gestion:roles:update",
-            descripcion="Actualizar roles",
-            is_active=True,
-        )
-        users_update = CatPermiso.objects.create(
-            codigo="admin:gestion:usuarios:update",
-            descripcion="Actualizar usuarios",
-            is_active=True,
-        )
+        roles_update = CatPermiso.objects.get_or_create(codigo="admin:gestion:roles:update", defaults=dict(descripcion="Actualizar roles", is_active=True))[0]
+        users_update = CatPermiso.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="Actualizar usuarios", is_active=True))[0]
         limited_role = CatRol.objects.create(
             rol="LIMITED_PERMISSION_GRANTER",
             desc_rol="Gestor sin permisos de usuarios",

@@ -156,16 +156,8 @@ class RbacResolverTests(TestCase):
             id_usuario=self.user, id_rol=self.role, is_primary=True
         )
 
-        self.perm_read = Permisos.objects.create(
-            codigo="expedientes:read",
-            descripcion="Leer expedientes",
-            is_active=True,
-        )
-        self.perm_write = Permisos.objects.create(
-            codigo="expedientes:update",
-            descripcion="Actualizar expedientes",
-            is_active=True,
-        )
+        self.perm_read = Permisos.objects.get_or_create(codigo="expedientes:read", defaults=dict(descripcion="Leer expedientes", is_active=True))[0]
+        self.perm_write = Permisos.objects.get_or_create(codigo="expedientes:update", defaults=dict(descripcion="Actualizar expedientes", is_active=True))[0]
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_read)
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_write)
 
@@ -194,11 +186,7 @@ class RbacResolverTests(TestCase):
         self.assertNotIn("expedientes:update", permissions)
 
     def test_applies_allow_deny_and_ignores_expired_overrides(self):
-        extra_perm = Permisos.objects.create(
-            codigo="farmacia:read",
-            descripcion="Leer farmacia",
-            is_active=True,
-        )
+        extra_perm = Permisos.objects.get_or_create(codigo="farmacia:read", defaults=dict(descripcion="Leer farmacia", is_active=True))[0]
         RelUsuarioOverride.objects.create(
             id_usuario=self.user,
             id_permiso=self.perm_write,
@@ -330,11 +318,7 @@ class RbacWriteConcurrencyHardeningUseCaseTests(TestCase):
             is_primary=True,
             usr_asignacion=self.actor,
         )
-        self.override_permission = Permisos.objects.create(
-            codigo="concurrency:override:read",
-            descripcion="Concurrency override",
-            is_active=True,
-        )
+        self.override_permission = Permisos.objects.get_or_create(codigo="concurrency:override:read", defaults=dict(descripcion="Concurrency override", is_active=True))[0]
 
     @patch(
         "apps.administracion.use_cases.rbac_write.assign_user_roles.touch_user_auth_revision"
@@ -634,16 +618,8 @@ class RbacReadPolicyAndUseCaseTests(TestCase):
         RelUsuarioRol.objects.create(
             id_usuario=self.user, id_rol=self.role, is_primary=True
         )
-        self.perm_roles_read = Permisos.objects.create(
-            codigo="admin:gestion:roles:read",
-            descripcion="Leer roles",
-            is_active=True,
-        )
-        self.perm_permissions_read = Permisos.objects.create(
-            codigo="admin:gestion:permisos:read",
-            descripcion="Leer permisos",
-            is_active=True,
-        )
+        self.perm_roles_read = Permisos.objects.get_or_create(codigo="admin:gestion:roles:read", defaults=dict(descripcion="Leer roles", is_active=True))[0]
+        self.perm_permissions_read = Permisos.objects.get_or_create(codigo="admin:gestion:permisos:read", defaults=dict(descripcion="Leer permisos", is_active=True))[0]
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.perm_roles_read)
         RelRolPermiso.objects.create(
             id_rol=self.role, id_permiso=self.perm_permissions_read
@@ -655,11 +631,7 @@ class RbacReadPolicyAndUseCaseTests(TestCase):
             landing_route="/target",
             is_active=True,
         )
-        self.target_permission = Permisos.objects.create(
-            codigo="catalogo:s1:read",
-            descripcion="Permiso S1",
-            is_active=True,
-        )
+        self.target_permission = Permisos.objects.get_or_create(codigo="catalogo:s1:read", defaults=dict(descripcion="Permiso S1", is_active=True))[0]
         RelRolPermiso.objects.create(
             id_rol=self.target_role, id_permiso=self.target_permission
         )
@@ -756,9 +728,7 @@ class RbacRolePermissionToggleTests(SimpleTestCase):
 
 class EnsureReadDependenciesTests(TestCase):
     def _perm(self, code, is_active=True):
-        return Permisos.objects.create(
-            codigo=code, descripcion=code, is_active=is_active
-        )
+        return Permisos.objects.get_or_create(codigo=code, defaults=dict(descripcion=code, is_active=is_active))[0]
 
     def test_transitive_closure_adds_explicit_and_inferred_read(self):
         update = self._perm("admin:gestion:usuarios:update")
@@ -779,6 +749,11 @@ class EnsureReadDependenciesTests(TestCase):
         )
 
     def test_nonexistent_dependency_is_ignored(self):
+        # La migracion 0017 ya siembra permisos:read / roles:read: se quitan
+        # para que la dependencia declarada no exista en el catalogo.
+        Permisos.objects.filter(
+            codigo__in=("admin:gestion:permisos:read", "admin:gestion:roles:read")
+        ).delete()
         update = self._perm("admin:gestion:usuarios:update")
         users_read = self._perm("admin:gestion:usuarios:read")
 

@@ -62,6 +62,8 @@ class SeedNavigationMenuCommandTests(TestCase):
         """
         codigos = _seed_permission_codes()
         codigo_faltante = next(iter(codigos))
+        # Las migraciones de datos ya pueden haber sembrado el codigo.
+        Permisos.objects.filter(codigo=codigo_faltante).delete()
         for codigo in codigos:
             if codigo == codigo_faltante:
                 continue

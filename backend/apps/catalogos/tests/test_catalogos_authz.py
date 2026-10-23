@@ -41,26 +41,10 @@ class CatalogosAuthzTests(APITestCase):
             is_active=True,
         )
 
-        self.perm_read = CatPermiso.objects.create(
-            codigo="admin:catalogos:centros_atencion:read",
-            descripcion="Leer centros",
-            is_active=True,
-        )
-        self.perm_create = CatPermiso.objects.create(
-            codigo="admin:catalogos:centros_atencion:create",
-            descripcion="Crear centros",
-            is_active=True,
-        )
-        self.perm_area_read = CatPermiso.objects.create(
-            codigo="admin:catalogos:areas:read",
-            descripcion="Leer areas",
-            is_active=True,
-        )
-        self.perm_area_create = CatPermiso.objects.create(
-            codigo="admin:catalogos:areas:create",
-            descripcion="Crear areas",
-            is_active=True,
-        )
+        self.perm_read = CatPermiso.objects.get_or_create(codigo="admin:catalogos:centros_atencion:read", defaults=dict(descripcion="Leer centros", is_active=True))[0]
+        self.perm_create = CatPermiso.objects.get_or_create(codigo="admin:catalogos:centros_atencion:create", defaults=dict(descripcion="Crear centros", is_active=True))[0]
+        self.perm_area_read = CatPermiso.objects.get_or_create(codigo="admin:catalogos:areas:read", defaults=dict(descripcion="Leer areas", is_active=True))[0]
+        self.perm_area_create = CatPermiso.objects.get_or_create(codigo="admin:catalogos:areas:create", defaults=dict(descripcion="Crear areas", is_active=True))[0]
 
         self.user = SyUsuario.objects.create(
             usuario="catalog_user",

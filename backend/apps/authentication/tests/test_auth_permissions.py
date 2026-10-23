@@ -63,16 +63,8 @@ class AuthPermissionsTests(TestCase):
         )
         RelUsuarioRol.objects.create(id_usuario=self.user, id_rol=role, is_primary=True)
 
-        denied_permission = Permisos.objects.create(
-            codigo="admin:gestion:usuarios:update",
-            descripcion="Actualizar usuarios",
-            is_active=True,
-        )
-        allowed_permission = Permisos.objects.create(
-            codigo="admin:gestion:usuarios:read",
-            descripcion="Leer usuarios",
-            is_active=True,
-        )
+        denied_permission = Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="Actualizar usuarios", is_active=True))[0]
+        allowed_permission = Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:read", defaults=dict(descripcion="Leer usuarios", is_active=True))[0]
 
         RelUsuarioOverride.objects.create(
             id_usuario=self.user,
@@ -96,18 +88,9 @@ class AuthPermissionsTests(TestCase):
         )
         RelUsuarioRol.objects.create(id_usuario=self.user, id_rol=role, is_primary=True)
 
-        perm_read = Permisos.objects.create(
-            codigo="expedientes:read",
-            descripcion="Leer",
-        )
-        perm_write = Permisos.objects.create(
-            codigo="expedientes:write",
-            descripcion="Escribir",
-        )
-        perm_extra = Permisos.objects.create(
-            codigo="pacientes:read",
-            descripcion="Leer pacientes",
-        )
+        perm_read = Permisos.objects.get_or_create(codigo="expedientes:read", defaults=dict(descripcion="Leer"))[0]
+        perm_write = Permisos.objects.get_or_create(codigo="expedientes:write", defaults=dict(descripcion="Escribir"))[0]
+        perm_extra = Permisos.objects.get_or_create(codigo="pacientes:read", defaults=dict(descripcion="Leer pacientes"))[0]
         RelRolPermiso.objects.create(id_rol=role, id_permiso=perm_read)
         RelRolPermiso.objects.create(id_rol=role, id_permiso=perm_write)
 
@@ -136,10 +119,7 @@ class AuthPermissionsTests(TestCase):
         )
         RelUsuarioRol.objects.create(id_usuario=self.user, id_rol=role, is_primary=True)
 
-        perm_read = Permisos.objects.create(
-            codigo="expedientes:read",
-            descripcion="Leer",
-        )
+        perm_read = Permisos.objects.get_or_create(codigo="expedientes:read", defaults=dict(descripcion="Leer"))[0]
         RelRolPermiso.objects.create(id_rol=role, id_permiso=perm_read)
 
         RelUsuarioOverride.objects.create(

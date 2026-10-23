@@ -4,6 +4,7 @@ from unittest.mock import patch
 from asgiref.testing import ApplicationCommunicator
 from channels.layers import get_channel_layer
 from django.contrib.auth.hashers import make_password
+from django.db import DEFAULT_DB_ALIAS, connections
 from django.test import TestCase, override_settings
 
 from apps.administracion.models import RelUsuarioRol
@@ -20,6 +21,25 @@ from apps.realtime.routing import WS_VISITS_STREAM_PATH
 from config.asgi import application
 
 
+def _make_sync_to_async_inline():
+    """Ejecuta `func` con la conexion del test (sqlite en memoria + TestCase).
+
+    `sync_to_async` real corre la consulta en otro hilo con otra conexion y
+    choca con la transaccion abierta del TestCase ("database table is
+    locked"). Se reutiliza la conexion del hilo del test dentro de la tarea.
+    """
+    test_connection = connections[DEFAULT_DB_ALIAS]
+
+    def sync_to_async_inline(func):
+        async def runner(*args, **kwargs):
+            connections[DEFAULT_DB_ALIAS] = test_connection
+            return func(*args, **kwargs)
+
+        return runner
+
+    return sync_to_async_inline
+
+
 @override_settings(
     CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
     CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
@@ -29,6 +49,12 @@ from config.asgi import application
 )
 class RealtimeHandshakeSecurityTests(TestCase):
     def setUp(self):
+        patcher = patch("apps.realtime.auth.sync_to_async", _make_sync_to_async_inline())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        env = patch.dict("os.environ", {"DJANGO_ALLOW_ASYNC_UNSAFE": "true"})
+        env.start()
+        self.addCleanup(env.stop)
         self.user = SyUsuario.objects.create(
             usuario="ws_realtime_user",
             correo="ws_realtime_user@example.com",

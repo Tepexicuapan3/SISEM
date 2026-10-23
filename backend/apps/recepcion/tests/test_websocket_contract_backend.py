@@ -1,7 +1,9 @@
 import asyncio
+from unittest.mock import patch
 
 from asgiref.testing import ApplicationCommunicator
 from django.contrib.auth.hashers import make_password
+from django.db import DEFAULT_DB_ALIAS, connections
 from django.test import TestCase, override_settings
 
 from apps.administracion.models import RelUsuarioRol
@@ -23,6 +25,25 @@ from infrastructure.realtime.ordering import evaluate_sequence_progression
 from infrastructure.realtime.ws_app import WS_VISITS_STREAM_PATH
 
 
+def _make_sync_to_async_inline():
+    """Ejecuta `func` con la conexion del test (sqlite en memoria + TestCase).
+
+    `sync_to_async` real corre la consulta en otro hilo con otra conexion y
+    choca con la transaccion abierta del TestCase ("database table is
+    locked"). Se reutiliza la conexion del hilo del test dentro de la tarea.
+    """
+    test_connection = connections[DEFAULT_DB_ALIAS]
+
+    def sync_to_async_inline(func):
+        async def runner(*args, **kwargs):
+            connections[DEFAULT_DB_ALIAS] = test_connection
+            return func(*args, **kwargs)
+
+        return runner
+
+    return sync_to_async_inline
+
+
 @override_settings(
     ALLOWED_HOSTS=["localhost", "testserver"],
     WS_ALLOW_ALL_ORIGINS=False,
@@ -30,6 +51,12 @@ from infrastructure.realtime.ws_app import WS_VISITS_STREAM_PATH
 )
 class VisitWebSocketContractsTests(TestCase):
     def setUp(self):
+        patcher = patch("apps.realtime.auth.sync_to_async", _make_sync_to_async_inline())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        env = patch.dict("os.environ", {"DJANGO_ALLOW_ASYNC_UNSAFE": "true"})
+        env.start()
+        self.addCleanup(env.stop)
         self.user = SyUsuario.objects.create(
             usuario="ws_user",
             correo="ws_user@example.com",

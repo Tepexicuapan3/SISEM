@@ -40,11 +40,7 @@ class RbacContractTests(APITestCase):
             is_primary=True,
         )
 
-        self.permission = Permisos.objects.create(
-            codigo="admin:gestion:permisos:read",
-            descripcion="Leer permisos",
-            is_active=True,
-        )
+        self.permission = Permisos.objects.get_or_create(codigo="admin:gestion:permisos:read", defaults=dict(descripcion="Leer permisos", is_active=True))[0]
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=self.permission)
 
         # Redis (sesion unica) no se limpia entre tests como la DB -- un
@@ -115,16 +111,8 @@ class RbacContractTests(APITestCase):
 
     @override_settings(RBAC_READ_S1_ENABLED=False)
     def test_permissions_catalog_depends_on_parity_legacy_vs_s1(self):
-        Permisos.objects.create(
-            codigo="admin:gestion:usuarios:update",
-            descripcion="Actualizar usuarios",
-            is_active=True,
-        )
-        Permisos.objects.create(
-            codigo="admin:gestion:usuarios:read",
-            descripcion="Leer usuarios",
-            is_active=True,
-        )
+        Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:update", defaults=dict(descripcion="Actualizar usuarios", is_active=True))[0]
+        Permisos.objects.get_or_create(codigo="admin:gestion:usuarios:read", defaults=dict(descripcion="Leer usuarios", is_active=True))[0]
 
         legacy = self.client.get("/api/v1/permissions")
         with self.settings(RBAC_READ_S1_ENABLED=True):
@@ -196,11 +184,7 @@ class RbacReadS1ParityTests(APITestCase):
             is_primary=True,
         )
 
-        permission = Permisos.objects.create(
-            codigo="admin:gestion:permisos:read",
-            descripcion="Leer permisos",
-            is_active=True,
-        )
+        permission = Permisos.objects.get_or_create(codigo="admin:gestion:permisos:read", defaults=dict(descripcion="Leer permisos", is_active=True))[0]
         RelRolPermiso.objects.create(id_rol=self.role, id_permiso=permission)
 
         # Redis (sesion unica) no se limpia entre tests como la DB -- un
