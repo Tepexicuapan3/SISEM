@@ -164,12 +164,40 @@ if not DEBUG and "test" not in sys.argv:
         )
 
 if "test" in sys.argv:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
+    if config("TESTS_EN_POSTGRES", default=False, cast=bool):
+        # Pruebas que SQLite no reproduce (concurrencia, triggers): Django crea
+        # y destruye su propia base test_<nombre> en el mismo servidor; los
+        # datos reales no se tocan. Solo "default": la replica no se usa.
+        DATABASES = {"default": DATABASES["default"]}
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": ":memory:",
+            }
         }
-    }
+
+# ── Identidad del paciente (docs/plans/identidad-paciente.md) ────────────────
+# Interruptores del plan por fases. Todos apagados: encenderlos cambia el
+# comportamiento; apagarlos lo devuelve al anterior sin redesplegar codigo.
+IDENTIDAD_PACIENTE = {
+    # Fase 1: alta de pacientes contra la replica de SERMED.
+    # apagado = como hoy; observar = crea igual y registra; bloquear = no crea.
+    "VERIFICAR_SERMED": config("IDENTIDAD_VERIFICAR_SERMED", default="apagado"),
+    # Fase 5: las tablas operativas se leen por id_paciente.
+    "LECTURA_OPERATIVA_POR_ID": config("IDENTIDAD_LECTURA_OPERATIVA_POR_ID", default=False, cast=bool),
+    # Fase 6: alta de recien nacidos provisionales.
+    "RECIEN_NACIDOS": config("IDENTIDAD_RECIEN_NACIDOS", default=False, cast=bool),
+    # Fase 7: deteccion de coincidencias y vinculacion de registros.
+    "VINCULACION": config("IDENTIDAD_VINCULACION", default=False, cast=bool),
+}
+if IDENTIDAD_PACIENTE["VERIFICAR_SERMED"] not in ("apagado", "observar", "bloquear"):
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "IDENTIDAD_VERIFICAR_SERMED debe ser apagado, observar o bloquear "
+        f"(se recibio {IDENTIDAD_PACIENTE['VERIFICAR_SERMED']!r})."
+    )
 
 DATABASE_ROUTERS = [
     "routers.ExpedientesRouter",
