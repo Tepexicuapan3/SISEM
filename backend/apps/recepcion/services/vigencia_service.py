@@ -58,4 +58,11 @@ def fila_tiene_vigencia(fila: dict | None, no_exp: str, pk_num: int) -> bool:
 
 
 def tiene_vigencia(no_exp: str, pk_num: int) -> bool:
+    # Plan identidad, bloque C2: el recien nacido provisional no esta en SERMED;
+    # su vigencia es la del provisional (regla del legado: hoy + 60 dias).
+    from apps.consulta_medica.services import newborn_service
+
+    if newborn_service.es_clave_provisional(pk_num):
+        provisional = newborn_service.provisional_por_clave(no_exp, pk_num)
+        return provisional is not None and newborn_service.vigente(provisional)
     return fila_tiene_vigencia(buscar_fila_paciente(no_exp, pk_num), no_exp, pk_num)

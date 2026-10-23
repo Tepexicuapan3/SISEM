@@ -1,6 +1,6 @@
 # Plan: identidad única del paciente (persona + afiliaciones)
 
-> Estado: **Bloque C1 en cierre** (2026-10-23). Fases 0, 1 y bloques A y B cerrados. Las decisiones de diseño se acordaron
+> Estado: **Bloque C (C1 + C2) en cierre** (2026-10-23). Fases 0, 1 y bloques A y B cerrados. Las decisiones de diseño se acordaron
 > con el usuario en la conversación del 2026-10-22; este archivo es el plan de
 > implementación y el inventario de la Fase 0. El documento de diseño detallado se
 > escribe aparte, cuando el usuario lo pida.
@@ -342,7 +342,7 @@ Expedientes** (el equivalente del `body-registro.jsp` del legado).
 
 | | |
 |---|---|
-| Alta | Desde el expediente del titular: apellidos, nombre, fecha de nacimiento, sexo, madre, orden de nacimiento (gemelos), CURP opcional. Registro de `cns_paciente` con `pk_num` NULL y `cd_familiar` de la secuencia de provisionales (≥ 9 000 001; el legado llega a ~52 896) + `cns_paciente_provisional`. Clínica de adscripción del titular. Vigencia hoy + `IDENTIDAD_DIAS_VIGENCIA_RN` (60) |
+| Alta | Desde el expediente del titular: apellidos, nombre, fecha de nacimiento, sexo, madre, orden de nacimiento (gemelos), CURP opcional. Registro de `cns_paciente` con `pk_num` NULL y `cd_familiar` de la secuencia de provisionales (> 100 000 000: por encima del PK_NUM máximo de SERMED, NUMBER(8); el legado llega a ~52 896) + `cns_paciente_provisional`. Clínica de adscripción del titular. Vigencia hoy + `IDENTIDAD_DIAS_VIGENCIA_RN` (60) |
 | Candidatos | Familiares de SERMED del mismo titular con la misma fecha de nacimiento y el mismo sexo, sin descartar |
 | "Es el mismo" | El registro de SERMED del bebé pasa a la **misma persona** que el provisional. No se mueve nada: la historia se ve por persona. El provisional queda `B` (vinculado) |
 | "No es" | `cns_persona_descarte`: no vuelve a proponerse |
@@ -353,8 +353,20 @@ Expedientes** (el equivalente del `body-registro.jsp` del legado).
 Permisos (migración `administracion 0018`, asignados a quien tiene `update`):
 `admin:gestion:expedientes:recien_nacidos` y `admin:gestion:expedientes:vincular`.
 
-Pendiente para **C2**: check-in del provisional en recepción (recepción elige por `pk_num`
-y el provisional no tiene: hay que pasar el `id_paciente`).
+### Bloque C2 — Recepción atiende al provisional
+
+Sin tocar la pantalla de recepción: el provisional viaja con su `cd_familiar` **en el lugar
+del `pk_num`**, igual que los familiares del legado sin PK_NUM (que `find_patient_by_record_key`
+ya resuelve por `cd_familiar`). La secuencia arranca en **100 000 001**, por encima del
+máximo PK_NUM de SERMED (`CAT_FAMILIAR.PK_NUM` es `NUMBER(8)`): nunca se confunde con un
+familiar real.
+
+| | |
+|---|---|
+| Buscador (`lookup_patient`) | Suma los provisionales pendientes como familiares: parentesco "RECIEN NACIDO (PROVISIONAL)", `ACTIVO` solo si está vigente (en histórico aparece también vencido) |
+| Visita, signos, consulta, alergias | Sin cambios: la llave `(no_exp, cd_familiar)` resuelve al registro del provisional |
+| Vigencia (citas) | La del provisional (hoy + 60), no la de SERMED |
+| Ficha e impresión | El nombre sale del registro de SIRES cuando no está en SERMED |
 
 ### Despliegue
 

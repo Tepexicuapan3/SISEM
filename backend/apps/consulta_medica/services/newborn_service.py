@@ -5,7 +5,7 @@ provisional y su vinculacion con SERMED.
   - Alta (registrar_recien_nacido): como el legado (body-registro.jsp), solo
     hijos, desde el expediente del titular. Registro de cns_paciente con
     no_exp del titular, pk_num NULL y cd_familiar de la secuencia de
-    provisionales (>= 9 000 001; el legado llega a ~52 896), mas
+    provisionales (> 100 000 000: por encima del PK_NUM de SERMED; el legado llega a ~52 896), mas
     PACIENTE_PROVISIONAL. Vigencia: hoy + DIAS_VIGENCIA_RN (60). Clinica: la de
     adscripcion del titular. CURP opcional.
   - Candidatos: familiares de SERMED del mismo titular con la misma fecha de
@@ -54,7 +54,17 @@ from apps.recepcion.services.errors import VisitDomainError
 
 logger = logging.getLogger(__name__)
 
-BASE_CD_FAMILIAR = 9_000_000
+# Por encima del maximo PK_NUM posible de SERMED (CAT_FAMILIAR.PK_NUM es
+# NUMBER(8): hasta 99 999 999). Recepcion y las tablas operativas usan el
+# cd_familiar del provisional en el lugar del pk_num (como ya pasa con los
+# familiares del legado sin PK_NUM): asi nunca puede confundirse con un
+# familiar real. El legado llega a ~52 896.
+BASE_CD_FAMILIAR = 100_000_000
+
+
+def es_clave_provisional(pk_num) -> bool:
+    """La "pk_num" que llega es el cd_familiar de un recien nacido provisional."""
+    return isinstance(pk_num, int) and pk_num > BASE_CD_FAMILIAR
 MENSAJE_SERMED_NO_DISPONIBLE = (
     "No se pudo consultar SERMED en este momento. No significa que el expediente no exista: avisá a sistemas."
 )
@@ -187,6 +197,64 @@ def _contract(provisional: ProvisionalPatient) -> dict:
         "pkNumSermed": provisional.linked_pk_num,
         "candidatos": candidatos(provisional) if pendiente else [],
     }
+
+
+def vigente(provisional: ProvisionalPatient) -> bool:
+    return (
+        provisional.status == ProvisionalPatient.Status.PENDING
+        and provisional.valid_until >= timezone.localdate()
+    )
+
+
+def provisional_por_clave(no_exp: str, pk_num) -> ProvisionalPatient | None:
+    """Provisional de recepcion: (no_exp del titular, cd_familiar en lugar del pk_num)."""
+    if not es_clave_provisional(pk_num):
+        return None
+    return (
+        ProvisionalPatient.objects.select_related("patient")
+        .filter(holder_no_exp=normalizar_no_exp(no_exp), patient__legacy_family_code=pk_num).first()
+    )
+
+
+def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
+    """
+    Plan identidad, bloque C2: provisionales pendientes como familiares para el
+    buscador de recepcion (check-in, agenda). Viajan con su cd_familiar en el
+    lugar del pk_num; todo lo que sigue (visita, signos, consulta, alergias)
+    los resuelve por esa llave. Sin el interruptor, no aparece ninguno.
+    """
+    if not habilitado():
+        return []
+    miembros = []
+    provisionales = (
+        ProvisionalPatient.objects.select_related("patient")
+        .filter(holder_no_exp=normalizar_no_exp(no_exp), status=ProvisionalPatient.Status.PENDING)
+        .order_by("patient__birth_date", "birth_order")
+    )
+    for provisional in provisionales:
+        activo = vigente(provisional)
+        if not historico and not activo:
+            continue
+        paciente = provisional.patient
+        nacimiento = paciente.birth_date
+        edad = None
+        if nacimiento:
+            hoy = timezone.localdate()
+            edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+        miembros.append({
+            "noExp": provisional.holder_no_exp,
+            "pkNum": paciente.legacy_family_code,
+            "nombre": _nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name),
+            "edad": edad,
+            "fechaNac": nacimiento.isoformat() if nacimiento else None,
+            "parentesco": "RECIEN NACIDO (PROVISIONAL)",
+            "estatus": "ACTIVO" if activo else "NO ACTIVO",
+            "cdClinica": provisional.clinic_code,
+            "foto": None,
+            "provisional": True,
+            "idPaciente": paciente.pk,
+        })
+    return miembros
 
 
 def listar(no_exp: str) -> dict:

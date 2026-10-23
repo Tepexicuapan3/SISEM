@@ -1067,7 +1067,7 @@ class ProvisionalPatient(models.Model):
     PACIENTE_PROVISIONAL (plan identidad, Fase 6): datos propios del recien
     nacido que se atiende antes de que Capital Humano lo registre en SERMED.
     El registro de cns_paciente (1:1) lleva no_exp del titular, pk_num NULL y
-    un cd_familiar de la secuencia de provisionales (>= 9 000 001, por
+    un cd_familiar de la secuencia de provisionales (> 100 000 000, por
     encima del legado). Igual que el legado (body-registro.jsp), solo hijos.
 
     sw_status: A = provisional pendiente, B = ya vinculado a su registro de

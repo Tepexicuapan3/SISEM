@@ -183,3 +183,77 @@ class ApiRecienNacidosTests(TestCase):
         self.assertEqual(respuesta.status_code, 403)
         self.assertEqual(autorizar.call_args[0][1], "admin:gestion:expedientes:vincular")
         vincular.assert_not_called()
+
+
+@ENCENDIDO
+class RecepcionProvisionalTests(_SermedSimulado, TestCase):
+    """Bloque C2: el provisional se atiende en recepcion con su cd_familiar
+    en el lugar del pk_num, como los familiares del legado sin PK_NUM."""
+
+    FILA_TITULAR = {"NO_EXP": "40041", "DS_PATERNO": "PEREZ", "DS_MATERNO": "GOMEZ", "DS_NOMBRE": "JUAN",
+                    "ESTATUS": "ACTIVO", "EDAD": 40, "FE_NAC": date(1985, 3, 15), "CD_CLINICA": "3"}
+
+    def setUp(self):
+        super().setUp()
+        self.provisional = self._registrar(nombre="BEBE")
+        self.clave = self.provisional["cdFamiliar"]
+
+    def test_la_clave_nunca_choca_con_un_pk_num_de_sermed(self):
+        # CAT_FAMILIAR.PK_NUM es NUMBER(8): hasta 99 999 999.
+        self.assertGreater(self.clave, 99_999_999)
+        self.assertTrue(rn.es_clave_provisional(self.clave))
+        self.assertFalse(rn.es_clave_provisional(48411))
+
+    def test_aparece_en_el_buscador_de_recepcion(self):
+        from apps.recepcion.uses_case import visit_queue_usecase
+
+        with mock.patch.object(visit_queue_usecase, "buscar_expediente",
+                               return_value={"empleados": [self.FILA_TITULAR], "familiares": []}):
+            resultado = visit_queue_usecase.lookup_patient("40041")
+        miembro = next(m for m in resultado["dependientes"] if m.get("provisional"))
+        self.assertEqual(miembro["pkNum"], self.clave)
+        self.assertEqual(miembro["estatus"], "ACTIVO")
+        self.assertEqual(miembro["parentesco"], "RECIEN NACIDO (PROVISIONAL)")
+        self.assertEqual(miembro["idPaciente"], self.provisional["idPaciente"])
+
+    def test_vencido_no_aparece_en_check_in_pero_si_en_historico(self):
+        from apps.recepcion.uses_case import visit_queue_usecase
+
+        ProvisionalPatient.objects.update(valid_until=timezone.localdate() - timedelta(days=1))
+        with mock.patch.object(visit_queue_usecase, "buscar_expediente",
+                               return_value={"empleados": [self.FILA_TITULAR], "familiares": []}):
+            activos = visit_queue_usecase.lookup_patient("40041")["dependientes"]
+            historico = visit_queue_usecase.lookup_patient("40041", historico=True)["dependientes"]
+        self.assertFalse(any(m.get("provisional") for m in activos))
+        self.assertEqual([m["estatus"] for m in historico if m.get("provisional")], ["NO ACTIVO"])
+
+    def test_vigencia_del_provisional(self):
+        from apps.recepcion.services.vigencia_service import tiene_vigencia
+
+        self.assertTrue(tiene_vigencia("40041", self.clave))
+        ProvisionalPatient.objects.update(valid_until=timezone.localdate() - timedelta(days=1))
+        self.assertFalse(tiene_vigencia("40041", self.clave))
+        self.assertFalse(tiene_vigencia("40041", self.clave + 999))   # no existe
+
+    def test_la_visita_queda_en_el_registro_del_provisional(self):
+        from apps.recepcion.models import Visit
+
+        visita = Visit.objects.create(folio="RN-1", no_exp="40041", pk_num=self.clave, arrival_type="walk_in",
+                                      service_type="medicina_general", nombre_paciente="BEBE")
+        self.assertEqual(visita.patient_id, self.provisional["idPaciente"])
+        self.assertEqual(Patient.objects.filter(no_exp="40041").count(), 1)   # no creo otro
+
+    def test_ficha_e_impresion_toman_el_nombre_del_registro(self):
+        from apps.impresion.services import patient_header
+        from apps.recepcion.services import ficha_service
+
+        with mock.patch("apps.administracion.use_cases.expedientes.buscar_expediente.buscar_expediente",
+                        return_value={"empleados": [self.FILA_TITULAR], "familiares": []}):
+            nombre = ficha_service._get_nombre_components("40041", self.clave)
+        self.assertEqual((nombre["nombre_paciente"], nombre["a_paterno"]), ("BEBE", "PEREZ"))
+        encabezado = patient_header._from_patient("40041", self.clave)
+        self.assertEqual(encabezado["first_name"], "BEBE")
+
+    @override_settings(IDENTIDAD_PACIENTE={"RECIEN_NACIDOS": False, "VERIFICAR_SERMED": "apagado"})
+    def test_apagado_recepcion_no_los_muestra(self):
+        self.assertEqual(rn.miembros_recepcion("40041", historico=True), [])

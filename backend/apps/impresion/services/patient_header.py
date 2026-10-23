@@ -46,9 +46,11 @@ def _full_name(first, paternal, maternal):
 
 
 def _from_patient(no_exp, pk_num):
-    from apps.consulta_medica.models import Patient
+    from apps.consulta_medica.services.patient_link_service import find_patient_by_record_key
 
-    patient = Patient.objects.filter(no_exp=no_exp, pk_num=pk_num).first()
+    # Por llave de registro: tambien encuentra al familiar del legado y al
+    # recien nacido provisional, que viajan con su cd_familiar como pk_num.
+    patient = find_patient_by_record_key(no_exp, pk_num)
     if patient is None or not (patient.first_name or patient.paternal_surname):
         return None
     header = _empty(no_exp, pk_num)

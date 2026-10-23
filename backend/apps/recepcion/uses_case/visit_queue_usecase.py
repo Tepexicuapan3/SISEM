@@ -126,6 +126,11 @@ def lookup_patient(no_exp: str, historico: bool = False) -> dict:
         for fam in familiares
         if historico or fam.get("ESTATUS") == "ACTIVO"
     ]
+    # Plan identidad, bloque C2: recien nacidos provisionales (aun sin
+    # registro en SERMED), con su cd_familiar en el lugar del pk_num.
+    from apps.consulta_medica.services.newborn_service import miembros_recepcion
+
+    dependientes += miembros_recepcion(no_exp, historico=historico)
 
     if not historico and titular is None and not dependientes:
         raise VisitDomainError(

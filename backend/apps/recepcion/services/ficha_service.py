@@ -6,7 +6,7 @@ Usa docxtpl para renderizar la plantilla Word y docx2pdf para convertir.
 import logging
 import os
 import tempfile
-from datetime import datetime
+from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,24 @@ def _get_nombre_components(no_exp: str, pk_num: int) -> dict:
     except Exception:
         logger.exception("Error consultando expediente %s para ficha", no_exp)
 
+    # Plan identidad, bloque C2: quien no esta en SERMED (recien nacido
+    # provisional, familiar del legado) se toma de su registro en SIRES.
+    from apps.consulta_medica.services.patient_link_service import find_patient_by_record_key
+
+    paciente = find_patient_by_record_key(no_exp, pk_num)
+    if paciente is not None and (paciente.first_name or paciente.paternal_surname):
+        nacimiento = paciente.birth_date
+        edad = ""
+        if nacimiento:
+            hoy = date.today()
+            edad = str(hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day)))
+        return {
+            "a_paterno": paciente.paternal_surname or "",
+            "a_materno": paciente.maternal_surname or "",
+            "nombre_paciente": paciente.first_name or "",
+            "edad": edad,
+            "fecha_nac": str(nacimiento) if nacimiento else "",
+        }
     return {"a_paterno": "", "a_materno": "", "nombre_paciente": "", "edad": "", "fecha_nac": ""}
 
 
