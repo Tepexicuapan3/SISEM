@@ -7,7 +7,7 @@ mismo que permite editar usuarios (change auth-session-revocation).
 Se asigna SOLO a los roles administradores (is_admin=True, vigentes). Idempotente.
 El alta del codigo tambien esta en navigation_permissions_seed.
 """
-from django.db import migrations
+from django.db import migrations, models
 from django.utils import timezone
 
 CREDENCIALES = "admin:gestion:usuarios:credenciales"
@@ -50,8 +50,22 @@ def quitar(apps, schema_editor):
     permiso = Permisos.objects.filter(codigo=CREDENCIALES).first()
     if permiso is None:
         return
-    RelRolPermiso.objects.filter(id_permiso=permiso).delete()
-    permiso.delete()
+    # Al revertir, Django puede renderizar la clase historica de Permisos mas
+    # de una vez: filtrar por instancia o usar permiso.delete() (su cascada
+    # filtra por instancia) falla con "Must be Permisos instance". Se filtra
+    # por pk, se replica la cascada (CASCADE) y se borra directo; una relacion
+    # PROTECT sigue frenando el borrado por la llave foranea de la base.
+    RelRolPermiso.objects.filter(id_permiso_id=permiso.pk).delete()
+    for relacion in Permisos._meta.related_objects:
+        if relacion.on_delete is models.CASCADE:
+            relacion.related_model._default_manager.filter(
+                **{relacion.field.attname: permiso.pk}
+            ).delete()
+    schema_editor.execute(
+        f"DELETE FROM {schema_editor.quote_name(Permisos._meta.db_table)} "
+        f"WHERE {schema_editor.quote_name(Permisos._meta.pk.column)} = %s",
+        [permiso.pk],
+    )
 
 
 class Migration(migrations.Migration):

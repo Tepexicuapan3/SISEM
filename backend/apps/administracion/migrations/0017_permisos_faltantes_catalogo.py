@@ -182,18 +182,27 @@ def revertir(apps, schema_editor):
     # Solo se borran los que nadie referencia (rol, override, etc.), para no
     # destruir asignaciones hechas despues. Los enlaces de menu se quitan antes
     # (FK PROTECT).
+    # Al revertir, Django puede renderizar la clase historica de Permisos mas
+    # de una vez: filtrar por instancia o comparar clases con "is" falla
+    # ("Must be Permisos instance"). Se compara por label y se filtra por pk.
     relaciones = [
         r for r in Permisos._meta.related_objects
-        if r.related_model is not ModuloPermiso
+        if r.related_model._meta.label != ModuloPermiso._meta.label
     ]
     for permiso in Permisos.objects.filter(codigo__in=codigos):
         if any(
-            r.related_model._default_manager.filter(**{r.field.name: permiso}).exists()
+            r.related_model._default_manager.filter(**{r.field.attname: permiso.pk}).exists()
             for r in relaciones
         ):
             continue
-        ModuloPermiso.objects.filter(id_permiso=permiso).delete()
-        permiso.delete()
+        ModuloPermiso.objects.filter(id_permiso_id=permiso.pk).delete()
+        # Sin permiso.delete(): su cascada vuelve a filtrar relacionados por
+        # instancia (mismo error). Ya se verifico arriba que nadie lo referencia.
+        schema_editor.execute(
+            f"DELETE FROM {schema_editor.quote_name(Permisos._meta.db_table)} "
+            f"WHERE {schema_editor.quote_name(Permisos._meta.pk.column)} = %s",
+            [permiso.pk],
+        )
 
 
 class Migration(migrations.Migration):
