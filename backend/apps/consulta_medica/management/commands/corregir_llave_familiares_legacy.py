@@ -41,7 +41,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
         with track_run("corregir_llave_familiares_legacy", options=options, operator=options["operador"]) as run:
             conn = self.conectar_legado(options)
             try:
-                fmap = LegacyFamilyMap.from_legacy_connection(conn)
+                fmap = LegacyFamilyMap.from_legacy_connection(conn, options.get("base_familiares"))
             finally:
                 conn.close()
             self.stdout.write(

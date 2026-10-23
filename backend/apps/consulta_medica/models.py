@@ -1329,6 +1329,11 @@ class LegacyConsultationRecord(models.Model):
     legacy_folio = models.CharField(
         max_length=20, unique=True, db_column="folio_legado",
     )
+    # Base del legado de donde vino (dbclinicas actual o las anuales
+    # dbclinicas2015...). El folio incluye el año (CC25-1) y sigue siendo unico:
+    # el mismo folio desde OTRA base no se sobrescribe, va al reporte. Vacio =
+    # importado antes de registrar el origen (se adopta en la siguiente corrida).
+    legacy_source_db = models.CharField(max_length=64, db_column="db_origen", default="", blank=True)
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
@@ -1407,7 +1412,10 @@ class LegacyConsultationDiagnosis(models.Model):
     """
 
     id_legacy_diagnosis = models.BigAutoField(primary_key=True, db_column="id_diagnostico_legado")
-    legacy_id = models.BigIntegerField(unique=True, db_column="id_legado")
+    # det_hisnotcie.cd_detcie: autoincremental de CADA base del legado (las
+    # anuales arrancan en 1). Unico junto con la base de origen, no solo.
+    legacy_id = models.BigIntegerField(db_column="id_legado")
+    legacy_source_db = models.CharField(max_length=64, db_column="db_origen", default="", blank=True)
     record = models.ForeignKey(
         LegacyConsultationRecord,
         db_column="id_registro",
@@ -1431,6 +1439,11 @@ class LegacyConsultationDiagnosis(models.Model):
         indexes = [
             models.Index(fields=["legacy_folio"], name="cns_legacy_diag_folio_idx"),
             models.Index(fields=["cie_code_legacy"], name="cns_legacy_diag_cie_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["legacy_source_db", "legacy_id"], name="cns_legacy_diag_origen_id_uq",
+            ),
         ]
 
     def __str__(self) -> str:

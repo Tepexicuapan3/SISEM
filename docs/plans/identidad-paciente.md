@@ -1,6 +1,6 @@
 # Plan: identidad única del paciente (persona + afiliaciones)
 
-> Estado: **Bloque C (C1 + C2) en cierre** (2026-10-23). Fases 0, 1 y bloques A y B cerrados. Las decisiones de diseño se acordaron
+> Estado: **Bloque D (legado) en cierre** (2026-10-23). Fases 0, 1 y bloques A, B y C cerrados. Las decisiones de diseño se acordaron
 > con el usuario en la conversación del 2026-10-22; este archivo es el plan de
 > implementación y el inventario de la Fase 0. El documento de diseño detallado se
 > escribe aparte, cuando el usuario lo pida.
@@ -377,3 +377,40 @@ familiar real.
 4. Probar en Administración → Expedientes con un titular real.
 
 **Reversa:** `IDENTIDAD_RECIEN_NACIDOS=False` (la sección desaparece y la guardia 1 se apaga).
+
+---
+
+## Bloque D — Fase 8: legado en tres capas (toda la historia)
+
+> Decisión del usuario (2026-10-23): se trae la base actual **y** las anuales
+> `dbclinicas2015` … `dbclinicas2024_a`. Procedimiento completo en
+> `docs/runbooks/legado-tres-capas.md`.
+
+### Qué cambia
+
+| | Cambio |
+|---|---|
+| Notas (`cns_legacy_consultation_record`) | Nueva columna `db_origen`. El folio sigue único: el mismo folio desde **otra** base no se sobrescribe, sale como conflicto en el reporte |
+| Diagnósticos (`cns_legacy_consultation_diagnosis`) | `db_origen` y llave única `(db_origen, legacy_id)`: `cd_detcie` se reinicia en cada base |
+| Filas importadas antes | Las que no tienen origen se adoptan en la siguiente corrida de su base (sin duplicar) |
+| Comandos del legado | Nueva opción `--base-familiares` (o `LEGACY_MYSQL_FAMILY_DATABASE`): las bases anuales traducen a los familiares con el `cat_familiar` de la actual |
+
+### Despliegue
+
+1. Respaldo de la base principal.
+2. `git pull` y `docker compose up -d --build backend` (migración `consulta_medica 0060`).
+3. Seguir el runbook `legado-tres-capas.md`: capa 1 (pgloader a `sisem_legado`), y después
+   las capas 2 y 3 base por base, de la más vieja a la más nueva, siempre con `--dry-run` primero.
+
+Verificación (solo lectura):
+
+```sql
+SELECT db_origen, count(*) FROM cns_legacy_consultation_record GROUP BY db_origen ORDER BY 1;
+SELECT db_origen, count(*) FROM cns_legacy_consultation_diagnosis GROUP BY db_origen ORDER BY 1;
+```
+
+Antes de correr nada, todas las filas existentes salen con `db_origen = ''`; se adoptan al
+correr de nuevo la base actual.
+
+**Reversa:** `migrate consulta_medica 0059` (solo si todavía no se importaron dos bases con el
+mismo `cd_detcie`: la llave vieja no las admitiría).

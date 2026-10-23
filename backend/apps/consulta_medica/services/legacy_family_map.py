@@ -15,6 +15,7 @@ identifica solo por CD_FAMILIAR.
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Iterable
@@ -76,10 +77,19 @@ class LegacyFamilyMap:
         return fmap
 
     @classmethod
-    def from_legacy_connection(cls, conn) -> "LegacyFamilyMap":
-        """Lee cat_familiar del MySQL legado (solo SELECT)."""
+    def from_legacy_connection(cls, conn, database: str | None = None) -> "LegacyFamilyMap":
+        """
+        Lee cat_familiar del MySQL legado (solo SELECT). ``database``: otra base
+        del mismo servidor (las anuales se traducen con el cat_familiar actual).
+        El nombre se valida: no puede enlazarse como parametro.
+        """
+        query = LEGACY_FAMILY_QUERY
+        if database:
+            if not re.fullmatch(r"[A-Za-z0-9_]+", database):
+                raise ValueError(f"Nombre de base del legado invalido: {database!r}")
+            query = f"SELECT cd_familiar, no_expf, pk_num FROM `{database}`.cat_familiar"
         with conn.cursor() as cursor:
-            cursor.execute(LEGACY_FAMILY_QUERY)
+            cursor.execute(query)
             return cls.from_rows(cursor.fetchall())
 
     def record_key(self, no_exp: str, tp_paciente) -> tuple[int, int | None]:

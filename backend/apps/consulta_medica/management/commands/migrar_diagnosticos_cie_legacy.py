@@ -71,7 +71,11 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
         finally:
             conn.close()
 
-        self.stdout.write(f"Filas leidas de det_hisnotcie: {len(rows)}")
+        # cd_detcie se reinicia en cada base del legado (las anuales arrancan en
+        # 1): la llave es (base de origen, cd_detcie). Sin esto, el diagnostico 5
+        # de 2016 se sobrescribia con el 5 de 2025.
+        origen = (options.get("database") or "").strip()
+        self.stdout.write(f"Filas leidas de det_hisnotcie ({origen or 'sin base'}): {len(rows)}")
 
         self.stdout.write("Precargando mapa folio->record de LegacyConsultationRecord...")
         folio_a_record_id = dict(
@@ -80,13 +84,20 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
         self.stdout.write(f"  {len(folio_a_record_id)} folios en memoria.")
 
         if options["dry_run"]:
-            existentes = set(
-                LegacyConsultationDiagnosis.objects.values_list("legacy_id", flat=True)
-            )
+            existentes = {
+                (fuente, legacy_id): folio
+                for fuente, legacy_id, folio in LegacyConsultationDiagnosis.objects.values_list(
+                    "legacy_source_db", "legacy_id", "legacy_folio",
+                )
+            }
             sin_record = sum(
                 1 for row in rows if row["cd_snota"] not in folio_a_record_id
             )
-            creados = sum(1 for row in rows if row["cd_detcie"] not in existentes)
+            creados = sum(
+                1 for row in rows
+                if (origen, row["cd_detcie"]) not in existentes
+                and existentes.get(("", row["cd_detcie"])) != (row.get("cd_snota") or "").strip()
+            )
             self.stdout.write(self.style.SUCCESS(
                 f"[dry-run] Creados: {creados}, Actualizados: {len(rows) - creados}, "
                 f"Sin record asociado (huerfanos, se migran igual): {sin_record}, Errores: 0"
@@ -114,6 +125,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
 
             diagnosticos.append(LegacyConsultationDiagnosis(
                 legacy_id=legacy_id,
+                legacy_source_db=origen,
                 record_id=record_id,
                 legacy_folio=legacy_folio,
                 cie_code_legacy=cie_code,
@@ -126,10 +138,23 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
 
         for inicio in range(0, len(diagnosticos), _BATCH_SIZE):
             lote = diagnosticos[inicio:inicio + _BATCH_SIZE]
+            if origen:
+                # Filas importadas antes de registrar el origen: si son el MISMO
+                # diagnostico (mismo cd_detcie y folio) se adoptan; si el folio es
+                # otro, son de otra base y se conservan aparte.
+                folio_por_id = {d.legacy_id: d.legacy_folio for d in lote}
+                adoptar = [
+                    pk for pk, legacy_id, folio in LegacyConsultationDiagnosis.objects
+                    .filter(legacy_source_db="", legacy_id__in=list(folio_por_id))
+                    .values_list("pk", "legacy_id", "legacy_folio")
+                    if folio_por_id.get(legacy_id) == folio
+                ]
+                if adoptar:
+                    LegacyConsultationDiagnosis.objects.filter(pk__in=adoptar).update(legacy_source_db=origen)
             LegacyConsultationDiagnosis.objects.bulk_create(
                 lote,
                 update_conflicts=True,
-                unique_fields=["legacy_id"],
+                unique_fields=["legacy_source_db", "legacy_id"],
                 update_fields=_UPDATE_FIELDS,
             )
             self.stdout.write(

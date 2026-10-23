@@ -42,6 +42,8 @@ _UPDATE_FIELDS = [
     "addendum_legacy", "weight_legacy", "height_legacy", "blood_pressure_legacy",
     "pulse_legacy", "temperature_legacy", "respiration_legacy", "bmi_legacy",
     "glucose_legacy", "is_first_visit_legacy", "status_legacy",
+    # Una fila importada antes de registrar el origen ("") adopta la base actual.
+    "legacy_source_db",
 ]
 
 _QUERY = """
@@ -62,6 +64,19 @@ def _blank_to_none(value):
     if isinstance(value, str) and not value.strip():
         return None
     return value
+
+
+def _origen_de(existentes: dict, folio: str, origen: str) -> str:
+    """nuevo / actualizar (misma base o fila sin origen, que se adopta) /
+    conflicto: el folio ya vino de OTRA base del legado (p. ej. una anual
+    partida en _a/_b que reinicio el consecutivo). Un conflicto NO se
+    sobrescribe: es una nota clinica distinta con el mismo folio."""
+    previo = existentes.get(folio)
+    if previo is None:
+        return "nuevo"
+    if previo in ("", origen):
+        return "actualizar"
+    return "conflicto"
 
 
 def _first_visit_flag(sw_morbi):
@@ -99,20 +114,24 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                 rows = cursor.fetchall()
             # tp_paciente del legado es cat_familiar.cd_familiar, NO el PK_NUM de
             # SERMED: se traduce con el cat_familiar del legado (legacy_family_map).
-            family_map = LegacyFamilyMap.from_legacy_connection(conn)
+            family_map = LegacyFamilyMap.from_legacy_connection(conn, options.get("base_familiares"))
         finally:
             conn.close()
 
-        self.stdout.write(f"Filas leidas de his_notas: {len(rows)}")
+        # Base del legado (dbclinicas actual o una anual): trazabilidad y archivo.
+        origen = (options.get("database") or "").strip()
+        self.stdout.write(f"Filas leidas de his_notas ({origen or 'sin base'}): {len(rows)}")
 
         if options["dry_run"]:
-            existentes = set(
-                LegacyConsultationRecord.objects.values_list("legacy_folio", flat=True)
+            existentes = dict(
+                LegacyConsultationRecord.objects.values_list("legacy_folio", "legacy_source_db")
             )
-            creados = sum(1 for row in rows if row["cd_snota"] not in existentes)
+            conteo = {"nuevo": 0, "actualizar": 0, "conflicto": 0}
+            for row in rows:
+                conteo[_origen_de(existentes, (row.get("cd_snota") or "").strip(), origen)] += 1
             self.stdout.write(self.style.SUCCESS(
-                f"[dry-run] Creados: {creados}, Actualizados: {len(rows) - creados}, "
-                f"Errores: 0"
+                f"[dry-run] Creados: {conteo['nuevo']}, Actualizados: {conteo['actualizar']}, "
+                f"Conflictos de folio (no se sobrescriben): {conteo['conflicto']}"
             ))
             return
 
@@ -141,6 +160,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
 
             registros.append(LegacyConsultationRecord(
                 legacy_folio=legacy_folio,
+                legacy_source_db=origen,
                 no_exp=no_exp,
                 pk_num=pk_num,
                 consultation_date=fecha,
@@ -168,8 +188,27 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
 
         total_antes = LegacyConsultationRecord.objects.count()
 
+        conflictos = 0
         for inicio in range(0, len(registros), _BATCH_SIZE):
             lote = registros[inicio:inicio + _BATCH_SIZE]
+            existentes = dict(
+                LegacyConsultationRecord.objects
+                .filter(legacy_folio__in=[r.legacy_folio for r in lote])
+                .values_list("legacy_folio", "legacy_source_db")
+            )
+            seguros = []
+            for registro in lote:
+                if _origen_de(existentes, registro.legacy_folio, origen) == "conflicto":
+                    conflictos += 1
+                    errores.append(
+                        f"folio={registro.legacy_folio}: ya existe desde la base "
+                        f"{existentes[registro.legacy_folio]!r}; no se sobrescribe."
+                    )
+                else:
+                    seguros.append(registro)
+            lote = seguros
+            if not lote:
+                continue
             LegacyConsultationRecord.objects.bulk_create(
                 lote,
                 update_conflicts=True,
@@ -182,7 +221,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
 
         total_despues = LegacyConsultationRecord.objects.count()
         creados = total_despues - total_antes
-        actualizados = len(registros) - creados
+        actualizados = len(registros) - conflictos - creados
 
         prefix = ""
         self.stdout.write(self.style.SUCCESS(

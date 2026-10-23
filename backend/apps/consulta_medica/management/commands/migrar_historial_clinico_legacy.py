@@ -127,7 +127,7 @@ class Command(LegacyMysqlCommandMixin, BaseCommand):
                 rows = cursor.fetchall()
             # tp_paciente del legado es cat_familiar.cd_familiar, NO el PK_NUM de
             # SERMED: se traduce con el cat_familiar del legado (legacy_family_map).
-            family_map = LegacyFamilyMap.from_legacy_connection(conn)
+            family_map = LegacyFamilyMap.from_legacy_connection(conn, options.get("base_familiares"))
         finally:
             conn.close()
 

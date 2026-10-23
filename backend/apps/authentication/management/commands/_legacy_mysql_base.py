@@ -22,6 +22,13 @@ class LegacyMysqlCommandMixin:
         parser.add_argument("--user", default=os.getenv("LEGACY_MYSQL_USER"))
         parser.add_argument("--password", default=os.getenv("LEGACY_MYSQL_PASSWORD"))
         parser.add_argument("--database", default=os.getenv("LEGACY_MYSQL_DATABASE"))
+        # Plan identidad, bloque D: las bases anuales (dbclinicas2015...) pueden
+        # no tener cat_familiar o tener uno viejo; los familiares se traducen
+        # con el de la base actual. Vacio = la misma --database.
+        parser.add_argument(
+            "--base-familiares", default=os.getenv("LEGACY_MYSQL_FAMILY_DATABASE"),
+            help="Base del legado de donde leer cat_familiar (p. ej. la actual). Por defecto, --database.",
+        )
         self._legacy_mysql_require_database = require_database
 
     def conectar_legado(self, options: dict):
