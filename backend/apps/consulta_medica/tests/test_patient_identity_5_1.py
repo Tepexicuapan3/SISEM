@@ -42,20 +42,20 @@ class CurpRulesTests(SimpleTestCase):
         self.assertEqual(birth_date_from_curp(CURP_MUJER_2005), date(2005, 7, 20))
 
     def test_sexo_de_la_curp(self):
-        self.assertEqual(sex_from_curp(CURP_HOMBRE_1985), "H")
-        self.assertEqual(sex_from_curp(CURP_MUJER_1985), "M")
+        self.assertEqual(sex_from_curp(CURP_HOMBRE_1985), "M")
+        self.assertEqual(sex_from_curp(CURP_MUJER_1985), "F")
 
     def test_sexo_de_sermed_se_traduce_al_de_sires(self):
         # En SERMED M = Masculino; en la CURP y en SIRES M = Mujer.
-        self.assertEqual(sermed_sex_to_sires("M"), "H")
-        self.assertEqual(sermed_sex_to_sires("F"), "M")
-        self.assertEqual(sermed_sex_to_sires(" f "), "M")
+        self.assertEqual(sermed_sex_to_sires("M"), "M")
+        self.assertEqual(sermed_sex_to_sires("F"), "F")
+        self.assertEqual(sermed_sex_to_sires(" f "), "F")
         self.assertIsNone(sermed_sex_to_sires("X"))
         self.assertIsNone(sermed_sex_to_sires(None))
 
     def test_detecta_diferencias_con_los_datos_del_paciente(self):
-        self.assertEqual(curp_mismatches(CURP_HOMBRE_1985, birth_date=date(1985, 3, 15), sex="H"), {})
-        errores = curp_mismatches(CURP_HOMBRE_1985, birth_date=date(1990, 1, 1), sex="M")
+        self.assertEqual(curp_mismatches(CURP_HOMBRE_1985, birth_date=date(1985, 3, 15), sex="M"), {})
+        errores = curp_mismatches(CURP_HOMBRE_1985, birth_date=date(1990, 1, 1), sex="F")
         self.assertEqual(set(errores), {"birthDate", "sex"})
         # Lo que no se conoce no se compara.
         self.assertEqual(curp_mismatches(CURP_HOMBRE_1985), {})
@@ -104,7 +104,7 @@ class PatientCurpEditRulesTests(TestCase):
         return Patient.objects.get(no_exp=self.no_exp, pk_num=self.pk_num)
 
     def test_capturar_curp_la_marca_como_capturada_y_queda_en_la_bitacora(self):
-        payload = self._update({"curp": CURP_HOMBRE_1985, "sex": "H"})
+        payload = self._update({"curp": CURP_HOMBRE_1985, "sex": "M"})
 
         self.assertEqual(payload["curpSource"], Patient.CurpSource.CAPTURED)
         entrada = ChangeLog.objects.get()
@@ -114,34 +114,34 @@ class PatientCurpEditRulesTests(TestCase):
         self.assertEqual(entrada.new_value["curp"], CURP_HOMBRE_1985)
 
     def test_sobrescribir_un_valor_es_correccion(self):
-        self._update({"curp": CURP_HOMBRE_1985, "sex": "H"})
-        self._update({"curp": CURP_MUJER_1985, "sex": "M"})
+        self._update({"curp": CURP_HOMBRE_1985, "sex": "M"})
+        self._update({"curp": CURP_MUJER_1985, "sex": "F"})
 
         ultima = ChangeLog.objects.order_by("-id_change").first()
         self.assertEqual(ultima.reason, ChangeLog.Reason.CORRECTION)
         self.assertEqual(ultima.previous_value["curp"], CURP_HOMBRE_1985)
 
     def test_borrar_la_curp_capturada_limpia_el_origen(self):
-        self._update({"curp": CURP_HOMBRE_1985, "sex": "H"})
+        self._update({"curp": CURP_HOMBRE_1985, "sex": "M"})
         payload = self._update({"curp": None})
 
         self.assertIsNone(payload["curp"])
         self.assertIsNone(payload["curpSource"])
 
     def test_la_curp_que_viene_de_sermed_no_se_edita(self):
-        self._update({"sex": "H"})
+        self._update({"sex": "M"})
         Patient.objects.filter(pk=self._patient().pk).update(
             curp=CURP_HOMBRE_1985, curp_source=Patient.CurpSource.SERMED,
         )
 
         with self.assertRaises(VisitDomainError) as ctx:
-            self._update({"curp": CURP_MUJER_1985, "sex": "M"})
+            self._update({"curp": CURP_MUJER_1985, "sex": "F"})
 
         self.assertEqual(ctx.exception.code, "CURP_FROM_SERMED")
         self.assertEqual(self._patient().curp, CURP_HOMBRE_1985)
 
     def test_mandar_la_misma_curp_de_sermed_no_es_una_edicion(self):
-        self._update({"sex": "H"})
+        self._update({"sex": "M"})
         Patient.objects.filter(pk=self._patient().pk).update(
             curp=CURP_HOMBRE_1985, curp_source=Patient.CurpSource.SERMED,
         )
@@ -155,7 +155,7 @@ class PatientCurpEditRulesTests(TestCase):
         Patient.objects.create(no_exp="OTRO1", pk_num=0, curp=CURP_HOMBRE_1985)
 
         with self.assertRaises(VisitDomainError) as ctx:
-            self._update({"curp": CURP_HOMBRE_1985, "sex": "H"})
+            self._update({"curp": CURP_HOMBRE_1985, "sex": "M"})
 
         self.assertEqual(ctx.exception.code, "CURP_ALREADY_REGISTERED")
         self.assertEqual(ctx.exception.status_code, 409)
@@ -164,20 +164,20 @@ class PatientCurpEditRulesTests(TestCase):
 
     def test_curp_que_no_coincide_con_el_sexo_se_rechaza(self):
         with self.assertRaises(VisitDomainError) as ctx:
-            self._update({"curp": CURP_HOMBRE_1985, "sex": "M"})
+            self._update({"curp": CURP_HOMBRE_1985, "sex": "F"})
 
         self.assertEqual(ctx.exception.status_code, 422)
         self.assertIn("sex", ctx.exception.details)
         self.assertFalse(ChangeLog.objects.exists())
 
     def test_cambiar_solo_el_sexo_tambien_se_valida_contra_la_curp(self):
-        self._update({"curp": CURP_HOMBRE_1985, "sex": "H"})
+        self._update({"curp": CURP_HOMBRE_1985, "sex": "M"})
 
         with self.assertRaises(VisitDomainError):
-            self._update({"sex": "M"})
+            self._update({"sex": "F"})
 
     def test_curp_que_no_coincide_con_la_fecha_de_nacimiento_se_rechaza(self):
-        self._update({"sex": "H"})
+        self._update({"sex": "M"})
         Patient.objects.filter(pk=self._patient().pk).update(birth_date=date(1990, 1, 1))
 
         with self.assertRaises(VisitDomainError) as ctx:
@@ -186,7 +186,7 @@ class PatientCurpEditRulesTests(TestCase):
         self.assertIn("birthDate", ctx.exception.details)
 
     def test_el_contrato_expone_la_identidad_nueva(self):
-        payload = self._update({"sex": "H"})
+        payload = self._update({"sex": "M"})
 
         for clave in ("uuid", "legacyFamilyCode", "paternalSurname", "maternalSurname",
                       "firstName", "birthDate", "curpSource"):

@@ -1,6 +1,6 @@
 # Plan: identidad única del paciente (persona + afiliaciones)
 
-> Estado: **Fase 1 en curso** (2026-10-22). Fase 0 cerrada. Las decisiones de diseño se acordaron
+> Estado: **Bloque A (fases 2 y 3) en cierre** (2026-10-22). Fases 0 y 1 cerradas. Las decisiones de diseño se acordaron
 > con el usuario en la conversación del 2026-10-22; este archivo es el plan de
 > implementación y el inventario de la Fase 0. El documento de diseño detallado se
 > escribe aparte, cuando el usuario lo pida.
@@ -222,3 +222,51 @@ ORDER BY fch_evento DESC;
   `bloquear` es justamente lo que los evita.
 
 **Reversa:** `IDENTIDAD_VERIFICAR_SERMED=apagado`.
+
+---
+
+## Bloque A — Fases 2 (sexo) y 3 (persona)
+
+> A partir de aquí se trabaja por bloques (acordado 2026-10-22): tests por módulo
+> durante el trabajo, suite completa al cerrar el bloque, commit y push al cierre.
+
+### Qué cambia
+
+| | Cambio | Visible |
+|---|---|---|
+| Sexo | Convención de SERMED: `M` Masculino, `F` Femenino, `X` No binario. Desde la CURP: `H→M`, `M→F`, `X→X` (backend y frontend) | La ficha muestra "Masculino/Femenino" |
+| Datos | Migración `0056`: convierte `cns_paciente.sexo` y `cns_paciente_revision.sexo_anterior` | No |
+| Familiares | La sync copia `cd_sexo` de `cat_familiar`. Si el familiar tiene CURP capturada, manda la CURP y la diferencia va al reporte | Al apretar Actualizar |
+| Persona | `cns_persona` (`0057`, una persona por registro con el mismo uuid) e `id_persona` obligatorio (`0058`). Todo registro nuevo nace con su persona (`Patient.save`) | No |
+
+**Fecha de corte del sexo** (la bitácora inmutable conserva H/M en las filas anteriores):
+
+```sql
+SELECT applied FROM django_migrations
+WHERE app = 'consulta_medica' AND name = '0056_sexo_convencion_sermed';
+```
+
+Antes de esa fecha, en `cns_bitacora_cambios`, `H` = Hombre y `M` = Mujer.
+
+`storage/expedientes-ddl/004_cd_sexo_cat_familiar.sql` agrega `cd_sexo` solo a volúmenes
+nuevos: la réplica del servidor ya lo tiene.
+
+### Verificación en el servidor (después del despliegue)
+
+```sql
+-- 1) Sexo convertido: solo M, F, X o vacío (ninguna H)
+SELECT sexo, count(*) FROM cns_paciente GROUP BY sexo ORDER BY sexo;
+
+-- 2) Cada registro tiene su persona con el mismo uuid (las dos deben dar 0)
+SELECT count(*) FROM cns_paciente WHERE id_persona IS NULL;
+SELECT count(*) FROM cns_paciente p JOIN cns_persona s ON s.id_persona = p.id_persona
+WHERE s.uuid <> p.uuid;
+
+-- 3) Fecha de corte
+SELECT applied FROM django_migrations
+WHERE app = 'consulta_medica' AND name = '0056_sexo_convencion_sermed';
+```
+
+**Reversa:** `migrate consulta_medica 0055` (la 0058 vuelve opcional `id_persona`; la
+0057 quita `id_persona` y `cns_persona`; la 0056 convierte M/F→H/M). Hay que desplegar
+también el código anterior: el actual exige la persona.

@@ -137,6 +137,18 @@ def plan_employee(patient: Patient, emp: SermedEmployee) -> PatientPlan:
 def plan_family_member(patient: Patient, member: SermedFamilyMember) -> PatientPlan:
     plan = PatientPlan(patient)
     _copy_identity(plan, member)
+    # Sexo de SERMED (plan identidad, Fase 2). Si el familiar tiene CURP
+    # capturada en SIRES, manda la CURP (la emite RENAPO), igual que con el
+    # titular, y la diferencia va al reporte para Capital Humano.
+    sex = sermed_sex_to_sires(member.sex_code)
+    curp = normalize_curp(patient.curp)
+    if curp:
+        curp_sex = sex_from_curp(curp)
+        if sex and curp_sex != sex:
+            plan.report(SEXO_DE_CURP, f"CD_SEXO de SERMED es {member.sex_code!r} y la CURP capturada "
+                                      f"indica '{curp_sex}': se conserva el de la CURP.")
+        sex = curp_sex
+    _set_if_changed(plan, "sex", sex)
     if member.holder_no_exp and member.holder_no_exp != str(patient.no_exp):
         plan.report(CAMBIO_TITULAR, f"En SERMED su titular es {member.holder_no_exp}; en SIRES, {patient.no_exp}.")
     plan.register_pk_num = True

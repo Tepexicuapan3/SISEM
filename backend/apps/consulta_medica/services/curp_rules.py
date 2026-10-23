@@ -24,7 +24,10 @@ CURP_REGEX = re.compile(
 )
 
 # CD_SEXO de SERMED (Oracle) -> sexo de SIRES / CURP.
-_SERMED_SEX = {"M": "H", "F": "M"}
+# SIRES usa la convencion de SERMED (M = Masculino, F = Femenino, X = No
+# binario) desde la migracion 0056. La CURP usa la de RENAPO: se convierte.
+_SERMED_SEX = {"M": "M", "F": "F"}
+_CURP_SEX = {"H": "M", "M": "F", "X": "X"}
 
 
 def normalize_curp(raw: str | None) -> str | None:
@@ -45,12 +48,12 @@ def birth_date_from_curp(curp: str) -> date | None:
 
 
 def sex_from_curp(curp: str) -> str:
-    """Letra de sexo de la CURP: H, M o X."""
-    return curp[10]
+    """Sexo de SIRES segun la posicion 11 de la CURP: H -> M, M -> F, X -> X."""
+    return _CURP_SEX.get(curp[10], curp[10])
 
 
 def sermed_sex_to_sires(cd_sexo: str | None) -> str | None:
-    """CD_SEXO de SERMED (F/M) al sexo de SIRES (M/H). Valor desconocido -> None."""
+    """CD_SEXO de SERMED (M/F) al sexo de SIRES (misma convencion). Desconocido -> None."""
     return _SERMED_SEX.get((cd_sexo or "").strip().upper())
 
 

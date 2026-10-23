@@ -18,6 +18,10 @@ class CatFamiliar(models.Model):
     no_edad         = models.IntegerField(null=True, blank=True, db_column='no_edad')
     fec_vig         = models.DateField(null=True, blank=True, db_column='fec_vig')
     cd_clinica      = models.CharField(max_length=10,  null=True, blank=True, db_column='cd_clinica')
+    # CD_SEXO existe en Oracle CAT_FAMILIAR (verificado 2026-10-22 con
+    # generar_ddl_oracle --tablas-sync) y en la replica real; para volumenes
+    # nuevos: storage/expedientes-ddl/004. M = Masculino, F = Femenino.
+    cd_sexo         = models.CharField(max_length=255, null=True, blank=True, db_column='cd_sexo')
     # Sin curp A PROPOSITO: Oracle nunca tuvo CURP para cat_familiar y agregar
     # columnas rompe el sync. El CURP del paciente vive en cns_paciente.curp (historia clinica unificada).
     fec_ult_actualizacion = models.DateTimeField(null=True, blank=True, db_column='fec_ult_actualizacion')

@@ -1,7 +1,7 @@
 import uuid
 
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.consulta_medica.storage import study_result_upload_to
@@ -923,10 +923,32 @@ class AllergyRevision(models.Model):
 
 
 class Sex(models.TextChoices):
-    # Mismas letras que la posicion 11 del CURP (RENAPO), incluida X.
-    MALE = "H", "Hombre"
-    FEMALE = "M", "Mujer"
+    # Convencion de SERMED (M/F), decidida con el usuario 2026-10-22 (plan
+    # identidad, Fase 2). La CURP (posicion 11) usa otra: H->M, M->F, X->X,
+    # ver curp_rules.sex_from_curp. Antes de la migracion 0056 SIRES guardaba
+    # H/M: en cns_bitacora_cambios (inmutable) las filas anteriores a la fecha
+    # en que se aplico 0056 (django_migrations.applied) usan H = Hombre y M = Mujer.
+    MALE = "M", "Masculino"
+    FEMALE = "F", "Femenino"
     NON_BINARY = "X", "No binario"
+
+
+class Person(models.Model):
+    """
+    PERSONA (plan identidad, Fase 3): la persona real. Cada registro de
+    cns_paciente es UNA afiliacion (como trabajador, como hijo, como recien
+    nacido provisional); varias afiliaciones de la misma persona comparten
+    id_persona. Vincular = igualar id_persona (Fase 7); la historia clinica no
+    se mueve. El uuid de intercambio NOM-024 es de la persona.
+    """
+
+    id_person = models.BigAutoField(primary_key=True, db_column="id_persona")
+    uuid = models.UUIDField(db_column="uuid", default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_persona"
 
 
 class Patient(models.Model):
@@ -953,7 +975,13 @@ class Patient(models.Model):
 
     id_patient = models.BigAutoField(primary_key=True, db_column="id_paciente")
     # Identificador para compartir con otras instituciones (NOM-024). Nunca cambia.
+    # Al nacer, la persona del registro recibe el mismo uuid.
     uuid = models.UUIDField(db_column="uuid", default=uuid.uuid4, unique=True, editable=False)
+    # Persona a la que pertenece esta afiliacion. Nunca nulo: cada registro nace
+    # con su propia persona (save) y la vinculacion la iguala con otra.
+    person = models.ForeignKey(
+        Person, db_column="id_persona", on_delete=models.PROTECT, related_name="records",
+    )
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     # 0 = titular. NULL = familiar sin PK_NUM en SERMED (solo cd_familiar).
     pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
@@ -1022,6 +1050,16 @@ class Patient(models.Model):
                 name="cns_paciente_con_identificador",
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        # Todo registro nace con su propia persona, venga de donde venga (la
+        # puerta central, el legado, una correccion de llaves o un test). Si el
+        # alta falla, la persona se revierte con la misma transaccion.
+        if self.person_id is not None:
+            return super().save(*args, **kwargs)
+        with transaction.atomic(using=kwargs.get("using") or "default"):
+            self.person = Person.objects.create(uuid=self.uuid, created_by_id=self.created_by_id)
+            return super().save(*args, **kwargs)
 
 
 class PatientIdentifier(models.Model):

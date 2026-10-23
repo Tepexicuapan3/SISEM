@@ -38,6 +38,7 @@ class SermedFamilyMember:
     beneficiary_type: str | None
     valid_until: date | None
     clinic_code: str | None
+    sex_code: str | None = None   # CD_SEXO de SERMED: M = Masculino, F = Femenino
 
 
 def _text(value) -> str | None:
@@ -87,5 +88,6 @@ class ReplicaSermedSource:
                 beneficiary_type=_text(row.tp_der),
                 valid_until=row.fec_vig,
                 clinic_code=_text(row.cd_clinica),
+                sex_code=_text(row.cd_sexo),
             )
         return result

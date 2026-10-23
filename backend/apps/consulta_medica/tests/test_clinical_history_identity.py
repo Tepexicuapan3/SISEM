@@ -36,22 +36,22 @@ class ClinicalHistoryIdentityApiTests(_ConsultationAuditApiTestBase):
         )
 
     def test_saves_and_returns_curp_and_sex(self):
-        response = self._patch({"curp": VALID_CURP, "sex": "H"})
+        response = self._patch({"curp": VALID_CURP, "sex": "M"})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["curp"], VALID_CURP)
-        self.assertEqual(response.data["sex"], "H")
+        self.assertEqual(response.data["sex"], "M")
         read = self.client.get(self.url)
         self.assertEqual(read.data["curp"], VALID_CURP)
-        self.assertEqual(read.data["sex"], "H")
+        self.assertEqual(read.data["sex"], "M")
 
     def test_normalizes_curp_to_uppercase_and_blank_to_null(self):
         # VALID_CURP es de hombre: el sexo tiene que coincidir con su letra 11 (5.1).
-        normalized = self._patch({"curp": f"  {VALID_CURP.lower()} ", "sex": "H"})
+        normalized = self._patch({"curp": f"  {VALID_CURP.lower()} ", "sex": "M"})
         cleared = self._patch({"curp": "", "sex": ""})
 
         self.assertEqual(normalized.data["curp"], VALID_CURP)
-        self.assertEqual(normalized.data["sex"], "H")
+        self.assertEqual(normalized.data["sex"], "M")
         self.assertIsNone(cleared.data["curp"])
         self.assertIsNone(cleared.data["sex"])
 
@@ -63,13 +63,13 @@ class ClinicalHistoryIdentityApiTests(_ConsultationAuditApiTestBase):
         self.assertFalse(Patient.objects.filter(no_exp=self.no_exp).exclude(curp=None).exists())
 
     def test_overwriting_curp_is_versioned_and_audited(self):
-        self._patch({"curp": VALID_CURP, "sex": "H"})
+        self._patch({"curp": VALID_CURP, "sex": "M"})
 
-        self._patch({"curp": "PEGJ850315MDFRRN01", "sex": "M"})
+        self._patch({"curp": "PEGJ850315MDFRRN01", "sex": "F"})
 
         revision = PatientRevision.objects.get()
         self.assertEqual(revision.previous_curp, VALID_CURP)
-        self.assertEqual(revision.previous_sex, "H")
+        self.assertEqual(revision.previous_sex, "M")
         event = AuditoriaEvento.objects.filter(accion="PatientProfileUpdated").latest("id_evento")
         self.assertEqual(event.datos_antes["curp"], VALID_CURP)
         self.assertEqual(sorted(event.datos_despues["changedFields"]), ["curp", "sex"])
@@ -83,7 +83,7 @@ class ClinicalHistoryIdentityApiTests(_ConsultationAuditApiTestBase):
         self.assertEqual(response.data["phone"], legacy_phone)
 
     def test_allergies_free_text_is_no_longer_exposed_nor_writable(self):
-        response = self._patch({"allergies": "Penicilina", "sex": "M"})
+        response = self._patch({"allergies": "Penicilina", "sex": "F"})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("allergies", response.data)

@@ -19,16 +19,17 @@ describe("patient-identity (5.1: CURP y datos de SERMED)", () => {
     expect(curpBirthDate("SIN CURP")).toBeNull();
   });
 
-  it("lee el sexo de la CURP", () => {
-    expect(curpSex(CURP_HOMBRE_1985)).toBe("H");
-    expect(curpSex(CURP_MUJER_2005)).toBe("M");
+  it("lee el sexo de la CURP y lo convierte a la convencion de SERMED", () => {
+    // CURP: H = Hombre, M = Mujer. SIRES: M = Masculino, F = Femenino.
+    expect(curpSex(CURP_HOMBRE_1985)).toBe("M");
+    expect(curpSex(CURP_MUJER_2005)).toBe("F");
     expect(curpSex("no es curp")).toBeNull();
   });
 
   it("detecta diferencias con el sexo y la fecha del paciente", () => {
-    expect(curpMismatches(CURP_HOMBRE_1985, { sex: "H", birthDate: "1985-03-15" })).toEqual({});
-    const errores = curpMismatches(CURP_HOMBRE_1985, { sex: "M", birthDate: "1990-01-01" });
-    expect(errores.sex).toContain("hombre");
+    expect(curpMismatches(CURP_HOMBRE_1985, { sex: "M", birthDate: "1985-03-15" })).toEqual({});
+    const errores = curpMismatches(CURP_HOMBRE_1985, { sex: "F", birthDate: "1990-01-01" });
+    expect(errores.sex).toContain("masculino");
     expect(errores.birthDate).toContain("15/03/1985");
     // Lo que no se conoce no se compara.
     expect(curpMismatches(CURP_HOMBRE_1985, { sex: null, birthDate: null })).toEqual({});

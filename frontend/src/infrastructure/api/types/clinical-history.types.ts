@@ -3,7 +3,8 @@
  */
 
 /** H = Hombre, M = Mujer, X = No binario (mismas letras que el CURP). */
-export type PatientSex = "H" | "M" | "X";
+/** Convencion de SERMED: M = Masculino, F = Femenino, X = No binario. */
+export type PatientSex = "M" | "F" | "X";
 
 /** HISTORIA_CLINICA: cabecera unica del paciente (solo lectura). */
 export interface ClinicalHistory {

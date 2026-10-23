@@ -1,10 +1,13 @@
 import type { CurpSource, PatientProfile, PatientSex } from "@api/types";
 
 export const PATIENT_SEX_LABELS: Record<PatientSex, string> = {
-  H: "Hombre",
-  M: "Mujer",
+  M: "Masculino",
+  F: "Femenino",
   X: "No binario",
 };
+
+/** La CURP (RENAPO) usa H = Hombre y M = Mujer: se convierte a la de SIRES. */
+const CURP_SEX: Record<string, PatientSex> = { H: "M", M: "F", X: "X" };
 
 /** Origen de la CURP (documento "Historia Clinica Unificada", 5.1). */
 export const CURP_SOURCE_LABELS: Record<CurpSource, string> = {
@@ -35,10 +38,10 @@ export const curpBirthDate = (curp: string): string | null => {
   return `${century}${value.slice(4, 6)}-${value.slice(6, 8)}-${value.slice(8, 10)}`;
 };
 
-/** Letra de sexo de la CURP (posicion 11): H, M o X. */
+/** Sexo de SIRES segun la posicion 11 de la CURP (H -> M, M -> F, X -> X). */
 export const curpSex = (curp: string): PatientSex | null => {
   const value = normalizeCurp(curp);
-  return isValidCurp(value) ? (value[10] as PatientSex) : null;
+  return isValidCurp(value) ? CURP_SEX[value[10]] ?? null : null;
 };
 
 const formatDate = (iso: string) => {

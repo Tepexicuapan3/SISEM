@@ -76,7 +76,7 @@ class TitularSyncTests(TestCase):
         )
         self.assertEqual(self.titular.birth_date, NACIMIENTO)
         # En SERMED M = Masculino; en SIRES H = Hombre.
-        self.assertEqual(self.titular.sex, "H")
+        self.assertEqual(self.titular.sex, "M")
         self.assertEqual(self.titular.curp, CURP_H)
         self.assertEqual(self.titular.curp_source, Patient.CurpSource.SERMED)
         self.assertEqual(result.discrepancies, [])
@@ -93,7 +93,7 @@ class TitularSyncTests(TestCase):
 
         self.titular.refresh_from_db()
         self.assertIsNone(self.titular.curp)
-        self.assertEqual(self.titular.sex, "H")
+        self.assertEqual(self.titular.sex, "M")
         self.assertEqual(_kinds(result), [sync.CURP_INVALIDA])
 
     def test_curp_con_otra_fecha_no_se_carga_y_va_al_reporte(self):
@@ -101,7 +101,7 @@ class TitularSyncTests(TestCase):
 
         self.titular.refresh_from_db()
         self.assertIsNone(self.titular.curp)
-        self.assertEqual(self.titular.sex, "M")  # el de SERMED, traducido
+        self.assertEqual(self.titular.sex, "F")  # el de SERMED (F = Femenino)
         self.assertEqual(_kinds(result), [sync.CURP_FECHA])
 
     def test_misma_fecha_y_otro_sexo_gana_la_curp(self):
@@ -109,7 +109,7 @@ class TitularSyncTests(TestCase):
 
         self.titular.refresh_from_db()
         self.assertEqual(self.titular.curp, CURP_M)
-        self.assertEqual(self.titular.sex, "M")  # M de la CURP = Mujer
+        self.assertEqual(self.titular.sex, "F")  # M de la CURP = Mujer -> F
         self.assertEqual(_kinds(result), [sync.SEXO_DE_CURP])
 
     def test_curp_de_otro_paciente_no_se_carga(self):
