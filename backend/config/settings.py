@@ -188,6 +188,9 @@ IDENTIDAD_PACIENTE = {
     "LECTURA_OPERATIVA_POR_ID": config("IDENTIDAD_LECTURA_OPERATIVA_POR_ID", default=False, cast=bool),
     # Fase 6: alta de recien nacidos provisionales.
     "RECIEN_NACIDOS": config("IDENTIDAD_RECIEN_NACIDOS", default=False, cast=bool),
+    # Vigencia del provisional: regla del legado, hoy + N dias (ope_param.no_diasvig
+    # de la clinica 7 = 60). Al vincularse manda la de Capital Humano.
+    "DIAS_VIGENCIA_RN": config("IDENTIDAD_DIAS_VIGENCIA_RN", default=60, cast=int),
     # Fase 7: deteccion de coincidencias y vinculacion de registros.
     "VINCULACION": config("IDENTIDAD_VINCULACION", default=False, cast=bool),
 }

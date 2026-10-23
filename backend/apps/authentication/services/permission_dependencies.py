@@ -41,6 +41,10 @@ EXPLICIT_PERMISSION_DEPENDENCIES: Dict[str, List[str]] = {
     # se declara explicita.
     "admin:autorizadores:designacion:write": ["admin:autorizadores:designacion:read"],
     "admin:autorizadores:designacion:global": ["admin:autorizadores:designacion:write"],
+    # Plan identidad, bloque C: registrar recien nacidos y vincular registros
+    # se hacen desde la pantalla de expedientes (lectura).
+    "admin:gestion:expedientes:recien_nacidos": ["admin:gestion:expedientes:read"],
+    "admin:gestion:expedientes:vincular": ["admin:gestion:expedientes:read"],
 }
 
 
@@ -87,6 +91,8 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     # distintos (change auditoria-sync-expedientes).
     "admin.expedientes.read": {"allOf": ["admin:gestion:expedientes:read"]},
     "admin.expedientes.update": {"allOf": ["admin:gestion:expedientes:update"]},
+    "admin.expedientes.recienNacidos": {"allOf": ["admin:gestion:expedientes:recien_nacidos"]},
+    "admin.expedientes.vincular": {"allOf": ["admin:gestion:expedientes:vincular"]},
     "admin.roles.read": {"allOf": ["admin:gestion:roles:read"]},
     "admin.roles.create": {"allOf": ["admin:gestion:roles:create"]},
     "admin.roles.update": {"allOf": ["admin:gestion:roles:update"]},

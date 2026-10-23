@@ -1,6 +1,6 @@
 # Plan: identidad única del paciente (persona + afiliaciones)
 
-> Estado: **Bloque B (fases 4 y 5) en cierre** (2026-10-23). Fases 0, 1 y bloque A cerrados. Las decisiones de diseño se acordaron
+> Estado: **Bloque C1 en cierre** (2026-10-23). Fases 0, 1 y bloques A y B cerrados. Las decisiones de diseño se acordaron
 > con el usuario en la conversación del 2026-10-22; este archivo es el plan de
 > implementación y el inventario de la Fase 0. El documento de diseño detallado se
 > escribe aparte, cuando el usuario lo pida.
@@ -327,3 +327,41 @@ persona por registro, la ficha muestra Masculino/Femenino).
 
 **Reversa:** interruptor en `False`; las columnas nuevas son opcionales y el código
 anterior las ignora.
+
+✅ **Bloque B cerrado (2026-10-23):** desplegado; `vincular_id_paciente` creó 1 registro
+y vinculó 8 filas; visitas, citas y signos vitales sin `id_paciente` = 0.
+
+---
+
+## Bloque C1 — Recién nacido provisional y vinculación (Administración → Expedientes)
+
+Decisiones del usuario (2026-10-23): **dos permisos nuevos** y todo en **Administración →
+Expedientes** (el equivalente del `body-registro.jsp` del legado).
+
+### Qué hace
+
+| | |
+|---|---|
+| Alta | Desde el expediente del titular: apellidos, nombre, fecha de nacimiento, sexo, madre, orden de nacimiento (gemelos), CURP opcional. Registro de `cns_paciente` con `pk_num` NULL y `cd_familiar` de la secuencia de provisionales (≥ 9 000 001; el legado llega a ~52 896) + `cns_paciente_provisional`. Clínica de adscripción del titular. Vigencia hoy + `IDENTIDAD_DIAS_VIGENCIA_RN` (60) |
+| Candidatos | Familiares de SERMED del mismo titular con la misma fecha de nacimiento y el mismo sexo, sin descartar |
+| "Es el mismo" | El registro de SERMED del bebé pasa a la **misma persona** que el provisional. No se mueve nada: la historia se ve por persona. El provisional queda `B` (vinculado) |
+| "No es" | `cns_persona_descarte`: no vuelve a proponerse |
+| Guardias | Candado por titular y control de provisional repetido; **guardia 2**: si SERMED ya tiene al bebé, avisa (registrar igual solo si es otro bebé, p. ej. gemelos); **guardia 1**: no se abre el registro de un familiar de SERMED que coincide con un provisional pendiente sin vincular primero |
+| Grupo sanguíneo | `conflict: true` si dos registros vinculados de la misma persona tienen grupos distintos |
+| Bitácora | `REGISTRO RN`, `LIGA RN`, `DESCARTE LIGA RN` en `cns_bitacora_cambios` |
+
+Permisos (migración `administracion 0018`, asignados a quien tiene `update`):
+`admin:gestion:expedientes:recien_nacidos` y `admin:gestion:expedientes:vincular`.
+
+Pendiente para **C2**: check-in del provisional en recepción (recepción elige por `pk_num`
+y el provisional no tiene: hay que pasar el `id_paciente`).
+
+### Despliegue
+
+1. Respaldo de la base principal.
+2. `git pull` y `docker compose up -d --build backend frontend` (migraciones
+   `consulta_medica 0059` y `administracion 0018`).
+3. Encender: `IDENTIDAD_RECIEN_NACIDOS=True` en el `.env` y `docker compose up -d backend`.
+4. Probar en Administración → Expedientes con un titular real.
+
+**Reversa:** `IDENTIDAD_RECIEN_NACIDOS=False` (la sección desaparece y la guardia 1 se apaga).

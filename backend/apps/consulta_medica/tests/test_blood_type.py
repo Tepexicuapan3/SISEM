@@ -45,7 +45,7 @@ class BloodTypeApiTests(_UnifiedApiBase):
         response = self.client.get(self._url("blood-type"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, {"current": None, "history": []})
+        self.assertEqual(response.data, {"current": None, "history": [], "conflict": False})
 
     def test_primera_captura_queda_vigente_y_no_va_a_la_bitacora(self):
         response = self._put({"bloodTypeId": _type_id("O+"), "source": "D"})

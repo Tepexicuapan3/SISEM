@@ -59,6 +59,56 @@ export interface EmpleadoResumen {
 
 export type BuscarPorNombreResponse = EmpleadoResumen[];
 
+// ── Recien nacidos provisionales (plan identidad, bloque C1) ──────────────
+
+/** Familiar de SERMED que podria ser el recien nacido (misma fecha y sexo). */
+export interface CandidatoSermed {
+  pkNum: number;
+  nombre: string;
+  fechaNacimiento: string | null;
+  sexo: "M" | "F" | "X" | null;
+  parentesco: string | null;
+  /** SIRES ya le habia abierto registro (se vincula igual, sin mover nada). */
+  yaTieneRegistro: boolean;
+}
+
+export interface RecienNacidoProvisional {
+  idPaciente: number;
+  cdFamiliar: number;
+  nombre: string;
+  fechaNacimiento: string | null;
+  sexo: "M" | "F" | "X" | null;
+  curp: string | null;
+  madre: string | null;
+  orden: number;
+  /** A = provisional, B = vinculado a SERMED. */
+  estatus: "A" | "B";
+  clinica: string | null;
+  vigencia: string;
+  vigente: boolean;
+  pkNumSermed: number | null;
+  candidatos: CandidatoSermed[];
+}
+
+export interface RecienNacidosResponse {
+  /** Interruptor IDENTIDAD_RECIEN_NACIDOS: apagado, la seccion no se muestra. */
+  habilitado: boolean;
+  provisionales: RecienNacidoProvisional[];
+}
+
+export interface RegistrarRecienNacidoRequest {
+  paternalSurname: string;
+  maternalSurname: string;
+  firstName: string;
+  birthDate: string;
+  sex: "M" | "F" | "X";
+  motherName?: string;
+  birthOrder?: number;
+  curp?: string;
+  /** SERMED ya tiene un hijo con esa fecha y sexo y aun asi es otro bebe (p. ej. gemelos). */
+  confirmarAunqueExista?: boolean;
+}
+
 export interface ActualizarExpedienteRequest {
   expediente: string;
 }

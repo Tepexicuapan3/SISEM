@@ -24,6 +24,11 @@ from .views.rbac_views import (
 
 from .views.rbac_session_views import UserForceLogoutView, UserUnlockView
 from .views.expediente_view import ExpedienteView, ActualizarExpedienteView, BuscarPorNombreView
+from .views.recien_nacido_view import (
+    DescartarCoincidenciaView,
+    RecienNacidosView,
+    VincularRecienNacidoView,
+)
 from .views.user_import_views import (
     UserImportConfirmView,
     UserImportJobStatusView,
@@ -114,6 +119,12 @@ urlpatterns = [
     path('expedientes/', ExpedienteView.as_view(), name='buscar'),
     path('expedientes/actualizar/', ActualizarExpedienteView.as_view(), name='actualizar'),
     path('expedientes/buscar-nombre/', BuscarPorNombreView.as_view(), name='buscar-nombre'),
+    # Plan identidad, bloque C1: recien nacidos provisionales y su vinculacion.
+    path('expedientes/recien-nacidos/<int:id_paciente>/vincular/', VincularRecienNacidoView.as_view(),
+         name='recien-nacido-vincular'),
+    path('expedientes/recien-nacidos/<int:id_paciente>/descartar/', DescartarCoincidenciaView.as_view(),
+         name='recien-nacido-descartar'),
+    path('expedientes/<str:no_exp>/recien-nacidos/', RecienNacidosView.as_view(), name='recien-nacidos'),
     path('users/empleados-sermed/<str:no_exp>', EmpleadoSermedLookupView.as_view(), name='rbac-empleado-sermed-lookup'),
     path("users/notify", UsersNotifyView.as_view(), name="rbac-users-notify"),
     path("users/export", UserExportView.as_view(), name="rbac-users-export"),

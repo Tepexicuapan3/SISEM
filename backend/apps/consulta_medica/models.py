@@ -1062,6 +1062,70 @@ class Patient(models.Model):
             return super().save(*args, **kwargs)
 
 
+class ProvisionalPatient(models.Model):
+    """
+    PACIENTE_PROVISIONAL (plan identidad, Fase 6): datos propios del recien
+    nacido que se atiende antes de que Capital Humano lo registre en SERMED.
+    El registro de cns_paciente (1:1) lleva no_exp del titular, pk_num NULL y
+    un cd_familiar de la secuencia de provisionales (>= 9 000 001, por
+    encima del legado). Igual que el legado (body-registro.jsp), solo hijos.
+
+    sw_status: A = provisional pendiente, B = ya vinculado a su registro de
+    SERMED (Fase 7). Se actualiza en la misma transaccion que la vinculacion.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "A", "Provisional"
+        LINKED = "B", "Vinculado a SERMED"
+
+    patient = models.OneToOneField(
+        Patient, db_column="id_paciente", on_delete=models.PROTECT,
+        primary_key=True, related_name="provisional",
+    )
+    holder_no_exp = models.CharField(max_length=20, db_column="no_exp_titular", db_index=True)
+    mother_name = models.CharField(max_length=150, db_column="ds_madre", null=True, blank=True)
+    # 1, 2... en partos multiples: con gemelos del mismo sexo la fecha y el sexo no alcanzan.
+    birth_order = models.PositiveSmallIntegerField(db_column="no_orden_nacimiento", default=1)
+    status = models.CharField(max_length=1, db_column="sw_status", choices=Status.choices, default=Status.PENDING)
+    # Clinica de adscripcion del titular al registrar (como el legado).
+    clinic_code = models.CharField(max_length=10, db_column="cd_clinica", null=True, blank=True)
+    # Regla del legado: hoy + N dias (IDENTIDAD_PACIENTE["DIAS_VIGENCIA_RN"], 60).
+    valid_until = models.DateField(db_column="fe_vigencia")
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+    linked_pk_num = models.IntegerField(db_column="pk_num_sermed", null=True, blank=True)
+    linked_at = models.DateTimeField(db_column="fch_liga", null=True, blank=True)
+    linked_by_id = models.BigIntegerField(db_column="usr_liga", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_paciente_provisional"
+
+
+class PersonDiscard(models.Model):
+    """
+    cns_persona_descarte (plan identidad, Fase 7): "no es la misma persona".
+    Una coincidencia descartada no vuelve a proponerse para ese registro.
+    """
+
+    id_discard = models.BigAutoField(primary_key=True, db_column="id")
+    patient = models.ForeignKey(
+        Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="discards",
+    )
+    candidate_no_exp = models.CharField(max_length=20, db_column="no_exp_candidato")
+    candidate_pk_num = models.IntegerField(db_column="pk_num_candidato")
+    reason = models.CharField(max_length=255, db_column="motivo", null=True, blank=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_persona_descarte"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["patient", "candidate_no_exp", "candidate_pk_num"], name="cns_persona_descarte_uq",
+            ),
+        ]
+
+
 class PatientIdentifier(models.Model):
     """
     IDENTIFICADOR_PACIENTE (documento "Historia Clinica Unificada", 5.1):
@@ -1987,6 +2051,7 @@ class ChangeLog(models.Model):
         PATIENT_OPENED = "ALTA PACIENTE", "Primera vez que el paciente se atiende en SIRES"
         NEWBORN_REGISTRATION = "REGISTRO RN", "Registro de recien nacido"
         NEWBORN_LINK = "LIGA RN", "Liga de recien nacido con SERMED"
+        NEWBORN_DISCARD = "DESCARTE LIGA RN", "Coincidencia descartada: no es la misma persona"
         MERGE = "FUSION", "Fusion de pacientes"
         CAPTURE = "CAPTURA", "Captura de un dato vacio"
         CORRECTION = "CORRECCION", "Correccion"

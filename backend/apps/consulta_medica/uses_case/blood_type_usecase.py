@@ -51,9 +51,13 @@ def _payload(patient):
         .order_by("-created_at", "-id_blood_type")
     )
     current = next((record for record in records if record.status == BloodType.Status.ACTIVE), None)
+    activos = {record.blood_type_id for record in records if record.status == BloodType.Status.ACTIVE}
     return {
         "current": _to_contract(current) if current else None,
         "history": [_to_contract(record) for record in records if record is not current],
+        # Plan identidad, Fase 7: dos registros vinculados de la misma persona
+        # con grupos distintos. Nunca se elige uno en silencio: se alerta.
+        "conflict": len(activos) > 1,
     }
 
 

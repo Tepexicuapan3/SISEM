@@ -10,6 +10,7 @@ import { useActualizarExpediente } from "../mutations/useActualizarExpediente";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import { formatCatalogDateTime } from "@features/admin/modules/catalogos/shared/utils/catalog-format";
 import { ApiError } from "@api/utils/errors";
+import { RecienNacidosPanel } from "../components/RecienNacidosPanel";
 import type {
   EmpleadoResumen,
   UltimaActualizacionExpediente,
@@ -375,6 +376,9 @@ function ExpedienteDetalle({
           </tbody>
         </table>
       </div>
+
+      {/* Plan identidad, bloque C1: hijos aun sin registro en SERMED. */}
+      <RecienNacidosPanel noExp={busqueda} />
     </>
   );
 }

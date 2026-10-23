@@ -252,6 +252,15 @@ NAVIGATION_PERMISSIONS_SEED += [
     ("admin:gestion:expedientes:update", "Actualizar expedientes desde SERMED (sincronizacion con Oracle)"),
 ]
 
+# Decimoseptima tanda (plan identidad del paciente, bloque C): dos permisos a
+# proposito separados. Vincular une la historia de dos registros: lo pueden
+# tener menos personas que registrar. La migracion administracion 0018 los
+# asigna a los roles que actualizan expedientes; despues se ajustan a mano.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:gestion:expedientes:recien_nacidos", "Registrar recien nacidos provisionales (sin registro en SERMED)"),
+    ("admin:gestion:expedientes:vincular", "Vincular registros de la misma persona (recien nacido con SERMED)"),
+]
+
 # Decimoseptima tanda (change `auth-session-revocation`): credenciales de
 # usuarios (restablecer contrasena, forzar cierre de sesion, desbloquear)
 # separadas de admin:gestion:usuarios:update. La migracion administracion 0016

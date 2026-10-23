@@ -62,6 +62,11 @@ class PatientRepository:
             if existing:
                 return existing, False
             verificar_alta(no_exp, pk_num, origen=origen, created_by_id=created_by_id)
+            # Plan identidad, guardia 1: un familiar que coincide con un recien
+            # nacido provisional pendiente se vincula antes de abrirle registro.
+            from apps.consulta_medica.services.newborn_service import verificar_rn_pendiente
+
+            verificar_rn_pendiente(no_exp, pk_num, origen=origen)
             patient, created = Patient.objects.get_or_create(no_exp=no_exp, pk_num=pk_num)
             if created:
                 PatientRepository._register_identifiers(patient, created_by_id)
