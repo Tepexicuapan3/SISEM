@@ -127,6 +127,10 @@ export interface PatientMember {
   cdClinica:  string | null;
   /** Data URI (image/jpeg;base64) lista para <img src>, o null si no hay foto cargada. */
   foto:       string | null;
+  /** Solo recien nacidos provisionales: orden de nacimiento (gemelos pueden llamarse igual). */
+  orden?:     number;
+  /** Solo provisionales y solo si el titular no es la madre. */
+  madre?:     string | null;
 }
 
 export interface PatientLookupResponse {

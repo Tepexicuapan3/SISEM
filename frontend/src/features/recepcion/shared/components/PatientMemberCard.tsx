@@ -72,6 +72,9 @@ export function PatientMemberCard({ member, selected, onSelect }: PatientMemberC
           {parentesco}
           {member.edad != null ? ` · ${member.edad} años` : ""}
         </p>
+        {member.madre ? (
+          <p className="truncate text-xs text-txt-muted">Madre: {member.madre}</p>
+        ) : null}
       </div>
 
       {/* Badge: Titular o Familiar */}

@@ -335,8 +335,23 @@ class RecepcionProvisionalTests(_SermedSimulado, TestCase):
         miembro = next(m for m in resultado["dependientes"] if m.get("provisional"))
         self.assertEqual(miembro["pkNum"], self.clave)
         self.assertEqual(miembro["estatus"], "ACTIVO")
-        self.assertEqual(miembro["parentesco"], "RECIEN NACIDO (PROVISIONAL)")
+        self.assertEqual(miembro["parentesco"], "HIJO(A) RECIEN NACIDO (PROVISIONAL) · ORDEN 1")
         self.assertEqual(miembro["idPaciente"], self.provisional["idPaciente"])
+
+    def test_gemelos_con_el_mismo_nombre_se_distinguen_por_el_orden(self):
+        rn.registrar_recien_nacido("40041", paterno="PEREZ", materno="LOPEZ", nombre=None,
+                                   fecha_nacimiento=NACIMIENTO, sexo="F", orden=2, madre="MARIA LOPEZ")
+        miembros = rn.miembros_recepcion("40041", historico=False)
+        self.assertEqual({m["nombre"] for m in miembros if m["orden"] == 2}, {"RECIEN NACIDO PEREZ LOPEZ"})
+        self.assertEqual(sorted(m["orden"] for m in miembros), [1, 2])
+
+    def test_la_madre_se_muestra_solo_si_el_titular_es_hombre(self):
+        ProvisionalPatient.objects.update(mother_name="MARIA LOPEZ")
+        self.assertEqual(rn.miembros_recepcion("40041", historico=False)[0]["madre"], "MARIA LOPEZ")
+        titular_mujer = SimpleNamespace(**{**vars(TITULAR), "cd_sexo": "F"})
+        with mock.patch.object(rn, "_titular_en_sermed", return_value=titular_mujer):
+            self.assertIsNone(rn.miembros_recepcion("40041", historico=False)[0]["madre"])
+            self.assertTrue(rn.listar("40041")["titularEsMujer"])
 
     def test_vencido_no_aparece_en_check_in_pero_si_en_historico(self):
         from apps.recepcion.uses_case import visit_queue_usecase

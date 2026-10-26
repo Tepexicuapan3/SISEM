@@ -227,11 +227,14 @@ def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
     if not habilitado():
         return []
     miembros = []
-    provisionales = (
+    provisionales = list(
         ProvisionalPatient.objects.select_related("patient")
         .filter(holder_no_exp=normalizar_no_exp(no_exp), status=ProvisionalPatient.Status.PENDING)
         .order_by("patient__birth_date", "birth_order")
     )
+    # Gemelos pueden llamarse igual ("RECIEN NACIDO"): el orden va siempre y la
+    # madre solo si el titular no es ella (si es la titular, seria redundante).
+    titular_es_madre = bool(provisionales) and _titular_es_mujer(no_exp)
     for provisional in provisionales:
         activo = vigente(provisional)
         if not historico and not activo:
@@ -248,12 +251,14 @@ def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
             "nombre": _nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name),
             "edad": edad,
             "fechaNac": nacimiento.isoformat() if nacimiento else None,
-            "parentesco": "RECIEN NACIDO (PROVISIONAL)",
+            "parentesco": f"HIJO(A) RECIEN NACIDO (PROVISIONAL) · ORDEN {provisional.birth_order}",
             "estatus": "ACTIVO" if activo else "NO ACTIVO",
             "cdClinica": provisional.clinic_code,
             "foto": None,
             "provisional": True,
             "idPaciente": paciente.pk,
+            "orden": provisional.birth_order,
+            "madre": None if titular_es_madre else provisional.mother_name,
         })
     return miembros
 
@@ -271,6 +276,15 @@ def _es_pareja(familiar) -> bool:
     if descripcion:
         return descripcion.startswith(PAREJA_DESCRIPCIONES)
     return (familiar.tp_der or "").strip().upper()[:1] in PAREJA_CODIGOS
+
+
+def _titular_es_mujer(no_exp: str) -> bool:
+    """Si SERMED no responde se asume que no: mostrar la madre de mas no hace dano."""
+    try:
+        titular = _titular_en_sermed(no_exp)
+    except VisitDomainError:
+        return False
+    return titular is not None and sermed_sex_to_sires(titular.cd_sexo) == "F"
 
 
 def _madre_sugerida(no_exp: str) -> str | None:
@@ -307,6 +321,7 @@ def listar(no_exp: str) -> dict:
         "habilitado": activo,
         "provisionales": [_contract(p) for p in provisionales],
         "madreSugerida": _madre_sugerida(no_exp) if activo else None,
+        "titularEsMujer": _titular_es_mujer(no_exp) if activo else False,
     }
 
 

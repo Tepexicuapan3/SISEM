@@ -252,10 +252,12 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
         <div key={rn.idPaciente} className="space-y-2 rounded-md border p-3 text-sm">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="font-medium">{rn.nombre}</span>
-            <span className="text-txt-muted">cd_familiar {rn.cdFamiliar}</span>
+            <span>Hijo(a) del titular</span>
+            <span>Orden {rn.orden}</span>
             <span>{fecha(rn.fechaNacimiento)}</span>
             <span>{sexo(rn.sexo)}</span>
-            {rn.orden > 1 && <span>Orden {rn.orden}</span>}
+            {!data.titularEsMujer && rn.madre && <span>Madre: {rn.madre}</span>}
+            <span className="text-txt-muted">cd_familiar {rn.cdFamiliar}</span>
             {rn.estatus === "B" ? (
               <Badge variant="stable">Vinculado a SERMED (pk {rn.pkNumSermed})</Badge>
             ) : rn.vigente ? (

@@ -96,6 +96,8 @@ export interface RecienNacidosResponse {
   provisionales: RecienNacidoProvisional[];
   /** Propuesta desde SERMED: la titular, o su unica esposa/concubina vigente. */
   madreSugerida: string | null;
+  /** La titular es la madre: mostrar el nombre de la madre seria redundante. */
+  titularEsMujer: boolean;
 }
 
 export interface RegistrarRecienNacidoRequest {
