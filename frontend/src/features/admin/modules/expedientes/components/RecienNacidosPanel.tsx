@@ -164,7 +164,14 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
           Recién nacidos provisionales
         </h2>
         {puedeRegistrar && !abierto && (
-          <Button variant="outline" size="sm" onClick={() => setAbierto(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setForm({ ...FORM_VACIO, motherName: data.madreSugerida ?? "" });
+              setAbierto(true);
+            }}
+          >
             Registrar recién nacido
           </Button>
         )}
@@ -178,7 +185,7 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
           </p>
           <Input placeholder="Apellido paterno" {...campo("paternalSurname")} />
           <Input placeholder="Apellido materno" {...campo("maternalSurname")} />
-          <Input placeholder="Nombre(s) *" {...campo("firstName")} required />
+          <Input placeholder="Nombre(s) — si aún no tiene, queda RECIEN NACIDO" {...campo("firstName")} />
           <Input type="date" aria-label="Fecha de nacimiento" {...campo("birthDate")} required />
           <select
             aria-label="Sexo"
@@ -191,7 +198,14 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
             <option value="X">{PATIENT_SEX_LABELS.X}</option>
           </select>
           <Input type="number" min={1} aria-label="Orden de nacimiento" title="1, 2... en partos múltiples" {...campo("birthOrder")} />
-          <Input placeholder="Nombre de la madre" {...campo("motherName")} />
+          <div className="space-y-1">
+            <Input placeholder="Nombre de la madre (opcional)" {...campo("motherName")} />
+            {data.madreSugerida && form.motherName === data.madreSugerida && (
+              <p className="text-xs text-txt-muted">
+                Propuesta desde SERMED (titular o esposa/concubina). Corrígela si no es la madre.
+              </p>
+            )}
+          </div>
           <Input placeholder="CURP (opcional)" {...campo("curp")} />
 
           {enSermed && (

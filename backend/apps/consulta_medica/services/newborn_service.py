@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 # familiares del legado sin PK_NUM): asi nunca puede confundirse con un
 # familiar real. El legado llega a ~52 896.
 BASE_CD_FAMILIAR = 100_000_000
+NOMBRE_SIN_ASIGNAR = "RECIEN NACIDO"
 
 
 def es_clave_provisional(pk_num) -> bool:
@@ -257,13 +258,56 @@ def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
     return miembros
 
 
+# Pareja del titular en SERMED. En la replica cd_parentesco trae la DESCRIPCION
+# ("ESPOSA (O)", "CONCUBINA (O)") y el codigo va en tp_der (E, C, H1, H2...; el
+# legado usa su primera letra). Manda la descripcion: hay filas con codigo
+# cruzado (p. ej. un "HIJO (A)" con tp_der E). El codigo solo si no hay descripcion.
+PAREJA_DESCRIPCIONES = ("ESPOSA", "CONCUBINA")
+PAREJA_CODIGOS = ("E", "C")
+
+
+def _es_pareja(familiar) -> bool:
+    descripcion = (familiar.cd_parentesco or "").strip().upper()
+    if descripcion:
+        return descripcion.startswith(PAREJA_DESCRIPCIONES)
+    return (familiar.tp_der or "").strip().upper()[:1] in PAREJA_CODIGOS
+
+
+def _madre_sugerida(no_exp: str) -> str | None:
+    """
+    Propuesta para el campo "madre" del alta (texto libre, editable): el bebe se
+    liga al titular, que puede ser el padre. Titular mujer -> ella; titular
+    hombre con UNA sola esposa/concubina vigente -> ella; si no, nada.
+    """
+    try:
+        titular = _titular_en_sermed(no_exp)
+    except VisitDomainError:
+        return None
+    if titular is not None and sermed_sex_to_sires(titular.cd_sexo) == "F":
+        return _nombre(titular.ds_paterno, titular.ds_materno, titular.ds_nombre)
+    hoy = timezone.localdate()
+    parejas = [
+        f for f in (_familiares_sermed(no_exp) or [])
+        if _es_pareja(f) and (f.fec_vig is None or f.fec_vig >= hoy)
+    ]
+    if len(parejas) == 1:
+        pareja = parejas[0]
+        return _nombre(pareja.ds_paterno, pareja.ds_materno, pareja.ds_nombre)
+    return None
+
+
 def listar(no_exp: str) -> dict:
     no_exp = normalizar_no_exp(no_exp)
     provisionales = (
         ProvisionalPatient.objects.filter(holder_no_exp=no_exp)
         .select_related("patient").order_by("status", "patient__birth_date", "birth_order")
     )
-    return {"habilitado": habilitado(), "provisionales": [_contract(p) for p in provisionales]}
+    activo = habilitado()
+    return {
+        "habilitado": activo,
+        "provisionales": [_contract(p) for p in provisionales],
+        "madreSugerida": _madre_sugerida(no_exp) if activo else None,
+    }
 
 
 # ── Alta ─────────────────────────────────────────────────────────────────────
@@ -274,10 +318,11 @@ def registrar_recien_nacido(
 ) -> dict:
     _exigir_habilitado()
     no_exp = normalizar_no_exp(no_exp)
-    paterno, materno, nombre = _texto(paterno), _texto(materno), _texto(nombre)
+    paterno, materno = _texto(paterno), _texto(materno)
+    # Un recien nacido muchas veces todavia no tiene nombre: nunca queda vacio
+    # (se lista en recepcion, ficha e impresion). El nombre real llega con SERMED.
+    nombre = _texto(nombre) or NOMBRE_SIN_ASIGNAR
     errores = {}
-    if not nombre:
-        errores["firstName"] = ["El nombre es obligatorio."]
     if not paterno and not materno:
         errores["paternalSurname"] = ["Se requiere al menos un apellido."]
     if not fecha_nacimiento:

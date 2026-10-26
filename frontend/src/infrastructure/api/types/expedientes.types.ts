@@ -94,6 +94,8 @@ export interface RecienNacidosResponse {
   /** Interruptor IDENTIDAD_RECIEN_NACIDOS: apagado, la seccion no se muestra. */
   habilitado: boolean;
   provisionales: RecienNacidoProvisional[];
+  /** Propuesta desde SERMED: la titular, o su unica esposa/concubina vigente. */
+  madreSugerida: string | null;
 }
 
 export interface RegistrarRecienNacidoRequest {

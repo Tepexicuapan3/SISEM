@@ -21,12 +21,19 @@ ENCENDIDO = override_settings(IDENTIDAD_PACIENTE={
     "VERIFICAR_SERMED": "apagado", "LECTURA_OPERATIVA_POR_ID": False,
     "RECIEN_NACIDOS": True, "VINCULACION": False, "DIAS_VIGENCIA_RN": 60,
 })
-TITULAR = SimpleNamespace(no_exp="40041", cd_clinica="3")
+TITULAR = SimpleNamespace(no_exp="40041", cd_clinica="3", cd_sexo="M",
+                          ds_paterno="PEREZ", ds_materno="GOMEZ", ds_nombre="JUAN")
 
 
-def _familiar(pk_num, fe_nac=NACIMIENTO, sexo="F", nombre="ANA"):
+# Como viene en la replica (verificado 2026-10-26): descripcion en cd_parentesco, codigo en tp_der.
+PARENTESCOS = {"H": ("HIJO (A)", "H1"), "E": ("ESPOSA (O)", "E"), "C": ("CONCUBINA (O)", "C")}
+
+
+def _familiar(pk_num, fe_nac=NACIMIENTO, sexo="F", nombre="ANA", parentesco="H", fec_vig=None, tp_der=None):
+    descripcion, codigo = PARENTESCOS[parentesco]
     return SimpleNamespace(pk_num=pk_num, fe_nac=fe_nac, cd_sexo=sexo, ds_paterno="PEREZ",
-                           ds_materno="LOPEZ", ds_nombre=nombre, cd_parentesco="H")
+                           ds_materno="LOPEZ", ds_nombre=nombre, cd_parentesco=descripcion,
+                           tp_der=tp_der or codigo, fec_vig=fec_vig)
 
 
 class _SermedSimulado:
@@ -72,7 +79,7 @@ class AltaTests(_SermedSimulado, TestCase):
     def test_valida_campos_y_curp(self):
         with self.assertRaises(VisitDomainError) as error:
             self._registrar(nombre="", paterno="", materno="", sexo="Z", fecha_nacimiento=date(2999, 1, 1))
-        self.assertEqual(set(error.exception.details), {"firstName", "paternalSurname", "sex", "birthDate"})
+        self.assertEqual(set(error.exception.details), {"paternalSurname", "sex", "birthDate"})
         with self.assertRaises(VisitDomainError) as error:
             self._registrar(curp="NO-ES-CURP")
         self.assertIn("curp", error.exception.details)
@@ -98,6 +105,13 @@ class AltaTests(_SermedSimulado, TestCase):
         self.assertEqual(error.exception.details["candidatos"][0]["pkNum"], 777)
         # Con confirmacion explicita (p. ej. gemelos) se registra igual.
         self._registrar(confirmar_aunque_exista=True)
+
+    def test_sin_nombre_queda_recien_nacido(self):
+        resultado = self._registrar(nombre="  ")
+        paciente = Patient.objects.get(pk=resultado["idPaciente"])
+        self.assertEqual(paciente.first_name, "RECIEN NACIDO")
+        cambio = ChangeLog.objects.get(table="cns_paciente", reason="REGISTRO RN")
+        self.assertEqual(cambio.new_value["first_name"], "RECIEN NACIDO")
 
     @override_settings(IDENTIDAD_PACIENTE={"RECIEN_NACIDOS": False, "VERIFICAR_SERMED": "apagado"})
     def test_apagado_no_registra(self):
@@ -198,6 +212,49 @@ class ApiRecienNacidosTests(TestCase):
         self.assertEqual(respuesta.status_code, 403)
         self.assertEqual(autorizar.call_args[0][1], "admin:gestion:expedientes:recien_nacidos")
         extender.assert_not_called()
+
+
+@ENCENDIDO
+class MadreSugeridaTests(_SermedSimulado, TestCase):
+    """El bebe se liga al titular, que puede ser el padre: la madre solo se propone."""
+
+    def _sugerida(self):
+        return rn.listar("40041")["madreSugerida"]
+
+    def test_titular_mujer_es_la_madre(self):
+        titular = SimpleNamespace(**{**vars(TITULAR), "cd_sexo": "F", "ds_nombre": "LAURA"})
+        with mock.patch.object(rn, "_titular_en_sermed", return_value=titular):
+            self.assertEqual(self._sugerida(), "LAURA PEREZ GOMEZ")
+
+    def test_titular_hombre_con_una_esposa_vigente(self):
+        self.familiares = [_familiar(10, parentesco="E", nombre="MARIA"), _familiar(11, nombre="HIJA")]
+        self.assertEqual(self._sugerida(), "MARIA PEREZ LOPEZ")
+
+    def test_concubina_tambien_cuenta(self):
+        self.familiares = [_familiar(10, parentesco="C", nombre="ROSA")]
+        self.assertEqual(self._sugerida(), "ROSA PEREZ LOPEZ")
+
+    def test_dos_parejas_o_ninguna_no_sugiere(self):
+        self.familiares = [_familiar(10, parentesco="E"), _familiar(11, parentesco="C")]
+        self.assertIsNone(self._sugerida())
+        self.familiares = [_familiar(11)]
+        self.assertIsNone(self._sugerida())
+
+    def test_manda_la_descripcion_no_el_codigo_cruzado(self):
+        # Datos reales: un "HIJO (A)" con tp_der E y una "ESPOSA (O)" con tp_der C.
+        self.familiares = [_familiar(10, parentesco="H", tp_der="E"),
+                           _familiar(11, parentesco="E", tp_der="C", nombre="MARIA")]
+        self.assertEqual(self._sugerida(), "MARIA PEREZ LOPEZ")
+
+    def test_pareja_con_vigencia_vencida_no_cuenta(self):
+        vencida = timezone.localdate() - timedelta(days=1)
+        self.familiares = [_familiar(10, parentesco="E", fec_vig=vencida)]
+        self.assertIsNone(self._sugerida())
+
+    def test_sermed_caido_no_rompe_el_panel(self):
+        caido = VisitDomainError("EXPEDIENTES_NO_DISPONIBLE", "x", 503)
+        with mock.patch.object(rn, "_titular_en_sermed", side_effect=caido):
+            self.assertIsNone(self._sugerida())
 
 
 @ENCENDIDO
