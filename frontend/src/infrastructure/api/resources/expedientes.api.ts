@@ -74,4 +74,12 @@ export const expedientesAPI = {
     );
     return res.data;
   },
+
+  extenderVigenciaRecienNacido: async (idPaciente: number, motivo?: string): Promise<RecienNacidoProvisional> => {
+    const res = await apiClient.post<RecienNacidoProvisional>(
+      `/expedientes/recien-nacidos/${idPaciente}/extender-vigencia/`,
+      { motivo },
+    );
+    return res.data;
+  },
 };

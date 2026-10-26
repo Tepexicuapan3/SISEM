@@ -378,6 +378,27 @@ familiar real.
 
 **Reversa:** `IDENTIDAD_RECIEN_NACIDOS=False` (la sección desaparece y la guardia 1 se apaga).
 
+### Extender vigencia del provisional (2026-10-26)
+
+Primer registro en el servidor verificado (paciente 10, expediente 40041). Hueco detectado: la
+vigencia del provisional se fijaba al registrar y nada la cambiaba; si Capital Humano tarda más de
+60 días, el bebé deja de aparecer en recepción.
+
+El legado lo resuelve a mano (`body-registro.jsp`, acción 8, «MODIFICA VIGENCIA DERECHOHABIENTE»):
+nueva vigencia hoy + `ope_param.no_diasvig`, sin fecha libre, con la anterior en `mov_familiar`.
+SIRES hace lo mismo:
+
+| | |
+|---|---|
+| Dónde | Administración → Expedientes → Recién nacidos, botón «Extender vigencia» (aparece si venció o faltan 15 días o menos) |
+| Permiso | `admin:gestion:expedientes:recien_nacidos`, el mismo del alta |
+| Regla | Solo provisionales pendientes; nueva vigencia = hoy + `DIAS_VIGENCIA_RN`; si no la alarga, `VIGENCIA_SIN_CAMBIO` |
+| Rastro | `cns_bitacora_cambios`, motivo `EXTENSION VIGENCIA RN`, con la vigencia anterior, la nueva y el motivo |
+| Endpoint | `POST /api/v1/expedientes/recien-nacidos/<id>/extender-vigencia/` |
+
+Sin migraciones: solo `git pull` y `docker compose up -d --build backend frontend` (y después
+`docker compose restart proxy`).
+
 ---
 
 ## Bloque D — Fase 8: legado en tres capas (toda la historia)

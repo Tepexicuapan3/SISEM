@@ -6,6 +6,7 @@ GET  /api/v1/expedientes/<no_exp>/recien-nacidos/            lista + candidatos 
 POST /api/v1/expedientes/<no_exp>/recien-nacidos/            alta (recien_nacidos)
 POST /api/v1/expedientes/recien-nacidos/<id>/vincular/       "es el mismo" (vincular)
 POST /api/v1/expedientes/recien-nacidos/<id>/descartar/      "no es" (vincular)
+POST /api/v1/expedientes/recien-nacidos/<id>/extender-vigencia/  hoy + 60 (recien_nacidos)
 """
 from datetime import date
 
@@ -107,3 +108,21 @@ class DescartarCoincidenciaView(_AccionSobreProvisional):
             request, id_paciente,
             lambda pk, pk_num, user: newborn_service.descartar(pk, pk_num, motivo=motivo, user=user),
         )
+
+
+class ExtenderVigenciaRecienNacidoView(APIView):
+    """Mismo permiso que el alta: en el legado la misma pantalla registra y renueva."""
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, id_paciente):
+        user, auth_error = _authorize(request, PERMISO_REGISTRAR, require_csrf=True)
+        if auth_error:
+            return auth_error
+        try:
+            resultado = newborn_service.extender_vigencia(
+                id_paciente, motivo=request.data.get("motivo"), user=user,
+            )
+        except VisitDomainError as exc:
+            return _error(request, exc)
+        return Response(resultado, status=status.HTTP_200_OK)

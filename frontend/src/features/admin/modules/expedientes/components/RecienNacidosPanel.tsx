@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Baby, Link2, X } from "lucide-react";
+import { Baby, CalendarPlus, Link2, X } from "lucide-react";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Badge } from "@shared/ui/badge";
@@ -15,6 +15,7 @@ import type {
 } from "@api/types/expedientes.types";
 import {
   useDescartarCoincidencia,
+  useExtenderVigenciaRecienNacido,
   useRecienNacidos,
   useRegistrarRecienNacido,
   useVincularRecienNacido,
@@ -27,11 +28,21 @@ const MENSAJES: Record<string, string> = {
   CANDIDATO_NO_VALIDO: "Ese familiar ya no coincide con el recién nacido (o se descartó).",
   RN_YA_VINCULADO: "Este recién nacido ya está vinculado a SERMED.",
   RECIEN_NACIDOS_DESHABILITADO: "El registro de recién nacidos no está habilitado.",
+  VIGENCIA_SIN_CAMBIO: "La vigencia ya llega a esa fecha: no hay nada que extender.",
   PERMISSION_DENIED: "No tienes permiso para esta acción.",
 };
 const mensaje = (error: unknown, fallback: string) => getCatalogErrorMessage(error, fallback, MENSAJES);
 
 const fecha = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "—");
+
+// El boton de extender aparece cuando ya vencio o le quedan pocos dias.
+const DIAS_AVISO_VIGENCIA = 15;
+const diasParaVencer = (iso: string) => {
+  const [anio, mes, dia] = iso.split("-").map(Number);
+  const hoy = new Date();
+  const vence = Date.UTC(anio, mes - 1, dia);
+  return Math.round((vence - Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) / 86_400_000);
+};
 const sexo = (valor: RecienNacidoProvisional["sexo"]) => (valor ? PATIENT_SEX_LABELS[valor] : "—");
 
 const FORM_VACIO: RegistrarRecienNacidoRequest = {
@@ -58,6 +69,7 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
   const registrar = useRegistrarRecienNacido(noExp);
   const vincular = useVincularRecienNacido(noExp);
   const descartar = useDescartarCoincidencia(noExp);
+  const extender = useExtenderVigenciaRecienNacido(noExp);
 
   const [abierto, setAbierto] = useState(false);
   const [form, setForm] = useState<RegistrarRecienNacidoRequest>(FORM_VACIO);
@@ -121,6 +133,23 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
       {
         onSuccess: () => toast.success("Coincidencia descartada: no se volverá a proponer."),
         onError: (error) => toast.error("No se pudo descartar", { description: mensaje(error, "Intenta nuevamente.") }),
+      },
+    );
+  };
+
+  const onExtender = (rn: RecienNacidoProvisional) => {
+    const motivo = window.prompt(
+      `Extender la vigencia de ${rn.nombre} otros 60 días a partir de hoy.\n\n` +
+        "Hacelo solo si cuentas con un documento que lo respalde. " +
+        "Motivo (opcional, queda en la bitácora con tu usuario):",
+    );
+    if (motivo === null) return;
+    extender.mutate(
+      { idPaciente: rn.idPaciente, motivo: motivo || undefined },
+      {
+        onSuccess: (r) => toast.success(`Vigencia extendida hasta el ${fecha(r.vigencia)}.`),
+        onError: (error) =>
+          toast.error("No se pudo extender la vigencia", { description: mensaje(error, "Intenta nuevamente.") }),
       },
     );
   };
@@ -219,6 +248,11 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
               <Badge variant="stable">Provisional · vigente hasta {fecha(rn.vigencia)}</Badge>
             ) : (
               <Badge variant="critical">Provisional · vencido {fecha(rn.vigencia)}</Badge>
+            )}
+            {rn.estatus === "A" && puedeRegistrar && diasParaVencer(rn.vigencia) <= DIAS_AVISO_VIGENCIA && (
+              <Button size="sm" variant="outline" onClick={() => onExtender(rn)} disabled={extender.isPending}>
+                <CalendarPlus className="mr-1 h-4 w-4" /> Extender vigencia
+              </Button>
             )}
           </div>
 

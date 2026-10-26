@@ -45,3 +45,12 @@ export const useDescartarCoincidencia = (noExp: string) => {
     onSuccess: invalidar,
   });
 };
+
+export const useExtenderVigenciaRecienNacido = (noExp: string) => {
+  const invalidar = useInvalidar(noExp);
+  return useMutation({
+    mutationFn: ({ idPaciente, motivo }: { idPaciente: number; motivo?: string }) =>
+      expedientesAPI.extenderVigenciaRecienNacido(idPaciente, motivo),
+    onSuccess: invalidar,
+  });
+};

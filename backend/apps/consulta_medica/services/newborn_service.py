@@ -447,6 +447,36 @@ def descartar(id_paciente: int, pk_num: int, *, motivo=None, user=None) -> dict:
     return _contract(provisional)
 
 
+def extender_vigencia(id_paciente: int, *, motivo=None, user=None) -> dict:
+    """
+    Como el legado (body-registro.jsp, "MODIFICA VIGENCIA DERECHOHABIENTE"):
+    la vigencia pasa a hoy + DIAS_VIGENCIA_RN, sin fecha libre, y queda la
+    anterior en la bitacora. Solo mientras siga pendiente de vincular: al
+    vincularse rige la de SERMED.
+    """
+    _exigir_habilitado()
+    with transaction.atomic():
+        provisional = _provisional_para_actualizar(id_paciente)
+        if provisional.status != ProvisionalPatient.Status.PENDING:
+            raise VisitDomainError(
+                "RN_YA_VINCULADO", "Este recién nacido ya está vinculado: su vigencia es la de SERMED.", 409,
+            )
+        anterior = provisional.valid_until
+        nueva = timezone.localdate() + timedelta(days=settings.IDENTIDAD_PACIENTE.get("DIAS_VIGENCIA_RN", 60))
+        if nueva <= anterior:
+            raise VisitDomainError(
+                "VIGENCIA_SIN_CAMBIO", f"La vigencia ya llega al {anterior:%d/%m/%Y}: no hay nada que extender.", 409,
+            )
+        provisional.valid_until = nueva
+        provisional.save(update_fields=["valid_until"])
+        record_change(
+            table="cns_paciente_provisional", key=build_key("id_paciente", provisional.pk),
+            action=ChangeLog.Action.UPDATE, reason=ChangeLog.Reason.NEWBORN_VALIDITY_EXTENSION, user=_usuario(user),
+            previous={"fe_vigencia": anterior}, new={"fe_vigencia": nueva, "motivo": _texto(motivo)},
+        )
+    return _contract(provisional)
+
+
 # ── Guardia 1 ────────────────────────────────────────────────────────────────
 
 def verificar_rn_pendiente(no_exp: str, pk_num, *, origen: str) -> None:

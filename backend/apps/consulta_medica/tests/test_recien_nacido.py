@@ -184,6 +184,71 @@ class ApiRecienNacidosTests(TestCase):
         self.assertEqual(autorizar.call_args[0][1], "admin:gestion:expedientes:vincular")
         vincular.assert_not_called()
 
+    def test_extender_vigencia_usa_el_permiso_de_registrar(self):
+        from rest_framework.response import Response
+        from rest_framework.test import APIRequestFactory
+
+        from apps.administracion.views import recien_nacido_view as vista
+
+        denegado = Response({"code": "PERMISSION_DENIED"}, status=403)
+        request = APIRequestFactory().post("/x", {}, format="json")
+        with mock.patch.object(vista, "_authorize", return_value=(None, denegado)) as autorizar, \
+             mock.patch.object(vista.newborn_service, "extender_vigencia") as extender:
+            respuesta = vista.ExtenderVigenciaRecienNacidoView.as_view()(request, id_paciente=1)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(autorizar.call_args[0][1], "admin:gestion:expedientes:recien_nacidos")
+        extender.assert_not_called()
+
+
+@ENCENDIDO
+class ExtenderVigenciaTests(_SermedSimulado, TestCase):
+    """Como el legado: hoy + 60 (sin fecha libre) y la anterior queda en la bitacora."""
+
+    def setUp(self):
+        super().setUp()
+        self.id_rn = self._registrar()["idPaciente"]
+        self.hoy = timezone.localdate()
+
+    def _vencer(self, dias_atras=1):
+        ProvisionalPatient.objects.filter(patient_id=self.id_rn).update(
+            valid_until=self.hoy - timedelta(days=dias_atras))
+
+    def test_un_provisional_vencido_vuelve_a_estar_vigente(self):
+        self._vencer()
+        resultado = rn.extender_vigencia(self.id_rn, motivo="Constancia de nacimiento en trámite")
+        self.assertEqual(resultado["vigencia"], (self.hoy + timedelta(days=60)).isoformat())
+        self.assertTrue(resultado["vigente"])
+        cambio = ChangeLog.objects.get(reason="EXTENSION VIGENCIA RN")
+        self.assertEqual((cambio.table, cambio.key), ("cns_paciente_provisional", f"id_paciente|{self.id_rn}"))
+        self.assertEqual(cambio.previous_value["fe_vigencia"], (self.hoy - timedelta(days=1)).isoformat())
+        self.assertEqual(cambio.new_value["motivo"], "Constancia de nacimiento en trámite")
+
+    def test_se_puede_extender_antes_de_que_venza(self):
+        ProvisionalPatient.objects.filter(patient_id=self.id_rn).update(valid_until=self.hoy + timedelta(days=5))
+        rn.extender_vigencia(self.id_rn)
+        self.assertEqual(ProvisionalPatient.objects.get(patient_id=self.id_rn).valid_until,
+                         self.hoy + timedelta(days=60))
+
+    def test_recien_registrado_no_hay_nada_que_extender(self):
+        with self.assertRaises(VisitDomainError) as error:
+            rn.extender_vigencia(self.id_rn)
+        self.assertEqual(error.exception.code, "VIGENCIA_SIN_CAMBIO")
+        self.assertFalse(ChangeLog.objects.filter(reason="EXTENSION VIGENCIA RN").exists())
+
+    def test_vinculado_no_se_extiende(self):
+        self.familiares = [_familiar(777)]
+        rn.vincular(self.id_rn, 777)
+        self._vencer()
+        with self.assertRaises(VisitDomainError) as error:
+            rn.extender_vigencia(self.id_rn)
+        self.assertEqual(error.exception.code, "RN_YA_VINCULADO")
+
+    def test_extendido_vuelve_a_aparecer_en_recepcion(self):
+        self._vencer()
+        self.assertEqual(rn.miembros_recepcion("40041", historico=False), [])
+        rn.extender_vigencia(self.id_rn)
+        self.assertEqual([m["idPaciente"] for m in rn.miembros_recepcion("40041", historico=False)], [self.id_rn])
+
 
 @ENCENDIDO
 class RecepcionProvisionalTests(_SermedSimulado, TestCase):

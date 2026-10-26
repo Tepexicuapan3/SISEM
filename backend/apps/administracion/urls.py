@@ -26,6 +26,7 @@ from .views.rbac_session_views import UserForceLogoutView, UserUnlockView
 from .views.expediente_view import ExpedienteView, ActualizarExpedienteView, BuscarPorNombreView
 from .views.recien_nacido_view import (
     DescartarCoincidenciaView,
+    ExtenderVigenciaRecienNacidoView,
     RecienNacidosView,
     VincularRecienNacidoView,
 )
@@ -124,6 +125,8 @@ urlpatterns = [
          name='recien-nacido-vincular'),
     path('expedientes/recien-nacidos/<int:id_paciente>/descartar/', DescartarCoincidenciaView.as_view(),
          name='recien-nacido-descartar'),
+    path('expedientes/recien-nacidos/<int:id_paciente>/extender-vigencia/',
+         ExtenderVigenciaRecienNacidoView.as_view(), name='recien-nacido-extender-vigencia'),
     path('expedientes/<str:no_exp>/recien-nacidos/', RecienNacidosView.as_view(), name='recien-nacidos'),
     path('users/empleados-sermed/<str:no_exp>', EmpleadoSermedLookupView.as_view(), name='rbac-empleado-sermed-lookup'),
     path("users/notify", UsersNotifyView.as_view(), name="rbac-users-notify"),

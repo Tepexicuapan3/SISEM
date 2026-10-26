@@ -2065,6 +2065,7 @@ class ChangeLog(models.Model):
         NEWBORN_REGISTRATION = "REGISTRO RN", "Registro de recien nacido"
         NEWBORN_LINK = "LIGA RN", "Liga de recien nacido con SERMED"
         NEWBORN_DISCARD = "DESCARTE LIGA RN", "Coincidencia descartada: no es la misma persona"
+        NEWBORN_VALIDITY_EXTENSION = "EXTENSION VIGENCIA RN", "Extension de la vigencia del recien nacido provisional"
         MERGE = "FUSION", "Fusion de pacientes"
         CAPTURE = "CAPTURA", "Captura de un dato vacio"
         CORRECTION = "CORRECCION", "Correccion"
