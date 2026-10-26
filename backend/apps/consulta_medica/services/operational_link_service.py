@@ -70,7 +70,16 @@ def resolve_record(model, no_exp, pk_num, *, created_by_id=None):
     return patient
 
 
+# Donde empieza la atencion: con un recien nacido pendiente de vincular no se
+# abre ficha ni cita (ni para el provisional ni para el familiar de SERMED).
+ATTENTION_ENTRY = frozenset({"recepcion.Visit", "recepcion.CitaMedica"})
+
+
 def _link_on_save(sender, instance, **kwargs):
+    if instance._state.adding and sender._meta.label in ATTENTION_ENTRY:
+        from apps.consulta_medica.services.newborn_service import exigir_vinculacion_para_atender
+
+        exigir_vinculacion_para_atender(getattr(instance, no_exp_field(sender)), instance.pk_num)
     if instance.patient_id is not None:
         return
     patient = resolve_record(

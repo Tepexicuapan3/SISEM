@@ -253,11 +253,50 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
         self.slot.refresh_from_db()
         self.assertTrue(self.slot.disponible, "El horario quedo ocupado sin ficha.")
 
-    def test_ficha_del_provisional_si_se_genera(self):
-        # La guardia no bloquea al provisional: es el expediente que ya existe.
+    def test_ficha_del_provisional_con_coincidencia_pide_vincular(self):
+        # Decision del usuario: con coincidencia sin resolver, tampoco el provisional.
+        with self.assertRaises(VisitDomainError) as error:
+            self._ficha(self.provisional["cdFamiliar"])
+        self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
+        self.slot.refresh_from_db()
+        self.assertTrue(self.slot.disponible)
+
+    def test_ficha_del_provisional_sin_coincidencia_se_genera(self):
+        self.familiares = []
         self._ficha(self.provisional["cdFamiliar"])
         self.slot.refresh_from_db()
         self.assertFalse(self.slot.disponible)
+
+    def test_descartada_la_coincidencia_ambos_se_atienden(self):
+        rn.descartar(self.provisional["idPaciente"], 777)
+        self._ficha(self.provisional["cdFamiliar"])
+        from apps.recepcion.models import Visit
+
+        self.assertTrue(Visit.objects.filter(pk_num=self.provisional["cdFamiliar"]).exists())
+
+    def test_vinculado_se_atiende_desde_sermed(self):
+        rn.vincular(self.provisional["idPaciente"], 777)
+        self._ficha(777)
+        self.slot.refresh_from_db()
+        self.assertFalse(self.slot.disponible)
+
+    def test_hijo_de_sermed_con_registro_previo_tambien_pide_vincular(self):
+        # "En cualquier caso": aunque el familiar ya tenga registro en SIRES.
+        Patient.objects.create(no_exp="40041", pk_num=777)
+        with self.assertRaises(VisitDomainError) as error:
+            self._ficha(777)
+        self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
+
+    def test_cambiar_una_cita_ya_creada_no_se_bloquea(self):
+        from apps.recepcion.models import CitaMedica
+
+        self.familiares = []
+        cita = CitaMedica.objects.create(
+            folio="T-1", no_exp="40041", pk_num=self.provisional["cdFamiliar"], medico=self.medico,
+            fecha_hora=timezone.now() + timedelta(days=1))
+        self.familiares = [_familiar(777)]   # aparece la coincidencia despues
+        cita.notas = "Reprogramar"
+        cita.save()   # solo se bloquea al CREAR
 
     def test_cita_rechazada_por_la_guardia_responde_409_con_su_mensaje(self):
         from rest_framework.test import APIRequestFactory

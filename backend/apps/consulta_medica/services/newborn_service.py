@@ -539,6 +539,35 @@ def extender_vigencia(id_paciente: int, *, motivo=None, user=None) -> dict:
 
 # ── Guardia 1 ────────────────────────────────────────────────────────────────
 
+def exigir_vinculacion_para_atender(no_exp, pk_num) -> None:
+    """
+    Decision del usuario (2026-10-26): mientras exista una coincidencia sin
+    resolver, NI el provisional NI el familiar de SERMED reciben ficha o cita:
+    primero se vincula (o se descarta). Solo al crear la ficha o la cita;
+    lo que ya esta abierto sigue su curso.
+    """
+    if not habilitado() or pk_num is None:
+        return
+    no_exp = normalizar_no_exp(no_exp)
+    if es_clave_provisional(pk_num):
+        provisional = provisional_por_clave(no_exp, pk_num)
+        if provisional is None or provisional.status != ProvisionalPatient.Status.PENDING:
+            return
+        coincidencias = candidatos(provisional)
+        if coincidencias:
+            nombres = ", ".join(f"{c['nombre']} (pk {c['pkNum']})" for c in coincidencias)
+            raise VisitDomainError(
+                "RN_PENDIENTE_DE_VINCULAR",
+                f"Este recién nacido provisional ya aparece en SERMED: {nombres}. "
+                "Vinculalo (o descartá la coincidencia) en Administración → Expedientes antes de atenderlo.",
+                409, details={"idPacienteProvisional": provisional.patient_id,
+                              "candidatos": [c["pkNum"] for c in coincidencias]},
+            )
+        return
+    # Familiar de SERMED: la misma regla aunque ya tenga registro en SIRES.
+    verificar_rn_pendiente(no_exp, pk_num, origen=ORIGEN_ATENCION)
+
+
 def verificar_rn_pendiente(no_exp: str, pk_num, *, origen: str) -> None:
     """
     Antes de crear el registro de un familiar de SERMED para atenderlo: si el
