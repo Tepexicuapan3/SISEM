@@ -335,7 +335,7 @@ class RecepcionProvisionalTests(_SermedSimulado, TestCase):
         miembro = next(m for m in resultado["dependientes"] if m.get("provisional"))
         self.assertEqual(miembro["pkNum"], self.clave)
         self.assertEqual(miembro["estatus"], "ACTIVO")
-        self.assertEqual(miembro["parentesco"], "HIJO(A) RECIEN NACIDO (PROVISIONAL) · ORDEN 1")
+        self.assertEqual(miembro["parentesco"], "RECIEN NACIDO (PROVISIONAL) · ORDEN 1")
         self.assertEqual(miembro["idPaciente"], self.provisional["idPaciente"])
 
     def test_gemelos_con_el_mismo_nombre_se_distinguen_por_el_orden(self):

@@ -101,6 +101,12 @@ def _sincronizar_pacientes(expediente: str, usuario, resultado: dict) -> bool:
 
         sync = sync_no_exp(expediente, user=usuario or PROCESS_SERMED_SYNC)
         resultado["pacientes"] = sync.counts
+        # El conteo solo no dice que CURP ni por que: el detalle queda en la
+        # bitacora para poder avisarle a Capital Humano (sin notificacion automatica).
+        resultado["discrepancias"] = [
+            {"tipo": d.kind, "idPaciente": d.patient_id, "noExp": d.no_exp, "pkNum": d.pk_num, "detalle": d.detail}
+            for d in sync.discrepancies
+        ]
         return True
     except Exception as exc:
         msg = f"Error al sincronizar pacientes con SERMED: {exc}"
@@ -171,7 +177,7 @@ def actualizar_expediente(
 
     resultado["estado"] = estado
     conteos = {"tablas": resultado["tablas"]}
-    for clave in ("cambios_registrados", "pacientes"):
+    for clave in ("cambios_registrados", "pacientes", "discrepancias"):
         if clave in resultado:
             conteos[clave] = resultado[clave]
     sync_audit_service.cerrar(registro, resultado=estado, conteos=conteos, errores=resultado["errores"])

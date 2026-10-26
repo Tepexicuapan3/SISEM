@@ -251,7 +251,7 @@ def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
             "nombre": _nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name),
             "edad": edad,
             "fechaNac": nacimiento.isoformat() if nacimiento else None,
-            "parentesco": f"HIJO(A) RECIEN NACIDO (PROVISIONAL) · ORDEN {provisional.birth_order}",
+            "parentesco": f"RECIEN NACIDO (PROVISIONAL) · ORDEN {provisional.birth_order}",
             "estatus": "ACTIVO" if activo else "NO ACTIVO",
             "cdClinica": provisional.clinic_code,
             "foto": None,

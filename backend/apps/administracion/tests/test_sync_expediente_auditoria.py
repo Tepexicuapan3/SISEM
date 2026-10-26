@@ -7,6 +7,7 @@ permiso.
 La conexion 'expedientes' (replica) y Oracle no existen en tests: el
 candado, la transaccion de la replica y sincronizar_tabla se simulan.
 """
+import dataclasses
 import datetime as dt
 from contextlib import nullcontext
 from unittest import mock
@@ -135,6 +136,21 @@ class ActualizarExpedienteBitacoraTests(_ReplicaSimulada, TestCase):
         self.assertEqual(cambio.reason, ChangeLog.Reason.SERMED_SYNC)
         paciente.refresh_from_db()
         self.assertEqual(paciente.updated_by_id, user.pk)
+
+    def test_el_detalle_de_las_discrepancias_queda_en_la_bitacora(self):
+        paciente = Patient.objects.create(no_exp="100", pk_num=0)
+        sin_curp = dataclasses.replace(_empleado(), curp="SIN CURP")
+        with mock.patch.object(sermed, "ReplicaSermedSource", return_value=_FuenteFalsa([sin_curp])):
+            resultado = actualizar_expediente("100")
+
+        registro = BitacoraSyncExpediente.objects.get(pk=resultado["id_sync"])
+        self.assertEqual(registro.conteos["pacientes"]["discrepancia_CURP_INVALIDA"], 1)
+        [detalle] = registro.conteos["discrepancias"]
+        self.assertEqual(
+            {k: detalle[k] for k in ("tipo", "idPaciente", "noExp", "pkNum")},
+            {"tipo": "CURP_INVALIDA", "idPaciente": paciente.pk, "noExp": "100", "pkNum": 0},
+        )
+        self.assertIn("SIN CURP", detalle["detalle"])
 
     def test_cambios_de_la_replica_quedan_ligados_a_la_actualizacion(self):
         cambio = CambioReplica(

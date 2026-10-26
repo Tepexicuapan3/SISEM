@@ -185,7 +185,7 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
           </p>
           <Input placeholder="Apellido paterno" {...campo("paternalSurname")} />
           <Input placeholder="Apellido materno" {...campo("maternalSurname")} />
-          <Input placeholder="Nombre(s) — si aún no tiene, queda RECIEN NACIDO" {...campo("firstName")} />
+          <Input placeholder="Nombre(s) (opcional)" title="Si aún no tiene nombre, déjalo vacío" {...campo("firstName")} />
           <Input type="date" aria-label="Fecha de nacimiento" {...campo("birthDate")} required />
           <select
             aria-label="Sexo"
