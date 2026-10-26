@@ -290,6 +290,10 @@ class CitasListCreateView(APIView):
             return error_response("CITA_NOT_AVAILABLE", str(exc),
                                   status.HTTP_400_BAD_REQUEST,
                                   request_id=get_request_id(request))
+        except VisitDomainError as exc:
+            # Regla de negocio al abrir el paciente (p. ej. recien nacido
+            # pendiente de vincular): su mensaje dice que hacer, no un 500.
+            return _domain_error(request, exc)
         except Exception as exc:
             logger.exception("Error creando cita: %s", exc)
             return error_response("CITA_CREATE_ERROR", "No se pudo agendar la cita.",

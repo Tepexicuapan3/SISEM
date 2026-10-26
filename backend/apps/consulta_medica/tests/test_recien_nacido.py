@@ -215,6 +215,72 @@ class ApiRecienNacidosTests(TestCase):
 
 
 @ENCENDIDO
+class FichaConGuardiaTests(_SermedSimulado, TestCase):
+    """
+    Reproduce lo reportado en recepcion (2026-10-26): ficha para el hijo de
+    SERMED que coincide con un provisional pendiente. La guardia 1 rechaza la
+    ficha; el horario del medico NO debe quedar ocupado.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from datetime import time
+
+        from apps.medicos.tests.factories import crear_medico
+        from apps.recepcion.models import HorarioDisponible
+
+        self.provisional = self._registrar()
+        self.familiares = [_familiar(777)]
+        self.medico = crear_medico()
+        self.fecha = timezone.localdate() + timedelta(days=1)
+        self.hora = time(10, 0)
+        self.slot = HorarioDisponible.objects.create(
+            medico=self.medico, fecha=self.fecha, hora=self.hora, disponible=True)
+
+    def _ficha(self, pk_num):
+        from apps.recepcion.uses_case.visit_queue_usecase import create_visit
+
+        return create_visit("40041", pk_num, doctor_id=self.medico.id_usuario_id, medico_id=self.medico.id,
+                            hora_consulta=self.hora, fecha_consulta=self.fecha)
+
+    def test_ficha_del_hijo_de_sermed_rechazada_no_ocupa_el_horario(self):
+        from apps.recepcion.models import Visit
+
+        with self.assertRaises(VisitDomainError) as error:
+            self._ficha(777)
+        self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
+        self.assertFalse(Visit.objects.filter(no_exp="40041", pk_num=777).exists())
+        self.slot.refresh_from_db()
+        self.assertTrue(self.slot.disponible, "El horario quedo ocupado sin ficha.")
+
+    def test_ficha_del_provisional_si_se_genera(self):
+        # La guardia no bloquea al provisional: es el expediente que ya existe.
+        self._ficha(self.provisional["cdFamiliar"])
+        self.slot.refresh_from_db()
+        self.assertFalse(self.slot.disponible)
+
+    def test_cita_rechazada_por_la_guardia_responde_409_con_su_mensaje(self):
+        from rest_framework.test import APIRequestFactory
+
+        from apps.recepcion.views import citas_views as vista
+
+        guardia = VisitDomainError("RN_PENDIENTE_DE_VINCULAR", "Vinculalo primero.", 409)
+        request = APIRequestFactory().post(
+            "/x", {"noExp": "40041", "pkNum": 777, "medicoId": self.medico.id,
+                   "fechaHora": f"{self.fecha.isoformat()}T10:00:00"}, format="json")
+        with mock.patch.object(vista, "_auth", return_value=(mock.Mock(), None)), \
+             mock.patch.object(vista, "_csrf", return_value=None), \
+             mock.patch.object(vista, "_check_cap"), \
+             mock.patch.object(vista, "tiene_vigencia", return_value=True), \
+             mock.patch.object(vista, "_resolve_medico_or_404", return_value=(self.medico, None)), \
+             mock.patch.object(vista.UserRepository, "build_auth_user", return_value={"id": 1}), \
+             mock.patch.object(vista.CitasRepository, "create", side_effect=guardia):
+            respuesta = vista.CitasListCreateView.as_view()(request)
+        self.assertEqual(respuesta.status_code, 409)
+        self.assertIn("RN_PENDIENTE_DE_VINCULAR", str(respuesta.data))
+
+
+@ENCENDIDO
 class MadreSugeridaTests(_SermedSimulado, TestCase):
     """El bebe se liga al titular, que puede ser el padre: la madre solo se propone."""
 

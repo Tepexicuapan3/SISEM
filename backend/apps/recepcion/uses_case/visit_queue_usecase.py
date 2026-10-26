@@ -245,38 +245,42 @@ def create_visit(
     if medico_id is None:
         medico_id = medico_id_for_usuario(doctor_id)
 
-    # Validar conflicto solo cuando se envió hora explícita
-    if doctor_id and hora_consulta:
-        _check_and_reserve_slot(doctor_id, medico_id, hora_consulta, fecha_consulta=fecha_consulta)
+    # Reserva del horario, ficha y log en UNA transaccion: si la ficha se
+    # rechaza (p. ej. la guardia del recien nacido o VERIFICAR_SERMED=bloquear),
+    # el horario del medico no queda ocupado sin ficha.
+    with transaction.atomic():
+        # Validar conflicto solo cuando se envió hora explícita
+        if doctor_id and hora_consulta:
+            _check_and_reserve_slot(doctor_id, medico_id, hora_consulta, fecha_consulta=fecha_consulta)
 
-    # Calcular número de ficha y turno al momento del registro
-    num_ficha, turno_nombre = _calcular_num_ficha()
+        # Calcular número de ficha y turno al momento del registro
+        num_ficha, turno_nombre = _calcular_num_ficha()
 
-    visit = VisitRepository.create(
-        no_exp=no_exp,
-        pk_num=pk_num,
-        nombre_paciente=nombre_paciente,
-        arrival_type=arrival_type,
-        service_type=service_type,
-        appointment_id=appointment_id,
-        doctor_id=doctor_id,
-        consultorio_id=consultorio_id,
-        tipo_cita_id=tipo_cita_id,
-        notes=notes,
-        hora_consulta=hora_consulta,
-        fecha_consulta=fecha_consulta,
-        num_ficha=num_ficha,
-        turno_nombre=turno_nombre,
-        created_by_id=created_by_id,
-    )
-    # Registrar el estado inicial en el log de auditoría
-    VisitRepository.log_status_change(
-        visit=visit,
-        from_status=None,
-        to_status="en_espera",
-        changed_by_id=created_by_id,
-        notes="Check-in inicial",
-    )
+        visit = VisitRepository.create(
+            no_exp=no_exp,
+            pk_num=pk_num,
+            nombre_paciente=nombre_paciente,
+            arrival_type=arrival_type,
+            service_type=service_type,
+            appointment_id=appointment_id,
+            doctor_id=doctor_id,
+            consultorio_id=consultorio_id,
+            tipo_cita_id=tipo_cita_id,
+            notes=notes,
+            hora_consulta=hora_consulta,
+            fecha_consulta=fecha_consulta,
+            num_ficha=num_ficha,
+            turno_nombre=turno_nombre,
+            created_by_id=created_by_id,
+        )
+        # Registrar el estado inicial en el log de auditoría
+        VisitRepository.log_status_change(
+            visit=visit,
+            from_status=None,
+            to_status="en_espera",
+            changed_by_id=created_by_id,
+            notes="Check-in inicial",
+        )
     return VisitRepository.to_contract(visit)
 
 
