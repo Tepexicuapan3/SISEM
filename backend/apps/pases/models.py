@@ -26,6 +26,15 @@ class Referral(models.Model):
         ACTIVO = "activo", "Activo"
         CANCELADO = "cancelado", "Cancelado"
 
+    class EstatusAutorizacion(models.TextChoices):
+        """Autorizacion del pase en el motor de autorizaciones (laboratorio y gabinete)."""
+
+        NO_REQUIERE = "NO_REQUIERE", "No requiere autorización"
+        PENDIENTE = "PENDIENTE", "Pendiente de autorizar"
+        AUTORIZADO = "AUTORIZADO", "Autorizado"
+        RECHAZADO = "RECHAZADO", "Rechazado"
+        VENCIDO = "VENCIDO", "Venció sin resolverse"
+
     id_referral = models.BigAutoField(primary_key=True, db_column="id_pase")
     consultation = models.ForeignKey(
         "consulta_medica.VisitConsultation",
@@ -92,6 +101,11 @@ class Referral(models.Model):
         null=True,
         blank=True,
         related_name="+",
+    )
+    # Lo actualiza el motor de autorizaciones (pases/services/autorizacion_motor_service).
+    estatus_autorizacion = models.CharField(
+        max_length=12, db_column="estatus_autorizacion",
+        choices=EstatusAutorizacion.choices, default=EstatusAutorizacion.NO_REQUIERE,
     )
 
     is_active = models.BooleanField(db_column="est_activo", default=True)

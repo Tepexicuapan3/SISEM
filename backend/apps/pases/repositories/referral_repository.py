@@ -190,6 +190,8 @@ class ReferralRepository:
             "folio": referral.folio,
             "status": referral.status,
             "cancellationReasonId": referral.cancellation_reason_id,
+            # Motor de autorizaciones: NO_REQUIERE | PENDIENTE | AUTORIZADO | RECHAZADO | VENCIDO.
+            "authorizationStatus": referral.estatus_autorizacion,
             "studies": studies,
             "isActive": referral.is_active,
             "createdAt": referral.created_at,

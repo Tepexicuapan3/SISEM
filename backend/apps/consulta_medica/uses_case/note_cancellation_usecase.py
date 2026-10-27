@@ -64,6 +64,7 @@ from apps.consulta_medica.services.change_log_service import build_key, record_c
 from apps.consulta_medica.services.medical_leave_rh_reconciliation import find_folios_in_rh
 from apps.consulta_medica.services import autorizacion_motor_service as motor
 from apps.pases.repositories.referral_repository import ReferralRepository
+from apps.pases.services import autorizacion_motor_service as motor_pases
 from apps.realtime.events import publish_visit_cancelled
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
@@ -547,6 +548,8 @@ def cancel_consultation(
             _cancel(Item.EntityType.REFERRAL, ref, "cancelado",
                     lambda ref=ref: ReferralRepository.cancel(
                         ref, cancellation_reason=None, updated_by_id=actor_id))
+            # Motor de autorizaciones: la solicitud pendiente del pase tambien se cancela.
+            motor_pases.cancelar_solicitud(ref, actor_id)
         for study in cascade.studies:
             _cancel(Item.EntityType.REFERRAL_STUDY, study, "cancelado",
                     lambda study=study: ReferralRepository.cancel_study_detail(

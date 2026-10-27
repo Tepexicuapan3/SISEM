@@ -9,6 +9,7 @@ from apps.catalogos.models import CatCentroAtencion, Especialidades, EstudiosMed
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.pases.models import Referral
 from apps.pases.repositories.referral_repository import ReferralRepository
+from apps.pases.services import autorizacion_motor_service as motor
 from apps.consulta_medica.services.visit_guards import (
     ensure_visit_not_cancelled,
     lock_visit_not_cancelled,
@@ -183,6 +184,8 @@ def create_referral(
                     created_by_id=actor_id,
                     updated_by_id=actor_id,
                 )
+            # Motor de autorizaciones (solo con AUTORIZACIONES_PASES_V2): estudios marcados.
+            motor.sincronizar_solicitud(referral, visit, id_usuario_solicitante=actor_id)
 
     referral.refresh_from_db()
     return ReferralRepository.to_contract(referral)
@@ -218,6 +221,8 @@ def cancel_referral(referral_id, roles, *, cancellation_reason_id, actor_id, per
     referral = ReferralRepository.cancel(
         referral, cancellation_reason=reason, updated_by_id=actor_id,
     )
+    # Motor de autorizaciones: su solicitud pendiente (si existe) tambien se cancela.
+    motor.cancelar_solicitud(referral, actor_id)
     return ReferralRepository.to_contract(referral)
 
 

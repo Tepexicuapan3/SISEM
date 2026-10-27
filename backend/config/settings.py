@@ -230,6 +230,8 @@ if IDENTIDAD_PACIENTE["VERIFICAR_SERMED"] not in ("apagado", "observar", "bloque
 # cambios; encendido = la autorizacion de receta se decide desde la bandeja
 # "Solicitudes de autorizacion" y el resultado se refleja en la receta.
 AUTORIZACIONES_RECETAS_V2 = config("AUTORIZACIONES_RECETAS_V2", default=False, cast=bool)
+# Pases de laboratorio y gabinete con estudios marcados (cat_estudiosmed.autorizado='S').
+AUTORIZACIONES_PASES_V2 = config("AUTORIZACIONES_PASES_V2", default=False, cast=bool)
 
 DATABASE_ROUTERS = [
     "routers.ExpedientesRouter",
