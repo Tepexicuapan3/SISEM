@@ -74,7 +74,7 @@ export interface CandidatoSermed {
 
 export interface RecienNacidoProvisional {
   idPaciente: number;
-  cdFamiliar: number;
+  cdProvisional: number;
   nombre: string;
   fechaNacimiento: string | null;
   sexo: "M" | "F" | "X" | null;

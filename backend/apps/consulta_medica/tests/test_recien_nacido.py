@@ -59,14 +59,17 @@ class AltaTests(_SermedSimulado, TestCase):
         resultado = self._registrar(madre="MARIA LOPEZ")
         paciente = Patient.objects.get(pk=resultado["idPaciente"])
         self.assertEqual((paciente.no_exp, paciente.pk_num), ("40041", None))
-        self.assertGreater(paciente.legacy_family_code, rn.BASE_CD_FAMILIAR)
+        self.assertGreater(paciente.provisional_code, rn.BASE_CD_PROVISIONAL)
+        # cd_familiar queda solo para el legado.
+        self.assertIsNone(paciente.legacy_family_code)
         self.assertEqual(paciente.sex, "F")
         provisional = paciente.provisional
         self.assertEqual(provisional.status, "A")
         self.assertEqual(provisional.clinic_code, "3")
         self.assertEqual(provisional.valid_until, timezone.localdate() + timedelta(days=60))
         self.assertTrue(PatientIdentifier.objects.filter(
-            patient=paciente, id_type="CD_FAMILIAR", value=str(paciente.legacy_family_code)).exists())
+            patient=paciente, id_type="PROVISIONAL", value=str(paciente.provisional_code)).exists())
+        self.assertFalse(PatientIdentifier.objects.filter(patient=paciente, id_type="CD_FAMILIAR").exists())
         self.assertTrue(ChangeLog.objects.filter(
             table="cns_paciente", key=f"id_paciente|{paciente.pk}", reason="REGISTRO RN").exists())
         self.assertTrue(resultado["vigente"])
@@ -74,7 +77,7 @@ class AltaTests(_SermedSimulado, TestCase):
     def test_la_secuencia_avanza_y_no_choca(self):
         primero = self._registrar(orden=1)
         segundo = self._registrar(orden=2)
-        self.assertEqual(segundo["cdFamiliar"], primero["cdFamiliar"] + 1)
+        self.assertEqual(segundo["cdProvisional"], primero["cdProvisional"] + 1)
 
     def test_valida_campos_y_curp(self):
         with self.assertRaises(VisitDomainError) as error:
@@ -264,7 +267,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
     def test_ficha_del_provisional_con_coincidencia_pide_vincular(self):
         # Decision del usuario: con coincidencia sin resolver, tampoco el provisional.
         with self.assertRaises(VisitDomainError) as error:
-            self._ficha(self.provisional["cdFamiliar"])
+            self._ficha(self.provisional["cdProvisional"])
         self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
         self._mensaje_para_recepcion(error.exception, "con: ")
         self.slot.refresh_from_db()
@@ -272,16 +275,16 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
 
     def test_ficha_del_provisional_sin_coincidencia_se_genera(self):
         self.familiares = []
-        self._ficha(self.provisional["cdFamiliar"])
+        self._ficha(self.provisional["cdProvisional"])
         self.slot.refresh_from_db()
         self.assertFalse(self.slot.disponible)
 
     def test_descartada_la_coincidencia_ambos_se_atienden(self):
         rn.descartar(self.provisional["idPaciente"], 777)
-        self._ficha(self.provisional["cdFamiliar"])
+        self._ficha(self.provisional["cdProvisional"])
         from apps.recepcion.models import Visit
 
-        self.assertTrue(Visit.objects.filter(pk_num=self.provisional["cdFamiliar"]).exists())
+        self.assertTrue(Visit.objects.filter(pk_num=self.provisional["cdProvisional"]).exists())
 
     def test_vinculado_se_atiende_desde_sermed(self):
         rn.vincular(self.provisional["idPaciente"], 777)
@@ -301,7 +304,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
 
         self.familiares = []
         cita = CitaMedica.objects.create(
-            folio="T-1", no_exp="40041", pk_num=self.provisional["cdFamiliar"], medico=self.medico,
+            folio="T-1", no_exp="40041", pk_num=self.provisional["cdProvisional"], medico=self.medico,
             fecha_hora=timezone.now() + timedelta(days=1))
         self.familiares = [_familiar(777)]   # aparece la coincidencia despues
         cita.notas = "Reprogramar"
@@ -432,7 +435,7 @@ class RecepcionProvisionalTests(_SermedSimulado, TestCase):
     def setUp(self):
         super().setUp()
         self.provisional = self._registrar(nombre="BEBE")
-        self.clave = self.provisional["cdFamiliar"]
+        self.clave = self.provisional["cdProvisional"]
 
     def test_la_clave_nunca_choca_con_un_pk_num_de_sermed(self):
         # CAT_FAMILIAR.PK_NUM es NUMBER(8): hasta 99 999 999.
@@ -508,3 +511,30 @@ class RecepcionProvisionalTests(_SermedSimulado, TestCase):
     @override_settings(IDENTIDAD_PACIENTE={"RECIEN_NACIDOS": False, "VERIFICAR_SERMED": "apagado"})
     def test_apagado_recepcion_no_los_muestra(self):
         self.assertEqual(rn.miembros_recepcion("40041", historico=True), [])
+
+
+class MoverCdProvisionalTests(TestCase):
+    """Migracion 0062: el provisional registrado con cd_familiar pasa a cd_provisional."""
+
+    def test_mueve_la_llave_y_cambia_el_identificador_con_bitacora(self):
+        from importlib import import_module
+
+        from django.apps import apps
+
+        paciente = Patient.objects.create(no_exp="40041", pk_num=None, legacy_family_code=100000001)
+        ProvisionalPatient.objects.create(patient=paciente, holder_no_exp="40041", valid_until=NACIMIENTO)
+        PatientIdentifier.objects.create(patient=paciente, id_type="CD_FAMILIAR", value="100000001", created_by="u")
+        legado = Patient.objects.create(no_exp="40041", pk_num=None, legacy_family_code=52895)
+
+        import_module("apps.consulta_medica.migrations.0062_mover_cd_provisional").mover(apps, None)
+
+        paciente.refresh_from_db()
+        self.assertEqual((paciente.legacy_family_code, paciente.provisional_code), (None, 100000001))
+        self.assertEqual(PatientIdentifier.objects.get(id_type="CD_FAMILIAR", value="100000001").status, "B")
+        self.assertEqual(PatientIdentifier.objects.get(id_type="PROVISIONAL", status="A").patient, paciente)
+        self.assertEqual(ChangeLog.objects.filter(reason="CORRECCION").count(), 3)
+        # El familiar del legado no se toca.
+        legado.refresh_from_db()
+        self.assertEqual((legado.legacy_family_code, legado.provisional_code), (52895, None))
+        # Recepcion lo sigue encontrando por la misma clave.
+        self.assertEqual(rn.provisional_por_clave("40041", 100000001).patient, paciente)

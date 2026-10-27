@@ -26,20 +26,26 @@ def find_patient_by_record_key(no_exp, pk_num) -> Patient | None:
     """
     Paciente de un registro identificado por (no_exp, pk_num). Transitorio:
     un familiar del legado sin PK_NUM tiene pk_num NULL en cns_paciente y sus
-    registros conservan el cd_familiar como llave (legacy_family_map).
+    registros conservan el cd_familiar como llave (legacy_family_map). Igual
+    el recien nacido provisional con su cd_provisional.
     """
     patient = Patient.objects.filter(no_exp=no_exp, pk_num=pk_num).first()
     if patient is None and pk_num:
         patient = Patient.objects.filter(
-            no_exp=no_exp, pk_num__isnull=True, legacy_family_code=pk_num,
+            Q(legacy_family_code=pk_num) | Q(provisional_code=pk_num), no_exp=no_exp, pk_num__isnull=True,
         ).first()
     return patient
 
 
 def _record_key(patient: Patient) -> tuple:
     """Llave con la que sus filas clinicas identifican a un registro: el
-    familiar del legado sin PK_NUM usa su cd_familiar como pk_num."""
-    return patient.no_exp, patient.pk_num if patient.pk_num is not None else patient.legacy_family_code
+    familiar del legado sin PK_NUM usa su cd_familiar como pk_num, y el
+    provisional su cd_provisional."""
+    if patient.pk_num is not None:
+        return patient.no_exp, patient.pk_num
+    if patient.legacy_family_code is not None:
+        return patient.no_exp, patient.legacy_family_code
+    return patient.no_exp, patient.provisional_code
 
 
 def records_for_key(no_exp, pk_num) -> list[Patient]:

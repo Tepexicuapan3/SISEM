@@ -117,6 +117,7 @@ class PatientRepository:
             "noExp": patient.no_exp,
             "pkNum": patient.pk_num,
             "legacyFamilyCode": patient.legacy_family_code,
+            "provisionalCode": patient.provisional_code,
             # Copiados de SERMED: solo lectura en SIRES.
             "paternalSurname": patient.paternal_surname,
             "maternalSurname": patient.maternal_surname,

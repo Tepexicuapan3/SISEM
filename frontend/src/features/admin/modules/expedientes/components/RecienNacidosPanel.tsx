@@ -257,7 +257,7 @@ export function RecienNacidosPanel({ noExp }: { noExp: string }) {
             <span>{fecha(rn.fechaNacimiento)}</span>
             <span>{sexo(rn.sexo)}</span>
             {!data.titularEsMujer && rn.madre && <span>Madre: {rn.madre}</span>}
-            <span className="text-txt-muted">cd_familiar {rn.cdFamiliar}</span>
+            <span className="text-txt-muted">Clave provisional {rn.cdProvisional}</span>
             {rn.estatus === "B" ? (
               <Badge variant="stable">Vinculado a SERMED (pk {rn.pkNumSermed})</Badge>
             ) : rn.vigente ? (

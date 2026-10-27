@@ -34,6 +34,7 @@ export interface PatientProfile {
   /** 0 = titular. null = familiar del legado sin PK_NUM (solo cd_familiar). */
   pkNum: number | null;
   legacyFamilyCode: number | null;
+  provisionalCode: number | null;
   /** Copiados de SERMED en cada sincronizacion: solo lectura en SIRES. */
   paternalSurname: string | null;
   maternalSurname: string | null;

@@ -4,7 +4,7 @@ provisional y su vinculacion con SERMED.
 
   - Alta (registrar_recien_nacido): como el legado (body-registro.jsp), solo
     hijos, desde el expediente del titular. Registro de cns_paciente con
-    no_exp del titular, pk_num NULL y cd_familiar de la secuencia de
+    no_exp del titular, pk_num NULL y cd_provisional de la secuencia de
     provisionales (> 100 000 000: por encima del PK_NUM de SERMED; el legado llega a ~52 896), mas
     PACIENTE_PROVISIONAL. Vigencia: hoy + DIAS_VIGENCIA_RN (60). Clinica: la de
     adscripcion del titular. CURP opcional.
@@ -56,16 +56,16 @@ logger = logging.getLogger(__name__)
 
 # Por encima del maximo PK_NUM posible de SERMED (CAT_FAMILIAR.PK_NUM es
 # NUMBER(8): hasta 99 999 999). Recepcion y las tablas operativas usan el
-# cd_familiar del provisional en el lugar del pk_num (como ya pasa con los
-# familiares del legado sin PK_NUM): asi nunca puede confundirse con un
+# cd_provisional en el lugar del pk_num (como ya pasa con el cd_familiar de
+# los familiares del legado sin PK_NUM): asi nunca puede confundirse con un
 # familiar real. El legado llega a ~52 896.
-BASE_CD_FAMILIAR = 100_000_000
+BASE_CD_PROVISIONAL = 100_000_000
 NOMBRE_SIN_ASIGNAR = "RECIEN NACIDO"
 
 
 def es_clave_provisional(pk_num) -> bool:
-    """La "pk_num" que llega es el cd_familiar de un recien nacido provisional."""
-    return isinstance(pk_num, int) and pk_num > BASE_CD_FAMILIAR
+    """La "pk_num" que llega es el cd_provisional de un recien nacido provisional."""
+    return isinstance(pk_num, int) and pk_num > BASE_CD_PROVISIONAL
 MENSAJE_SERMED_NO_DISPONIBLE = (
     "No se pudo consultar SERMED en este momento. No significa que el expediente no exista: avisá a sistemas."
 )
@@ -89,10 +89,10 @@ def _candado(clave: str) -> None:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [clave])
 
 
-def _siguiente_cd_familiar() -> int:
-    _candado("sires:cd_familiar_provisional")
-    actual = Patient.objects.filter(legacy_family_code__gt=BASE_CD_FAMILIAR).aggregate(m=Max("legacy_family_code"))["m"]
-    return (actual or BASE_CD_FAMILIAR) + 1
+def _siguiente_cd_provisional() -> int:
+    _candado("sires:cd_provisional")
+    actual = Patient.objects.aggregate(m=Max("provisional_code"))["m"]
+    return (actual or BASE_CD_PROVISIONAL) + 1
 
 
 def _usuario(user):
@@ -184,7 +184,7 @@ def _contract(provisional: ProvisionalPatient) -> dict:
     pendiente = provisional.status == ProvisionalPatient.Status.PENDING
     return {
         "idPaciente": paciente.pk,
-        "cdFamiliar": paciente.legacy_family_code,
+        "cdProvisional": paciente.provisional_code,
         "nombre": _nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name),
         "fechaNacimiento": paciente.birth_date.isoformat() if paciente.birth_date else None,
         "sexo": paciente.sex,
@@ -208,19 +208,19 @@ def vigente(provisional: ProvisionalPatient) -> bool:
 
 
 def provisional_por_clave(no_exp: str, pk_num) -> ProvisionalPatient | None:
-    """Provisional de recepcion: (no_exp del titular, cd_familiar en lugar del pk_num)."""
+    """Provisional de recepcion: (no_exp del titular, cd_provisional en lugar del pk_num)."""
     if not es_clave_provisional(pk_num):
         return None
     return (
         ProvisionalPatient.objects.select_related("patient")
-        .filter(holder_no_exp=normalizar_no_exp(no_exp), patient__legacy_family_code=pk_num).first()
+        .filter(holder_no_exp=normalizar_no_exp(no_exp), patient__provisional_code=pk_num).first()
     )
 
 
 def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
     """
     Plan identidad, bloque C2: provisionales pendientes como familiares para el
-    buscador de recepcion (check-in, agenda). Viajan con su cd_familiar en el
+    buscador de recepcion (check-in, agenda). Viajan con su cd_provisional en el
     lugar del pk_num; todo lo que sigue (visita, signos, consulta, alergias)
     los resuelve por esa llave. Sin el interruptor, no aparece ninguno.
     """
@@ -247,7 +247,7 @@ def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
             edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
         miembros.append({
             "noExp": provisional.holder_no_exp,
-            "pkNum": paciente.legacy_family_code,
+            "pkNum": paciente.provisional_code,
             "nombre": _nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name),
             "edad": edad,
             "fechaNac": nacimiento.isoformat() if nacimiento else None,
@@ -396,16 +396,16 @@ def registrar_recien_nacido(
                     409, details={"candidatos": [_familiar_contract(f) for f in en_sermed]},
                 )
 
-        cd_familiar = _siguiente_cd_familiar()
+        cd_provisional = _siguiente_cd_provisional()
         paciente = Patient.objects.create(
-            no_exp=no_exp, pk_num=None, legacy_family_code=cd_familiar,
+            no_exp=no_exp, pk_num=None, provisional_code=cd_provisional,
             paternal_surname=paterno, maternal_surname=materno, first_name=nombre,
             birth_date=fecha_nacimiento, sex=sexo, curp=curp_normalizada,
             curp_source=Patient.CurpSource.CAPTURED if curp_normalizada else None,
             created_by_id=user_id, updated_by_id=user_id,
         )
         register_identifier(
-            paciente, PatientIdentifier.IdType.CD_FAMILIAR, cd_familiar,
+            paciente, PatientIdentifier.IdType.PROVISIONAL, cd_provisional,
             reason=ChangeLog.Reason.NEWBORN_REGISTRATION, user=_usuario(user),
         )
         provisional = ProvisionalPatient.objects.create(
@@ -418,7 +418,7 @@ def registrar_recien_nacido(
             table="cns_paciente", key=build_key("id_paciente", paciente.pk),
             action=ChangeLog.Action.CREATE, reason=ChangeLog.Reason.NEWBORN_REGISTRATION, user=_usuario(user),
             new={
-                "no_exp": no_exp, "cd_familiar": cd_familiar, "first_name": nombre,
+                "no_exp": no_exp, "cd_provisional": cd_provisional, "first_name": nombre,
                 "paternal_surname": paterno, "maternal_surname": materno,
                 "birth_date": fecha_nacimiento, "sex": sexo, "curp": curp_normalizada,
                 "mother_name": _texto(madre), "birth_order": orden,

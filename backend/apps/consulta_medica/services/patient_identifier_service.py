@@ -101,7 +101,8 @@ def retire_identifier(identifier: PatientIdentifier, *, reason: str, user: Any) 
 def identifiers_from_columns(patient: Patient, *, include_family: bool = True) -> list[tuple[str, str]]:
     """
     Identificadores que corresponden a las columnas de cns_paciente:
-    titular (pk_num 0) -> NO_EXP; familiar -> PK_NUM y/o CD_FAMILIAR.
+    titular (pk_num 0) -> NO_EXP; familiar -> PK_NUM y/o CD_FAMILIAR;
+    recien nacido provisional -> PROVISIONAL.
     """
     if patient.pk_num == 0:
         return [(IdType.NO_EXP, str(patient.no_exp))]
@@ -112,6 +113,8 @@ def identifiers_from_columns(patient: Patient, *, include_family: bool = True) -
         result.append((IdType.PK_NUM, str(patient.pk_num)))
     if patient.legacy_family_code is not None:
         result.append((IdType.CD_FAMILIAR, str(patient.legacy_family_code)))
+    if patient.provisional_code is not None:
+        result.append((IdType.PROVISIONAL, str(patient.provisional_code)))
     return result
 
 

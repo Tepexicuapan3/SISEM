@@ -966,7 +966,9 @@ class Patient(models.Model):
 
     Identificadores del familiar: pk_num (PK_NUM de SERMED) y cd_familiar
     (cd_familiar de dbclinicas, el tp_paciente del legado). Hay familiares
-    del legado sin PK_NUM: se identifican solo por cd_familiar.
+    del legado sin PK_NUM: se identifican solo por cd_familiar. El recien
+    nacido provisional de SIRES no tiene ninguno de los dos: su llave es
+    cd_provisional (cd_familiar queda solo para el legado).
     """
 
     class CurpSource(models.TextChoices):
@@ -986,6 +988,8 @@ class Patient(models.Model):
     # 0 = titular. NULL = familiar sin PK_NUM en SERMED (solo cd_familiar).
     pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     legacy_family_code = models.IntegerField(db_column="cd_familiar", null=True, blank=True)
+    # Recien nacido provisional: secuencia propia > 100 000 000 (newborn_service).
+    provisional_code = models.IntegerField(db_column="cd_provisional", null=True, blank=True)
 
     # Copiados de SERMED (cat_empleados / cat_familiar). "RN" en ds_nombre
     # mientras un recien nacido no este registrado en Capital Humano.
@@ -1043,10 +1047,19 @@ class Patient(models.Model):
                 fields=["legacy_family_code"], condition=models.Q(legacy_family_code__isnull=False),
                 name="cns_paciente_cd_familiar_uq",
             ),
+            models.UniqueConstraint(
+                fields=["provisional_code"], condition=models.Q(provisional_code__isnull=False),
+                name="cns_paciente_cd_provisional_uq",
+            ),
             # Nadie queda sin identificador: titular (pk_num 0), familiar con
-            # PK_NUM, o familiar del legado con solo cd_familiar.
+            # PK_NUM, familiar del legado con solo cd_familiar o recien nacido
+            # provisional con cd_provisional.
             models.CheckConstraint(
-                condition=models.Q(pk_num__isnull=False) | models.Q(legacy_family_code__isnull=False),
+                condition=(
+                    models.Q(pk_num__isnull=False)
+                    | models.Q(legacy_family_code__isnull=False)
+                    | models.Q(provisional_code__isnull=False)
+                ),
                 name="cns_paciente_con_identificador",
             ),
         ]
@@ -1067,8 +1080,8 @@ class ProvisionalPatient(models.Model):
     PACIENTE_PROVISIONAL (plan identidad, Fase 6): datos propios del recien
     nacido que se atiende antes de que Capital Humano lo registre en SERMED.
     El registro de cns_paciente (1:1) lleva no_exp del titular, pk_num NULL y
-    un cd_familiar de la secuencia de provisionales (> 100 000 000, por
-    encima del legado). Igual que el legado (body-registro.jsp), solo hijos.
+    un cd_provisional de la secuencia de provisionales (> 100 000 000, por
+    encima de SERMED y del legado). Igual que el legado (body-registro.jsp), solo hijos.
 
     sw_status: A = provisional pendiente, B = ya vinculado a su registro de
     SERMED (Fase 7). Se actualiza en la misma transaccion que la vinculacion.
@@ -1130,14 +1143,16 @@ class PatientIdentifier(models.Model):
     """
     IDENTIFICADOR_PACIENTE (documento "Historia Clinica Unificada", 5.1):
     los numeros con los que se conoce a un paciente. Es la fuente oficial;
-    las columnas no_exp / pk_num / cd_familiar de cns_paciente son copias
-    para consultar rapido.
+    las columnas no_exp / pk_num / cd_familiar / cd_provisional de
+    cns_paciente son copias para consultar rapido.
 
     - NO_EXP: solo titulares (el NO_EXP de un familiar es el de su titular).
     - PK_NUM: familiares, el de SERMED.
     - CD_FAMILIAR: familiares del legado (tp_paciente de dbclinicas). Nunca
-      se asigna a un paciente nuevo.
-    - PROVISIONAL: recien nacido aun sin registro en Capital Humano.
+      se asigna a un paciente nuevo: es el puente para buscar su historia en
+      el legado.
+    - PROVISIONAL: recien nacido aun sin registro en Capital Humano
+      (cns_paciente.cd_provisional).
     - CURP: reservado. Mientras haya CURP repetidas en SERMED, la CURP vive
       solo en cns_paciente.curp.
 
