@@ -190,3 +190,44 @@ class PatientLookupApiTests(APITestCase):
         response = self.client.get(f"/api/v1/visits/patient-lookup?noExp={PACIENTE_NO_EXP}")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ── Plan contraer la llave vieja, C0: idPaciente en la busqueda ─────────────
+
+    def _csrf_headers(self):
+        csrf_token = self.client.cookies.get("csrf_token")
+        if csrf_token is None:
+            self.client.cookies["csrf_token"] = "csrf-token-test"
+            return {"HTTP_X_CSRF_TOKEN": "csrf-token-test"}
+        return {"HTTP_X_CSRF_TOKEN": csrf_token.value}
+
+    def test_cada_miembro_trae_su_id_paciente_o_null_si_nunca_se_atendio(self):
+        from apps.consulta_medica.models import Patient
+
+        felix = Patient.objects.create(no_exp=PACIENTE_NO_EXP, pk_num=48411)
+        response = self.client.get(f"/api/v1/visits/patient-lookup?noExp={PACIENTE_NO_EXP}&historico=true")
+
+        por_nombre = {d["nombre"]: d for d in response.data["dependientes"]}
+        self.assertEqual(por_nombre["ROMERO VAZQUEZ FELIX"]["idPaciente"], felix.pk)
+        self.assertIsNone(por_nombre["ROMERO VAZQUEZ SOFIA"]["idPaciente"])
+        self.assertIsNone(response.data["titular"]["idPaciente"])
+
+    def test_abrir_paciente_devuelve_su_id_y_no_duplica(self):
+        from apps.consulta_medica.models import Patient
+
+        response = self.client.post("/api/v1/visits/patient-open", {"noExp": PACIENTE_NO_EXP, "pkNum": 48412},
+                                    format="json", **self._csrf_headers())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sofia = Patient.objects.get(no_exp=PACIENTE_NO_EXP, pk_num=48412)
+        self.assertEqual(response.data, {"idPaciente": sofia.pk})
+
+        otra = self.client.post("/api/v1/visits/patient-open", {"noExp": PACIENTE_NO_EXP, "pkNum": 48412},
+                                format="json", **self._csrf_headers())
+        self.assertEqual(otra.data, {"idPaciente": sofia.pk})
+
+    def test_abrir_paciente_no_acepta_claves_provisionales(self):
+        from apps.consulta_medica.models import Patient
+
+        response = self.client.post("/api/v1/visits/patient-open", {"noExp": PACIENTE_NO_EXP, "pkNum": 100000001},
+                                    format="json", **self._csrf_headers())
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(Patient.objects.filter(pk_num=100000001).exists())

@@ -235,6 +235,12 @@ export const visitsAPI = {
     return response.data;
   },
 
+  /** Abre en SIRES al miembro elegido que todavia no tiene idPaciente (pkNum = el de SERMED). */
+  openPatient: async (noExp: string, pkNum: number): Promise<{ idPaciente: number }> => {
+    const response = await apiClient.post<{ idPaciente: number }>("/visits/patient-open", { noExp, pkNum });
+    return response.data;
+  },
+
   downloadFicha: async (visitId: number): Promise<Blob> => {
     const response = await apiClient.get(`/visits/${visitId}/ficha`, {
       responseType: "blob",

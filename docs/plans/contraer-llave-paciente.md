@@ -1,6 +1,6 @@
 # Plan: contraer la llave vieja (`no_exp` + `pk_num` → `id_paciente`)
 
-> Estado: **plan, sin empezar** (2026-10-27). Continúa el plan
+> Estado: **en curso** — C0 hecho (2026-10-27). Continúa el plan
 > [identidad-paciente.md](identidad-paciente.md): expandir (hecho) → migrar (a medias) → **contraer**.
 
 ## Objetivo
@@ -31,9 +31,21 @@ vive **una sola vez**:
 | `no_exp` | El expediente (del titular o propio) |
 
 La historia se lee por persona en un solo JOIN (`patient__person_id = X`), sin respaldo por llave
-vieja. Las pantallas siguen buscando por expediente; cómo viaja el paciente elegido entre la
-pantalla y el backend después de la búsqueda se define al arrancar C0 (siempre sin mostrar el
-`id_paciente`).
+vieja.
+
+## Cómo viaja el paciente (decisión del 2026-10-27)
+
+`pkNum` no se sobrecarga con otros identificadores (clave provisional, `cd_familiar`): el frontend
+manda **`idPaciente`** (interno, nunca se muestra).
+
+1. La búsqueda por expediente devuelve cada miembro con su `idPaciente`, o `null` si nunca se
+   atendió. El provisional siempre lo trae.
+2. Al elegir un miembro sin `idPaciente`: `POST /visits/patient-open {noExp, pkNum}` (pkNum = el de
+   SERMED, 0 = titular) lo abre por la puerta central y devuelve su `idPaciente`.
+3. Todo lo que guarda o lee datos del paciente recibe solo `idPaciente`.
+
+Cada bloque: el backend acepta `idPaciente` (y temporalmente la llave vieja), cambia la pantalla,
+se quita la forma vieja.
 
 ## Qué NO se modifica
 
@@ -46,7 +58,7 @@ Usos de `no_exp`/`pk_num` en código de producción (sin tests ni migraciones):
 
 | Bloque | Módulo | Tablas | Archivos principales (usos) |
 |---|---|---|---|
-| **C0** | Entrada | — | resolver el paciente elegido en la búsqueda a su `id_paciente` (puerta central); `noExp` obligatorio en `recepcion/serializers.py` y `recepcion/views/citas_views.py` |
+| **C0** ✅ | Entrada | — | `idPaciente` en la búsqueda de miembros, `POST /visits/patient-open`, conversión única `consulta_medica/services/paciente_entrada.py` (`noExp` ya era obligatorio al crear fichas y citas) |
 | **C1** | Recepción | `rcp_visits`, `citas_medicas` | `repositories/citas_repository.py` (28), `repositories/visit_repository.py` (28), `uses_case/visit_queue_usecase.py` (23), `uses_case/qr_checkin_usecase.py` (22), `services/vigencia_service.py` (21), `views/citas_views.py` (19), `services/ficha_service.py` (12), `views/__init__.py` (11), `services/clinica_paciente_service.py` (8), `impresion/ficha.py` (6) |
 | **C2** | Somatometría | `smt_visit_vitals`, `smt_patient_latest_vitals` | `repositories/vitals_repository.py` (29), `uses_case/capture_vitals_usecase.py` (10) |
 | **C3** | Consulta médica | `cns_allergy`, `cns_medical_leave`, `cns_study_result`, `cns_stomatology_history`, `cns_odontograma`, `cns_clinical_history`, `cns_antecedente_personal`, `cns_antecedente_familiar`, `cns_antecedente_quirurgico`, `cns_habito`, `cns_tratamiento_dental` | `views.py` (220), `views_unified_history.py` (99), `uses_case/patient_record_usecase.py` (63), `services/patient_link_service.py` (61), `repositories/clinical_history_repository.py` (42), `repositories/allergy_repository.py` (24), `repositories/medical_leave_repository.py` (22), `repositories/odontogram_repository.py` (22) y el resto de `uses_case/` y `repositories/` (≈15 archivos, < 20 usos cada uno) |

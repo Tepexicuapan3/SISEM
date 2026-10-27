@@ -88,6 +88,31 @@ def _build_member(source: dict, pk_num: int, no_exp_key: str) -> dict:
     }
 
 
+def _agregar_id_paciente(no_exp: str, miembros: list) -> None:
+    """
+    Plan contraer la llave vieja, C0: cada miembro trae su idPaciente (interno,
+    no se muestra) para que la pantalla lo mande al guardar. None si nunca se
+    atendio en SIRES: se abre con POST patients/open al elegirlo. Una sola
+    consulta por expediente. El provisional siempre lo trae (ya viene de
+    miembros_recepcion).
+    """
+    from apps.consulta_medica.models import Patient
+    from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+
+    por_pk_num = dict(
+        Patient.objects.filter(no_exp=normalizar_no_exp(no_exp), pk_num__isnull=False)
+        .values_list("pk_num", "id_patient")
+    )
+    for miembro in miembros:
+        if miembro is None or "idPaciente" in miembro:
+            continue
+        try:
+            pk_num = int(miembro.get("pkNum"))
+        except (TypeError, ValueError):
+            pk_num = None
+        miembro["idPaciente"] = por_pk_num.get(pk_num)
+
+
 def lookup_patient(no_exp: str, historico: bool = False) -> dict:
     """
     Busca el titular y sus derechohabientes por expediente.
@@ -131,6 +156,7 @@ def lookup_patient(no_exp: str, historico: bool = False) -> dict:
     from apps.consulta_medica.services.newborn_service import miembros_recepcion
 
     dependientes += miembros_recepcion(no_exp, historico=historico)
+    _agregar_id_paciente(no_exp, [titular, *dependientes])
 
     if not historico and titular is None and not dependientes:
         raise VisitDomainError(

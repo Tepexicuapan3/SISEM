@@ -121,6 +121,13 @@ class PatientLookupQuerySerializer(serializers.Serializer):
     historico = serializers.BooleanField(required=False, default=False)
 
 
+class PatientOpenSerializer(serializers.Serializer):
+    """Miembro elegido en la busqueda que todavia no tiene idPaciente."""
+
+    noExp = serializers.CharField(max_length=20)
+    pkNum = serializers.IntegerField(min_value=0)
+
+
 class VerificarQRSerializer(serializers.Serializer):
     """
     Payload crudo leído del código QR del comprobante de cita (o tipeado a

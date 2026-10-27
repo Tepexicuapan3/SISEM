@@ -23,6 +23,7 @@ from apps.recepcion.serializers import (
     CreateVisitSerializer,
     ListVisitsQuerySerializer,
     PatientLookupQuerySerializer,
+    PatientOpenSerializer,
     UpdateVisitStatusSerializer,
 )
 from apps.recepcion.services.errors import VisitDomainError
@@ -336,6 +337,54 @@ class PatientLookupView(APIView):
             return _visit_error_response(request, exc)
 
         return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PatientOpenView(APIView):
+    """
+    POST /visits/patient-open  {noExp, pkNum}  ->  {idPaciente}
+
+    Plan contraer la llave vieja, C0: abre en SIRES al miembro elegido en la
+    busqueda que todavia no tiene idPaciente (familiar de SERMED que nunca se
+    atendio). pkNum es SOLO el de SERMED (0 = titular): el provisional ya trae
+    su idPaciente desde la busqueda y nunca pasa por aqui.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        from apps.consulta_medica.services.newborn_service import es_clave_provisional
+        from apps.consulta_medica.services.paciente_entrada import paciente_de_llave
+
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+        try:
+            _require_visit_queue_access(user)
+        except VisitDomainError as exc:
+            return _visit_error_response(request, exc)
+
+        serializer = PatientOpenSerializer(data=request.data)
+        if not serializer.is_valid() or es_clave_provisional(serializer.validated_data["pkNum"]):
+            return error_response("VALIDATION_ERROR", "Parámetros inválidos",
+                                  status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                  details=serializer.errors or {"pkNum": ["Debe ser el PK_NUM de SERMED."]},
+                                  request_id=get_request_id(request))
+        try:
+            paciente = paciente_de_llave(
+                serializer.validated_data["noExp"], serializer.validated_data["pkNum"],
+                created_by_id=user.id_usuario,
+            )
+        except VisitDomainError as exc:
+            return _visit_error_response(request, exc)
+        if paciente is None:
+            return error_response("PATIENT_NOT_FOUND", "Paciente no encontrado.",
+                                  status.HTTP_404_NOT_FOUND, request_id=get_request_id(request))
+        return Response({"idPaciente": paciente.pk}, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

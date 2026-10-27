@@ -119,6 +119,12 @@ export interface VisitsListParams {
 export interface PatientMember {
   noExp:      string;
   pkNum:      number;
+  /**
+   * Registro interno del paciente en SIRES (nunca se muestra). null si todavia
+   * no se atendio: se obtiene con visitsAPI.openPatient al elegirlo. El
+   * provisional siempre lo trae.
+   */
+  idPaciente?: number | null;
   nombre:     string;
   edad:       number | null;
   fechaNac:   string | null;  // YYYY-MM-DD

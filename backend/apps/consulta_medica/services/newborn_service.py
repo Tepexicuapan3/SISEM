@@ -247,6 +247,7 @@ def miembros_recepcion(no_exp: str, *, historico: bool) -> list[dict]:
             edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
         miembros.append({
             "noExp": provisional.holder_no_exp,
+            "idPaciente": paciente.pk,
             "pkNum": paciente.provisional_code,
             "nombre": _nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name),
             "edad": edad,
