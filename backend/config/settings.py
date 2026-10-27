@@ -162,6 +162,8 @@ if config("LEGADO_NAME", default=""):
         "PORT": config("LEGADO_PORT", default="5432"),
         "OPTIONS": {
             "client_encoding": "UTF8",
+            # Si la copia no responde, la pantalla lo dice rapido en vez de colgarse.
+            "connect_timeout": 3,
             "options": "-c default_transaction_read_only=on -c statement_timeout=15000",
         },
     }

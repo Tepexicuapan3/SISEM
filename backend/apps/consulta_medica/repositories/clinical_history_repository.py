@@ -70,6 +70,11 @@ class PatientRepository:
             patient, created = Patient.objects.get_or_create(no_exp=no_exp, pk_num=pk_num)
             if created:
                 PatientRepository._register_identifiers(patient, created_by_id)
+                # Puente al historial del legado (CD_FAMILIAR). Despues del commit:
+                # nunca frena ni revierte el alta; si falla, lo completa la recarga.
+                from apps.consulta_medica.services.legado_llaves import registrar_al_abrir
+
+                transaction.on_commit(lambda: registrar_al_abrir(patient))
         return patient, created
 
     @staticmethod

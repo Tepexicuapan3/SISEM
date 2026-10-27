@@ -2087,6 +2087,7 @@ class ChangeLog(models.Model):
         MIGRATION_CONFLICT = "CONFLICTO MIGRACION", "Conflicto de migracion"
         MIGRATION = "MIGRACION", "Migracion del legado"
         LEGACY_KEY_FIX = "CORRECCION CD_FAMILIAR", "Correccion de la llave del familiar migrado"
+        LEGACY_BRIDGE = "LLAVE LEGADO", "cd_familiar del legado registrado para buscar su historia"
         # El dato clinico evoluciona (dejo de fumar, cambio la cantidad): no es un error.
         CLINICAL_UPDATE = "ACTUALIZACION", "Actualizacion del dato clinico"
         CLINIC_CHANGE = "CAMBIO DE CLINICA EN SERMED", "Cambio de clinica en SERMED"
