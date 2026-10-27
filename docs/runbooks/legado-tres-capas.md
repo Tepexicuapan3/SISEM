@@ -10,6 +10,17 @@
 | **2. Archivo de eventos** | Notas de consulta y diagnósticos CIE, curados | `cns_legacy_consultation_record`, `cns_legacy_consultation_diagnosis` (solo lectura) | Consultar la historia vieja desde SIRES |
 | **3. Hechos permanentes** | Alergias, antecedentes, hábitos, grupo sanguíneo | Modelo nuevo, con origen "legado" | Lo que el médico necesita ver hoy (seguridad del paciente) |
 
+> **Diseño vigente (2026-10-27).** El legado sigue en uso, así que no se migra en masa:
+> 1. La capa 1 (`sisem_legado`) se recarga **cada noche** (la base actual; las anuales una vez).
+> 2. SIRES **consulta directo** esa copia, con sus propias tablas y catálogos, por `id_persona` →
+>    identificadores `NO_EXP` / `CD_FAMILIAR` del paciente (pantalla "Historial previo a SIRES").
+> 3. Los hechos que importan (alergias, antecedentes, hábitos, grupo sanguíneo) pasan a SIRES
+>    **cuando un médico los confirma**, por sección; lo confirmado no se vuelve a ofrecer. Las
+>    alergias sin confirmar se muestran en la alerta al recetar como "del legado, sin confirmar".
+>
+> Las secciones "Capas 2 y 3: migrar a SIRES" de más abajo quedan **en desuso: no correrlas**.
+> Se conservan como referencia hasta retirar esos comandos.
+
 ## Antes de empezar
 
 1. **Respaldo** de la base principal de SIRES.
@@ -92,7 +103,74 @@ REVOKE CREATE ON SCHEMA legado_2015 FROM PUBLIC;
 
 Quien consulte la copia usa un usuario con el rol `legado_lectura`, nunca el de la aplicación.
 
-## Capas 2 y 3: migrar a SIRES, base por base
+### 1.5 Usuario de SIRES para la copia (una vez)
+
+```sql
+CREATE ROLE sires_legado LOGIN PASSWORD 'CLAVE_LARGA' IN ROLE legado_lectura;
+```
+
+En el `.env` del backend (no hay que tocar nada más; sin `LEGADO_NAME` la pantalla dice
+"no disponible" y el sistema arranca igual):
+
+```
+LEGADO_NAME=sisem_legado
+LEGADO_USER=sires_legado
+LEGADO_PASSWORD=CLAVE_LARGA
+LEGADO_HOST=auth-db
+LEGADO_PORT=5432
+```
+
+Además del rol, la conexión de SIRES abre con `default_transaction_read_only=on`: aunque el
+usuario tuviera permisos de más, la sesión no puede escribir. Verificación:
+
+```bash
+docker compose exec backend python manage.py shell -c \
+  "from django.db import connections; c=connections['legado'].cursor(); c.execute('SHOW transaction_read_only'); print(c.fetchone())"
+```
+
+Tiene que imprimir `('on',)`.
+
+### 1.6 Índices (después de cada carga, por esquema)
+
+pgloader copia los índices del MySQL, que no siempre alcanzan para buscar por paciente:
+
+```sql
+CREATE INDEX IF NOT EXISTS ix_notas_paciente   ON legado_2015.his_notas (no_exp, tp_paciente);
+CREATE INDEX IF NOT EXISTS ix_hisnotcie_nota   ON legado_2015.det_hisnotcie (cd_snota);
+CREATE INDEX IF NOT EXISTS ix_hisclin_paciente ON legado_2015.his_clinica (no_exp, tp_paciente);   -- si existe
+CREATE INDEX IF NOT EXISTS ix_hisclind_pac     ON legado_2015.his_clinicad (no_exp, tp_paciente);  -- si existe
+CREATE INDEX IF NOT EXISTS ix_familiar_tit     ON legado_2015.cat_familiar (no_expf);              -- si existe
+CREATE INDEX IF NOT EXISTS ix_familiar_pk      ON legado_2015.cat_familiar (pk_num);               -- si existe
+ANALYZE;
+```
+
+### 1.7 Recarga nocturna de la base actual
+
+Las anuales no cambian: se cargan una vez. La actual (`dbclinicas`) se recarga cada noche en un
+esquema nuevo y se intercambia al final, así la pantalla nunca ve una carga a medias.
+
+`legado_actual.load` igual que 1.2, pero con `ALTER SCHEMA 'dbclinicas' RENAME TO 'legado_actual_nuevo'`.
+
+```bash
+# cron del servidor, 02:30 todos los días
+docker run --rm -v "$PWD:/cfg" dimitri/pgloader:latest pgloader /cfg/legado_actual.load && \
+docker compose exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d sisem_legado -v ON_ERROR_STOP=1' <<'SQL'
+-- índices de 1.6 sobre legado_actual_nuevo, y después:
+BEGIN;
+DROP SCHEMA IF EXISTS legado_actual_viejo CASCADE;
+ALTER SCHEMA legado_actual RENAME TO legado_actual_viejo;
+ALTER SCHEMA legado_actual_nuevo RENAME TO legado_actual;
+GRANT USAGE ON SCHEMA legado_actual TO legado_lectura;
+GRANT SELECT ON ALL TABLES IN SCHEMA legado_actual TO legado_lectura;
+COMMIT;
+SQL
+```
+
+Si pgloader falla, el `&&` evita el intercambio: queda la copia de la noche anterior. La primera
+vez no existe `legado_actual`: renombrar directo `legado_actual_nuevo` a `legado_actual`.
+`legado_actual_viejo` queda un día como respaldo inmediato.
+
+## Capas 2 y 3: migrar a SIRES, base por base (EN DESUSO, ver diseño vigente)
 
 Los comandos leen del MySQL del legado mientras exista (lo que se ejecuta es solo SELECT
 sobre el legado). **Orden de las bases: de la más vieja a la más nueva.** Por cada base,

@@ -147,6 +147,25 @@ DATABASES = {
     },
 }
 
+# Copia tal cual del legado (docs/runbooks/legado-tres-capas.md, capa 1): base
+# sisem_legado, un esquema por base del legado. SIRES solo la lee con SQL
+# directo; la sesion abre en solo lectura, asi que ni un error de codigo puede
+# escribir. Sin LEGADO_NAME no hay alias y el historial del legado se muestra
+# como no disponible (no detiene el arranque).
+if config("LEGADO_NAME", default=""):
+    DATABASES["legado"] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config("LEGADO_NAME"),
+        "USER": config("LEGADO_USER", default=""),
+        "PASSWORD": config("LEGADO_PASSWORD", default=""),
+        "HOST": config("LEGADO_HOST", default="127.0.0.1"),
+        "PORT": config("LEGADO_PORT", default="5432"),
+        "OPTIONS": {
+            "client_encoding": "UTF8",
+            "options": "-c default_transaction_read_only=on -c statement_timeout=15000",
+        },
+    }
+
 # Fuera de desarrollo, una contrasena de base faltante es un error de
 # despliegue: se detiene el arranque en vez de intentar una contrasena
 # escrita en el codigo.
