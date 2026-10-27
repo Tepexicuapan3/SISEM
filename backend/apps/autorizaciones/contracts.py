@@ -23,6 +23,7 @@ __all__ = [
     "cancelar_por_origen",
     "puede_autorizar",
     "solicitar_autorizacion",
+    "tiene_solicitud_pendiente",
 ]
 
 
@@ -139,3 +140,13 @@ def cancelar_por_origen(tipo_origen: str, id_origen: int, *, id_usuario: int) ->
     from .uses_case.solicitud_use_case import SolicitudUseCase
 
     return SolicitudUseCase.cancelar_por_origen(tipo_origen, id_origen, id_usuario=id_usuario)
+
+
+def tiene_solicitud_pendiente(tipo_origen: str, id_origen: int) -> bool:
+    """True si el documento de origen tiene una solicitud PENDIENTE en el motor
+    (su decision se toma desde la bandeja de autorizaciones)."""
+    from .models import Solicitud
+
+    return Solicitud.objects.filter(
+        tipo_origen=tipo_origen, id_origen=id_origen, estatus=Solicitud.Estatus.PENDIENTE,
+    ).exists()

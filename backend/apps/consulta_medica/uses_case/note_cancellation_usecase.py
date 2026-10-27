@@ -62,6 +62,7 @@ from apps.consulta_medica.repositories.visit_diagnosis_repository import VisitDi
 from apps.consulta_medica.services.canonical_json import SCHEMA, canonical_json, sha256_hex
 from apps.consulta_medica.services.change_log_service import build_key, record_change
 from apps.consulta_medica.services.medical_leave_rh_reconciliation import find_folios_in_rh
+from apps.consulta_medica.services import autorizacion_motor_service as motor
 from apps.pases.repositories.referral_repository import ReferralRepository
 from apps.realtime.events import publish_visit_cancelled
 from apps.recepcion.repositories.visit_repository import VisitRepository
@@ -536,6 +537,8 @@ def cancel_consultation(
         for auth in cascade.authorizations:
             _cancel(Item.EntityType.RX_AUTH, auth, "cancelada",
                     lambda auth=auth: PrescriptionAuthorizationRepository.cancel(auth))
+            # Motor de autorizaciones: su solicitud pendiente (si existe) tambien se cancela.
+            motor.cancelar_solicitud(auth, actor_id)
         for dx in cascade.diagnoses:
             _cancel(Item.EntityType.DIAGNOSIS, dx, "cancelado",
                     lambda dx=dx: VisitDiagnosisRepository.cancel(dx, updated_by_id=actor_id))

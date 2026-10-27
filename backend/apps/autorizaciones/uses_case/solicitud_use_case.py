@@ -121,6 +121,11 @@ def _evento_resuelta(solicitud) -> events.SolicitudResuelta:
         estatus=solicitud.estatus,
         id_usuario_resolucion=solicitud.id_usuario_resolucion,
         clave_motivo=solicitud.motivo_cierre.clave if solicitud.motivo_cierre_id else None,
+        texto_motivo=(
+            " — ".join(filter(None, [solicitud.motivo_cierre.descripcion, solicitud.descripcion_motivo_cierre]))
+            if solicitud.motivo_cierre_id
+            else None
+        ),
     )
 
 

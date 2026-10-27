@@ -27,6 +27,8 @@ class SolicitudResuelta:
     estatus: str
     id_usuario_resolucion: int | None
     clave_motivo: str | None
+    # Motivo legible (descripcion del catalogo + texto libre) para el documento de origen.
+    texto_motivo: str | None = None
 
 
 @dataclass(frozen=True)

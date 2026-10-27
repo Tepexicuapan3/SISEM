@@ -225,6 +225,12 @@ if IDENTIDAD_PACIENTE["VERIFICAR_SERMED"] not in ("apagado", "observar", "bloque
         f"(se recibio {IDENTIDAD_PACIENTE['VERIFICAR_SERMED']!r})."
     )
 
+# ── Autorizaciones medicas (apps/autorizaciones) ─────────────────────────────
+# Recetas en el motor de autorizaciones (F5). Apagado = flujo anterior sin
+# cambios; encendido = la autorizacion de receta se decide desde la bandeja
+# "Solicitudes de autorizacion" y el resultado se refleja en la receta.
+AUTORIZACIONES_RECETAS_V2 = config("AUTORIZACIONES_RECETAS_V2", default=False, cast=bool)
+
 DATABASE_ROUTERS = [
     "routers.ExpedientesRouter",
     "apps.recepcion.routers.RecepcionCitasRouter",

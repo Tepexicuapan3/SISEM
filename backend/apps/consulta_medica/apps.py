@@ -13,3 +13,8 @@ class ConsultaMedicaConfig(AppConfig):
         connect_signals()
         # Plan identidad, Fase 5: lo mismo en las tablas operativas.
         connect_operational_signals()
+
+        # Motor de autorizaciones: la decision tomada en la bandeja se refleja en la receta.
+        from apps.consulta_medica.services.autorizacion_motor_service import conectar as conectar_motor
+
+        conectar_motor()

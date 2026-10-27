@@ -11,6 +11,7 @@ from apps.consulta_medica.repositories.prescription_item_repository import (
     PrescriptionItemRepository,
 )
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
+from apps.consulta_medica.services import autorizacion_motor_service as motor
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -98,9 +99,11 @@ def _maybe_create_authorization(prescription, visit):
             specialized_count=specialized_count,
             controlled_count=controlled_count,
         )
+        # Motor de autorizaciones (solo con AUTORIZACIONES_RECETAS_V2): recalcula su solicitud.
+        motor.sincronizar_solicitud(pending)
         return
 
-    PrescriptionAuthorizationRepository.create(
+    authorization = PrescriptionAuthorizationRepository.create(
         prescription,
         visit,
         prescribed_by_id=prescription.created_by_id,
@@ -108,6 +111,8 @@ def _maybe_create_authorization(prescription, visit):
         specialized_count=specialized_count,
         controlled_count=controlled_count,
     )
+    # Motor de autorizaciones (solo con AUTORIZACIONES_RECETAS_V2): crea su solicitud.
+    motor.sincronizar_solicitud(authorization)
 
 
 def _get_visit_or_error(visit_id):
@@ -415,6 +420,8 @@ def authorize_prescription(authorization_id, roles, *, actor_id, permissions=Non
         )
 
     _ensure_not_self_authorization(authorization, actor_id)
+    # Si la receta espera en el motor de autorizaciones, se decide desde su bandeja.
+    motor.asegurar_no_gestionada_por_motor(authorization)
 
     with transaction.atomic():
         # Gotcha A4.4: PrescriptionAuthorizationRepository.authorize muta la
@@ -473,6 +480,8 @@ def reject_prescription(authorization_id, roles, *, reason, actor_id, permission
         )
 
     _ensure_not_self_authorization(authorization, actor_id)
+    # Si la receta espera en el motor de autorizaciones, se decide desde su bandeja.
+    motor.asegurar_no_gestionada_por_motor(authorization)
 
     with transaction.atomic():
         # Gotcha A4.4: PrescriptionAuthorizationRepository.reject muta la
