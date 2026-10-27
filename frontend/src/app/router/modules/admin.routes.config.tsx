@@ -53,6 +53,7 @@ import AreasClinicasPage from "@features/admin/modules/catalogos/areas-clinicas/
 import CentrosAreasClinicasPage from "@features/admin/modules/catalogos/centro-area-clinica/pages/CentrosAreasClinicasPage";
 import SucursalesPage from "@features/admin/modules/catalogos/sucursales/pages/SucursalesPage";
 import PlaceholderPage from "@shared/components/PlaceholderPage";
+import AutorizadoresPage from "@features/admin/modules/autorizadores/pages/AutorizadoresPage";
 import MedicosPage from "@features/admin/modules/medicos/pages/MedicosPage";
 import MenusPage from "@features/admin/modules/menus/pages/MenusPage";
 import BitacoraAccesoPage from "@features/admin/modules/bitacora-acceso/pages/BitacoraAccesoPage";
@@ -690,6 +691,14 @@ export const adminRoutes: RouteObject[] = [
           description="Validacion y autorizacion de estudios clinicos"
           moduleName="Administracion"
         />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "autorizacion/autorizadores",
+    element: (
+      <ProtectedRoute requiredAllPermissions={["admin:autorizadores:read"]} dependencyAware>
+        <AutorizadoresPage />
       </ProtectedRoute>
     ),
   },

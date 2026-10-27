@@ -382,6 +382,11 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:autorizacion:estudios:read"],
             badge: PLACEHOLDER_BADGE,
           },
+          {
+            title: "Autorizadores médicos",
+            url: "/admin/autorizacion/autorizadores",
+            permissions: ["admin:autorizadores:read"],
+          },
         ],
       },
       {
