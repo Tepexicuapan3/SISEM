@@ -34,6 +34,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Autorización de Estudios",
     grupo: "Administración",
   },
+  "/admin/autorizacion/autorizadores": {
+    label: "Autorizadores Médicos",
+    grupo: "Administración",
+  },
   "/admin/catalogos": { label: "Catálogos", grupo: "Catálogos" },
   "/admin/catalogos/areas": { label: "Áreas", grupo: "Catálogos" },
   "/admin/catalogos/areas-clinicas": {
@@ -246,6 +250,7 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Autorización de Recetas",
     grupo: "Clínico",
   },
+  "/clinico/autorizaciones": { label: "Solicitudes de Autorización", grupo: "Clínico" },
   "/clinico/padrones": { label: "Padrones Clínicos", grupo: "Clínico" },
   "/clinico/cirugias": { label: "Cirugías", grupo: "Clínico" },
   "/clinico/consultas": { label: "Consultas", grupo: "Clínico" },

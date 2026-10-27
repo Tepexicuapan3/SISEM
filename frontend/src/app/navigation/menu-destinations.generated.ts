@@ -26,6 +26,7 @@ export interface MenuDestination {
 }
 
 export const MENU_DESTINATIONS: MenuDestination[] = [
+  {"path":"/admin/autorizacion/autorizadores","permissions":["admin:autorizadores:read"]},
   {"path":"/admin/autorizacion/estudios","permissions":["admin:autorizacion:estudios:read"]},
   {"path":"/admin/bitacora-acceso","permissions":["admin:auditoria:accesos:read"]},
   {"path":"/admin/catalogos","permissions":[]},
@@ -101,6 +102,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/almacen/unidades-medida","permissions":["almacen:inventario:read"]},
   {"path":"/clinico/ambulancias","permissions":["clinico:ambulancias:read"]},
   {"path":"/clinico/autorizacion-recetas","permissions":["clinico:recetas:authorize"]},
+  {"path":"/clinico/autorizaciones","permissions":["clinico:autorizaciones:read"]},
   {"path":"/clinico/cirugias","permissions":["clinico:cirugias:read"]},
   {"path":"/clinico/consultas","permissions":["clinico:consultas:read"]},
   {"path":"/clinico/consultas/agenda","permissions":["clinico:consultas:read"]},

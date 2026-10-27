@@ -11,6 +11,8 @@ import SomatometriaCapturePage from "@features/somatometria/modules/captura/page
 import CirugiasPage from "@features/cirugias/pages/CirugiasPage";
 import AmbulanciasPage from "@features/ambulancias/pages/AmbulanciasPage";
 import AutorizacionRecetasPage from "@features/autorizacion-recetas/pages/AutorizacionRecetasPage";
+import SolicitudesBandejaPage from "@features/autorizaciones/pages/SolicitudesBandejaPage";
+import SolicitudDetallePage from "@features/autorizaciones/pages/SolicitudDetallePage";
 import PadronesPage from "@features/padrones/pages/PadronesPage";
 import PlaceholderPage from "@shared/components/PlaceholderPage";
 
@@ -127,6 +129,23 @@ export const clinicoRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute requiredPermission="clinico:recetas:authorize">
         <AutorizacionRecetasPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    // Modulo autorizaciones: bandeja y detalle (destino del boton de la notificacion).
+    path: "autorizaciones",
+    element: (
+      <ProtectedRoute requiredAllPermissions={["clinico:autorizaciones:read"]} dependencyAware>
+        <SolicitudesBandejaPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "autorizaciones/:uuid",
+    element: (
+      <ProtectedRoute requiredAllPermissions={["clinico:autorizaciones:read"]} dependencyAware>
+        <SolicitudDetallePage />
       </ProtectedRoute>
     ),
   },

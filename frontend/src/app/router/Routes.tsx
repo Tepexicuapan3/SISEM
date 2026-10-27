@@ -54,6 +54,10 @@ const UrgenciasRoutes = lazy(() =>
     default: m.UrgenciasRoutes,
   })),
 );
+// Bandeja de notificaciones del usuario (la enlaza el menu de usuario).
+const NotificacionesPage = lazy(
+  () => import("@features/notificaciones/pages/NotificacionesPage"),
+);
 
 /**
  * Router principal.
@@ -197,6 +201,14 @@ export const router = createBrowserRouter([
             element: (
               <SuspenseWrapper className="min-h-[calc(100dvh-4rem)]">
                 <UrgenciasRoutes />
+              </SuspenseWrapper>
+            ),
+          },
+          {
+            path: "/notificaciones",
+            element: (
+              <SuspenseWrapper className="min-h-[calc(100dvh-4rem)]">
+                <NotificacionesPage />
               </SuspenseWrapper>
             ),
           },

@@ -3,6 +3,7 @@ import { Separator } from "@shared/ui/separator";
 import { SidebarBreadcrumbs } from "@shared/layouts/header/SidebarBreadcrumbs";
 import { ModuleSearch } from "@shared/layouts/header/ModuleSearch";
 import { ClockDisplay } from "@shared/layouts/header/ClockDisplay";
+import { NotificacionesBell } from "@features/notificaciones/components/NotificacionesBell";
 
 /**
  * Header principal del layout.
@@ -30,8 +31,11 @@ export const MainHeader = () => {
 
       <ClockDisplay />
 
-      <div className="ml-auto w-48 shrink-0 sm:w-56 md:w-72 lg:w-96">
-        <ModuleSearch />
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        <NotificacionesBell />
+        <div className="w-48 shrink-0 sm:w-56 md:w-72 lg:w-96">
+          <ModuleSearch />
+        </div>
       </div>
     </header>
   );
