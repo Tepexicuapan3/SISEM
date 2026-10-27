@@ -1724,6 +1724,7 @@ class VisitPrescriptionItemsView(APIView):
                     "medicationId": data["medicationId"],
                     "substance": payload["allergyWarning"]["substance"],
                     "severity": payload["allergyWarning"]["severity"],
+                    "fromLegacy": payload["allergyWarning"].get("fromLegacy", False),
                 },
                 meta={
                     "module": "consulta_medica",
@@ -1794,6 +1795,7 @@ class VisitPrescriptionItemsView(APIView):
                     "prescriptionItemId": payload.get("id"),
                     "medicationId": payload.get("medicationId"),
                     "substance": allergy_ack["substance"],
+                    "fromLegacy": allergy_ack.get("fromLegacy", False),
                 },
                 meta={
                     "module": "consulta_medica",

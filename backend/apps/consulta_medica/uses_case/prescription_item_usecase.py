@@ -153,6 +153,45 @@ def _find_matching_allergy(no_exp, pk_num, medication):
     return None
 
 
+def _find_matching_legacy_allergy(no_exp, pk_num, medication):
+    """
+    Diseño del legado del 2026-10-27: alergias del sistema anterior que ningun
+    medico confirmo ni descarto todavia tambien alertan, marcadas como "del
+    legado, sin confirmar" (en el legado no estan clasificadas: se cruza el
+    texto de todas). Mismo criterio de texto que _find_matching_allergy.
+    """
+    from apps.consulta_medica.services.legado_confirmacion import alergias_sin_confirmar
+
+    generic_name = (medication.generic_name or "").strip().lower()
+    commercial_name = (medication.name or "").strip().lower()
+    for item in alergias_sin_confirmar(no_exp, pk_num):
+        substance = (item["texto"] or "").strip().lower()
+        if not substance:
+            continue
+        for name in (generic_name, commercial_name):
+            if name and (substance in name or name in substance):
+                return item
+    return None
+
+
+def _allergy_warning(allergy_match, legacy_match):
+    if allergy_match is not None:
+        return {
+            "allergyId": allergy_match.id_allergy,
+            "substance": allergy_match.substance,
+            "severity": allergy_match.severity,
+            "reaction": allergy_match.reaction,
+        }
+    return {
+        "allergyId": None,
+        "substance": legacy_match["texto"],
+        "severity": None,
+        "reaction": None,
+        "fromLegacy": True,
+        "legacyOrigin": legacy_match["origen"],
+    }
+
+
 def add_prescription_item(
     visit_id,
     roles,
@@ -206,15 +245,13 @@ def add_prescription_item(
         )
 
     allergy_match = _find_matching_allergy(visit.no_exp, visit.pk_num, medication)
-    if allergy_match is not None and not acknowledge_allergy_warning:
+    legacy_match = (
+        _find_matching_legacy_allergy(visit.no_exp, visit.pk_num, medication) if allergy_match is None else None
+    )
+    if (allergy_match is not None or legacy_match is not None) and not acknowledge_allergy_warning:
         return {
             "requiresAcknowledgment": True,
-            "allergyWarning": {
-                "allergyId": allergy_match.id_allergy,
-                "substance": allergy_match.substance,
-                "severity": allergy_match.severity,
-                "reaction": allergy_match.reaction,
-            },
+            "allergyWarning": _allergy_warning(allergy_match, legacy_match),
         }
 
     normalized_indications = (indications or "").strip()
@@ -254,10 +291,12 @@ def add_prescription_item(
         _maybe_create_authorization(prescription, visit)
 
     payload = PrescriptionItemRepository.to_contract(item)
-    if allergy_match is not None:
+    if allergy_match is not None or legacy_match is not None:
+        warning = _allergy_warning(allergy_match, legacy_match)
         payload["allergyWarningAcknowledged"] = {
-            "allergyId": allergy_match.id_allergy,
-            "substance": allergy_match.substance,
+            "allergyId": warning["allergyId"],
+            "substance": warning["substance"],
+            **({"fromLegacy": True} if legacy_match is not None else {}),
         }
     return payload
 

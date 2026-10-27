@@ -39,7 +39,7 @@ import { useAddPrescriptionItem } from "@features/consulta-medica/modules/atenci
 import { useCancelPrescriptionItem } from "@features/consulta-medica/modules/atencion/mutations/useCancelPrescriptionItem";
 import type { AllergyWarning } from "@api/types";
 
-const SEVERITY_LABEL: Record<AllergyWarning["severity"], string> = {
+const SEVERITY_LABEL: Record<NonNullable<AllergyWarning["severity"]>, string> = {
   L: "Leve",
   M: "Moderada",
   G: "Grave",
@@ -279,9 +279,16 @@ export function PrescriptionItemsButton({
           {allergyWarning ? (
             <div className="space-y-2 rounded-lg border border-status-critical/50 bg-status-critical/5 p-3">
               <p className="text-sm font-semibold text-status-critical">
-                ⚠️ Alergia registrada: {allergyWarning.substance} (
-                {SEVERITY_LABEL[allergyWarning.severity]})
+                {allergyWarning.fromLegacy
+                  ? `⚠️ Alergia del sistema anterior, sin confirmar: ${allergyWarning.substance}`
+                  : `⚠️ Alergia registrada: ${allergyWarning.substance}`}
+                {allergyWarning.severity ? ` (${SEVERITY_LABEL[allergyWarning.severity]})` : ""}
               </p>
+              {allergyWarning.fromLegacy ? (
+                <p className="text-xs text-txt-muted">
+                  Viene de {allergyWarning.legacyOrigin}. Revisala en Historial → Datos del sistema anterior.
+                </p>
+              ) : null}
               {allergyWarning.reaction ? (
                 <p className="text-xs text-txt-muted">{allergyWarning.reaction}</p>
               ) : null}

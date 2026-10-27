@@ -36,16 +36,21 @@ export interface AddPrescriptionItemRequest {
 }
 
 export interface AllergyWarning {
-  allergyId: number;
+  /** null si la alergia viene del sistema anterior y nadie la confirmo todavia. */
+  allergyId: number | null;
   substance: string;
-  /** L leve, M moderada, G grave (codigos del documento). */
-  severity: "L" | "M" | "G";
+  /** L leve, M moderada, G grave (codigos del documento). null en las del sistema anterior. */
+  severity: "L" | "M" | "G" | null;
   reaction: string | null;
+  /** Alergia del sistema anterior, sin confirmar (no esta en el expediente de SIRES). */
+  fromLegacy?: boolean;
+  legacyOrigin?: string;
 }
 
 export interface AllergyAcknowledgedInfo {
-  allergyId: number;
+  allergyId: number | null;
   substance: string;
+  fromLegacy?: boolean;
 }
 
 // El backend NO crea el item si hay una alergia activa que choca con el
