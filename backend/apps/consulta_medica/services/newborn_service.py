@@ -451,7 +451,7 @@ def vincular(id_paciente: int, pk_num: int, *, user=None) -> dict:
         if pk_num not in {c["pkNum"] for c in candidatos(provisional)}:
             raise VisitDomainError(
                 "CANDIDATO_NO_VALIDO",
-                "Ese familiar de SERMED no coincide con el recién nacido (o ya se descartó).", 409,
+                "Ese familiar ya no coincide con el recién nacido (o ya se descartó la coincidencia).", 409,
             )
         # Regularizacion: el familiar viene de la replica; no aplica la guardia 1
         # (que justamente exige vincular primero).
