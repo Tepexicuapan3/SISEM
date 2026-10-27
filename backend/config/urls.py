@@ -22,6 +22,8 @@ urlpatterns = [
     path('api/v1/', include('apps.comunicados.urls')),
     path('api/v1/', include('apps.impresion.urls')),
     path('api/v1/', include('apps.padrones.urls')),
+    path('api/v1/', include('apps.autorizaciones.urls')),
+    path('api/v1/', include('apps.notificaciones.urls')),
     #path('recetas/', include('apps.recetas.urls')),
 ]
 

@@ -744,6 +744,21 @@ NAV_SEED = [
         "permisos": [],
     },
     {
+        # Agregado 2026-10-27 (change autorizadores-medicos): administracion de
+        # medicos autorizadores (app autorizaciones). La migracion
+        # autorizaciones 0008 lo crea; aqui queda para que --prune no lo de de baja.
+        "clave": "administracion.autorizadores_medicos",
+        "titulo": "Autorizadores médicos",
+        "icono": "user-check",
+        "url": "/admin/autorizacion/autorizadores",
+        "badge": None,
+        "orden": 3,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion",
+        "permisos": ["admin:autorizadores:read"],
+    },
+    {
         "clave": "administracion.reportes.consultas_diario",
         "titulo": "Informe Diario de Consulta Médica",
         "icono": None,
@@ -925,6 +940,21 @@ NAV_SEED = [
         "grupo": "primary",
         "parent_clave": "clinico",
         "permisos": ["clinico:recetas:authorize"],
+    },
+    {
+        # Agregado 2026-10-27 (change autorizadores-medicos): bandeja del modulo
+        # autorizaciones (recetas, estudios y cancelaciones). La crea la
+        # migracion autorizaciones 0009; aqui queda para que --prune no la de de baja.
+        "clave": "clinico.autorizaciones_solicitudes",
+        "titulo": "Solicitudes de autorización",
+        "icono": "clipboard-list",
+        "url": "/clinico/autorizaciones",
+        "badge": None,
+        "orden": 6,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "clinico",
+        "permisos": ["clinico:autorizaciones:read"],
     },
     {
         # Agregado 2026-10-16 (padrones-clinicos, P-04 del legado): padron de

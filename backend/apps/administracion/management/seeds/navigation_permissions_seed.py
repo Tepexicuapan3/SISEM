@@ -271,3 +271,19 @@ NAVIGATION_PERMISSIONS_SEED += [
         "Gestionar credenciales de usuarios: restablecer contrasena, forzar cierre de sesion y desbloquear",
     ),
 ]
+
+# Decimoctava tanda (change `autorizadores-medicos`): modulo nuevo
+# apps/autorizaciones. Las migraciones autorizaciones 0004/0007 los dan de alta
+# y la 0008 los asigna a los roles admin (is_admin=True). Para decidir no basta
+# el permiso: la politica del autorizador (estatus, vigencia, tipo y centro) se
+# valida en cada operacion.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("admin:autorizadores:read", "Ver autorizadores médicos, su historial y sus asignaciones"),
+    ("admin:autorizadores:create", "Dar de alta autorizadores médicos"),
+    ("admin:autorizadores:update", "Editar tipos, centros y renovar la vigencia de autorizadores médicos"),
+    ("admin:autorizadores:status", "Suspender, reactivar y dar de baja autorizadores médicos"),
+    ("admin:autorizadores:global", "Otorgar alcance GLOBAL (todos los centros) a autorizadores médicos"),
+    ("clinico:autorizaciones:read", "Ver la bandeja y el detalle de solicitudes de autorización"),
+    ("clinico:autorizaciones:decide", "Autorizar o rechazar solicitudes (requiere ser autorizador vigente)"),
+    ("clinico:autorizaciones:notify", "Enviar solicitudes de autorización a autorizadores elegidos"),
+]

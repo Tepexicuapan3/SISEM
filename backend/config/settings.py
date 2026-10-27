@@ -76,6 +76,8 @@ INSTALLED_APPS = [
     "apps.impresion",
     "apps.folios",
     "apps.padrones",
+    "apps.autorizaciones",
+    "apps.notificaciones",
 ]
 
 MIDDLEWARE = [
@@ -293,6 +295,10 @@ CELERY_BEAT_SCHEDULE = {
     "auth-cerrar-sesiones-abandonadas": {
         "task": "apps.authentication.tasks.cerrar_sesiones_abandonadas",
         "schedule": 90.0,  # segundos
+    },
+    "autorizaciones-vencer-solicitudes": {
+        "task": "apps.autorizaciones.tasks.vencer_solicitudes_pendientes",
+        "schedule": crontab(minute="*/15"),
     },
 }
 
