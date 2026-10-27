@@ -243,12 +243,20 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
         return create_visit("40041", pk_num, doctor_id=self.medico.id_usuario_id, medico_id=self.medico.id,
                             hora_consulta=self.hora, fecha_consulta=self.fecha)
 
+    def _mensaje_para_recepcion(self, error, esperado):
+        # Recepcion no conoce claves internas ni el nombre de la base.
+        self.assertIn("Se encontró una coincidencia", error.message)
+        self.assertIn(esperado, error.message)
+        for interno in ("SERMED", "pk ", "cd_familiar"):
+            self.assertNotIn(interno, error.message)
+
     def test_ficha_del_hijo_de_sermed_rechazada_no_ocupa_el_horario(self):
         from apps.recepcion.models import Visit
 
         with self.assertRaises(VisitDomainError) as error:
             self._ficha(777)
         self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
+        self._mensaje_para_recepcion(error.exception, "(orden 1)")
         self.assertFalse(Visit.objects.filter(no_exp="40041", pk_num=777).exists())
         self.slot.refresh_from_db()
         self.assertTrue(self.slot.disponible, "El horario quedo ocupado sin ficha.")
@@ -258,6 +266,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
         with self.assertRaises(VisitDomainError) as error:
             self._ficha(self.provisional["cdFamiliar"])
         self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
+        self._mensaje_para_recepcion(error.exception, "con: ")
         self.slot.refresh_from_db()
         self.assertTrue(self.slot.disponible)
 

@@ -555,11 +555,11 @@ def exigir_vinculacion_para_atender(no_exp, pk_num) -> None:
             return
         coincidencias = candidatos(provisional)
         if coincidencias:
-            nombres = ", ".join(f"{c['nombre']} (pk {c['pkNum']})" for c in coincidencias)
+            nombres = ", ".join(c["nombre"] for c in coincidencias)
             raise VisitDomainError(
                 "RN_PENDIENTE_DE_VINCULAR",
-                f"Este recién nacido provisional ya aparece en SERMED: {nombres}. "
-                "Vinculalo (o descartá la coincidencia) en Administración → Expedientes antes de atenderlo.",
+                f"Se encontró una coincidencia para este recién nacido provisional con: {nombres}. "
+                "Antes de atenderlo, vinculalos o descartá la coincidencia en Administración → Expedientes.",
                 409, details={"idPacienteProvisional": provisional.patient_id,
                               "candidatos": [c["pkNum"] for c in coincidencias]},
             )
@@ -593,8 +593,9 @@ def verificar_rn_pendiente(no_exp: str, pk_num, *, origen: str) -> None:
             continue
         raise VisitDomainError(
             "RN_PENDIENTE_DE_VINCULAR",
-            f"Este familiar coincide con el recién nacido provisional "
+            f"Se encontró una coincidencia de este familiar con el recién nacido provisional "
             f"{_nombre(paciente.paternal_surname, paciente.maternal_surname, paciente.first_name)} "
-            f"(cd_familiar {paciente.legacy_family_code}). Vinculalo en Administración → Expedientes antes de atenderlo.",
+            f"(orden {provisional.birth_order}). "
+            "Antes de atenderlo, vinculalos o descartá la coincidencia en Administración → Expedientes.",
             409, details={"idPacienteProvisional": paciente.pk, "pkNum": pk_num},
         )
