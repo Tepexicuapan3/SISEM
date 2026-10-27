@@ -7,6 +7,13 @@ interface Props {
   pkNum: number;
 }
 
+/** "legado_actual" -> "Base actual"; "legado_2024_a" -> "Base 2024 a". */
+const nombreBase = (sourceDb?: string) => {
+  if (!sourceDb) return null;
+  const resto = sourceDb.replace(/^legado_/, "");
+  return resto === "actual" ? "Base actual" : `Base ${resto.replace(/_/g, " ")}`;
+};
+
 const formatFecha = (fecha: string) => {
   try {
     return new Date(fecha).toLocaleDateString("es-MX", {
@@ -57,7 +64,11 @@ export const LegacyConsultationHistorySection = ({ noExp, pkNum }: Props) => {
             </p>
           )}
 
-          {data && data.items.length === 0 && (
+          {data?.disponible === false && (
+            <p className="text-txt-muted text-sm text-center py-6">{data.mensaje}</p>
+          )}
+
+          {data && data.disponible !== false && data.items.length === 0 && (
             <p className="text-txt-muted text-sm text-center py-6">
               No hay notas del legado para este paciente.
             </p>
@@ -77,12 +88,36 @@ export const LegacyConsultationHistorySection = ({ noExp, pkNum }: Props) => {
                       {formatFecha(nota.date)}
                       {nota.time ? ` — ${nota.time}` : ""}
                     </p>
-                    <span className="font-mono text-xs text-txt-muted">{nota.legacyFolio}</span>
+                    <span className="font-mono text-xs text-txt-muted">
+                      {nota.legacyFolio}
+                      {nombreBase(nota.sourceDb) ? ` · ${nombreBase(nota.sourceDb)}` : ""}
+                    </span>
                   </div>
+                  {(nota.doctorName || nota.clinicName) && (
+                    <p className="text-txt-muted">
+                      {[nota.doctorName && `Dr(a). ${nota.doctorName}`, nota.clinicName]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  )}
+                  {nota.statusLegacy && nota.statusLegacy !== "A" && (
+                    <p className="text-xs font-semibold text-txt-muted uppercase">Nota cancelada en el legado</p>
+                  )}
                   {nota.diagnosticImpression && (
                     <p className="text-txt-body">
                       <strong>Diagnóstico:</strong> {nota.diagnosticImpression}
                     </p>
+                  )}
+                  {nota.diagnoses && nota.diagnoses.length > 0 && (
+                    <ul className="text-txt-body list-disc pl-5">
+                      {nota.diagnoses.map((cie, indice) => (
+                        <li key={`${nota.id}-cie-${indice}`}>
+                          {cie.codigo ? <span className="font-mono">{cie.codigo}</span> : null}
+                          {cie.codigo && cie.descripcion ? " — " : ""}
+                          {cie.descripcion}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                   {nota.assessment && (
                     <p className="text-txt-muted">

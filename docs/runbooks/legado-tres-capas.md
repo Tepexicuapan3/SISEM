@@ -135,14 +135,17 @@ Tiene que imprimir `('on',)`.
 pgloader copia los índices del MySQL, que no siempre alcanzan para buscar por paciente:
 
 ```sql
-CREATE INDEX IF NOT EXISTS ix_notas_paciente   ON legado_2015.his_notas (no_exp, tp_paciente);
-CREATE INDEX IF NOT EXISTS ix_hisnotcie_nota   ON legado_2015.det_hisnotcie (cd_snota);
-CREATE INDEX IF NOT EXISTS ix_hisclin_paciente ON legado_2015.his_clinica (no_exp, tp_paciente);   -- si existe
-CREATE INDEX IF NOT EXISTS ix_hisclind_pac     ON legado_2015.his_clinicad (no_exp, tp_paciente);  -- si existe
-CREATE INDEX IF NOT EXISTS ix_familiar_tit     ON legado_2015.cat_familiar (no_expf);              -- si existe
-CREATE INDEX IF NOT EXISTS ix_familiar_pk      ON legado_2015.cat_familiar (pk_num);               -- si existe
+-- SIRES compara el expediente sin ceros a la izquierda: el índice es sobre esa expresión.
+CREATE INDEX IF NOT EXISTS ix_notas_paciente   ON legado_2015.his_notas    ((ltrim(CAST(no_exp AS text), '0')), tp_paciente);
+CREATE INDEX IF NOT EXISTS ix_hisnotcie_nota   ON legado_2015.det_hisnotcie ((CAST(cd_snota AS text)));
+CREATE INDEX IF NOT EXISTS ix_hisclin_paciente ON legado_2015.his_clinica  ((ltrim(CAST(no_exp AS text), '0')), tp_paciente);  -- si existe
+CREATE INDEX IF NOT EXISTS ix_hisclind_pac     ON legado_2015.his_clinicad ((ltrim(CAST(no_exp AS text), '0')), tp_paciente);  -- si existe
+CREATE INDEX IF NOT EXISTS ix_familiar_tit     ON legado_2015.cat_familiar ((ltrim(CAST(no_expf AS text), '0')));           -- si existe
 ANALYZE;
 ```
+
+Los catálogos que usa la pantalla (`cat_medicos`, `cat_clinicas`, `cat_cie10`) se leen **siempre de
+`legado_actual`**: las anuales pueden no tenerlos.
 
 ### 1.7 Recarga nocturna de la base actual
 

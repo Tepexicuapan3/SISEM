@@ -3,7 +3,8 @@ from apps.consulta_medica.repositories.legacy_consultation_repository import (
     LegacyConsultationRepository,
 )
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
-from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
+from apps.consulta_medica.services import legado_archivo, legado_historial
+from apps.consulta_medica.services.diagnosis_redaction_service import REDACTED_TEXT, redact_cie_if_restricted
 
 from .consultation_usecase import ensure_doctor_role
 
@@ -65,6 +66,23 @@ def get_patient_consultations_history(no_exp, pk_num, roles, permissions=None):
     }
 
 
+def _redact_legacy_item(item, permissions, roles):
+    """Misma regla que las consultas de SIRES: un diagnostico sensible se oculta
+    a quien no tiene el permiso, y con el el texto del diagnostico de la nota."""
+    restringido = False
+    cies = ([item["primaryCie"]] if item.get("primaryCie") else []) + list(item.get("diagnoses") or [])
+    for cie in cies:
+        codigo, descripcion, _, oculto = redact_cie_if_restricted(
+            code=cie.get("codigo"), description=cie.get("descripcion"), permissions=permissions, roles=roles,
+        )
+        cie["codigo"], cie["descripcion"] = codigo, descripcion
+        restringido = restringido or oculto
+    if restringido and item.get("diagnosticImpression"):
+        item["diagnosticImpression"] = REDACTED_TEXT
+    item["diagnosisRestricted"] = restringido
+    return item
+
+
 def get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions=None):
     """
     Historial de notas del legado (previas a SIRES) -- archivo de solo
@@ -74,6 +92,16 @@ def get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions=
     repository).
     """
     ensure_doctor_role(roles, permissions)
+
+    # Diseño del 2026-10-27: con la copia del legado configurada, se lee de
+    # ahi (por persona, todas las bases). Sin ella, el archivo migrado de antes.
+    if legado_archivo.disponible():
+        try:
+            payload = legado_historial.historial(no_exp, pk_num)
+        except legado_archivo.LegadoNoDisponible as exc:
+            return {"items": [], "total": 0, "totalCount": 0, "disponible": False, "mensaje": str(exc)}
+        payload["items"] = [_redact_legacy_item(item, permissions, roles) for item in payload["items"]]
+        return {**payload, "disponible": True}
 
     records = LegacyConsultationRepository.list_for_patient(no_exp, pk_num)
     items = [LegacyConsultationRepository.to_contract(r) for r in records]
