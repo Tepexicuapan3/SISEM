@@ -213,7 +213,8 @@ class VisitContractsApiTests(APITestCase):
         self.assertEqual(response.data["status"], 422)
         self.assertEqual(response.data["requestId"], self.request_id)
         self.assertIn("details", response.data)
-        self.assertIn("noExp", response.data["details"])
+        # Plan contraer la llave vieja: el paciente se indica con idPaciente.
+        self.assertIn("idPaciente", response.data["details"])
 
     def test_create_visit_role_not_allowed(self):
         self._login_as("medico_user", self.medico_password)

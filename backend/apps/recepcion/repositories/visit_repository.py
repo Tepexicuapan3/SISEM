@@ -1,5 +1,7 @@
 import math
 import uuid
+from apps.consulta_medica.services.paciente_entrada import llave_publica, q_pk_registro
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 from datetime import datetime
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -97,9 +99,10 @@ class VisitRepository:
     @staticmethod
     def exists_open_visit_for_patient(no_exp: str, pk_num: int) -> bool:
         """Verifica que el paciente no tenga ya una visita activa en el mismo día."""
+        from apps.consulta_medica.services.paciente_entrada import q_registro
+
         return Visit.objects.filter(
-            no_exp=no_exp,
-            pk_num=pk_num,
+            q_registro(no_exp, pk_num),
             fch_baja__isnull=True,
             status__in=("en_espera", "en_somatometria", "lista_para_doctor", "en_consulta"),
         ).exists()
@@ -165,6 +168,7 @@ class VisitRepository:
         queryset = (
             Visit.objects
             .select_related(
+                "patient",
                 "consultorio__id_center",
                 "tipo_cita",
                 "vital_signs",
@@ -193,21 +197,22 @@ class VisitRepository:
             queryset = queryset.filter(consultorio__id_center_id=centro_id)
         if service_type:
             queryset = queryset.filter(service_type=service_type)
+        # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
         if no_exp:
-            queryset = queryset.filter(no_exp=no_exp)
+            queryset = queryset.filter(patient__no_exp=normalizar_no_exp(no_exp))
         if folio:
             queryset = queryset.filter(folio__icontains=folio)
         if q:
             queryset = queryset.filter(
                 Q(nombre_paciente__icontains=q)
                 | Q(folio__icontains=q)
-                | Q(no_exp__icontains=q)
+                | Q(patient__no_exp__icontains=q)
             )
         # `pk_num` es el índice del integrante familiar (0 = titular): filtro
         # EXACTO, siempre separado de `q`. Debe ser `is not None` — `pk_num=0`
         # es el titular y `if pk_num:` lo descartaría en silencio (D13).
         if pk_num is not None:
-            queryset = queryset.filter(pk_num=pk_num)
+            queryset = queryset.filter(q_pk_registro(pk_num))
 
         total       = queryset.count()
         start       = (page - 1) * page_size
@@ -288,9 +293,9 @@ class VisitRepository:
         return {
             "id":                visit.id_visit,
             "folio":             visit.folio,
-            # no_exp puede ser null en registros anteriores a la migración 0003.
-            "noExp":             visit.no_exp or "",
-            "pkNum":             visit.pk_num,
+            # Salen de cns_paciente (plan contraer la llave vieja).
+            "noExp":             llave_publica(visit)[0] or "",
+            "pkNum":             llave_publica(visit)[1],
             "nombrePaciente":    visit.nombre_paciente,
             "arrivalType":       visit.arrival_type,
             "serviceType":       visit.service_type,

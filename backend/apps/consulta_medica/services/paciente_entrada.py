@@ -74,3 +74,37 @@ def resolver_paciente_en_datos(attrs: dict) -> dict:
     elif not attrs.get("noExp"):
         raise serializers.ValidationError({"idPaciente": ["Indica el paciente."]})
     return attrs
+
+
+def q_pk_registro(pk_num, prefijo="patient__"):
+    """
+    Filtro por el "pkNum" que conoce la pantalla, contra cns_paciente: el
+    PK_NUM de SERMED, o el cd_provisional / cd_familiar de quien no lo tiene.
+    """
+    from django.db.models import Q
+
+    sin_pk = Q(**{f"{prefijo}pk_num__isnull": True}) & (
+        Q(**{f"{prefijo}provisional_code": pk_num}) | Q(**{f"{prefijo}legacy_family_code": pk_num})
+    )
+    return Q(**{f"{prefijo}pk_num": pk_num}) | sin_pk
+
+
+def q_registro(no_exp, pk_num, prefijo="patient__"):
+    """Filtro por la llave que conoce la pantalla (expediente + pkNum), contra cns_paciente."""
+    from django.db.models import Q
+
+    return Q(**{f"{prefijo}no_exp": normalizar_no_exp(no_exp)}) & q_pk_registro(pk_num, prefijo)
+
+
+def llave_publica(fila) -> tuple[str, int | None]:
+    """
+    (noExp, pkNum) que se le devuelve a la pantalla para una fila de atencion:
+    salen de cns_paciente (la fila ya no las necesita guardar). Mientras haya
+    filas sin paciente, se usa lo que la fila tenga.
+    """
+    from apps.consulta_medica.services.patient_link_service import _record_key
+
+    paciente = getattr(fila, "patient", None)
+    if paciente is not None:
+        return _record_key(paciente)
+    return getattr(fila, "no_exp", None) or "", getattr(fila, "pk_num", None)

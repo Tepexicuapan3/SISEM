@@ -5,6 +5,7 @@ Encapsula todo acceso a CitaMedica y HorarioDisponible.
 """
 
 import math
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from datetime import date, timedelta
 
 from django.db import transaction
@@ -60,13 +61,17 @@ def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bo
 
     from apps.catalogos.services.parametro_service import get_param
 
-    activas = CitaMedica.objects.filter(no_exp=no_exp, estatus__in=ESTATUS_CITA_ACTIVA)
+    # Plan contraer la llave vieja: titular y familiares se cuentan por cns_paciente.
+    from apps.consulta_medica.services.paciente_entrada import q_pk_registro
+    from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+
+    activas = CitaMedica.objects.filter(patient__no_exp=normalizar_no_exp(no_exp), estatus__in=ESTATUS_CITA_ACTIVA)
     del_dia = activas.filter(fecha_hora__date=timezone.localtime(fecha_hora).date())
 
     # Topes generales (no por centro: se cuentan en todas las clinicas). El
     # valor de settings solo aplica si la definicion no existe.
     max_paciente = get_param("citas.max_por_paciente_dia", default=settings.CITAS_MAX_POR_PACIENTE_DIA)
-    if max_paciente and del_dia.filter(pk_num=pk_num).count() >= max_paciente:
+    if max_paciente and del_dia.filter(q_pk_registro(pk_num)).count() >= max_paciente:
         raise TopeCitaExcedido(
             "CITA_MISMO_DIA",
             "El paciente ya tiene una cita ese día."
@@ -84,7 +89,7 @@ def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bo
 
     max_futuras = get_param("portal.max_citas_futuras", default=settings.PORTAL_MAX_CITAS_FUTURAS)
     if desde_portal and max_futuras:
-        futuras = activas.filter(pk_num=pk_num, fecha_hora__gte=timezone.now()).count()
+        futuras = activas.filter(q_pk_registro(pk_num), fecha_hora__gte=timezone.now()).count()
         if futuras >= max_futuras:
             raise TopeCitaExcedido(
                 "TOPE_CITAS_FUTURAS",
@@ -106,8 +111,9 @@ def _serialize_cita(cita: CitaMedica) -> dict:
     return {
         "id":             cita.id,
         "folio":          cita.folio,
-        "noExp":          cita.no_exp,
-        "pkNum":          cita.pk_num,
+        # Salen de cns_paciente (plan contraer la llave vieja).
+        "noExp":          llave_publica(cita)[0],
+        "pkNum":          llave_publica(cita)[1],
         "medicoId":       cita.medico_id,
         "medicoNombre":   display_name(cita.medico),
         "consultorioId":  cita.consultorio_id,
@@ -168,7 +174,7 @@ class CitasRepository:
     ) -> tuple[list[dict], int, int]:
         qs = (
             CitaMedica.objects
-            .select_related("medico__id_usuario__detalle", "consultorio__id_center")
+            .select_related("patient", "medico__id_usuario__detalle", "consultorio__id_center")
             .order_by("fecha_hora")
         )
 
@@ -179,7 +185,9 @@ class CitasRepository:
         if centro_id:
             qs = qs.filter(consultorio__id_center_id=centro_id)
         if no_exp:
-            qs = qs.filter(no_exp=no_exp)
+            from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+
+            qs = qs.filter(patient__no_exp=normalizar_no_exp(no_exp))
         if folio:
             qs = qs.filter(folio__icontains=folio)
         if estatus:
