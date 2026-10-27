@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.consulta_medica.views_legado import PatientLegacyReviewView
 from apps.consulta_medica.views import (
     DailyConsultationReportView,
     MedicalLeaveReportView,
@@ -169,6 +170,11 @@ urlpatterns = [
         "patients/<str:no_exp>/legacy-consultations",
         PatientLegacyConsultationsHistoryView.as_view(),
         name="patient-legacy-consultations-history",
+    ),
+    path(
+        "patients/<str:no_exp>/legacy-review",
+        PatientLegacyReviewView.as_view(),
+        name="patient-legacy-review",
     ),
     path(
         "visits/<int:visit_id>/medical-leave",

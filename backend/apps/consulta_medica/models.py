@@ -1896,6 +1896,39 @@ class PatientLegacySource(models.Model):
         ]
 
 
+class LegacyReview(models.Model):
+    """
+    cns_legado_revision (diseño del legado del 2026-10-27): lo que un medico
+    confirmo (paso a SIRES) o descarto de los datos del legado de un paciente.
+    Ninguno de los dos se vuelve a ofrecer a esa persona. `ref_origen` dice de
+    que base, tabla, fila y campo del legado salio el dato.
+    """
+
+    class Decision(models.TextChoices):
+        CONFIRMED = "C", "Confirmado"
+        REJECTED = "R", "Descartado"
+
+    id_review = models.BigAutoField(primary_key=True, db_column="id")
+    patient = models.ForeignKey(
+        Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="legacy_reviews",
+    )
+    section = models.CharField(max_length=30, db_column="seccion")
+    legacy_ref = models.CharField(max_length=120, db_column="ref_origen")
+    text = models.CharField(max_length=500, db_column="texto")
+    decision = models.CharField(max_length=1, db_column="decision", choices=Decision.choices)
+    # Lo que se creo en SIRES al confirmar (vacio si se descarto o ya existia).
+    created_table = models.CharField(max_length=40, db_column="tabla_destino", null=True, blank=True)
+    created_id = models.BigIntegerField(db_column="id_destino", null=True, blank=True)
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    created_by_id = models.BigIntegerField(db_column="usr_alta", null=True, blank=True)
+
+    class Meta:
+        db_table = "cns_legado_revision"
+        constraints = [
+            models.UniqueConstraint(fields=["patient", "legacy_ref"], name="cns_legado_revision_ref_uq"),
+        ]
+
+
 class PhysicalExamFinding(models.Model):
     """
     EXPLORACION_FISICA por region y POR CONSULTA (antes 6 columnas de texto en

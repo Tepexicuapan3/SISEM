@@ -8,6 +8,7 @@ import { CancelarNotaDialog } from "@features/expedientes/components/CancelarNot
 import { usePatientConsultationsHistory } from "@features/expedientes/queries/usePatientConsultationsHistory";
 import { ConsultationAddendaSection } from "@features/expedientes/components/ConsultationAddendaSection";
 import { LegacyConsultationHistorySection } from "@features/expedientes/components/LegacyConsultationHistorySection";
+import { LegacyReviewSection } from "@features/expedientes/components/LegacyReviewSection";
 
 interface ExpedienteHistorialTabProps {
   noExp: string;
@@ -149,6 +150,7 @@ export function ExpedienteHistorialTab({
         ))
       )}
 
+      <LegacyReviewSection noExp={noExp} pkNum={pkNum} />
       <LegacyConsultationHistorySection noExp={noExp} pkNum={pkNum} />
 
       {canCancelNotes ? (

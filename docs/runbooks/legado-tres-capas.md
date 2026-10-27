@@ -21,6 +21,41 @@
 > Las secciones "Capas 2 y 3: migrar a SIRES" de más abajo quedan **en desuso: no correrlas**.
 > Se conservan como referencia hasta retirar esos comandos.
 
+## Paso a paso (seguir en este orden)
+
+Todo lo que toca el legado es **solo lectura**. Marcá cada paso al terminarlo.
+
+- [ ] **1. Desplegar el código** (bloques L1 a L5, incluye la migración `0063`):
+      `git pull` → `docker compose up -d --build backend frontend` →
+      `docker compose exec backend python manage.py migrate consulta_medica` → `docker compose restart proxy`.
+      Sin `LEGADO_*` en el `.env` no cambia nada visible.
+- [ ] **2. Preparar:** respaldo de SIRES; host, puerto y usuario **de solo lectura** del MySQL del
+      legado; lista de bases (`SHOW DATABASES LIKE 'dbclinicas%';`); red de Docker de `auth-db`
+      (`docker network ls`, p. ej. `sires_default`).
+- [ ] **3. Base y usuarios** en el Postgres de SIRES: secciones 1.1 y 1.5 (`CREATE DATABASE
+      sisem_legado`, rol `legado_lectura`, usuario `sires_legado`).
+- [ ] **4. Copiar cada base con pgloader:** sección 1.2. Un `.load` por base; la actual se renombra
+      a `legado_actual`. Para que pgloader encuentre `auth-db`, agregar la red:
+      `docker run --rm --network sires_default -v "$PWD:/cfg" dimitri/pgloader:latest pgloader /cfg/legado_2015.load`.
+      El resumen final tiene que dar `errors = 0`.
+- [ ] **5. Verificar conteos** MySQL contra Postgres: sección 1.3 (`his_notas`, `det_hisnotcie`,
+      `his_clinica`, `his_clinicad`).
+- [ ] **6. Permisos de solo lectura** por esquema: sección 1.4.
+- [ ] **7. Índices** por esquema: sección 1.6.
+- [ ] **8. Conectar SIRES:** variables `LEGADO_*` de la sección 1.5 en el `.env`,
+      `docker compose up -d backend`, `docker compose restart proxy` y la verificación
+      `SHOW transaction_read_only` → `('on',)`.
+- [ ] **9. Puente de los familiares que ya existen:**
+      `docker compose exec backend python manage.py registrar_llaves_legado --dry-run` y después sin
+      `--dry-run`. Los **dudosos** que liste se revisan a mano (nunca se adivinan).
+- [ ] **10. Probar en pantalla** (expediente → pestaña Historial):
+      "Historial previo a SIRES" muestra notas de todas las bases con médico, clínica y diagnósticos;
+      "Datos del sistema anterior por revisar" ofrece alergias, antecedentes y hábitos para confirmar;
+      al recetar un medicamento que choca con una alergia del legado sin confirmar aparece la
+      advertencia "del sistema anterior, sin confirmar".
+- [ ] **11. Recarga nocturna** de `legado_actual`: sección 1.7 (cron). Después del intercambio de
+      esquemas, correr también `registrar_llaves_legado`. Las anuales no se recargan.
+
 ## Antes de empezar
 
 1. **Respaldo** de la base principal de SIRES.
@@ -73,7 +108,7 @@ ALTER SCHEMA 'dbclinicas2015' RENAME TO 'legado_2015';
 Para la base actual: `.../dbclinicas` y `RENAME TO 'legado_actual'`.
 
 ```bash
-docker run --rm -v "$PWD:/cfg" dimitri/pgloader:latest pgloader /cfg/legado_2015.load
+docker run --rm --network sires_default -v "$PWD:/cfg" dimitri/pgloader:latest pgloader /cfg/legado_2015.load
 ```
 
 pgloader convierte los tipos y el encoding latin1 del legado. Revisá su resumen final: la
@@ -155,8 +190,8 @@ esquema nuevo y se intercambia al final, así la pantalla nunca ve una carga a m
 `legado_actual.load` igual que 1.2, pero con `ALTER SCHEMA 'dbclinicas' RENAME TO 'legado_actual_nuevo'`.
 
 ```bash
-# cron del servidor, 02:30 todos los días
-docker run --rm -v "$PWD:/cfg" dimitri/pgloader:latest pgloader /cfg/legado_actual.load && \
+# cron del servidor, 02:30 todos los días (ajustar la red: docker network ls)
+docker run --rm --network sires_default -v "$PWD:/cfg" dimitri/pgloader:latest pgloader /cfg/legado_actual.load && \
 docker compose exec -T auth-db sh -c 'psql -U "$POSTGRES_USER" -d sisem_legado -v ON_ERROR_STOP=1' <<'SQL'
 -- índices de 1.6 sobre legado_actual_nuevo, y después:
 BEGIN;
@@ -167,6 +202,7 @@ GRANT USAGE ON SCHEMA legado_actual TO legado_lectura;
 GRANT SELECT ON ALL TABLES IN SCHEMA legado_actual TO legado_lectura;
 COMMIT;
 SQL
+docker compose exec -T backend python manage.py registrar_llaves_legado
 ```
 
 Si pgloader falla, el `&&` evita el intercambio: queda la copia de la noche anterior. La primera
