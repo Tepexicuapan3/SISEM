@@ -106,10 +106,9 @@ def get_latest_vitals_for_visit(visit_id, *, visit_flow_service=None):
             404,
         )
 
-    latest = VitalsRepository.get_latest_for_patient(visit.no_exp, visit.pk_num)
+    latest = VitalsRepository.get_latest_for_patient(visit.patient_id)
     today_capture = VitalsRepository.get_latest_today_for_patient(
-        visit.no_exp,
-        visit.pk_num,
+        visit.patient_id,
         exclude_visit_id=visit.id_visit,
     )
 
@@ -128,7 +127,7 @@ def _resolve_reused_source(visit, reused_visit_id):
     Valida el reuso de una captura de signos vitales del mismo dia. Las 4
     reglas (mismo orden que los codigos 422 esperados por el spec):
     no reusar la propia visita, el origen debe existir, debe ser la misma
-    persona (no_exp+pk_num) y debe haber sido capturado HOY (dia calendario
+    persona (mismo id_paciente) y debe haber sido capturado HOY (dia calendario
     local). Devuelve la `Visit` origen (o None si no hay reuso).
     """
     if reused_visit_id is None:
@@ -149,7 +148,7 @@ def _resolve_reused_source(visit, reused_visit_id):
             422,
         )
 
-    if source.id_visit.no_exp != visit.no_exp or source.id_visit.pk_num != visit.pk_num:
+    if source.id_visit.patient_id != visit.patient_id:
         raise VisitFlowError(
             "REUSE_PATIENT_MISMATCH",
             "La captura de origen pertenece a otra persona.",

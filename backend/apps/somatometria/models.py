@@ -211,4 +211,9 @@ class PatientLatestVitals(models.Model):
                 fields=["no_exp", "pk_num"],
                 name="smt_latest_vitals_noexp_pknum_uq",
             ),
+            # Plan contraer la llave vieja: una fila por registro del paciente.
+            models.UniqueConstraint(
+                fields=["patient"], condition=models.Q(patient__isnull=False),
+                name="smt_latest_vitals_paciente_uq",
+            ),
         ]

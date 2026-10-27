@@ -33,6 +33,13 @@ def _payload(**overrides):
     return payload
 
 
+def _pid(no_exp, pk_num):
+    """Registro del paciente (plan contraer la llave vieja: se busca por id_paciente)."""
+    from apps.consulta_medica.models import Patient
+
+    return Patient.objects.get(no_exp=no_exp, pk_num=pk_num).pk
+
+
 def _create_visit(*, folio, no_exp, pk_num=0, status="lista_para_doctor"):
     return Visit.objects.create(
         folio=folio,
@@ -54,7 +61,7 @@ class GetLatestTodayForPatientTests(TestCase):
         VitalsRepository.create_for_visit(source, _payload(), captured_by=None)
 
         found = VitalsRepository.get_latest_today_for_patient(
-            "EXP-TODAY-1", 0, exclude_visit_id=current.id_visit,
+            _pid("EXP-TODAY-1", 0), exclude_visit_id=current.id_visit,
         )
 
         self.assertIsNotNone(found)
@@ -67,7 +74,7 @@ class GetLatestTodayForPatientTests(TestCase):
         VitalsRepository.create_for_visit(current, _payload(), captured_by=None)
 
         found = VitalsRepository.get_latest_today_for_patient(
-            "EXP-SELF-1", 0, exclude_visit_id=current.id_visit,
+            _pid("EXP-SELF-1", 0), exclude_visit_id=current.id_visit,
         )
 
         self.assertIsNone(found, "la propia visita nunca debe ofrecerse como reuso de si misma")
@@ -80,7 +87,7 @@ class GetLatestTodayForPatientTests(TestCase):
         VitalsRepository.create_for_visit(titular, _payload(), captured_by=None)
 
         found = VitalsRepository.get_latest_today_for_patient(
-            "EXP-FAM-1", 2, exclude_visit_id=derechohabiente.id_visit,
+            _pid("EXP-FAM-1", 2), exclude_visit_id=derechohabiente.id_visit,
         )
 
         self.assertIsNone(found, "no debe mezclar el reuso entre integrantes del mismo no_exp")
@@ -101,7 +108,7 @@ class GetLatestTodayForPatientTests(TestCase):
                 VitalsRepository.create_for_visit(source, _payload(), captured_by=None)
 
                 found = VitalsRepository.get_latest_today_for_patient(
-                    f"EXP-{status_value}", 0, exclude_visit_id=current.id_visit,
+                    _pid(f"EXP-{status_value}", 0), exclude_visit_id=current.id_visit,
                 )
 
                 self.assertIsNone(found)
@@ -119,15 +126,15 @@ class GetLatestTodayForPatientTests(TestCase):
         today_utc = datetime(2026, 8, 26, 18, 0, 0, tzinfo=dt_timezone.utc)
         with mock.patch("django.utils.timezone.now", return_value=today_utc):
             found = VitalsRepository.get_latest_today_for_patient(
-                "EXP-YEST-1", 0, exclude_visit_id=current.id_visit,
+                _pid("EXP-YEST-1", 0), exclude_visit_id=current.id_visit,
             )
 
         self.assertIsNone(found)
 
     def test_returns_none_when_no_exp_is_missing(self):
-        # Visita walk-in sin expediente (no_exp NULL): nunca hay reuso posible.
+        # Visita sin registro de paciente: nunca hay reuso posible.
         found = VitalsRepository.get_latest_today_for_patient(
-            None, 0, exclude_visit_id=999999,
+            None, exclude_visit_id=999999,
         )
         self.assertIsNone(found)
 
@@ -155,7 +162,7 @@ class GetLatestTodayForPatientTimezoneBoundaryTests(TestCase):
         query_instant_utc = datetime(2026, 8, 26, 6, 10, 0, tzinfo=dt_timezone.utc)
         with mock.patch("django.utils.timezone.now", return_value=query_instant_utc):
             found = VitalsRepository.get_latest_today_for_patient(
-                "EXP-TZ-1", 0, exclude_visit_id=current.id_visit,
+                _pid("EXP-TZ-1", 0), exclude_visit_id=current.id_visit,
             )
 
         self.assertIsNone(
@@ -181,7 +188,7 @@ class GetLatestTodayForPatientTimezoneBoundaryTests(TestCase):
         same_local_day_query_utc = datetime(2026, 8, 26, 5, 55, 0, tzinfo=dt_timezone.utc)
         with mock.patch("django.utils.timezone.now", return_value=same_local_day_query_utc):
             found = VitalsRepository.get_latest_today_for_patient(
-                "EXP-TZ-2", 0, exclude_visit_id=current.id_visit,
+                _pid("EXP-TZ-2", 0), exclude_visit_id=current.id_visit,
             )
 
         self.assertIsNotNone(found)

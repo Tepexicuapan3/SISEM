@@ -46,6 +46,8 @@ class VitalsRepository:
             # Denormalizado desde la visita al crear -- no_exp/pk_num de una
             # visita no cambian despues de creada, asi que esta copia nunca
             # se desincroniza en el uso normal del sistema.
+            patient_id=visit.patient_id,
+            # Copia de la llave vieja: se deja de escribir en C6 (plan contraer la llave).
             no_exp=visit.no_exp,
             pk_num=visit.pk_num,
             reused_from_visit=reused_from,
@@ -84,51 +86,48 @@ class VitalsRepository:
         Espejo "ultima captura por paciente": se sobreescribe a proposito
         (a diferencia de `VisitVitalSigns`, que jamas se sobreescribe). Es
         solo para precargar la siguiente consulta, no forma parte del
-        historial clinico. La clave efectiva es SIEMPRE (no_exp, pk_num)
-        -- ver docstring de `PatientLatestVitals` -- por eso el lookup y
-        el upsert usan ambos campos, nunca solo `no_exp`.
+        historial clinico. La clave es el registro del paciente
+        (id_paciente; plan contraer la llave vieja): nunca el no_exp solo,
+        que es de todo el nucleo familiar.
 
         Llamado por AMBOS `create_for_visit` y `update_for_visit`: una
         correccion que no re-espeje este cache dejaria la proxima consulta
         precargada con el valor NO corregido.
         """
-        if not visit.no_exp:
+        if visit.patient_id is None:
             return
         latest_defaults = dict(fields)
         latest_defaults.pop("notes", None)
         latest_defaults["id_visit_origen"] = visit
+        # Copia de la llave vieja hasta C6.
+        latest_defaults["no_exp"], latest_defaults["pk_num"] = visit.no_exp, visit.pk_num
         PatientLatestVitals.objects.update_or_create(
-            no_exp=visit.no_exp,
-            pk_num=visit.pk_num,
+            patient_id=visit.patient_id,
             defaults=latest_defaults,
         )
 
     @staticmethod
-    def get_latest_for_patient(no_exp, pk_num):
-        # Sin defaults a proposito: un caller que se olvide de pasar
-        # `pk_num` debe explotar ruidoso (TypeError) en vez de mezclar en
-        # silencio el cache entre integrantes del mismo nucleo familiar.
-        if not no_exp:
+    def get_latest_for_patient(patient_id):
+        if patient_id is None:
             return None
-        return PatientLatestVitals.objects.filter(no_exp=no_exp, pk_num=pk_num).first()
+        return PatientLatestVitals.objects.filter(patient_id=patient_id).first()
 
     @staticmethod
-    def get_latest_today_for_patient(no_exp, pk_num, *, exclude_visit_id):
+    def get_latest_today_for_patient(patient_id, *, exclude_visit_id):
         """
         Fuente de verdad (NO el cache) de la captura de signos vitales de
-        HOY para la misma persona (no_exp+pk_num), en una visita distinta a
+        HOY para el mismo registro (id_paciente), en una visita distinta a
         `exclude_visit_id`. "Hoy" es el dia calendario LOCAL
         (`timezone.localdate()` / `fch_alta__date` con USE_TZ=True aplica
         la zona horaria configurada) -- nunca UTC crudo, para no ofrecer ni
         esconder capturas cerca de medianoche por error.
         """
-        if not no_exp:
+        if patient_id is None:
             return None
         return (
             VisitVitalSigns.objects.select_related("id_visit")
             .filter(
-                id_visit__no_exp=no_exp,
-                id_visit__pk_num=pk_num,
+                id_visit__patient_id=patient_id,
                 fch_alta__date=timezone.localdate(),
             )
             .exclude(id_visit_id=exclude_visit_id)
