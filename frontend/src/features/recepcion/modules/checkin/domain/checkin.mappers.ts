@@ -16,9 +16,10 @@ import {
 export const mapCheckinFormToCreateVisitRequest = (
   values: CheckinFormValues,
   nombrePaciente?: string,
+  idPaciente?: number,
 ): CreateVisitRequest => ({
-  noExp:           values.noExp,
-  pkNum:           values.pkNum,
+  // Con idPaciente no viaja la llave vieja: el backend la toma de cns_paciente.
+  ...(idPaciente ? { idPaciente } : { noExp: values.noExp, pkNum: values.pkNum }),
   nombrePaciente:  nombrePaciente || undefined,
   arrivalType:     values.arrivalType,
   serviceType:     values.serviceType,

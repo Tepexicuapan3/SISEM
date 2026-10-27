@@ -82,7 +82,10 @@ export interface VisitStatusLogResponse {
 export type VisitsListResponse = ListResponse<VisitQueueItem>;
 
 export interface CreateVisitRequest {
-  noExp:           string;
+  /** Paciente elegido (interno). Desde el plan contraer la llave vieja reemplaza a noExp/pkNum. */
+  idPaciente?:     number;
+  /** Transitorio: solo si no se manda idPaciente. */
+  noExp?:          string;
   pkNum?:          number;
   nombrePaciente?: string;
   arrivalType:     ArrivalType;

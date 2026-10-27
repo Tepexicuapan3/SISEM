@@ -105,7 +105,9 @@ def _resolve_medico_or_404(medico_id_raw, request):
 # ── Serializers ───────────────────────────────────────────────────────────────
 
 class CreateCitaSerializer(serializers.Serializer):
-    noExp         = serializers.CharField(max_length=20)
+    # Plan contraer la llave vieja: idPaciente (desde C0); noExp/pkNum transitorio.
+    idPaciente    = serializers.IntegerField(min_value=1, required=False)
+    noExp         = serializers.CharField(max_length=20, required=False)
     pkNum         = serializers.IntegerField(min_value=0, default=0)
     medicoId      = serializers.IntegerField(min_value=1)
     consultorioId = serializers.IntegerField(min_value=1, required=False)
@@ -118,6 +120,11 @@ class CreateCitaSerializer(serializers.Serializer):
     )
     motivo        = serializers.CharField(max_length=255, required=False, allow_blank=True)
     notas         = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        from apps.consulta_medica.services.paciente_entrada import resolver_paciente_en_datos
+
+        return resolver_paciente_en_datos(attrs)
 
 
 class ListCitasQuerySerializer(serializers.Serializer):

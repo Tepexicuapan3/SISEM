@@ -50,3 +50,42 @@ class PacienteDeLlaveTests(TestCase):
         hijo = paciente_de_llave("40041", 3)
         Patient.objects.filter(pk=hijo.pk).update(person_id=bebe.person_id)
         self.assertEqual(registros_de_la_persona(bebe), [bebe, hijo])
+
+
+@APAGADO
+class SerializersConIdPacienteTests(TestCase):
+    """C1, etapa A: crear ficha y cita aceptan idPaciente (y la llave vieja, transitorio)."""
+
+    def _cita(self, **datos):
+        from apps.recepcion.views.citas_views import CreateCitaSerializer
+
+        return CreateCitaSerializer(data={"medicoId": 1, "fechaHora": "2026-11-03T10:00:00", **datos})
+
+    def _ficha(self, **datos):
+        from apps.recepcion.serializers import CreateVisitSerializer
+
+        return CreateVisitSerializer(data={"arrivalType": "walk_in", **datos})
+
+    def test_con_id_paciente_se_completa_la_llave_desde_cns_paciente(self):
+        hijo = paciente_de_llave("40041", 3)
+        for serializer in (self._cita(idPaciente=hijo.pk), self._ficha(idPaciente=hijo.pk)):
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            self.assertEqual((serializer.validated_data["noExp"], serializer.validated_data["pkNum"]), ("40041", 3))
+
+    def test_el_provisional_se_manda_por_id_paciente(self):
+        bebe = Patient.objects.create(no_exp="40041", pk_num=None, provisional_code=100000001)
+        serializer = self._ficha(idPaciente=bebe.pk)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["pkNum"], 100000001)
+
+    def test_sin_paciente_o_con_uno_que_no_existe_es_error(self):
+        sin_paciente = self._cita()
+        self.assertFalse(sin_paciente.is_valid())
+        self.assertIn("idPaciente", sin_paciente.errors)
+        serializer = self._ficha(idPaciente=999999)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("idPaciente", serializer.errors)
+
+    def test_la_llave_vieja_sigue_funcionando_mientras_dura_la_transicion(self):
+        serializer = self._cita(noExp="40041", pkNum=0)
+        self.assertTrue(serializer.is_valid(), serializer.errors)

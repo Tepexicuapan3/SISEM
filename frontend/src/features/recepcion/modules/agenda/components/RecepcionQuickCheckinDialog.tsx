@@ -29,6 +29,7 @@ import type { PatientMember, VisitQueueItem } from "@api/types";
 import type { MedicoDisponible } from "@api/types/medicos.types";
 import { isOpenVisitStatus } from "@features/recepcion/shared/utils/recepcion-format";
 import { ApiError }        from "@api/utils/errors";
+import { visitsAPI }       from "@api/resources/visits.api";
 import { PatientMemberCard } from "@features/recepcion/shared/components/PatientMemberCard";
 import { useCreateVisit }   from "@features/recepcion/modules/checkin/mutations/useCreateVisit";
 import { useTiposCitasList } from "@features/admin/modules/catalogos/tipos-citas/queries/useTiposCitasList";
@@ -350,8 +351,14 @@ export const RecepcionQuickCheckinDialog = ({
       return;
     }
     try {
+      // El miembro que nunca se atendió todavía no tiene idPaciente: se abre primero.
+      const idPaciente =
+        selectedMember?.idPaciente ??
+        (selectedMember
+          ? (await visitsAPI.openPatient(selectedMember.noExp, selectedMember.pkNum)).idPaciente
+          : undefined);
       await createVisit.mutateAsync(
-        mapCheckinFormToCreateVisitRequest(values, selectedMember?.nombre),
+        mapCheckinFormToCreateVisitRequest(values, selectedMember?.nombre, idPaciente),
       );
       toast.success("Ficha de consulta generada.");
       form.reset(DEFAULT_CHECKIN_FORM_VALUES);

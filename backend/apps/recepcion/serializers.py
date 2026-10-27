@@ -6,7 +6,9 @@ from apps.catalogos.models import MotivoCita
 class CreateVisitSerializer(serializers.Serializer):
     """Datos requeridos para registrar la llegada de un paciente (check-in)."""
 
-    noExp           = serializers.CharField(max_length=20)
+    # Plan contraer la llave vieja: idPaciente (desde C0); noExp/pkNum transitorio.
+    idPaciente      = serializers.IntegerField(min_value=1, required=False)
+    noExp           = serializers.CharField(max_length=20, required=False)
     pkNum           = serializers.IntegerField(min_value=0, default=0)
     nombrePaciente  = serializers.CharField(max_length=255, required=False, allow_blank=True)
     arrivalType = serializers.ChoiceField(choices=("appointment", "walk_in"))
@@ -56,7 +58,9 @@ class CreateVisitSerializer(serializers.Serializer):
             )
 
         attrs["appointmentId"] = appointment_id or None
-        return attrs
+        from apps.consulta_medica.services.paciente_entrada import resolver_paciente_en_datos
+
+        return resolver_paciente_en_datos(attrs)
 
 
 class ListVisitsQuerySerializer(serializers.Serializer):
