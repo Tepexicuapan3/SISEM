@@ -1,6 +1,6 @@
 # Plan: contraer la llave vieja (`no_exp` + `pk_num` → `id_paciente`)
 
-> Estado: **en curso** — C0 hecho (2026-10-27). Continúa el plan
+> Estado: **en curso** — C0 a C4b hechos; sigue C5/C6 (2026-10-27). Continúa el plan
 > [identidad-paciente.md](identidad-paciente.md): expandir (hecho) → migrar (a medias) → **contraer**.
 
 ## Objetivo
@@ -95,3 +95,37 @@ SELECT count(*) FROM rcp_visits WHERE id_paciente IS NULL;
 - **Achicar el rango del provisional:** mientras alguna pantalla o API lleve el `cd_provisional` en
   `pkNum`, con números chicos chocaría con un `PK_NUM` real. Se revisa al definir C0.
 - Las tablas de [contraer-llave-paciente-tablas-sin-cambio.md](contraer-llave-paciente-tablas-sin-cambio.md).
+
+
+## C6 — checklist de ejecución (inventario del 2026-10-27)
+
+Regla: después de C6 ninguna de las 22 tablas guarda `no_exp`/`pk_num`; todo se filtra y se crea por
+`patient` y lo que se muestra sale de `cns_paciente` (`llave_publica`).
+
+**A. Filtros que pasan a `cns_paciente`**
+- [ ] `ambulancias/repositories/ambulance_request_repository.py` (filtro por expediente)
+- [ ] `cirugias/repositories/surgery_repository.py` (filtro por expediente)
+- [ ] `consulta_medica/repositories/medical_leave_repository.py` (filtro por expediente)
+- [ ] `padrones/uses_case/padron_usecase.py` (expediente + pkNum)
+- [ ] `pases/repositories/referral_repository.py` (por paciente y por expediente)
+- [ ] `consulta_medica/uses_case/consultation_usecase.py` (`id_visit__no_exp/pk_num` → `id_visit__patient_id`)
+- [ ] `consulta_medica/uses_case/odontogram_usecase.py`, `patient_record_usecase.py` (la visita es del paciente)
+- [ ] `consulta_medica/services/patient_link_service.py`: `for_patient` sin respaldo por llave vieja; `keys_for_person`
+- [ ] `consulta_medica/repositories/consultation_repository.py`
+
+**B. Creaciones que pasan `patient` explícito** (la señal ya no puede resolverlo desde la llave)
+- [ ] hijos de la visita: `follow_up_usecase`, `medical_leave_usecase`, `study_result_usecase`, `pases/referral_usecase`
+- [ ] por llave de la URL: `allergy_repository`, `medical_leave_repository`, `odontogram_repository`,
+      `stomatology_history_repository`, `study_result_repository`, `clinical_history_repository`,
+      `patient_record_usecase`, `pases/referral_repository`, `citas_repository`, `visit_repository`,
+      cirugías, ambulancias, padrones, contratos
+- [ ] `get_or_create` por llave (estomatología, historia clínica, odontograma) → por `patient`
+
+**C. Lecturas de la fila** → `llave_publica`: `consulta_medica/views.py`, `impresion/*`, `*/impresion/*`,
+`report_export_service`, `record_access_audit_service`.
+
+**D. Congelar**
+- [ ] Señales: resuelven `patient` si llega la llave y **vacían** `no_exp`/`pk_num` antes de guardar
+- [ ] Migraciones: `no_exp`/`pk_num` con NULL permitido y sin default en las 22 tablas; `id_paciente` NOT NULL
+      (salvo `portal_miembros`, fuera de alcance)
+- [ ] Suite completa de todas las apps en verde
