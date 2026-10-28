@@ -49,6 +49,8 @@ class ConsultationCancellationRepository:
         content_hash,
         signed_at,
         snapshot_version=1,
+        authorizer_record_id=None,
+        authorizer_type_id=None,
     ):
         return ConsultationCancellation.objects.create(
             consultation=consultation,
@@ -57,6 +59,8 @@ class ConsultationCancellationRepository:
             reason_detail=reason_detail,
             authorizer=authorizer,
             designation_id=designation_id,
+            authorizer_record_id=authorizer_record_id,
+            authorizer_type_id=authorizer_type_id,
             applied_scope=applied_scope,
             center_id=center_id,
             outside_assignment=outside_assignment,

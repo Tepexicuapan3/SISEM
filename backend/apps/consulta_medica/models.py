@@ -545,10 +545,15 @@ class ConsultationCancellation(models.Model):
         "authentication.SyUsuario", db_column="usr_autoriza", on_delete=models.PROTECT,
         related_name="+",
     )
+    # Quien habilito al autorizador: la designacion vieja o, con
+    # AUTORIZACIONES_NOTA_V2, el modulo de autorizadores (ids planos: es otro
+    # dominio). El CHECK exige al menos uno.
     designation = models.ForeignKey(
         "catalogos.DesignacionAutorizador", db_column="id_designacion",
-        on_delete=models.PROTECT, related_name="+",
+        on_delete=models.PROTECT, related_name="+", null=True, blank=True,
     )
+    authorizer_record_id = models.BigIntegerField(db_column="id_autorizador", null=True, blank=True)
+    authorizer_type_id = models.BigIntegerField(db_column="id_autorizador_tipo", null=True, blank=True)
     applied_scope = models.CharField(max_length=12, db_column="alcance_aplicado")
     center = models.ForeignKey(
         "catalogos.CatCentroAtencion", db_column="id_centro_atencion",
@@ -567,6 +572,13 @@ class ConsultationCancellation(models.Model):
 
     class Meta:
         db_table = "cns_cancelacion_nota"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(designation__isnull=False)
+                | models.Q(authorizer_record_id__isnull=False, authorizer_type_id__isnull=False),
+                name="cns_cancnota_habilitacion_ck",
+            ),
+        ]
         indexes = [
             models.Index(fields=["center", "created_at"], name="cns_cancnota_centro_idx"),
             models.Index(fields=["authorizer", "created_at"], name="cns_cancnota_autor_idx"),
