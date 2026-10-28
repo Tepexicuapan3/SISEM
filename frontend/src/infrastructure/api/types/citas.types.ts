@@ -67,11 +67,24 @@ export interface CreateCitaRequest {
 export interface UpdateEstatusCitaRequest {
   estatus: "confirmada" | "atendida" | "cancelada" | "no_asistio";
   /**
+   * Motivo tipificado (catálogo MotivoCita, ver GET /citas/motivos-cancelacion).
    * Obligatorio para "cancelada" y "no_asistio" — la máquina de estados del
    * backend (cita_state_machine_usecase.transition_cita_state) lo exige y
-   * responde 422 CITA_MOTIVO_REQUERIDO si viene vacío.
+   * responde 422 CITA_MOTIVO_REQUERIDO si falta. El texto libre ya no
+   * cuenta como motivo; va como detalle opcional.
    */
-  motivo?: string;
+  motivoCancelacionId?: number;
+  motivoDetalle?: string;
+}
+
+/** Motivo de cancelación del catálogo MotivoCita (GET /citas/motivos-cancelacion). */
+export interface MotivoCancelacion {
+  id:   number;
+  name: string;
+}
+
+export interface MotivosCancelacionResponse {
+  results: MotivoCancelacion[];
 }
 
 // ─── Params ───────────────────────────────────────────────────────────────────

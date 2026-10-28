@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@shared/ui/dialog";
-import { Textarea } from "@shared/ui/textarea";
+import { MotivoCancelacionFields } from "@features/recepcion/shared/components/MotivoCancelacionFields";
 import { useUpdateEstatusCita } from "@features/recepcion/modules/citas/mutations/useCitaMutations";
 import { resolveDomainErrorMessage } from "@features/recepcion/modules/agenda/pages/RecepcionAgendaPage.helpers";
 import {
@@ -41,22 +41,25 @@ function formatFechaCorta(fecha: string): string {
 /**
  * Dialogo de confirmacion para cancelar una CitaMedica desde la agenda de
  * recepcion (`SlotCalendar`). A diferencia del portal de citas en linea
- * (donde el motivo es opcional), acá el backend EXIGE motivo para la
- * transicion a "cancelada" (CITA_MOTIVO_REQUERIDO) — por eso el textarea es
- * obligatorio y el boton de confirmar queda deshabilitado sin contenido, en
- * vez de depender solo del 422 del servidor.
+ * (donde el motivo se asigna solo), acá el backend EXIGE el motivo
+ * tipificado del catalogo para la transicion a "cancelada"
+ * (CITA_MOTIVO_REQUERIDO) — por eso el selector es obligatorio y el boton de
+ * confirmar queda deshabilitado sin motivo, en vez de depender solo del 422
+ * del servidor. El texto libre va como detalle opcional.
  */
 export function CancelarCitaDialog({ cita, onOpenChange }: CancelarCitaDialogProps) {
-  const [motivo, setMotivo] = useState("");
+  const [motivoId, setMotivoId] = useState("");
+  const [detalle, setDetalle] = useState("");
   const updateEstatus = useUpdateEstatusCita(cita?.id ?? 0);
 
   useEffect(() => {
     if (cita) {
-      setMotivo("");
+      setMotivoId("");
+      setDetalle("");
     }
   }, [cita]);
 
-  const motivoValido = motivo.trim().length > 0;
+  const motivoValido = Boolean(motivoId);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && !updateEstatus.isPending) {
@@ -70,7 +73,11 @@ export function CancelarCitaDialog({ cita, onOpenChange }: CancelarCitaDialogPro
     }
 
     try {
-      await updateEstatus.mutateAsync({ estatus: "cancelada", motivo: motivo.trim() });
+      await updateEstatus.mutateAsync({
+        estatus:             "cancelada",
+        motivoCancelacionId: Number(motivoId),
+        motivoDetalle:       detalle.trim() || undefined,
+      });
       toast.success("Cita cancelada", { description: `Folio ${cita.folio}.` });
       onOpenChange(false);
     } catch (error) {
@@ -96,27 +103,15 @@ export function CancelarCitaDialog({ cita, onOpenChange }: CancelarCitaDialogPro
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-1.5">
-          <label
-            htmlFor="motivo-cancelacion-cita"
-            className="text-sm font-medium text-txt-body"
-          >
-            Motivo de la cancelacion <span className="text-status-critical">*</span>
-          </label>
-          <Textarea
-            id="motivo-cancelacion-cita"
-            rows={3}
-            maxLength={255}
-            value={motivo}
-            onChange={(e) => setMotivo(e.target.value)}
-            disabled={updateEstatus.isPending}
-            placeholder="Ej. el paciente solicito reagendar, se resolvio por otro medio..."
-            aria-invalid={!motivoValido}
-          />
-          <p className="text-xs text-txt-muted">
-            Obligatorio para cancelar una cita agendada.
-          </p>
-        </div>
+        <MotivoCancelacionFields
+          idPrefix="cancelacion-cita"
+          motivoId={motivoId}
+          onMotivoId={setMotivoId}
+          detalle={detalle}
+          onDetalle={setDetalle}
+          disabled={updateEstatus.isPending}
+          enabled={cita !== null}
+        />
 
         <DialogFooter>
           <Button

@@ -161,9 +161,12 @@ export type RecepcionStatusAction =
 
 export interface UpdateVisitStatusRequest {
   targetStatus: RecepcionStatusAction;
-  /** Requerido por el backend solo para `targetStatus: "cancelada"`
-   * (VISIT_MOTIVO_REQUERIDO); las demas transiciones lo ignoran si llega. */
-  motivo?: string;
+  /** Motivo tipificado (catálogo MotivoCita). Requerido por el backend solo
+   * para `targetStatus: "cancelada"` (VISIT_MOTIVO_REQUERIDO); las demas
+   * transiciones lo ignoran si llega. */
+  motivoCancelacionId?: number;
+  /** Texto libre complementario, opcional. */
+  motivoDetalle?: string;
 }
 
 export interface UpdateVisitStatusResponse {

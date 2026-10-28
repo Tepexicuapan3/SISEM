@@ -5,6 +5,7 @@ from apps.recepcion.views.citas_views import (
     CitasListCreateView,
     CitaDetailView,
     CitaEstatusView,
+    MotivosCancelacionView,
     SlotsDisponiblesView,
 )
 from apps.recepcion.views.agenda_views import AgendaSemanalView
@@ -35,6 +36,7 @@ urlpatterns = [
 
     # ── Citas médicas ─────────────────────────────────────────────────────────
     path("citas",                           CitasListCreateView.as_view(), name="citas"),
+    path("citas/motivos-cancelacion",       MotivosCancelacionView.as_view(), name="citas-motivos-cancelacion"),
     path("citas/slots",                     SlotsDisponiblesView.as_view(),  name="citas-slots"),
     path("citas/agenda",                    AgendaSemanalView.as_view(),     name="citas-agenda"),
     path("citas/<int:cita_id>",             CitaDetailView.as_view(),      name="cita-detail"),

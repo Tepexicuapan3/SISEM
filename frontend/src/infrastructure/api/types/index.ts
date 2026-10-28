@@ -1340,6 +1340,8 @@ export type {
   SlotDisponible,
   CreateCitaRequest,
   UpdateEstatusCitaRequest,
+  MotivoCancelacion,
+  MotivosCancelacionResponse,
   CitasListParams,
   SlotsParams,
   CitasListResponse,

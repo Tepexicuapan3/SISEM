@@ -7,6 +7,7 @@ import type {
   ConfirmarQRCheckinResponse,
   CreateCitaRequest,
   FichaQRResponse,
+  MotivosCancelacionResponse,
   SlotsParams,
   SlotsResponse,
   UpdateEstatusCitaRequest,
@@ -31,6 +32,11 @@ export const citasAPI = {
 
   updateEstatus: async (id: number, data: UpdateEstatusCitaRequest): Promise<CitaListItem> => {
     const r = await apiClient.patch<CitaListItem>(`/citas/${id}/estatus`, data);
+    return r.data;
+  },
+
+  getMotivosCancelacion: async (): Promise<MotivosCancelacionResponse> => {
+    const r = await apiClient.get<MotivosCancelacionResponse>("/citas/motivos-cancelacion");
     return r.data;
   },
 

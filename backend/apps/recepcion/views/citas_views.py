@@ -23,6 +23,7 @@ from apps.recepcion.repositories.citas_repository import CitasRepository, _seria
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 from apps.recepcion.services.vigencia_service import tiene_vigencia
+from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABILITY
 
 logger = logging.getLogger(__name__)
 
@@ -380,6 +381,38 @@ class CitaEstatusView(APIView):
             return _domain_error(request, exc)
 
         return Response(result)
+
+
+class MotivosCancelacionView(APIView):
+    """
+    GET /citas/motivos-cancelacion
+
+    Motivos tipificados (catálogo MotivoCita) que aplican a una cancelación,
+    para los diálogos de cancelar cita y cancelar ficha de recepción. El
+    catálogo completo (/appointment-reasons/) exige permiso de admin de
+    catálogos; aquí basta con poder trabajar la agenda o la cola.
+    """
+
+    authentication_classes = []
+    permission_classes     = []
+
+    def get(self, request):
+        user, err = _auth(request)
+        if err:
+            return err
+        permisos = UserRepository.build_auth_user(user).get("permissions", [])
+        if not (has_capability(permisos, CITAS_READ_CAPABILITY)
+                or has_capability(permisos, RECEPCION_WRITE_CAPABILITY)):
+            return _domain_error(request, VisitDomainError("ROLE_NOT_ALLOWED", "No tienes permiso.", 403))
+
+        motivos = (
+            MotivoCita.objects
+            .filter(is_active=True, deleted_at__isnull=True,
+                    aplica_a__in=(MotivoCita.AplicaA.CANCELACION, MotivoCita.AplicaA.AMBOS))
+            .order_by("name")
+            .values("id", "name")
+        )
+        return Response({"results": list(motivos)})
 
 
 class SlotsDisponiblesView(APIView):

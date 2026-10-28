@@ -19,7 +19,6 @@ import {
   AlertDialogTitle,
 } from "@shared/ui/alert-dialog";
 import { Button } from "@shared/ui/button";
-import { Textarea } from "@shared/ui/textarea";
 import {
   ARRIVAL_TYPE,
   VISIT_STATUS,
@@ -27,6 +26,7 @@ import {
   type VisitStatus,
 } from "@api/types";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { MotivoCancelacionFields } from "@features/recepcion/shared/components/MotivoCancelacionFields";
 import { useVisitStatusAction } from "@features/recepcion/modules/checkin/mutations/useVisitStatusAction";
 import { useRecepcionAgendaQueue } from "@features/recepcion/modules/agenda/queries/useRecepcionAgendaQueue";
 import { RecepcionQuickCheckinDialog } from "@features/recepcion/modules/agenda/components/RecepcionQuickCheckinDialog";
@@ -200,8 +200,10 @@ export const RecepcionAgendaPage = () => {
   const [pendingStatusAction, setPendingStatusAction] =
     useState<PendingStatusAction | null>(null);
   // Solo se usa cuando pendingStatusAction.targetStatus === CANCELADA -- el
-  // backend exige motivo unicamente para esa transicion (VISIT_MOTIVO_REQUERIDO).
-  const [cancelMotivo, setCancelMotivo] = useState("");
+  // backend exige el motivo tipificado (catalogo MotivoCita) unicamente para
+  // esa transicion (VISIT_MOTIVO_REQUERIDO); el detalle libre es opcional.
+  const [cancelMotivoId, setCancelMotivoId] = useState("");
+  const [cancelDetalle, setCancelDetalle] = useState("");
 
   const visits = bandejaIsHistorical
     ? (historicalData?.items ?? [])
@@ -307,7 +309,7 @@ export const RecepcionAgendaPage = () => {
     : null;
   const pendingActionRequiresMotivo =
     pendingStatusAction?.targetStatus === RECEPCION_ACTION.CANCELADA;
-  const cancelMotivoValido = cancelMotivo.trim().length > 0;
+  const cancelMotivoValido = Boolean(cancelMotivoId);
 
   const handleOpenQuickCheckin = (defaults?: Partial<CheckinFormInput>) => {
     setQuickCheckinDefaults(defaults);
@@ -323,7 +325,8 @@ export const RecepcionAgendaPage = () => {
       return;
     }
 
-    setCancelMotivo("");
+    setCancelMotivoId("");
+    setCancelDetalle("");
     setPendingStatusAction({ visitId, folio, targetStatus });
   };
 
@@ -375,7 +378,8 @@ export const RecepcionAgendaPage = () => {
       await visitStatusAction.mutateAsync({
         visitId: pendingStatusAction.visitId,
         targetStatus: pendingStatusAction.targetStatus,
-        motivo: requiresMotivo ? cancelMotivo.trim() : undefined,
+        motivoCancelacionId: requiresMotivo ? Number(cancelMotivoId) : undefined,
+        motivoDetalle: requiresMotivo ? cancelDetalle.trim() || undefined : undefined,
       });
 
       toast.success(
@@ -395,7 +399,8 @@ export const RecepcionAgendaPage = () => {
       });
     } finally {
       setPendingStatusAction(null);
-      setCancelMotivo("");
+      setCancelMotivoId("");
+      setCancelDetalle("");
     }
   };
 
@@ -597,7 +602,8 @@ export const RecepcionAgendaPage = () => {
         onOpenChange={(nextOpen) => {
           if (!nextOpen) {
             setPendingStatusAction(null);
-            setCancelMotivo("");
+            setCancelMotivoId("");
+            setCancelDetalle("");
           }
         }}
       >
@@ -612,27 +618,14 @@ export const RecepcionAgendaPage = () => {
           </AlertDialogHeader>
 
           {pendingActionRequiresMotivo ? (
-            <div className="space-y-1.5">
-              <label
-                htmlFor="motivo-cancelacion-visita"
-                className="text-sm font-medium text-txt-body"
-              >
-                Motivo de la cancelacion <span className="text-status-critical">*</span>
-              </label>
-              <Textarea
-                id="motivo-cancelacion-visita"
-                rows={3}
-                maxLength={255}
-                value={cancelMotivo}
-                onChange={(e) => setCancelMotivo(e.target.value)}
-                disabled={visitStatusAction.isPending}
-                placeholder="Ej. el paciente se retiro, se resolvio por otro medio..."
-                aria-invalid={!cancelMotivoValido}
-              />
-              <p className="text-xs text-txt-muted">
-                Obligatorio para cancelar una visita.
-              </p>
-            </div>
+            <MotivoCancelacionFields
+              idPrefix="cancelacion-visita"
+              motivoId={cancelMotivoId}
+              onMotivoId={setCancelMotivoId}
+              detalle={cancelDetalle}
+              onDetalle={setCancelDetalle}
+              disabled={visitStatusAction.isPending}
+            />
           ) : null}
 
           <AlertDialogFooter>

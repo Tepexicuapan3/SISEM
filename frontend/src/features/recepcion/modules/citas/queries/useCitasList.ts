@@ -6,6 +6,7 @@ const CITAS_KEYS = {
   all:   ["citas"]                                        as const,
   list:  (params?: CitasListParams) => ["citas", "list", params] as const,
   slots: (medicoId: number, fecha: string) => ["citas", "slots", medicoId, fecha] as const,
+  motivosCancelacion: ["citas", "motivos-cancelacion"] as const,
 };
 
 export { CITAS_KEYS };
