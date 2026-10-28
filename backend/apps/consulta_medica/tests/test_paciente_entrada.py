@@ -89,3 +89,47 @@ class SerializersConIdPacienteTests(TestCase):
     def test_la_llave_vieja_sigue_funcionando_mientras_dura_la_transicion(self):
         serializer = self._cita(noExp="40041", pkNum=0)
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+
+@APAGADO
+class RutasPorIdPacienteTests(TestCase):
+    """C3: pacientes/<idPaciente>/... reutiliza la vista de patients/<no_exp>/...?pkNum=."""
+
+    def _vista(self):
+        from rest_framework.response import Response
+        from rest_framework.views import APIView
+
+        from apps.consulta_medica.services.paciente_entrada import por_id_paciente
+        from apps.consulta_medica.views import _parse_pk_num
+
+        class Eco(APIView):
+            authentication_classes = []
+            permission_classes = []
+
+            def get(self, request, no_exp):
+                return Response({"noExp": no_exp, "pkNum": _parse_pk_num(request)})
+
+        return por_id_paciente(Eco).as_view()
+
+    def _get(self, id_paciente):
+        from rest_framework.test import APIRequestFactory
+
+        return self._vista()(APIRequestFactory().get("/x"), id_paciente=id_paciente)
+
+    def test_la_vista_recibe_la_llave_del_registro(self):
+        hijo = paciente_de_llave("40041", 3)
+        self.assertEqual(self._get(hijo.pk).data, {"noExp": "40041", "pkNum": 3})
+
+    def test_el_provisional_llega_por_su_id(self):
+        bebe = Patient.objects.create(no_exp="40041", pk_num=None, provisional_code=100000001)
+        self.assertEqual(self._get(bebe.pk).data, {"noExp": "40041", "pkNum": 100000001})
+
+    def test_paciente_inexistente_da_404(self):
+        self.assertEqual(self._get(999999).status_code, 404)
+
+    def test_las_rutas_clinicas_tienen_su_espejo(self):
+        from django.urls import resolve
+
+        for ruta in ("allergies", "clinical-history", "consultations", "medical-leaves", "odontogram",
+                     "personal-history", "study-results", "legacy-review", "referrals"):
+            self.assertTrue(resolve(f"/api/v1/pacientes/7/{ruta}").func.view_class.__name__.endswith("PorId"), ruta)

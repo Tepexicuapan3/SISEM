@@ -29,3 +29,8 @@ urlpatterns = [
         name="reportes-pases",
     ),
 ]
+
+# Plan contraer la llave vieja: misma vista por idPaciente (pacientes/<id>/...).
+from apps.consulta_medica.services.paciente_entrada import rutas_por_id_paciente  # noqa: E402
+
+urlpatterns += rutas_por_id_paciente(urlpatterns)

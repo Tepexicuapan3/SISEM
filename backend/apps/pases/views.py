@@ -75,6 +75,10 @@ def _actor_context(user):
 
 
 def _parse_pk_num(request):
+    # Ruta espejo por idPaciente (plan contraer la llave vieja): el pkNum sale de cns_paciente.
+    entrada = getattr(request, "_pk_num_entrada", None)
+    if entrada is not None:
+        return entrada
     raw_value = request.query_params.get("pkNum", "0")
     try:
         return int(raw_value)

@@ -108,3 +108,44 @@ def llave_publica(fila) -> tuple[str, int | None]:
     if paciente is not None:
         return _record_key(paciente)
     return getattr(fila, "no_exp", None) or "", getattr(fila, "pk_num", None)
+
+
+def por_id_paciente(view_cls):
+    """
+    Vista espejo para las rutas `pacientes/<id_paciente>/...` (plan contraer la
+    llave vieja): la pantalla manda el idPaciente y se reutiliza la MISMA vista
+    de `patients/<no_exp>/...?pkNum=`, con la llave tomada de cns_paciente. La
+    vista lee el pkNum con su `_parse_pk_num`, que respeta `_pk_num_entrada`.
+    """
+    from django.http import JsonResponse
+
+    class VistaPorId(view_cls):
+        def dispatch(self, request, *args, id_paciente=None, **kwargs):
+            llave = llave_de_paciente(id_paciente)
+            if llave is None:
+                return JsonResponse(
+                    {"code": "PATIENT_NOT_FOUND", "message": "Paciente no encontrado.", "status": 404},
+                    status=404,
+                )
+            request._pk_num_entrada = llave[1]
+            return super().dispatch(request, *args, no_exp=llave[0], **kwargs)
+
+    VistaPorId.__name__ = VistaPorId.__qualname__ = f"{view_cls.__name__}PorId"
+    return VistaPorId
+
+
+def rutas_por_id_paciente(patrones, prefijo="patients/<str:no_exp>/"):
+    """Una ruta `pacientes/<int:id_paciente>/...` por cada `patients/<str:no_exp>/...`."""
+    from django.urls import path
+
+    espejos = []
+    for patron in patrones:
+        ruta = str(getattr(patron, "pattern", ""))
+        vista = getattr(getattr(patron, "callback", None), "view_class", None)
+        if ruta.startswith(prefijo) and vista is not None:
+            espejos.append(path(
+                ruta.replace(prefijo, "pacientes/<int:id_paciente>/", 1),
+                por_id_paciente(vista).as_view(),
+                name=f"{patron.name}-por-id" if patron.name else None,
+            ))
+    return espejos
