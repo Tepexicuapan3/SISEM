@@ -1,6 +1,6 @@
 # Plan: contraer la llave vieja (`no_exp` + `pk_num` → `id_paciente`)
 
-> Estado: **C0 a C6 hechos** (2026-10-27); C7 (borrar columnas) en la versión siguiente. Continúa el plan
+> Estado: **C0 a C6 hechos** (2026-10-27) y verificados en el servidor (2026-10-28); C7 (borrar columnas) en la versión siguiente. Continúa el plan
 > [identidad-paciente.md](identidad-paciente.md): expandir (hecho) → migrar (a medias) → **contraer**.
 
 ## Objetivo
@@ -133,6 +133,18 @@ Regla: después de C6 ninguna de las 22 tablas guarda `no_exp`/`pk_num`; todo se
 **Resultado C6 (2026-10-27):** suite completa en verde (consulta_medica 641, resto de apps 1574).
 Migraciones, en este orden: `*_llave_vieja_opcional` → `consulta_medica.0065_completar_id_paciente`
 (completa id_paciente con `link_existing`) → `*_id_paciente_obligatorio`.
+
+**Verificación en el servidor (2026-10-28):** desplegado y con las migraciones aplicadas. Las fichas
+nuevas (rcp_visits 12–14) guardan solo `id_paciente`, con `no_exp`/`pk_num` en NULL. Pruebas manuales
+aprobadas:
+- Recepción: ficha y cita para titular, hijo y provisional.
+- Expediente de un familiar: alergias, historial, licencias y odontograma.
+- Portal de citas: reservar y cancelar. Para que aparezcan centros hace falta un horario de médico con
+  canal `LINEA`/`AMBOS`; cada franja nace `PRESENCIAL`.
+
+De estas pruebas salió un defecto que ya existía, ajeno a este cambio: al cancelar una cita o una ficha
+en recepción se mandaba un motivo en texto libre, y el backend exige el motivo del catálogo
+(`c80cfa21`, `24c1c9b4`).
 
 **Pendiente para C7** (versión siguiente, con respaldo previo):
 - Borrar `no_exp`/`pk_num` (`expediente` en contratos) de las 22 tablas, con sus índices y únicos viejos.
