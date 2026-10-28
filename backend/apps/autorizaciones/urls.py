@@ -12,6 +12,15 @@ from .views import (
     UsuariosElegiblesView,
 )
 
+from .views_configuracion import (
+    MotivoConfiguracionDetalleView,
+    MotivosConfiguracionView,
+    ReglaCentroBajaView,
+    ReglaCentroDetalleView,
+    ReglasCentroView,
+    TipoConfiguracionDetalleView,
+    TiposConfiguracionView,
+)
 from .views_solicitud import (
     SolicitudDecisionView,
     SolicitudDetalleView,
@@ -37,4 +46,11 @@ urlpatterns = [
     path("autorizadores/<int:pk>/renovar/", AutorizadorRenovarView.as_view()),
     path("autorizadores/<int:pk>/historial/", AutorizadorHistorialView.as_view()),
     path("autorizaciones/catalogos/", CatalogosAutorizacionView.as_view()),
+    path("autorizaciones/configuracion/tipos/", TiposConfiguracionView.as_view()),
+    path("autorizaciones/configuracion/tipos/<int:pk>/", TipoConfiguracionDetalleView.as_view()),
+    path("autorizaciones/configuracion/reglas/", ReglasCentroView.as_view()),
+    path("autorizaciones/configuracion/reglas/<int:pk>/", ReglaCentroDetalleView.as_view()),
+    path("autorizaciones/configuracion/reglas/<int:pk>/baja/", ReglaCentroBajaView.as_view()),
+    path("autorizaciones/configuracion/motivos/", MotivosConfiguracionView.as_view()),
+    path("autorizaciones/configuracion/motivos/<int:pk>/", MotivoConfiguracionDetalleView.as_view()),
 ]

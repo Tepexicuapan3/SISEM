@@ -286,4 +286,7 @@ NAVIGATION_PERMISSIONS_SEED += [
     ("clinico:autorizaciones:read", "Ver la bandeja y el detalle de solicitudes de autorización"),
     ("clinico:autorizaciones:decide", "Autorizar o rechazar solicitudes (requiere ser autorizador vigente)"),
     ("clinico:autorizaciones:notify", "Enviar solicitudes de autorización a autorizadores elegidos"),
+    # Configuracion del modulo (2026-10-28): migracion autorizaciones 0014.
+    ("admin:autorizaciones-config:read", "Ver la configuración del módulo de autorizaciones"),
+    ("admin:autorizaciones-config:update", "Editar tipos, reglas por centro y motivos de autorizaciones"),
 ]

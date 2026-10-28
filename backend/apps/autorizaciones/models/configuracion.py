@@ -53,6 +53,8 @@ class TipoAutorizacion(RegistroAuditable):
         max_length=10, choices=MetodoFirma.choices, default=MetodoFirma.SIMPLE,
     )
     requiere_cedula = models.BooleanField(default=True)
+    # Bloqueo optimista de la pantalla de configuracion.
+    version = models.PositiveIntegerField(default=1)
 
     class Meta:
         db_table = "aut_tipo_autorizacion"
@@ -98,6 +100,7 @@ class ReglaCentro(RegistroAuditable):
     modalidad = models.CharField(max_length=16, choices=Modalidad.choices, null=True, blank=True)
     aprobaciones_requeridas = models.PositiveSmallIntegerField(null=True, blank=True)
     horas_vigencia_solicitud = models.PositiveSmallIntegerField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
 
     class Meta:
         db_table = "aut_regla_centro"
@@ -181,6 +184,7 @@ class Motivo(RegistroAuditable):
     descripcion = models.CharField(max_length=150)
     # "Otro": obliga a capturar el motivo en texto libre.
     requiere_descripcion_libre = models.BooleanField(default=False)
+    version = models.PositiveIntegerField(default=1)
 
     class Meta:
         db_table = "aut_motivo"

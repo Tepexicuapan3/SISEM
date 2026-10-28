@@ -759,6 +759,21 @@ NAV_SEED = [
         "permisos": ["admin:autorizadores:read"],
     },
     {
+        # Agregado 2026-10-28 (change autorizadores-medicos): configuracion del
+        # modulo (tipos, reglas por centro, motivos). La migracion autorizaciones
+        # 0014 lo crea; aqui queda para que --prune no lo de de baja.
+        "clave": "administracion.autorizaciones_configuracion",
+        "titulo": "Configuración de autorizaciones",
+        "icono": "settings",
+        "url": "/admin/autorizacion/configuracion",
+        "badge": None,
+        "orden": 4,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion",
+        "permisos": ["admin:autorizaciones-config:read"],
+    },
+    {
         "clave": "administracion.reportes.consultas_diario",
         "titulo": "Informe Diario de Consulta Médica",
         "icono": None,
