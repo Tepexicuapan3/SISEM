@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { conIdPaciente } from "@api/paciente-ids";
 import type {
   AmbulanceRequestItem,
   AmbulanceRequestListParams,
@@ -15,7 +16,7 @@ export const ambulanciasAPI = {
   },
 
   create: async (data: CreateAmbulanceRequestRequest): Promise<AmbulanceRequestItem> => {
-    const response = await apiClient.post<AmbulanceRequestItem>("/ambulance-requests", data);
+    const response = await apiClient.post<AmbulanceRequestItem>("/ambulance-requests", await conIdPaciente(data));
     return response.data;
   },
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import apiClient from "@api/client";
-import { registrarIdsPaciente, rutaPaciente } from "@api/paciente-ids";
+import { conIdPaciente, registrarIdsPaciente, rutaPaciente } from "@api/paciente-ids";
 
 vi.mock("@api/client", () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -56,5 +56,28 @@ describe("rutaPaciente", () => {
       url: "/patients/88001/allergies",
       params: { pkNum: 0 },
     });
+  });
+});
+
+describe("conIdPaciente", () => {
+  it("cambia expediente + pkNum por idPaciente cuando lo conoce", async () => {
+    registrarIdsPaciente([{ noExp: "50050", pkNum: 2, idPaciente: 31 }]);
+
+    await expect(conIdPaciente({ noExp: "50050", pkNum: 2, surgeonId: 9 })).resolves.toEqual({
+      surgeonId: 9,
+      idPaciente: 31,
+    });
+    await expect(conIdPaciente({ expediente: "50050", pkNum: 2, nombre: "X" }, "expediente")).resolves.toEqual({
+      nombre: "X",
+      idPaciente: 31,
+    });
+  });
+
+  it("si no lo conoce deja la llave para que el backend lo abra", async () => {
+    const mockedGet = (apiClient as unknown as { get: ReturnType<typeof vi.fn> }).get;
+    mockedGet.mockResolvedValueOnce({ data: { titular: null, dependientes: [] } });
+
+    const datos = { noExp: "60060", pkNum: 0, itemId: "E11" };
+    await expect(conIdPaciente(datos)).resolves.toEqual(datos);
   });
 });

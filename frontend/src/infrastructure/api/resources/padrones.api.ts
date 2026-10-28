@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { conIdPaciente } from "@api/paciente-ids";
 import type {
   PadronDischargeRequest,
   PadronEnrollRequest,
@@ -23,7 +24,7 @@ export const padronesAPI = {
   },
 
   enroll: async (registry: PadronRegistry, data: PadronEnrollRequest): Promise<PadronEnrollment> => {
-    const response = await apiClient.post<PadronEnrollment>(`/padrones/${registry}`, data);
+    const response = await apiClient.post<PadronEnrollment>(`/padrones/${registry}`, await conIdPaciente(data));
     return response.data;
   },
 

@@ -69,3 +69,27 @@ export const rutaPaciente = async (
     ? { url: `/pacientes/${id}/${recurso}`, params: {} }
     : { url: `/patients/${noExp}/${recurso}`, params: { pkNum } };
 };
+
+/**
+ * Cuerpo para guardar algo del paciente: si se conoce su idPaciente, viaja
+ * solo ese id (sin expediente ni pkNum). Si no (nunca se atendió), viaja la
+ * llave y el backend lo abre por la puerta central.
+ */
+export const conIdPaciente = async <T extends { pkNum?: number }>(
+  datos: T,
+  campoExpediente: "noExp" | "expediente" = "noExp",
+): Promise<T> => {
+  const noExp = (datos as Record<string, unknown>)[campoExpediente];
+  if (typeof noExp !== "string" || !noExp) return datos;
+  const pkNum = datos.pkNum ?? 0;
+  let id = ids.get(clave(noExp, pkNum));
+  if (id === undefined) {
+    await buscarExpediente(noExp);
+    id = ids.get(clave(noExp, pkNum));
+  }
+  if (id === undefined) return datos;
+  const resto: Record<string, unknown> = { ...datos };
+  delete resto[campoExpediente];
+  delete resto.pkNum;
+  return { ...resto, idPaciente: id } as unknown as T;
+};

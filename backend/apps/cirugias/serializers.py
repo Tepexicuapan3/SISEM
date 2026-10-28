@@ -2,7 +2,8 @@ from rest_framework import serializers
 
 
 class ScheduleSurgerySerializer(serializers.Serializer):
-    noExp = serializers.CharField()
+    idPaciente = serializers.IntegerField(min_value=1, required=False)
+    noExp = serializers.CharField(required=False)
     pkNum = serializers.IntegerField(required=False, default=0)
     surgeonId = serializers.IntegerField()
     surgeryTypeId = serializers.IntegerField()
@@ -16,6 +17,12 @@ class ScheduleSurgerySerializer(serializers.Serializer):
     diagnosisText = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     requirements = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     cieCodes = serializers.ListField(child=serializers.CharField(), required=False)
+
+    def validate(self, attrs):
+        # Plan contraer la llave vieja: idPaciente; noExp/pkNum transitorio.
+        from apps.consulta_medica.services.paciente_entrada import resolver_paciente_en_datos
+
+        return resolver_paciente_en_datos(super().validate(attrs))
 
 
 class CancelSurgerySerializer(serializers.Serializer):

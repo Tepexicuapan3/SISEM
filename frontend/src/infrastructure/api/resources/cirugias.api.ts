@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { conIdPaciente } from "@api/paciente-ids";
 import type {
   CancelSurgeryRequest,
   ScheduleSurgeryRequest,
@@ -14,7 +15,7 @@ export const cirugiasAPI = {
   },
 
   schedule: async (data: ScheduleSurgeryRequest): Promise<SurgeryItem> => {
-    const response = await apiClient.post<SurgeryItem>("/surgeries", data);
+    const response = await apiClient.post<SurgeryItem>("/surgeries", await conIdPaciente(data));
     return response.data;
   },
 

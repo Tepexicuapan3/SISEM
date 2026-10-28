@@ -53,6 +53,8 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
     fchAlta       = serializers.DateTimeField(source="fch_alta", read_only=True)
     fchModf       = serializers.DateTimeField(source="fch_modf", read_only=True)
     pkNum             = serializers.IntegerField(source="pk_num", required=False)
+    # Plan contraer la llave vieja: el derechohabiente elegido llega por idPaciente.
+    idPaciente        = serializers.IntegerField(min_value=1, required=False, write_only=True)
     fechaNacimiento   = serializers.DateField(source="fecha_nacimiento", allow_null=True, required=False)
     vigenciaDh        = serializers.SerializerMethodField()
     edadDh            = serializers.SerializerMethodField()
@@ -95,7 +97,7 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ContratoOxigeno
         fields = [
-            "id", "sucursal", "numContrato", "nombre", "expediente", "pkNum",
+            "id", "sucursal", "numContrato", "nombre", "expediente", "pkNum", "idPaciente",
             "fechaNacimiento",
             "tpDer", "tpDerLabel", "clinica", "servicio", "servicio2", "servicio3",
             "telefono",
@@ -114,3 +116,20 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
             "fchAlta", "fchModf",
             "vigenciaDh", "edadDh",
         )
+        extra_kwargs = {"expediente": {"required": False}}
+
+    def validate(self, attrs):
+        """idPaciente -> expediente + pk_num desde cns_paciente (transitorio: tambien
+        se acepta el expediente directo). Un contrato nuevo necesita uno de los dos."""
+        from apps.consulta_medica.services.paciente_entrada import llave_de_paciente
+
+        attrs = super().validate(attrs)
+        id_paciente = attrs.pop("idPaciente", None)
+        if id_paciente is not None:
+            llave = llave_de_paciente(id_paciente)
+            if llave is None:
+                raise serializers.ValidationError({"idPaciente": ["Paciente no encontrado."]})
+            attrs["expediente"], attrs["pk_num"] = llave
+        elif self.instance is None and not attrs.get("expediente"):
+            raise serializers.ValidationError({"idPaciente": ["Indica el derechohabiente."]})
+        return attrs

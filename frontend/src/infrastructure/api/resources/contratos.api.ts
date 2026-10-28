@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { conIdPaciente } from "@api/paciente-ids";
 import type {
   BuscarDerechohabienteParams,
   BuscarDerechohabienteResponse,
@@ -24,7 +25,7 @@ export const contratosAPI = {
   },
 
   create: async (data: CreateContratoRequest): Promise<ContratoOxigeno> => {
-    const response = await apiClient.post<ContratoOxigeno>("/contratos-oxigeno/", data);
+    const response = await apiClient.post<ContratoOxigeno>("/contratos-oxigeno/", await conIdPaciente(data, "expediente"));
     return response.data;
   },
 
