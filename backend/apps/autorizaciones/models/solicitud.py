@@ -66,6 +66,8 @@ class Solicitud(RegistroAuditable):
     # SHA-256 del contenido a autorizar: lo firma cada decision.
     hash_contenido = models.CharField(max_length=64)
     sin_elegibles = models.BooleanField(default=False)
+    # Se escala una sola vez (F7): NULL = todavia no.
+    fecha_escalamiento = models.DateTimeField(null=True, blank=True)
     tabla_legado = models.CharField(max_length=30, null=True, blank=True)
     id_legado = models.CharField(max_length=40, null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
@@ -229,7 +231,8 @@ class SolicitudTransicion(models.Model):
     )
     estatus_anterior = models.CharField(max_length=12, null=True, blank=True)
     estatus_nuevo = models.CharField(max_length=12)
-    # CREADA, RECALCULADA, APROBACION_PARCIAL, AUTORIZADA, RECHAZADA, VENCIDA, CANCELADA_ORIGEN, NOTIFICADA
+    # CREADA, RECALCULADA, APROBACION_PARCIAL, AUTORIZADA, RECHAZADA, VENCIDA, CANCELADA_ORIGEN,
+    # NOTIFICADA, ESCALADA
     evento = models.CharField(max_length=24)
     id_usuario = models.BigIntegerField(null=True, blank=True)  # NULL = proceso automatico
     fecha_evento = models.DateTimeField(auto_now_add=True)

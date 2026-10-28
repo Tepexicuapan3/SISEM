@@ -304,6 +304,18 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.authentication.tasks.cerrar_sesiones_abandonadas",
         "schedule": 90.0,  # segundos
     },
+    "autorizaciones-escalar-solicitudes": {
+        "task": "apps.autorizaciones.tasks.escalar_solicitudes_pendientes",
+        "schedule": crontab(minute="5,20,35,50"),
+    },
+    "autorizaciones-vigencia-autorizadores": {
+        "task": "apps.autorizaciones.tasks.revisar_vigencia_autorizadores",
+        "schedule": crontab(hour=7, minute=0),
+    },
+    "notificaciones-reintentar-correos": {
+        "task": "apps.notificaciones.tasks.reintentar_correos",
+        "schedule": crontab(minute=30),
+    },
     "autorizaciones-vencer-solicitudes": {
         "task": "apps.autorizaciones.tasks.vencer_solicitudes_pendientes",
         "schedule": crontab(minute="*/15"),

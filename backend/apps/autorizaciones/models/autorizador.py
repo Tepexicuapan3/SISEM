@@ -186,6 +186,7 @@ class AutorizadorMovimiento(models.Model):
         ALTA_CENTRO = "ALTA_CENTRO", "Centro asignado"
         BAJA_CENTRO = "BAJA_CENTRO", "Centro retirado"
         VENCIMIENTO = "VENCIMIENTO", "Vencimiento de vigencia"
+        AVISO_POR_VENCER = "AVISO_POR_VENCER", "Aviso de vigencia por vencer"
 
     id_movimiento = models.BigAutoField(primary_key=True)
     autorizador = models.ForeignKey(

@@ -392,6 +392,56 @@ class SolicitudUseCase:
         return vencidas
 
     @staticmethod
+    def escalar_pendientes(ahora=None) -> int:
+        """F7: pendientes sin respuesta tras las horas de su tipo (24 por defecto).
+        Recuerda a los destinatarios que hoy pueden autorizar y suma a los elegibles
+        que faltaban; si no queda nadie, avisa al solicitante. Una vez por solicitud.
+        No sube la version: no cambia lo que se autoriza."""
+        ahora = ahora or timezone.now()
+        escaladas = 0
+        for id_solicitud in Repo.ids_por_escalar(ahora):
+            with transaction.atomic():
+                solicitud = (
+                    Solicitud.objects.select_for_update(of=("self",))
+                    .select_related("tipo_autorizacion")
+                    .filter(pk=id_solicitud, estatus=PENDIENTE, fecha_escalamiento__isnull=True)
+                    .first()
+                )
+                if solicitud is None:  # resuelta o escalada mientras tanto
+                    continue
+                elegibles = {
+                    e.id_autorizador
+                    for e in autorizadores_elegibles(
+                        solicitud.tipo_autorizacion.clave, solicitud.centro_atencion_id,
+                        excluir_id_usuario=solicitud.id_usuario_solicitante,
+                    )
+                }
+                actuales = dict(
+                    SolicitudDestinatario.objects.filter(solicitud=solicitud)
+                    .values_list("autorizador_id", "estatus")
+                )
+                esperando = (SolicitudDestinatario.Estatus.NOTIFICADO, SolicitudDestinatario.Estatus.VISTO)
+                recordatorio = sorted(a for a, estatus in actuales.items() if estatus in esperando and a in elegibles)
+                nuevos = sorted(elegibles - set(actuales))
+                for id_autorizador in nuevos:
+                    SolicitudDestinatario.objects.create(
+                        solicitud=solicitud, autorizador_id=id_autorizador,
+                        tipo_seleccion=SolicitudDestinatario.TipoSeleccion.ESCALAMIENTO,
+                    )
+                sin_elegibles = not recordatorio and not nuevos
+                solicitud.fecha_escalamiento = ahora
+                solicitud.sin_elegibles = sin_elegibles
+                solicitud.save(update_fields=["fecha_escalamiento", "sin_elegibles"])
+                _transicion(solicitud, PENDIENTE, "ESCALADA", None,
+                            {"recordatorio": recordatorio, "nuevos": nuevos})
+                events.publicar(events.SolicitudEscalada(
+                    id_solicitud=solicitud.pk, ids_autorizador_recordatorio=tuple(recordatorio),
+                    ids_autorizador_nuevos=tuple(nuevos), sin_elegibles=sin_elegibles,
+                ))
+                escaladas += 1
+        return escaladas
+
+    @staticmethod
     def cancelar_por_origen(tipo_origen, id_origen, *, id_usuario) -> bool:
         """El documento de origen se cancelo: su solicitud pendiente se cancela."""
         with transaction.atomic():

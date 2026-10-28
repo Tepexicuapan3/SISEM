@@ -130,6 +130,69 @@ class AutorizadorRepository:
     def motivo(id_motivo):
         return Motivo.objects.filter(pk=id_motivo, esta_activo=True).first()
 
+    # ------------------------------------------------------------------ #
+    # Tareas programadas (F7)                                             #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def ids_por_vencer(hoy, dias_aviso):
+        """Activos o suspendidos cuya vigencia termina en los proximos `dias_aviso`
+        dias y que todavia no tienen aviso para esa fecha de fin."""
+        return AutorizadorRepository._sin_movimiento_para_su_fin(
+            Autorizador.objects.filter(
+                fecha_fin_vigencia__gte=hoy, fecha_fin_vigencia__lte=hoy + timedelta(days=dias_aviso),
+            ),
+            AutorizadorMovimiento.TipoMovimiento.AVISO_POR_VENCER,
+        )
+
+    @staticmethod
+    def ids_vencidos_sin_registrar(hoy):
+        return AutorizadorRepository._sin_movimiento_para_su_fin(
+            Autorizador.objects.filter(fecha_fin_vigencia__lt=hoy),
+            AutorizadorMovimiento.TipoMovimiento.VENCIMIENTO,
+        )
+
+    @staticmethod
+    def _sin_movimiento_para_su_fin(consulta, tipo_movimiento):
+        # Uno por fecha de fin: si se renueva y vuelve a vencer, es otro aviso.
+        candidatos = consulta.filter(
+            fecha_baja__isnull=True,
+            estatus__in=[Autorizador.Estatus.ACTIVO, Autorizador.Estatus.SUSPENDIDO],
+        ).values_list("pk", "fecha_fin_vigencia")
+        registrados = set(
+            AutorizadorMovimiento.objects.filter(
+                tipo_movimiento=tipo_movimiento, autorizador_id__in=[pk for pk, _ in candidatos],
+            ).values_list("autorizador_id", "datos_nuevos__fechaFinVigencia")
+        )
+        return [pk for pk, fin in candidatos.order_by("pk") if (pk, fin.isoformat()) not in registrados]
+
+    @staticmethod
+    def ids_usuarios_que_renuevan():
+        """Usuarios activos que hoy pueden renovar autorizadores (admin:autorizadores:update).
+        La decision final la toma el resolvedor central de permisos."""
+        from apps.administracion.models import RelRolPermiso, RelUsuarioOverride, RelUsuarioRol
+        from apps.administracion.services.rbac_resolver import RBACResolver
+
+        permiso = "admin:autorizadores:update"
+        roles = RelRolPermiso.objects.filter(
+            fch_baja__isnull=True, id_permiso__codigo=permiso,
+        ).values_list("id_rol", flat=True)
+        con_rol = RelUsuarioRol.objects.filter(fch_baja__isnull=True).filter(
+            Q(id_rol__is_admin=True) | Q(id_rol__in=roles)
+        ).values_list("id_usuario", flat=True)
+        con_excepcion = RelUsuarioOverride.objects.filter(
+            fch_baja__isnull=True, efecto="ALLOW", id_permiso__codigo=permiso,
+        ).values_list("id_usuario", flat=True)
+        candidatos = SyUsuario.objects.filter(est_activo=True).filter(
+            Q(pk__in=con_rol) | Q(pk__in=con_excepcion)
+        ).order_by("pk")
+        resultado = []
+        for usuario in candidatos:
+            efectivos = RBACResolver.get_effective_permissions(usuario)
+            if "*" in efectivos or permiso in efectivos:
+                resultado.append(usuario.pk)
+        return resultado
+
     @staticmethod
     def usuarios_elegibles(busqueda, limite=20):
         ya_autorizador = Autorizador.objects.filter(

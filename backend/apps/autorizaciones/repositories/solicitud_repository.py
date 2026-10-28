@@ -1,5 +1,7 @@
 """Acceso a datos de solicitudes. La bandeja de cada autorizador se arma con
 sus tipos y centros asignados (mismo criterio de cobertura que la politica)."""
+from datetime import timedelta
+
 from django.db.models import Q
 
 from apps.catalogos.models import CatCentroAtencion
@@ -64,6 +66,20 @@ class SolicitudRepository:
             .order_by("pk")
             .values_list("pk", flat=True)
         )
+
+    @staticmethod
+    def ids_por_escalar(ahora):
+        """Pendientes sin escalar, vigentes, con mas horas que las de su tipo (F7)."""
+        ids = []
+        for tipo in TipoAutorizacion.objects.filter(fecha_baja__isnull=True):
+            ids += Solicitud.objects.filter(
+                tipo_autorizacion=tipo,
+                estatus=Solicitud.Estatus.PENDIENTE,
+                fecha_escalamiento__isnull=True,
+                fecha_limite__gt=ahora,
+                fecha_creacion__lte=ahora - timedelta(hours=tipo.horas_escalamiento),
+            ).values_list("pk", flat=True)
+        return sorted(ids)
 
     @staticmethod
     def items_activos(solicitud):

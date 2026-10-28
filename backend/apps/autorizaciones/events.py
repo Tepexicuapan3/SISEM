@@ -8,10 +8,12 @@ solicitud y su documento nunca quedan en estados distintos.
 Eventos:
   SolicitudResuelta  (AUTORIZADA, RECHAZADA, VENCIDA o CANCELADA)
   SolicitudCreada    (para notificar; F4)
+  SolicitudEscalada, AutorizadorPorVencer, AutorizadorVencido (tareas programadas; F7)
 """
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from dataclasses import dataclass
 from typing import Callable
 
@@ -46,6 +48,30 @@ class SolicitudEnviada:
     id_solicitud: int
     ids_autorizador: tuple
     id_usuario_envio: int
+
+
+@dataclass(frozen=True)
+class SolicitudEscalada:
+    """Sin respuesta tras las horas del tipo (F7): recordatorio + elegibles que faltaban."""
+
+    id_solicitud: int
+    ids_autorizador_recordatorio: tuple
+    ids_autorizador_nuevos: tuple
+    sin_elegibles: bool
+
+
+@dataclass(frozen=True)
+class AutorizadorPorVencer:
+    id_autorizador: int
+    id_usuario: int
+    fecha_fin_vigencia: date
+
+
+@dataclass(frozen=True)
+class AutorizadorVencido:
+    id_autorizador: int
+    id_usuario: int
+    fecha_fin_vigencia: date
 
 
 _suscriptores: dict[str, list[Callable]] = defaultdict(list)

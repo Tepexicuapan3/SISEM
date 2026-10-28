@@ -145,6 +145,23 @@ def notificar(
     return creadas
 
 
+MAX_INTENTOS_CORREO = 3
+
+
+def reintentar_correos_fallidos(max_intentos: int = MAX_INTENTOS_CORREO) -> int:
+    """Vuelve a encolar los correos FALLIDA con intentos disponibles (F7, cada hora).
+    Cada envio suma un intento, asi que un correo que siempre falla se deja de
+    reintentar al llegar al maximo y queda FALLIDA para revision."""
+    ids = list(
+        Entrega.objects.filter(
+            canal=Entrega.Canal.CORREO, estatus=Entrega.Estatus.FALLIDA, intentos__lt=max_intentos,
+        ).order_by("pk").values_list("notificacion_id", flat=True)
+    )
+    if ids:
+        _encolar_correo(ids)
+    return len(ids)
+
+
 def listar(id_usuario, *, solo_no_leidas=False):
     consulta = Notificacion.objects.filter(usuario_id=id_usuario, fecha_archivo__isnull=True)
     if solo_no_leidas:

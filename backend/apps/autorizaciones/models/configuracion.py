@@ -46,6 +46,8 @@ class TipoAutorizacion(RegistroAuditable):
     rechazo_resuelve_solicitud = models.BooleanField(default=True)
     permite_rechazo = models.BooleanField(default=True)
     horas_vigencia_solicitud = models.PositiveSmallIntegerField(default=72)
+    # Sin respuesta tras estas horas: recordatorio y envio a los elegibles que faltaban (F7).
+    horas_escalamiento = models.PositiveSmallIntegerField(default=24)
     dias_aviso_vencimiento = models.PositiveSmallIntegerField(default=15)
     metodo_firma_minimo = models.CharField(
         max_length=10, choices=MetodoFirma.choices, default=MetodoFirma.SIMPLE,
@@ -70,6 +72,10 @@ class TipoAutorizacion(RegistroAuditable):
             models.CheckConstraint(
                 condition=Q(horas_vigencia_solicitud__gte=1),
                 name="aut_tipo_autorizacion_horas_ck",
+            ),
+            models.CheckConstraint(
+                condition=Q(horas_escalamiento__gte=1),
+                name="aut_tipo_autorizacion_escala_ck",
             ),
         ]
 

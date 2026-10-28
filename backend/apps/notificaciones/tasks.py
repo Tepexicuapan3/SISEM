@@ -6,7 +6,7 @@ from django.conf import settings
 from apps.authentication.services.email_service import send_notification_email_batch
 
 from .models import Entrega, Notificacion
-from .services.notificacion_service import _registrar
+from .services.notificacion_service import _registrar, reintentar_correos_fallidos
 
 
 def _url_publica(ruta: str) -> str:
@@ -44,3 +44,9 @@ def enviar_correo_notificacion(id_notificacion):
     ok = resultado.get("sent", 0) > 0
     _registrar(entrega, ok, None if ok else "El servidor de correo rechazó el envío")
     return {"enviado": ok}
+
+
+@shared_task
+def reintentar_correos():
+    """Cada hora: correos fallidos con intentos disponibles (maximo 3)."""
+    return {"reencolados": reintentar_correos_fallidos()}
