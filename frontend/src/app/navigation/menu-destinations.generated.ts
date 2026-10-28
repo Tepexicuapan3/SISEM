@@ -27,6 +27,7 @@ export interface MenuDestination {
 
 export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/autorizacion/autorizadores","permissions":["admin:autorizadores:read"]},
+  {"path":"/admin/autorizacion/configuracion","permissions":["admin:autorizaciones-config:read"]},
   {"path":"/admin/autorizacion/estudios","permissions":["admin:autorizacion:estudios:read"]},
   {"path":"/admin/bitacora-acceso","permissions":["admin:auditoria:accesos:read"]},
   {"path":"/admin/catalogos","permissions":[]},

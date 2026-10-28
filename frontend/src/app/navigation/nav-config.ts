@@ -387,6 +387,11 @@ export const NAV_CONFIG: NavSection[] = [
             url: "/admin/autorizacion/autorizadores",
             permissions: ["admin:autorizadores:read"],
           },
+          {
+            title: "Configuración",
+            url: "/admin/autorizacion/configuracion",
+            permissions: ["admin:autorizaciones-config:read"],
+          },
         ],
       },
       {

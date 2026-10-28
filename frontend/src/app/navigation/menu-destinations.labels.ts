@@ -38,6 +38,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Autorizadores Médicos",
     grupo: "Administración",
   },
+  "/admin/autorizacion/configuracion": {
+    label: "Configuración de Autorizaciones",
+    grupo: "Administración",
+  },
   "/admin/catalogos": { label: "Catálogos", grupo: "Catálogos" },
   "/admin/catalogos/areas": { label: "Áreas", grupo: "Catálogos" },
   "/admin/catalogos/areas-clinicas": {
