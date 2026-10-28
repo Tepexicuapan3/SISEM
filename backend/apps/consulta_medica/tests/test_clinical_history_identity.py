@@ -104,7 +104,7 @@ class LegacyCommandAllergyImportTests(_ConsultationAuditApiTestBase):
         mock_connect.return_value = _mock_conn([row])
         call_command("migrar_historial_clinico_legacy", host="x", user="x", password="x", database="x")
 
-        substances = sorted(Allergy.objects.filter(no_exp="EXP-0001").values_list("substance", flat=True))
+        substances = sorted(Allergy.objects.filter(patient__no_exp="EXP-0001").values_list("substance", flat=True))
         # Una fila por elemento, tipo "otro" (documento); "NEGADAS" no es alergia.
         self.assertEqual(substances, ["Penicilina", "sulfas"])
         self.assertEqual(

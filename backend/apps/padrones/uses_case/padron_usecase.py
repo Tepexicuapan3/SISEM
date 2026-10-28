@@ -27,6 +27,7 @@ from apps.padrones.models import ChronicEnrollment, DisabilityEnrollment, Regist
 from apps.recepcion.services.errors import VisitDomainError
 from apps.consulta_medica.services.paciente_entrada import q_pk_registro
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 READ_REQUIREMENT = {"allOf": ["clinico:padrones:read"]}
 WRITE_REQUIREMENT = {"allOf": ["clinico:padrones:write"]}
@@ -92,8 +93,8 @@ def to_contract(spec, enrollment, *, permissions, roles):
     return {
         "id": enrollment.id,
         "registry": spec.key,
-        "noExp": enrollment.no_exp,
-        "pkNum": enrollment.pk_num,
+        "noExp": llave_publica(enrollment)[0],
+        "pkNum": llave_publica(enrollment)[1],
         "patientName": _patient_name(enrollment.patient),
         "item": _item_payload(spec, enrollment, permissions, roles),
         "center": {"id": enrollment.center_id, "name": enrollment.center.name},

@@ -260,7 +260,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
             self._ficha(777)
         self.assertEqual(error.exception.code, "RN_PENDIENTE_DE_VINCULAR")
         self._mensaje_para_recepcion(error.exception, "(orden 1)")
-        self.assertFalse(Visit.objects.filter(no_exp="40041", pk_num=777).exists())
+        self.assertFalse(Visit.objects.filter(patient__no_exp="40041", patient__pk_num=777).exists())
         self.slot.refresh_from_db()
         self.assertTrue(self.slot.disponible, "El horario quedo ocupado sin ficha.")
 
@@ -284,7 +284,9 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
         self._ficha(self.provisional["cdProvisional"])
         from apps.recepcion.models import Visit
 
-        self.assertTrue(Visit.objects.filter(pk_num=self.provisional["cdProvisional"]).exists())
+        # Plan contraer la llave vieja: la ficha guarda solo el id_paciente del provisional.
+        ficha = Visit.objects.get(patient_id=self.provisional["idPaciente"])
+        self.assertEqual((ficha.no_exp, ficha.pk_num), (None, None))
 
     def test_vinculado_se_atiende_desde_sermed(self):
         rn.vincular(self.provisional["idPaciente"], 777)

@@ -52,6 +52,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.portal_citas.errors import PortalReservaError
+from apps.consulta_medica.services.paciente_entrada import q_registro
 from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
 from apps.portal_citas.tasks import enviar_comprobante_portal_task
@@ -178,8 +179,7 @@ def reservar_cita(
         fin_nuevo = inicio_nuevo + timedelta(minutes=slot.duracion_min)
 
         citas_activas = CitaMedica.objects.filter(
-            no_exp=miembro_objetivo.no_exp,
-            pk_num=miembro_objetivo.pk_num,
+            q_registro(miembro_objetivo.no_exp, miembro_objetivo.pk_num),
             estatus__in=[EstatusCita.AGENDADA, EstatusCita.CONFIRMADA],
         )
         for existente in citas_activas:

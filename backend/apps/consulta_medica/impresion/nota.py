@@ -25,6 +25,7 @@ from apps.consulta_medica.impresion.common import (
 from apps.consulta_medica.models import VisitDiagnosis
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
 from apps.impresion.registry import PrintContext
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 PRINT_TZ = ZoneInfo("America/Mexico_City")
 
@@ -161,7 +162,7 @@ def build_nota_context(visit_id, actor, *, permissions=None, roles=None):
         "attended_date": fmt_date(attended),
         "service": visit.get_service_type_display(),
         "patient": header,
-        "expediente": visit.no_exp or "",
+        "expediente": llave_publica(visit)[0] or "",
         "doctor": doctor_info(consultation.doctor),
         "center_name": getattr(center, "name", "") or "",
         "consultorio": getattr(visit.consultorio, "name", "") if visit.consultorio else "",
@@ -177,8 +178,8 @@ def build_nota_context(visit_id, actor, *, permissions=None, roles=None):
     }
     return PrintContext(
         context=context,
-        no_exp=visit.no_exp,
-        pk_num=visit.pk_num,
+        no_exp=llave_publica(visit)[0],
+        pk_num=llave_publica(visit)[1],
         folio=visit.folio or "",
         filename=f"nota_{visit.folio}.pdf",
         is_cancelled=cancelled,

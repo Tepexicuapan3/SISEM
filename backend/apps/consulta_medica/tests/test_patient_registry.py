@@ -54,7 +54,8 @@ class NormalizarNoExpTests(TestCase):
 
     def test_la_historia_usa_el_no_exp_guardado_en_el_paciente(self):
         historia, _ = ClinicalHistoryRepository.get_or_create_for_patient(" 040041", 902)
-        self.assertEqual(historia.no_exp, "40041")
+        # Plan contraer la llave vieja: la cabecera ya no guarda la llave; la del paciente, normalizada.
+        self.assertIsNone(historia.no_exp)
         self.assertEqual(historia.patient.no_exp, "40041")
 
 

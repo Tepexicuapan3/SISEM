@@ -38,7 +38,7 @@ class ImportTraceabilityTests(TestCase):
 
         _run("migrar_historial_clinico_legacy", [row], mock_connect)
 
-        history = ClinicalHistory.objects.get(no_exp="EXP-0001")
+        history = ClinicalHistory.objects.get(patient__no_exp="EXP-0001")
         self.assertEqual((history.legacy_source_table, history.legacy_source_id), ("his_clinica", 12))
         self.assertEqual(
             dict(Allergy.objects.values_list("substance", "original_text")),
@@ -49,9 +49,9 @@ class ImportTraceabilityTests(TestCase):
     def test_his_clinicad_sola_deja_su_origen(self, mock_connect):
         _run("migrar_historia_estomatologia_legacy", [dict(_DENTAL_ROW)], mock_connect)
 
-        history = ClinicalHistory.objects.get(no_exp="EXPDENT1")
+        history = ClinicalHistory.objects.get(patient__no_exp="EXPDENT1")
         self.assertEqual((history.legacy_source_table, history.legacy_source_id), ("his_clinicad", 77))
-        self.assertEqual(Allergy.objects.get(no_exp="EXPDENT1").original_text, "Ampicilina")
+        self.assertEqual(Allergy.objects.get(patient__no_exp="EXPDENT1").original_text, "Ampicilina")
 
     @patch(_CONNECT)
     def test_his_clinica_manda_sobre_his_clinicad(self, mock_connect):
@@ -61,7 +61,7 @@ class ImportTraceabilityTests(TestCase):
         # Otra corrida de estomatologia no le quita el origen a his_clinica.
         _run("migrar_historia_estomatologia_legacy", [dict(_DENTAL_ROW, no_hisclin=78)], mock_connect)
 
-        history = ClinicalHistory.objects.get(no_exp="EXPDENT1")
+        history = ClinicalHistory.objects.get(patient__no_exp="EXPDENT1")
         self.assertEqual((history.legacy_source_table, history.legacy_source_id), ("his_clinica", 5))
 
 

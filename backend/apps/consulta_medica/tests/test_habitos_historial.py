@@ -171,7 +171,7 @@ class HabitLegacyImportTests(_ConsultationAuditApiTestBase):
         call_command("migrar_historia_estomatologia_legacy", host="x", user="x", password="x",
                      database="x", stdout=StringIO())
 
-        diet = Habit.objects.filter(no_exp="EXPDENT1", habit__code="alimentacion")
+        diet = Habit.objects.filter(patient__no_exp="EXPDENT1", habit__code="alimentacion")
         self.assertEqual(diet.count(), 2)
         self.assertEqual(diet.get(record_status="A").notes, "Dieta capturada en SIRES")
         legacy = diet.get(record_status="B")

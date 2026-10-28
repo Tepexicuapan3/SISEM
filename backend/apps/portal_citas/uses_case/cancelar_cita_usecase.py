@@ -61,6 +61,7 @@ from apps.portal_citas.tasks import enviar_cancelacion_portal_task
 from apps.recepcion.models import CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +101,10 @@ def cancelar_cita(
     # No se distingue "miembro no existe" de "no autorizado": mismo mensaje
     # genérico en ambos casos, igual que en la reserva de Fase 4, para no
     # revelar detalles a un atacante que adivinó un folio ajeno.
+    # Plan contraer la llave vieja: la llave de la cita sale de cns_paciente.
+    no_exp_cita, pk_num_cita = llave_publica(cita)
     miembro_objetivo = PortalMiembro.objects.filter(
-        no_exp=cita.no_exp, pk_num=cita.pk_num
+        no_exp=no_exp_cita, pk_num=pk_num_cita
     ).first()
     if miembro_objetivo is None or not puede_gestionar_miembro(
         miembro_sesion, miembro_objetivo.id

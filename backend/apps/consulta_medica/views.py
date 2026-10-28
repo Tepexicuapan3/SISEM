@@ -118,6 +118,7 @@ from .uses_case.odontogram_usecase import (
     get_patient_odontogram,
     upsert_tooth_condition,
 )
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +197,7 @@ def _log_sensitive_diagnosis_redaction_if_any(
     if no_exp is None and visit_id is not None:
         visit = Visit.objects.filter(pk=visit_id).only("no_exp", "pk_num").first()
         if visit is not None:
-            no_exp, pk_num = visit.no_exp, visit.pk_num
+            no_exp, pk_num = llave_publica(visit)[0], llave_publica(visit)[1]
     log_restricted_access(
         request, user, no_exp=no_exp, pk_num=pk_num, section=section,
         restricted_count=len(resource_ids),

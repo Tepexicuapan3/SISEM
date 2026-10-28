@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.authentication.services.cookie_auth import CookieJWTAuthentication
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .derechohabiente_service import buscar_derechohabientes, info_vigencia_por_expedientes
 from .document_service import generar_formato_oxigeno
 from .email_service import build_vencimiento_html, enviar_notificacion
@@ -80,7 +81,7 @@ class ContratoOxigenoViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(queryset)
         items = page if page is not None else queryset
 
-        dh_info = info_vigencia_por_expedientes([(c.expediente, c.pk_num) for c in items])
+        dh_info = info_vigencia_por_expedientes([llave_publica(c) for c in items])
         context = {**self.get_serializer_context(), "dh_info": dh_info}
 
         if page is not None:

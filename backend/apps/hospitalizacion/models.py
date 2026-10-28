@@ -42,12 +42,12 @@ class HospitalAdmission(models.Model):
     legacy_folio = models.CharField(max_length=20, unique=True, null=True, blank=True, db_column="folio_legado")
     hospital_service_folio = models.CharField(max_length=20, null=True, blank=True, db_column="folio_servicio")
 
-    no_exp = models.CharField(max_length=20, db_column="no_exp")
-    pk_num = models.IntegerField(default=0, db_column="pk_num")
+    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
+    pk_num = models.IntegerField(default=0, db_column="pk_num", null=True, blank=True)
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
-        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        "consulta_medica.Patient", db_column="id_paciente",
         on_delete=models.PROTECT, related_name="+",
     )
 

@@ -1,6 +1,7 @@
 from apps.catalogos.models import CatTipoAlergia
 from apps.consulta_medica.models import Allergy, AllergyRevision
 from apps.consulta_medica.services.patient_link_service import for_patient
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 # Campos editables via update() -- se usa para saber que "previous_<campo>"
 # snapshotear en AllergyRevision. No incluye no_exp/pk_num/source/is_active
@@ -97,8 +98,8 @@ class AllergyRepository:
     def to_contract(allergy):
         return {
             "id": allergy.id_allergy,
-            "noExp": allergy.no_exp,
-            "pkNum": allergy.pk_num,
+            "noExp": llave_publica(allergy)[0],
+            "pkNum": llave_publica(allergy)[1],
             "allergyTypeId": allergy.allergy_type_id,
             "allergyTypeName": allergy.allergy_type.name,
             "substance": allergy.substance,

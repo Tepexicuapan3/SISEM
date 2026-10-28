@@ -1,6 +1,7 @@
 from django.utils import timezone
 
 from apps.consulta_medica.models import PrescriptionAuthorization
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 class PrescriptionAuthorizationRepository:
@@ -118,8 +119,8 @@ class PrescriptionAuthorizationRepository:
             "id": authorization.id_authorization,
             "prescriptionId": authorization.prescription_id,
             "visitId": visit.id_visit,
-            "noExp": visit.no_exp,
-            "pkNum": visit.pk_num,
+            "noExp": llave_publica(visit)[0],
+            "pkNum": llave_publica(visit)[1],
             "prescribedById": authorization.prescribed_by_id,
             "medicationsCount": authorization.medications_count,
             "specializedCount": authorization.specialized_count,

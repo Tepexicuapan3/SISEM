@@ -9,6 +9,7 @@ from apps.impresion.errors import PrintError
 from apps.impresion.services.patient_header import get_patient_header
 from apps.medicos import identity
 from apps.recepcion.repositories.visit_repository import VisitRepository
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 VISIT_CLOSED = "cerrada"
 VISIT_CANCELLED = "cancelada"
@@ -39,7 +40,7 @@ def is_note_cancelled(visit, consultation):
 
 
 def patient_header_or_409(visit):
-    header = get_patient_header(visit.no_exp, visit.pk_num, visit.nombre_paciente or "")
+    header = get_patient_header(llave_publica(visit)[0], llave_publica(visit)[1], visit.nombre_paciente or "")
     if header["source"] is None:
         raise not_printable("No se pudo resolver el nombre del paciente.")
     return header

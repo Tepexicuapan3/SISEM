@@ -121,14 +121,14 @@ class UpdateForVisitAttributionTests(TestCase):
             visit, _payload(weightKg=70), captured_by=nurse_a,
         )
 
-        latest_before = PatientLatestVitals.objects.get(no_exp="EXP-ATTR-4", pk_num=0)
+        latest_before = PatientLatestVitals.objects.get(patient__no_exp="EXP-ATTR-4", patient__pk_num=0)
         self.assertEqual(float(latest_before.weight_kg), 70.0)
 
         VitalsRepository.update_for_visit(
             vital_signs, _payload(weightKg=68, bmi=22.2), updated_by=nurse_b,
         )
 
-        latest_after = PatientLatestVitals.objects.get(no_exp="EXP-ATTR-4", pk_num=0)
+        latest_after = PatientLatestVitals.objects.get(patient__no_exp="EXP-ATTR-4", patient__pk_num=0)
         self.assertEqual(
             float(latest_after.weight_kg),
             68.0,

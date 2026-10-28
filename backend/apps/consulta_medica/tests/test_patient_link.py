@@ -76,10 +76,13 @@ class DualWriteTests(TestCase):
 
         self.assertEqual(_allergy("20", 33).patient, paciente)
 
-    def test_sin_paciente_el_registro_se_guarda_igual(self):
+    def test_sin_paciente_se_abre_su_registro_y_la_llave_no_se_guarda(self):
+        # Plan contraer la llave vieja: la alergia solo guarda id_paciente; si el
+        # registro no existia, se abre por la puerta central.
         alergia = _allergy("21", 0)
 
-        self.assertIsNone(alergia.patient)
+        self.assertEqual((alergia.patient.no_exp, alergia.patient.pk_num), ("21", 0))
+        self.assertEqual((alergia.no_exp, alergia.pk_num), (None, None))
 
     def test_no_cambia_un_paciente_ya_asignado(self):
         a = Patient.objects.create(no_exp="22", pk_num=0)

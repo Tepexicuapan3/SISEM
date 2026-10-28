@@ -4,6 +4,7 @@ from apps.administracion.models import CatClinica
 from apps.cirugias.models import SurgeryCancellation, SurgeryDiagnosis, SurgerySchedule
 from apps.medicos.identity import display_name as medico_display_name
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 def _clinic_name(clinic_id):
@@ -111,8 +112,8 @@ class SurgeryRepository:
         return {
             "id": surgery.id,
             "folio": surgery.folio,
-            "noExp": surgery.no_exp,
-            "pkNum": surgery.pk_num,
+            "noExp": llave_publica(surgery)[0],
+            "pkNum": llave_publica(surgery)[1],
             "surgeonId": surgery.surgeon_id,
             "surgeonName": medico_display_name(surgery.surgeon),
             "surgeryTypeId": surgery.surgery_type_id,
@@ -143,8 +144,8 @@ class SurgeryRepository:
             "date": surgery.scheduled_date,
             "time": surgery.scheduled_time,
             "folio": surgery.folio,
-            "noExp": surgery.no_exp,
-            "pkNum": surgery.pk_num,
+            "noExp": llave_publica(surgery)[0],
+            "pkNum": llave_publica(surgery)[1],
             "surgeonName": medico_display_name(surgery.surgeon),
             "surgeryTypeName": surgery.surgery_type.name,
             "classificationName": surgery.classification.name,

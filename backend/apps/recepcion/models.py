@@ -40,7 +40,7 @@ class CitaMedica(models.Model):
     folio        = models.CharField(max_length=32, unique=True)
 
     # Paciente (núcleo familiar — mismo esquema que rcp_visits)
-    no_exp       = models.CharField(max_length=20, db_index=True)
+    no_exp       = models.CharField(max_length=20, db_index=True, null=True, blank=True)
     # IntegerField, no smallint: los PK_NUM de SERMED pasan de 32 767 (p. ej.
     # 48411) y en Postgres la cita fallaba con "smallint out of range". Mismo
     # arreglo que rcp_visits (recepcion.0006).
@@ -50,7 +50,7 @@ class CitaMedica(models.Model):
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
-        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        "consulta_medica.Patient", db_column="id_paciente",
         on_delete=models.PROTECT, related_name="+",
     )
 
@@ -253,7 +253,7 @@ class Visit(models.Model):
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
-        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        "consulta_medica.Patient", db_column="id_paciente",
         on_delete=models.PROTECT, related_name="+",
     )
     arrival_type = models.CharField(

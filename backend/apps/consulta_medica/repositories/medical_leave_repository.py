@@ -3,6 +3,7 @@ from django.utils import timezone
 from apps.consulta_medica.models import MedicalLeave
 from apps.consulta_medica.services.patient_link_service import for_patient
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 class MedicalLeaveRepository:
@@ -101,8 +102,8 @@ class MedicalLeaveRepository:
         return {
             "id": leave.id_medical_leave,
             "folio": leave.folio,
-            "noExp": leave.no_exp,
-            "pkNum": leave.pk_num,
+            "noExp": llave_publica(leave)[0],
+            "pkNum": llave_publica(leave)[1],
             "patientName": visit.nombre_paciente if visit else None,
             "doctorName": doctor_detalle.nombre_completo if doctor_detalle else None,
             "leaveTypeId": leave.leave_type_id,

@@ -38,9 +38,50 @@ OPERATIONAL_MODELS = {
     "pases.Referral": "no_exp",
     "contratos_oxigeno.ContratoOxigeno": "expediente",
     "portal_citas.PortalMiembro": "no_exp",
+    "padrones.ChronicEnrollment": "no_exp",
+    "padrones.DisabilityEnrollment": "no_exp",
 }
 # Tablas que solo se vinculan a un registro existente (no lo crean).
 ONLY_LINK = frozenset({"portal_citas.PortalMiembro"})
+
+# Plan contraer la llave vieja (C6): estas tablas guardan SOLO id_paciente.
+# Si alguien todavia manda la llave al crear, sirve para resolver el registro
+# y despues se vacia: nunca llega a la base. La llave se lee de cns_paciente
+# (paciente_entrada.llave_publica).
+SIN_LLAVE = frozenset({
+    "recepcion.Visit", "recepcion.CitaMedica",
+    "somatometria.VisitVitalSigns", "somatometria.PatientLatestVitals",
+    "consulta_medica.Allergy", "consulta_medica.MedicalLeave", "consulta_medica.StudyResult",
+    "consulta_medica.StomatologyHistory", "consulta_medica.Odontogram", "consulta_medica.ClinicalHistory",
+    "consulta_medica.PersonalHistory", "consulta_medica.FamilyHistory", "consulta_medica.SurgicalHistory",
+    "consulta_medica.Habit", "consulta_medica.DentalTreatment",
+    "cirugias.SurgerySchedule", "hospitalizacion.HospitalAdmission", "ambulancias.AmbulanceRequest",
+    "pases.Referral", "contratos_oxigeno.ContratoOxigeno",
+    "padrones.ChronicEnrollment", "padrones.DisabilityEnrollment",
+})
+
+
+def paciente_de_la_visita(instance):
+    """
+    id_paciente de la visita de la que cuelga una fila (pase, estudio, licencia,
+    signos...), para quien llega sin paciente y sin llave: la visita congelada
+    ya no guarda no_exp/pk_num, pero si su id_paciente.
+    """
+    visita_id = getattr(instance, "id_visit_id", None)
+    if visita_id is None and getattr(instance, "consultation_id", None):
+        visita_id = getattr(instance.consultation, "id_visit_id", None)
+    if visita_id is None:
+        return None
+    from apps.recepcion.models import Visit
+
+    return Visit.objects.filter(pk=visita_id).values_list("patient_id", flat=True).first()
+
+
+def congelar_llave(sender, instance) -> None:
+    """Vacia la llave vieja de una fila ya ligada a su paciente (tablas SIN_LLAVE)."""
+    if sender._meta.label in SIN_LLAVE and instance.patient_id is not None:
+        setattr(instance, no_exp_field(sender), None)
+        instance.pk_num = None
 
 
 def operational_models():
@@ -81,6 +122,7 @@ def _link_on_save(sender, instance, **kwargs):
 
         exigir_vinculacion_para_atender(getattr(instance, no_exp_field(sender)), instance.pk_num)
     if instance.patient_id is not None:
+        congelar_llave(sender, instance)
         return
     patient = resolve_record(
         sender, getattr(instance, no_exp_field(sender)), instance.pk_num,
@@ -88,6 +130,9 @@ def _link_on_save(sender, instance, **kwargs):
     )
     if patient is not None:
         instance.patient = patient
+    elif sender._meta.label in SIN_LLAVE:
+        instance.patient_id = paciente_de_la_visita(instance)
+    congelar_llave(sender, instance)
 
 
 def connect_operational_signals():

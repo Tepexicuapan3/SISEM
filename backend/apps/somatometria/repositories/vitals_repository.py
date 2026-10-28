@@ -1,6 +1,7 @@
 from django.utils import timezone
 
 from apps.somatometria.models import PatientLatestVitals, VisitVitalSigns
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 class VitalsRepository:
@@ -48,8 +49,8 @@ class VitalsRepository:
             # se desincroniza en el uso normal del sistema.
             patient_id=visit.patient_id,
             # Copia de la llave vieja: se deja de escribir en C6 (plan contraer la llave).
-            no_exp=visit.no_exp,
-            pk_num=visit.pk_num,
+            no_exp=llave_publica(visit)[0],
+            pk_num=llave_publica(visit)[1],
             reused_from_visit=reused_from,
             captured_by=captured_by,
             **fields,
@@ -100,7 +101,7 @@ class VitalsRepository:
         latest_defaults.pop("notes", None)
         latest_defaults["id_visit_origen"] = visit
         # Copia de la llave vieja hasta C6.
-        latest_defaults["no_exp"], latest_defaults["pk_num"] = visit.no_exp, visit.pk_num
+        latest_defaults["no_exp"], latest_defaults["pk_num"] = llave_publica(visit)[0], llave_publica(visit)[1]
         PatientLatestVitals.objects.update_or_create(
             patient_id=visit.patient_id,
             defaults=latest_defaults,

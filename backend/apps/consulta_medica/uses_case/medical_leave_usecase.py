@@ -15,6 +15,7 @@ from apps.consulta_medica.services.visit_guards import (
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .consultation_usecase import ensure_doctor_or_incapacidad_read_role, ensure_doctor_role
 
 # Topes por centro en cat_parametro (incapacidad.max_dias[_maternidad]); estas
@@ -59,7 +60,7 @@ def create_medical_leave(
     visit = _get_visit_or_error(visit_id)
     ensure_visit_not_cancelled(visit)
 
-    if visit.pk_num != 0:
+    if llave_publica(visit)[1] != 0:
         raise VisitDomainError(
             "LEAVE_TITULAR_ONLY",
             "Solo el titular puede recibir una incapacidad, no un familiar.",
@@ -100,7 +101,7 @@ def create_medical_leave(
         )
 
     overlap = MedicalLeaveRepository.get_active_overlap_for_patient(
-        visit.no_exp, visit.pk_num, start_date
+        llave_publica(visit)[0], llave_publica(visit)[1], start_date
     )
     if overlap:
         raise VisitDomainError(
@@ -115,8 +116,8 @@ def create_medical_leave(
         folio = next_folio(FolioType.LICENCIA)
         leave = MedicalLeaveRepository.create(
             consultation=consultation,
-            no_exp=visit.no_exp,
-            pk_num=visit.pk_num,
+            no_exp=llave_publica(visit)[0],
+            pk_num=llave_publica(visit)[1],
             leave_type=leave_type,
             is_subsequent=is_subsequent,
             days=days,

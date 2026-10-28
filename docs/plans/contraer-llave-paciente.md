@@ -1,6 +1,6 @@
 # Plan: contraer la llave vieja (`no_exp` + `pk_num` → `id_paciente`)
 
-> Estado: **en curso** — C0 a C4b hechos; sigue C5/C6 (2026-10-27). Continúa el plan
+> Estado: **C0 a C6 hechos** (2026-10-27); C7 (borrar columnas) en la versión siguiente. Continúa el plan
 > [identidad-paciente.md](identidad-paciente.md): expandir (hecho) → migrar (a medias) → **contraer**.
 
 ## Objetivo
@@ -103,29 +103,40 @@ Regla: después de C6 ninguna de las 22 tablas guarda `no_exp`/`pk_num`; todo se
 `patient` y lo que se muestra sale de `cns_paciente` (`llave_publica`).
 
 **A. Filtros que pasan a `cns_paciente`**
-- [ ] `ambulancias/repositories/ambulance_request_repository.py` (filtro por expediente)
-- [ ] `cirugias/repositories/surgery_repository.py` (filtro por expediente)
-- [ ] `consulta_medica/repositories/medical_leave_repository.py` (filtro por expediente)
-- [ ] `padrones/uses_case/padron_usecase.py` (expediente + pkNum)
-- [ ] `pases/repositories/referral_repository.py` (por paciente y por expediente)
-- [ ] `consulta_medica/uses_case/consultation_usecase.py` (`id_visit__no_exp/pk_num` → `id_visit__patient_id`)
-- [ ] `consulta_medica/uses_case/odontogram_usecase.py`, `patient_record_usecase.py` (la visita es del paciente)
-- [ ] `consulta_medica/services/patient_link_service.py`: `for_patient` sin respaldo por llave vieja; `keys_for_person`
-- [ ] `consulta_medica/repositories/consultation_repository.py`
+- [x] `ambulancias/repositories/ambulance_request_repository.py` (filtro por expediente)
+- [x] `cirugias/repositories/surgery_repository.py` (filtro por expediente)
+- [x] `consulta_medica/repositories/medical_leave_repository.py` (filtro por expediente)
+- [x] `padrones/uses_case/padron_usecase.py` (expediente + pkNum)
+- [x] `pases/repositories/referral_repository.py` (por paciente y por expediente)
+- [x] `consulta_medica/uses_case/consultation_usecase.py` (`id_visit__no_exp/pk_num` → `id_visit__patient_id`)
+- [x] `consulta_medica/uses_case/odontogram_usecase.py`, `patient_record_usecase.py` (la visita es del paciente)
+- [x] `consulta_medica/services/patient_link_service.py`: `for_patient` sin respaldo por llave vieja; `keys_for_person`
+- [x] `consulta_medica/repositories/consultation_repository.py`
 
 **B. Creaciones que pasan `patient` explícito** (la señal ya no puede resolverlo desde la llave)
-- [ ] hijos de la visita: `follow_up_usecase`, `medical_leave_usecase`, `study_result_usecase`, `pases/referral_usecase`
-- [ ] por llave de la URL: `allergy_repository`, `medical_leave_repository`, `odontogram_repository`,
+- [x] hijos de la visita: `follow_up_usecase`, `medical_leave_usecase`, `study_result_usecase`, `pases/referral_usecase`
+- [x] por llave de la URL: `allergy_repository`, `medical_leave_repository`, `odontogram_repository`,
       `stomatology_history_repository`, `study_result_repository`, `clinical_history_repository`,
       `patient_record_usecase`, `pases/referral_repository`, `citas_repository`, `visit_repository`,
       cirugías, ambulancias, padrones, contratos
-- [ ] `get_or_create` por llave (estomatología, historia clínica, odontograma) → por `patient`
+- [x] `get_or_create` por llave (estomatología, historia clínica, odontograma) → por `patient`
 
 **C. Lecturas de la fila** → `llave_publica`: `consulta_medica/views.py`, `impresion/*`, `*/impresion/*`,
 `report_export_service`, `record_access_audit_service`.
 
 **D. Congelar**
-- [ ] Señales: resuelven `patient` si llega la llave y **vacían** `no_exp`/`pk_num` antes de guardar
-- [ ] Migraciones: `no_exp`/`pk_num` con NULL permitido y sin default en las 22 tablas; `id_paciente` NOT NULL
+- [x] Señales: resuelven `patient` si llega la llave y **vacían** `no_exp`/`pk_num` antes de guardar
+- [x] Migraciones: `no_exp`/`pk_num` con NULL permitido y sin default en las 22 tablas; `id_paciente` NOT NULL
       (salvo `portal_miembros`, fuera de alcance)
-- [ ] Suite completa de todas las apps en verde
+- [x] Suite completa de todas las apps en verde
+
+**Resultado C6 (2026-10-27):** suite completa en verde (consulta_medica 641, resto de apps 1574).
+Migraciones, en este orden: `*_llave_vieja_opcional` → `consulta_medica.0065_completar_id_paciente`
+(completa id_paciente con `link_existing`) → `*_id_paciente_obligatorio`.
+
+**Pendiente para C7** (versión siguiente, con respaldo previo):
+- Borrar `no_exp`/`pk_num` (`expediente` en contratos) de las 22 tablas, con sus índices y únicos viejos.
+- Quitar el respaldo por llave vieja de `for_patient` y la copia en `keys_for_person`.
+- Retirar los importadores masivos del legado y `corregir_llave_familiares_legacy`
+  (sus 2 tests quedaron omitidos: movían filas cambiando la llave).
+- Quitar la aceptación transitoria de `noExp`/`pkNum` en los serializers que ya reciben `idPaciente`.

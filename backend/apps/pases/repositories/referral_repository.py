@@ -1,6 +1,7 @@
 from apps.pases.models import Referral, ReferralStudyDetail
 from apps.consulta_medica.services.paciente_entrada import q_registro
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 _STUDY_TYPES = {Referral.ReferralType.LABORATORIO, Referral.ReferralType.GABINETE}
 
@@ -146,8 +147,8 @@ class ReferralRepository:
             "date": referral.created_at,
             "folio": referral.folio,
             "referralType": referral.referral_type,
-            "noExp": referral.no_exp,
-            "pkNum": referral.pk_num,
+            "noExp": llave_publica(referral)[0],
+            "pkNum": llave_publica(referral)[1],
             "patientName": visit.nombre_paciente if visit else None,
             "doctorName": doctor_detalle.nombre_completo if doctor_detalle else None,
             "destinationCenterName": (
@@ -178,8 +179,8 @@ class ReferralRepository:
         return {
             "id": referral.id_referral,
             "visitId": referral.consultation.id_visit_id,
-            "noExp": referral.no_exp,
-            "pkNum": referral.pk_num,
+            "noExp": llave_publica(referral)[0],
+            "pkNum": llave_publica(referral)[1],
             "referralType": referral.referral_type,
             "destinationCenterId": referral.destination_center_id,
             "destinationCenterName": (

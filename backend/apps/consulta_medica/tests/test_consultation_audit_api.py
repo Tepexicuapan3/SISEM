@@ -53,6 +53,7 @@ from apps.consulta_medica.uses_case.consultation_usecase import (
 )
 from apps.consulta_medica.uses_case.prescription_item_usecase import add_prescription_item
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 _TEST_MEDIA_ROOT = tempfile.mkdtemp(prefix="sires_test_media_consulta_medica_audit_")
 
@@ -577,7 +578,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
             accion="OdontogramToothUpdated",
         )
         self.assertFalse(
-            Odontogram.objects.filter(no_exp=no_exp, pk_num=0).exists(),
+            Odontogram.objects.filter(patient__no_exp=no_exp, patient__pk_num=0).exists(),
         )
 
     def test_stomatology_history_updated_rolls_back(self):
@@ -594,7 +595,8 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         # get_or_create_for_patient corre ANTES del atomic() en el usecase
         # (fuera de la proteccion) -- la fila base existe, pero la edicion
         # (dentro del atomic) debe haberse revertido.
-        history = StomatologyHistory.objects.get(no_exp=no_exp, pk_num=0)
+        # Plan contraer la llave vieja: se busca por el registro del paciente.
+        history = StomatologyHistory.objects.get(patient__no_exp=no_exp, patient__pk_num=0)
         self.assertIsNone(history.oral_hygiene)
 
     def test_secondary_diagnosis_cancelled_rolls_back(self):
@@ -865,15 +867,15 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
             {"items": ["Paracetamol 500mg"]}, format="json", **self._csrf_headers(),
         )
         self.client.patch(
-            f"/api/v1/patients/{visit.no_exp}/profile?pkNum=0",
+            f"/api/v1/patients/{llave_publica(visit)[0]}/profile?pkNum=0",
             {"phone": "5555555555"}, format="json", **self._csrf_headers(),
         )
         self.client.patch(
-            f"/api/v1/patients/{visit.no_exp}/odontogram/11?pkNum=0",
+            f"/api/v1/patients/{llave_publica(visit)[0]}/odontogram/11?pkNum=0",
             {"condition": "caries"}, format="json", **self._csrf_headers(),
         )
         self.client.patch(
-            f"/api/v1/patients/{visit.no_exp}/stomatology-history?pkNum=0",
+            f"/api/v1/patients/{llave_publica(visit)[0]}/stomatology-history?pkNum=0",
             {"oralHygiene": "good"}, format="json", **self._csrf_headers(),
         )
         add_prescription_item(

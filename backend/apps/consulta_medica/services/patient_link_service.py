@@ -106,10 +106,23 @@ def linked_models():
 
 
 def _link_on_save(sender, instance, **kwargs):
+    from apps.consulta_medica.services.operational_link_service import (
+        SIN_LLAVE, congelar_llave, paciente_de_la_visita, resolve_record,
+    )
+
     if instance.patient_id is None and instance.no_exp:
-        patient = find_patient_by_record_key(instance.no_exp, instance.pk_num)
+        if sender._meta.label in SIN_LLAVE:
+            # Plan contraer la llave vieja: la fila solo guarda id_paciente; si el
+            # registro no existe se abre por la puerta central (como las operativas).
+            patient = resolve_record(sender, instance.no_exp, instance.pk_num,
+                                     created_by_id=getattr(instance, "created_by_id", None))
+        else:
+            patient = find_patient_by_record_key(instance.no_exp, instance.pk_num)
         if patient is not None:
             instance.patient = patient
+    if instance.patient_id is None and sender._meta.label in SIN_LLAVE:
+        instance.patient_id = paciente_de_la_visita(instance)
+    congelar_llave(sender, instance)
 
 
 def connect_signals():

@@ -10,6 +10,7 @@ import logging
 
 from apps.medicos import identity
 from apps.medicos.models import CatMedico, LegacyMedico, RelMedicoConsultorio, RelMedicoCobertura
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 logger = logging.getLogger(__name__)
 
@@ -185,8 +186,8 @@ def serialize_excepcion_created(resultado) -> dict:
             {
                 "id": cita.id,
                 "folio": cita.folio,
-                "noExp": cita.no_exp,
-                "pkNum": cita.pk_num,
+                "noExp": llave_publica(cita)[0],
+                "pkNum": llave_publica(cita)[1],
                 "fechaHora": cita.fecha_hora.isoformat(),
                 "consultorioNombre": cita.consultorio.name if cita.consultorio_id else None,
                 "estatus": cita.estatus,

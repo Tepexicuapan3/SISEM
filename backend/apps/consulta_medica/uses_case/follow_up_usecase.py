@@ -20,6 +20,7 @@ from apps.medicos.models import CatMedico
 from apps.recepcion.models import CitaMedica, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository, q_slots_futuros
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 MOTIVO_SEGUIMIENTO = "Cita de seguimiento"
 
@@ -66,7 +67,7 @@ def schedule_follow_up(visit, follow_up_date, slot_id, doctor_id) -> CitaMedica:
     """
     if not follow_up_date:
         raise _invalido("Indica la fecha de seguimiento antes de elegir el horario.")
-    if not visit.no_exp:
+    if not llave_publica(visit)[0]:
         raise _invalido("La visita no tiene expediente; la cita la agenda recepción.")
 
     slot = HorarioDisponible.objects.select_related("medico").filter(pk=slot_id).first()
@@ -78,8 +79,8 @@ def schedule_follow_up(visit, follow_up_date, slot_id, doctor_id) -> CitaMedica:
     fecha_hora = timezone.make_aware(datetime.combine(slot.fecha, slot.hora))
     try:
         cita = CitasRepository.create(
-            no_exp=visit.no_exp,
-            pk_num=visit.pk_num,
+            no_exp=llave_publica(visit)[0],
+            pk_num=llave_publica(visit)[1],
             medico_id=slot.medico_id,
             fecha_hora=fecha_hora,
             servicio_tipo=visit.service_type,

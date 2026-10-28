@@ -438,11 +438,15 @@ class OdontogramVersioningApiTests(_UnifiedApiBase):
         return self._patch(self._url(f"odontogram/{tooth}"), body)
 
     def test_one_version_per_visit_and_previous_versions_preserved(self):
+        from apps.consulta_medica.services.paciente_entrada import paciente_de_llave
+
+        # Plan contraer la llave vieja: la visita es del paciente por su id_paciente.
+        paciente = paciente_de_llave(self.no_exp, 0)
         visit_a = self._make_visit()
         visit_b = self._make_visit()
-        visit_a.no_exp = visit_b.no_exp = self.no_exp
-        visit_a.save()
-        visit_b.save()
+        for visit in (visit_a, visit_b):
+            visit.patient = paciente
+            visit.save()
 
         self._set_tooth("16", "caries", visit_a.id_visit)
         self._set_tooth("26", "filled", visit_a.id_visit)
@@ -540,7 +544,9 @@ class MigrarHistoriaEstomatologiaLegacyTests(_ConsultationAuditApiTestBase):
             call_command("migrar_historia_estomatologia_legacy", host="x", user="x", password="x",
                          database="x", stdout=out)
 
-        base = {"no_exp": "EXPDENT1", "pk_num": 0}
+        legado = {"no_exp": "EXPDENT1", "pk_num": 0}
+        # Plan contraer la llave vieja: las tablas de la historia se buscan por paciente.
+        base = {"patient__no_exp": "EXPDENT1", "patient__pk_num": 0}
         # SIN sufijo = familiar; CON sufijo p / asma = personal.
         self.assertEqual(
             set(FamilyHistory.objects.filter(**base).values_list("description", flat=True)),
@@ -552,12 +558,12 @@ class MigrarHistoriaEstomatologiaLegacyTests(_ConsultationAuditApiTestBase):
         )
         self.assertEqual(SurgicalHistory.objects.get(**base).procedure, "Amigdalectomia")
         self.assertEqual(list(Allergy.objects.filter(**base).values_list("substance", flat=True)), ["Ampicilina"])
-        vitals = LegacyVitalSigns.objects.get(**base)
+        vitals = LegacyVitalSigns.objects.get(**legado)
         self.assertEqual((vitals.weight_kg, vitals.height_cm), (Decimal("70.00"), Decimal("170.00")))
         self.assertEqual((vitals.blood_pressure_systolic, vitals.blood_pressure_diastolic), (120, 80))
         self.assertIsNone(vitals.measured_on)
-        self.assertFalse(HistoricalNote.objects.filter(**base, section="signos_vitales").exists())
-        self.assertTrue(HistoricalNote.objects.filter(**base, section="padecimiento", content="Dolor molar").exists())
+        self.assertFalse(HistoricalNote.objects.filter(**legado, section="signos_vitales").exists())
+        self.assertTrue(HistoricalNote.objects.filter(**legado, section="padecimiento", content="Dolor molar").exists())
         self.assertIn("Ya importadas: 1", out.getvalue())
 
     @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
@@ -568,7 +574,7 @@ class MigrarHistoriaEstomatologiaLegacyTests(_ConsultationAuditApiTestBase):
         call_command("migrar_historia_estomatologia_legacy", host="x", user="x", password="x",
                      database="x", stdout=StringIO())
 
-        base = {"no_exp": "EXPDENT1", "pk_num": 0}
+        base = {"patient__no_exp": "EXPDENT1", "patient__pk_num": 0}
         self.assertEqual(
             sorted(FamilyHistory.objects.filter(**base).values_list("description", flat=True)),
             ["Cancer", "Diabetes mellitus", "Familiar finado"],

@@ -42,7 +42,7 @@ class PatientProfileUseCaseTests(TestCase):
         self._update({"occupationId": self.ocupacion_a.id, "phone": "5555555555"})
 
         patient = self._patient()
-        history = ClinicalHistory.objects.get(no_exp=self.no_exp, pk_num=self.pk_num)
+        history = ClinicalHistory.objects.get(patient__no_exp=self.no_exp, patient__pk_num=self.pk_num)
         self.assertEqual(patient.occupation_id, self.ocupacion_a.id)
         self.assertEqual(history.patient_id, patient.id_patient)
         self.assertEqual(history.opened_on, timezone.localdate())

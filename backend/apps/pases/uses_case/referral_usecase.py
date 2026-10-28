@@ -17,6 +17,7 @@ from apps.consulta_medica.services.visit_guards import (
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import ROLE_DOCTOR
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 # A diferencia de consultation_usecase.ensure_doctor_role (que usa un solo
 # permiso -- clinico:consultas:read -- para lectura Y escritura, hueco de
@@ -158,8 +159,8 @@ def create_referral(
         folio = next_folio(FolioType.PASE)
         referral = ReferralRepository.create(
             consultation=consultation,
-            no_exp=visit.no_exp,
-            pk_num=visit.pk_num,
+            no_exp=llave_publica(visit)[0],
+            pk_num=llave_publica(visit)[1],
             referral_type=referral_type,
             destination_center=destination_center,
             specialty=specialty,

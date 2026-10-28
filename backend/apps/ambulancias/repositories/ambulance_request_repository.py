@@ -3,6 +3,7 @@ from django.utils import timezone
 from apps.administracion.models import CatClinica
 from apps.ambulancias.models import AmbulanceRequest, AmbulanceRequestSchedule
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 def _clinic_name(clinic_id):
@@ -104,8 +105,8 @@ class AmbulanceRequestRepository:
         return {
             "id": request.id,
             "folio": request.folio,
-            "noExp": request.no_exp,
-            "pkNum": request.pk_num,
+            "noExp": llave_publica(request)[0],
+            "pkNum": llave_publica(request)[1],
             "requestingClinicId": request.requesting_clinic_id,
             "requestingClinicName": _clinic_name(request.requesting_clinic_id),
             "requestedByName": request.requested_by_name,
@@ -150,8 +151,8 @@ class AmbulanceRequestRepository:
         return {
             "date": request.created_at,
             "folio": request.folio,
-            "noExp": request.no_exp,
-            "pkNum": request.pk_num,
+            "noExp": llave_publica(request)[0],
+            "pkNum": llave_publica(request)[1],
             "requestingClinicName": _clinic_name(request.requesting_clinic_id),
             "reasonName": request.reason.name,
             "destinationName": request.destination.name,

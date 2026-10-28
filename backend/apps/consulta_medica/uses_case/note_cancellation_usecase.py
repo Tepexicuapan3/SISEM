@@ -72,6 +72,7 @@ from apps.recepcion.uses_case.visit_state_machine_usecase import (
     ROLE_AUTORIZADOR_NOTA,
     transition_visit_state,
 )
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +354,7 @@ def _build_snapshot(*, visit, consultation, motivo, motivo_detalle, actor_id, de
     return {
         "schema": SCHEMA,
         "visit": {"id": visit.id_visit, "folio": visit.folio, "status": visit.status,
-                  "noExp": visit.no_exp, "pkNum": visit.pk_num},
+                  "noExp": llave_publica(visit)[0], "pkNum": llave_publica(visit)[1]},
         "consultation": {
             "id": consultation.pk, "doctorId": consultation.doctor_id,
             "primaryDiagnosis": consultation.primary_diagnosis,

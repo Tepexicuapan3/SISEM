@@ -51,6 +51,7 @@ from apps.pases.models import Referral, ReferralStudyDetail
 from apps.pases.repositories.referral_repository import ReferralRepository
 from apps.recepcion.models import Visit, VisitStatusLog
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 CANCEL_PERMS = ["clinico:notas:cancel"]
 AUTH_PASSWORD = "Authorizer_Audit_123456"
@@ -99,7 +100,7 @@ class _CancellationBase(_ConsultationAuditApiTestBase):
             quantity=1, indications="Cada 12h", actor_id=self.doctor_user.id_usuario,
         )
         self.referral = ReferralRepository.create(
-            consultation=self.consultation, no_exp=self.visit.no_exp, pk_num=0,
+            consultation=self.consultation, no_exp=llave_publica(self.visit)[0], pk_num=0,
             referral_type=Referral.ReferralType.LABORATORIO, folio="REF-TEST-1",
         )
         for _ in range(2):
@@ -107,7 +108,7 @@ class _CancellationBase(_ConsultationAuditApiTestBase):
                 referral=self.referral, study_type=self.study_type,
             )
         self.leave = MedicalLeaveRepository.create(
-            consultation=self.consultation, no_exp=self.visit.no_exp, pk_num=0,
+            consultation=self.consultation, no_exp=llave_publica(self.visit)[0], pk_num=0,
             leave_type=self.leave_type, is_subsequent=False, days=3,
             start_date=date.today(), end_date=date.today() + timedelta(days=2),
             folio="LIC-20260101000000-EXP", created_by_id=self.doctor_user.id_usuario,
@@ -259,13 +260,13 @@ class CancellationSuccessTests(_CancellationBase):
     def test_incapacidad_cancelada_libera_traslape_y_sale_de_reportes(self):
         self.assertIsNotNone(
             MedicalLeaveRepository.get_active_overlap_for_patient(
-                self.visit.no_exp, 0, date.today(),
+                llave_publica(self.visit)[0], 0, date.today(),
             )
         )
         self._cancel()
         self.assertIsNone(
             MedicalLeaveRepository.get_active_overlap_for_patient(
-                self.visit.no_exp, 0, date.today(),
+                llave_publica(self.visit)[0], 0, date.today(),
             )
         )
         self.assertIsNone(MedicalLeaveRepository.get_active_for_consultation(self.consultation))
@@ -415,7 +416,7 @@ class CancellationBlockersTests(_CancellationBase):
 
     def test_s28_resultado_de_estudio_activo_de_la_consulta(self):
         StudyResult.objects.create(
-            consultation=self.consultation, no_exp=self.visit.no_exp, pk_num=0,
+            consultation=self.consultation, no_exp=llave_publica(self.visit)[0], pk_num=0,
             study_type=self.study_type, result_date=date.today(), file="x.pdf",
         )
         self._assert_blocked("STUDY_RESULT_ACTIVE")
@@ -423,7 +424,7 @@ class CancellationBlockersTests(_CancellationBase):
     def test_s28_resultado_ligado_a_estudio_de_pase(self):
         detail = ReferralStudyDetail.objects.first()
         StudyResult.objects.create(
-            consultation=self.consultation, no_exp=self.visit.no_exp, pk_num=0,
+            consultation=self.consultation, no_exp=llave_publica(self.visit)[0], pk_num=0,
             study_type=self.study_type, result_date=date.today(), file="x.pdf",
             referral_study=detail,
         )
@@ -431,7 +432,7 @@ class CancellationBlockersTests(_CancellationBase):
 
     def test_resultado_inactivo_no_bloquea(self):
         StudyResult.objects.create(
-            consultation=self.consultation, no_exp=self.visit.no_exp, pk_num=0,
+            consultation=self.consultation, no_exp=llave_publica(self.visit)[0], pk_num=0,
             study_type=self.study_type, result_date=date.today(), file="x.pdf",
             is_active=False,
         )

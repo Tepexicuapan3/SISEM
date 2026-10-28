@@ -15,6 +15,7 @@ from apps.consulta_medica.services.patient_registry_service import (
     normalizar_no_exp,
     verificar_alta,
 )
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 logger = logging.getLogger(__name__)
 
@@ -153,13 +154,12 @@ class ClinicalHistoryRepository:
             patient, _ = PatientRepository.get_or_create(
                 no_exp, pk_num, created_by_id=created_by_id, origen=origen,
             )
+            # Plan contraer la llave vieja: una cabecera por registro del paciente.
             history, created = ClinicalHistory.objects.get_or_create(
-                # El no_exp tal como quedo guardado en el paciente (normalizado,
-                # o el anterior sin normalizar): la cabecera usa la misma llave.
-                no_exp=patient.no_exp,
-                pk_num=pk_num,
+                patient=patient,
                 defaults={
-                    "patient": patient,
+                    "no_exp": patient.no_exp,
+                    "pk_num": pk_num,
                     "opened_on": opened_on or timezone.localdate(),
                     "opening_clinic_code": clinic_code,
                     "opening_doctor_code": doctor_code,
@@ -172,8 +172,8 @@ class ClinicalHistoryRepository:
     def to_contract(history):
         return {
             "id": history.id_clinical_history,
-            "noExp": history.no_exp,
-            "pkNum": history.pk_num,
+            "noExp": llave_publica(history)[0],
+            "pkNum": llave_publica(history)[1],
             "patientId": history.patient_id,
             "openedOn": history.opened_on.isoformat() if history.opened_on else None,
             "openingClinicCode": history.opening_clinic_code,

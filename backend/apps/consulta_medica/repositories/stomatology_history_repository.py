@@ -1,4 +1,5 @@
 from apps.consulta_medica.models import StomatologyHistory, StomatologyHistoryRevision
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 # Campos editables via upsert_stomatology_history (HC_ESTOMATOLOGIA) -- mismo
 # set que STOMATOLOGY_HISTORY_FIELD_MAP. Se usa para saber que
@@ -22,10 +23,10 @@ class StomatologyHistoryRepository:
         )
 
         clinical_history, _ = ClinicalHistoryRepository.get_or_create_for_patient(no_exp, pk_num)
+        # Plan contraer la llave vieja: una por registro del paciente.
         history, created = StomatologyHistory.objects.get_or_create(
-            no_exp=no_exp,
-            pk_num=pk_num,
-            defaults={"clinical_history": clinical_history},
+            patient_id=clinical_history.patient_id,
+            defaults={"clinical_history": clinical_history, "no_exp": no_exp, "pk_num": pk_num},
         )
         return history, created
 
@@ -60,8 +61,8 @@ class StomatologyHistoryRepository:
     def to_contract(history):
         return {
             "id": history.id_stomatology_history,
-            "noExp": history.no_exp,
-            "pkNum": history.pk_num,
+            "noExp": llave_publica(history)[0],
+            "pkNum": llave_publica(history)[1],
             "oralHygiene": history.oral_hygiene,
             "brushingsPerDay": history.brushings_per_day,
             "usesFloss": history.uses_floss,

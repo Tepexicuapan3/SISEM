@@ -75,7 +75,7 @@ class MigrarHistorialClinicoLegacyTests(TestCase):
         )
 
         patient = Patient.objects.get(no_exp="EXP-0001", pk_num=0)
-        history = ClinicalHistory.objects.get(no_exp="EXP-0001", pk_num=0)
+        history = ClinicalHistory.objects.get(patient__no_exp="EXP-0001", patient__pk_num=0)
         self.assertEqual(history.patient_id, patient.id_patient)
         self.assertEqual(patient.occupation_id, self.ocupacion.id)
         self.assertEqual(patient.marital_status_id, self.edocivil.id)
@@ -97,7 +97,7 @@ class MigrarHistorialClinicoLegacyTests(TestCase):
             stdout=out,
         )
 
-        self.assertFalse(ClinicalHistory.objects.filter(no_exp="EXP-0001").exists())
+        self.assertFalse(ClinicalHistory.objects.filter(patient__no_exp="EXP-0001").exists())
         self.assertIn("[dry-run]", out.getvalue())
 
     @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
@@ -114,7 +114,7 @@ class MigrarHistorialClinicoLegacyTests(TestCase):
             host="x", user="x", password="x", database="x", stdout=out,
         )
 
-        self.assertEqual(ClinicalHistory.objects.filter(no_exp="EXP-0001").count(), 1)
+        self.assertEqual(ClinicalHistory.objects.filter(patient__no_exp="EXP-0001").count(), 1)
         # El texto historico se importa una sola vez por fila del legado
         # (idempotente por legacy_ref): no se duplica ni se pisa.
         notes = HistoricalNote.objects.filter(no_exp="EXP-0001", section="padecimiento")
@@ -145,7 +145,7 @@ class MigrarHistorialClinicoLegacyTests(TestCase):
 
         call_command("migrar_historial_clinico_legacy", host="x", user="x", password="x", database="x")
 
-        history = ClinicalHistory.objects.get(no_exp="EXP-0001", pk_num=0)
+        history = ClinicalHistory.objects.get(patient__no_exp="EXP-0001", patient__pk_num=0)
         self.assertEqual(str(history.created_at.date()), "2019-03-15")
         # HISTORIA_CLINICA.fe_apertura = fecha real del legado.
         self.assertEqual(str(history.opened_on), "2019-03-15")

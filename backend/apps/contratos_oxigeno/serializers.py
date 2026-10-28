@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from apps.administracion.services.fecha_service import calcular_edad
 from apps.catalogos.models import CatSucursal, Especialidades
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .models import ContratoOxigeno
 
 
@@ -83,7 +84,7 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
         return obj.get_status_display()
 
     def _dh_info(self, obj) -> dict:
-        return self.context.get("dh_info", {}).get((obj.expediente, obj.pk_num), {})
+        return self.context.get("dh_info", {}).get(llave_publica(obj), {})
 
     def get_vigenciaDh(self, obj) -> str | None:        # noqa: N802
         return self._dh_info(obj).get("vigencia")

@@ -87,7 +87,9 @@ class CitaSeguimientoTests(TestCase):
         payload = self._close(visit, follow_up_slot_id=slot.id)
 
         cita = CitaMedica.objects.get()
-        self.assertEqual((cita.no_exp, cita.medico_id, cita.motivo), ("EXP-SEG", self.medico.id, MOTIVO_SEGUIMIENTO))
+        # Plan contraer la llave vieja: la cita guarda solo el paciente de la visita.
+        self.assertEqual(cita.patient_id, visit.patient_id)
+        self.assertEqual((cita.patient.no_exp, cita.medico_id, cita.motivo), ("EXP-SEG", self.medico.id, MOTIVO_SEGUIMIENTO))
         self.assertEqual(cita.notas, f"Consulta {visit.folio}")
         self.assertEqual(payload["followUpAppointment"]["folio"], cita.folio)
         slot.refresh_from_db()

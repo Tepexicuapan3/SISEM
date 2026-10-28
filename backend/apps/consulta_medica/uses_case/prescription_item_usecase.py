@@ -20,6 +20,7 @@ from apps.consulta_medica.services.visit_guards import (
     lock_visit_not_cancelled,
 )
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .consultation_usecase import ensure_doctor_role
 
 # Permiso separado del rol de doctor -- quien autoriza no necesariamente
@@ -249,9 +250,9 @@ def add_prescription_item(
             },
         )
 
-    allergy_match = _find_matching_allergy(visit.no_exp, visit.pk_num, medication)
+    allergy_match = _find_matching_allergy(llave_publica(visit)[0], llave_publica(visit)[1], medication)
     legacy_match = (
-        _find_matching_legacy_allergy(visit.no_exp, visit.pk_num, medication) if allergy_match is None else None
+        _find_matching_legacy_allergy(llave_publica(visit)[0], llave_publica(visit)[1], medication) if allergy_match is None else None
     )
     if (allergy_match is not None or legacy_match is not None) and not acknowledge_allergy_warning:
         return {

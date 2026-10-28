@@ -182,17 +182,18 @@ def alergias_sin_confirmar(no_exp, pk_num) -> list[dict]:
     return next((s["items"] for s in secciones if s["seccion"] == ALERGIAS), [])
 
 
-def _crear(importador, item, base, user_id):
+def _crear(importador, item, base, user_id, id_paciente):
     """Crea el dato en SIRES. Devuelve (tabla, id) o (None, None) si ya existia."""
     destino, seccion = item["_destino"], item["seccion"]
     if seccion == ALERGIAS:
-        antes = Allergy.objects.filter(no_exp=base["no_exp"], pk_num=base["pk_num"]).count()
+        del_paciente = Allergy.objects.filter(patient_id=id_paciente)
+        antes = del_paciente.count()
         importador.allergy(no_exp=base["no_exp"], pk_num=base["pk_num"], substance=item["texto"],
                            allergy_type_id=destino["tipo"], source=destino["fuente"],
                            original_text=destino["original"])
-        if Allergy.objects.filter(no_exp=base["no_exp"], pk_num=base["pk_num"]).count() == antes:
+        if del_paciente.count() == antes:
             return None, None
-        alergia = Allergy.objects.filter(no_exp=base["no_exp"], pk_num=base["pk_num"]).latest("id_allergy")
+        alergia = del_paciente.latest("id_allergy")
         Allergy.objects.filter(pk=alergia.pk).update(created_by_id=user_id)
         return Allergy._meta.db_table, alergia.pk
     if seccion == PERSONALES:
@@ -235,12 +236,13 @@ def confirmar(no_exp, pk_num, seccion, aceptar, *, user_id=None) -> dict:
     completos = {item["ref"]: item for item in _propuestas_crudas(no_exp, pk_num) if item["ref"] in refs_propuestas}
     paciente, _ = PatientRepository.get_or_create(no_exp, pk_num, created_by_id=user_id, origen=ORIGEN_LEGADO)
     base = {"no_exp": paciente.no_exp, "pk_num": pk_num, "source": SpecialtySource.LEGACY}
+    id_paciente = paciente.pk
     importador = LegacyHistoryImporter()
     confirmados = descartados = 0
     with transaction.atomic():
         for ref, item in completos.items():
             if ref in aceptar:
-                tabla, creado = _crear(importador, item, {**base, "legacy_ref": ref[:60]}, user_id)
+                tabla, creado = _crear(importador, item, {**base, "legacy_ref": ref[:60]}, user_id, id_paciente)
                 decision, confirmados = LegacyReview.Decision.CONFIRMED, confirmados + 1
             else:
                 tabla, creado = None, None

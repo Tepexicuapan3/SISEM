@@ -51,6 +51,8 @@ from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import _pk_nums_gestionables, obtener_nucleo
 from apps.portal_citas.uses_case.cancelar_cita_usecase import ESTATUS_CANCELABLES
 from apps.recepcion.models import CitaMedica
+from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
 
 def _es_cancelable(cita: CitaMedica, ahora, ventana: timedelta) -> bool:
@@ -77,8 +79,9 @@ def listar_citas(miembro_sesion: PortalMiembro) -> list[dict]:
     )
 
     citas = (
-        CitaMedica.objects.filter(no_exp=no_exp, pk_num__in=pk_nums)
-        .select_related("medico__id_usuario__detalle", "consultorio")
+        # Plan contraer la llave vieja: la cita se liga por cns_paciente.
+        CitaMedica.objects.filter(patient__no_exp=normalizar_no_exp(no_exp), patient__pk_num__in=pk_nums)
+        .select_related("patient", "medico__id_usuario__detalle", "consultorio")
         .order_by("-fecha_hora")
     )
 
@@ -92,7 +95,7 @@ def listar_citas(miembro_sesion: PortalMiembro) -> list[dict]:
             "consultorioNombre": cita.consultorio.name if cita.consultorio else None,
             "servicioTipo": cita.servicio_tipo,
             "estatus": cita.estatus,
-            "paraQuien": nombres_por_pk.get(cita.pk_num),
+            "paraQuien": nombres_por_pk.get(llave_publica(cita)[1]),
             "cancelable": _es_cancelable(cita, ahora, ventana),
         }
         for cita in citas

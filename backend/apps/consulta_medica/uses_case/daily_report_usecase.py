@@ -5,6 +5,7 @@ from apps.authentication.services.permission_dependencies import (
 )
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 # Reporte, no escritura: permiso propio en vez de reusar
 # clinico:consultas:read (ese habilita tambien captura de consulta -- ver
@@ -44,8 +45,8 @@ def _consultation_to_report_row(consultation):
         "folio": visit.folio,
         "date": visit.fecha_consulta,
         "time": visit.hora_consulta,
-        "noExp": visit.no_exp,
-        "pkNum": visit.pk_num,
+        "noExp": llave_publica(visit)[0],
+        "pkNum": llave_publica(visit)[1],
         "patientName": visit.nombre_paciente,
         "serviceType": visit.service_type,
         "consultorio": _consultorio_name(visit.consultorio),

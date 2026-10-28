@@ -9,6 +9,7 @@ from apps.catalogos.models import TiposSanguineo
 from apps.consulta_medica.models import BloodType, ChangeLog, StudyResult, VisitConsultation
 from apps.consulta_medica.repositories.clinical_history_repository import PatientRepository
 from apps.consulta_medica.tests.test_unified_history import _UnifiedApiBase
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 def _type_id(name):
@@ -117,10 +118,10 @@ class BloodTypeLabResultTests(_UnifiedApiBase):
         super().setUp()
         visit = self._visit_with_consultation()
         self._login_doctor()
-        self.no_exp = visit.no_exp
+        self.no_exp = llave_publica(visit)[0]
         consultation = VisitConsultation.objects.get(id_visit=visit)
         self.result = StudyResult.objects.create(
-            consultation=consultation, no_exp=visit.no_exp, pk_num=0, study_type=self.study_type,
+            consultation=consultation, no_exp=llave_publica(visit)[0], pk_num=0, study_type=self.study_type,
             result_date="2026-02-01", file="resultados/grupo.pdf",
         )
         self.other_result = StudyResult.objects.create(

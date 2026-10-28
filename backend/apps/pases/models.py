@@ -42,12 +42,12 @@ class Referral(models.Model):
         on_delete=models.PROTECT,
         related_name="referrals",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
-        "consulta_medica.Patient", db_column="id_paciente", null=True, blank=True,
+        "consulta_medica.Patient", db_column="id_paciente",
         on_delete=models.PROTECT, related_name="+",
     )
 

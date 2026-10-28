@@ -8,6 +8,7 @@ from apps.consulta_medica.tests.test_consultation_audit_api import _Consultation
 from apps.consulta_medica.uses_case.medical_leave_usecase import create_medical_leave
 from apps.pases.models import Referral
 from apps.pases.uses_case.referral_usecase import create_referral
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 FOLIO_RE = r"^{}-\d{{4}}-\d{{6}}$"
 
@@ -30,7 +31,7 @@ class DocumentFolioTests(_ConsultationAuditApiTestBase):
         self.assertNotEqual(first, second)
         for folio in (first, second):
             self.assertRegex(folio, FOLIO_RE.format("REF"))
-            self.assertNotIn(self.visit.no_exp, folio)
+            self.assertNotIn(llave_publica(self.visit)[0], folio)
         self.assertEqual(int(second[-6:]), int(first[-6:]) + 1)
 
     def test_medical_leave_folio_has_no_patient_data(self):
@@ -39,4 +40,4 @@ class DocumentFolioTests(_ConsultationAuditApiTestBase):
             start_date=date.today(), is_subsequent=False, actor_id=self.doctor_id,
         )
         self.assertTrue(re.match(FOLIO_RE.format("LIC"), result["folio"]), result["folio"])
-        self.assertNotIn(self.visit.no_exp, result["folio"])
+        self.assertNotIn(llave_publica(self.visit)[0], result["folio"])

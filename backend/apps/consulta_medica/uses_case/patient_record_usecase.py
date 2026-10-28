@@ -38,6 +38,7 @@ from apps.consulta_medica.services.patient_registry_service import normalizar_no
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .consultation_usecase import ensure_doctor_role
 
 
@@ -112,8 +113,8 @@ def _blank_to_none(value, _no_exp):
 
 def _base_contract(record):
     return {
-        "noExp": record.no_exp,
-        "pkNum": record.pk_num,
+        "noExp": llave_publica(record)[0],
+        "pkNum": llave_publica(record)[1],
         "source": record.source,
         "createdAt": record.created_at,
         "updatedAt": record.updated_at,
@@ -467,7 +468,7 @@ def _update_versioned(spec, no_exp, pk_num, record, values, validated_data, acto
         return spec.contract(record, permissions, roles)
 
     new_version = spec.model(
-        no_exp=record.no_exp, pk_num=record.pk_num, patient_id=record.patient_id,
+        no_exp=llave_publica(record)[0], pk_num=llave_publica(record)[1], patient_id=record.patient_id,
         source=validated_data.get("source") or record.source,
         created_by_id=actor_id, updated_by_id=actor_id, **current,
     )

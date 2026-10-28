@@ -48,31 +48,28 @@ class DobleEscrituraTests(TestCase):
         )
         self.assertEqual(miembro2.patient_id, existente.pk)
 
-    def test_pk_num_none_explicito_queda_nulo_y_sin_registro(self):
-        # Recien nacido provisional (Fase 6): nunca debe quedar como titular (0).
-        visita = _visita("F-3", "40041", None)
-        visita.refresh_from_db()
-        self.assertIsNone(visita.pk_num)
-        self.assertIsNone(visita.patient_id)
+    def test_sin_registro_resoluble_la_ficha_no_se_guarda(self):
+        # Plan contraer la llave vieja: id_paciente es obligatorio. Sin llave que
+        # resolver (pk_num None) la ficha no se guarda sin paciente.
+        from django.db import IntegrityError
+
+        with self.assertRaises(IntegrityError):
+            _visita("F-3", "40041", None)
 
     def test_omitir_pk_num_conserva_el_cero_del_titular(self):
         visita = Visit.objects.create(folio="F-4", no_exp="40041", arrival_type="walk_in",
                                       service_type="medicina_general", nombre_paciente="P")
-        self.assertEqual(visita.pk_num, 0)
+        # La ficha guarda solo el paciente: el titular (pk_num 0) de ese expediente.
+        self.assertEqual((visita.patient.no_exp, visita.patient.pk_num), ("40041", 0))
 
 
 class LlenadoDeLoExistenteTests(TestCase):
-    def test_vincular_id_paciente_llena_las_tablas_operativas(self):
-        visita = _visita("F-10", "50123", 0)
-        Visit.objects.filter(pk=visita.pk).update(patient=None)   # como antes de la Fase 5
-        self.assertEqual(unlinked_counts()["rcp_visits"], 1)
-
-        reporte = link_existing()
-
-        visita.refresh_from_db()
-        self.assertIsNotNone(visita.patient_id)
-        self.assertEqual(reporte["rcp_visits"]["rows"], 1)
+    def test_sin_filas_sin_paciente_el_llenado_no_cambia_nada(self):
+        # Plan contraer la llave vieja: id_paciente ya es obligatorio, no puede
+        # haber fichas sin paciente; el llenado (migracion 0065) no tiene que hacer.
+        _visita("F-10", "50123", 0)
         self.assertEqual(unlinked_counts()["rcp_visits"], 0)
+        self.assertEqual(link_existing()["rcp_visits"]["rows"], 0)
 
     def test_el_llenado_no_crea_registros_desde_el_portal(self):
         miembro = PortalMiembro.objects.create(
@@ -91,11 +88,14 @@ class RegistroDeTablasTests(TestCase):
             "rcp_visits", "citas_medicas", "smt_visit_vitals", "smt_patient_latest_vitals",
             "cir_surgery", "hsp_admission", "amb_request", "ref_referral",
             "contratos_oxigeno", "portal_miembros",
+            # Plan contraer la llave vieja: los padrones tambien solo guardan id_paciente.
+            "cns_padron_cronico", "cns_padron_discapacidad",
         })
         for modelo in operational_models():
             campo = modelo._meta.get_field("patient")
             self.assertEqual(campo.column, "id_paciente", modelo._meta.label)
-            self.assertTrue(campo.null, modelo._meta.label)
+            # Plan contraer la llave vieja: obligatorio, salvo el portal (solo liga si existe).
+            self.assertEqual(campo.null, modelo._meta.label == "portal_citas.PortalMiembro", modelo._meta.label)
             modelo._meta.get_field(no_exp_field(modelo))   # el campo de expediente existe
         self.assertEqual(OPERATIONAL_MODELS["contratos_oxigeno.ContratoOxigeno"], "expediente")
 

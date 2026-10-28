@@ -18,6 +18,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import Licencias, Permisos, Roles
 from apps.consulta_medica.uses_case.consultation_usecase import save_diagnosis
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 def _noop_audit_hook(**kwargs):
@@ -117,7 +118,7 @@ class MedicalLeaveAccessApiTests(APITestCase):
         self._login_as("incap_recepcion", self.recepcion_password)
 
         response = self.client.get(
-            f"/api/v1/patients/{self.visit.no_exp}/medical-leaves"
+            f"/api/v1/patients/{llave_publica(self.visit)[0]}/medical-leaves"
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -143,7 +144,7 @@ class MedicalLeaveAccessApiTests(APITestCase):
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
 
         get_response = self.client.get(
-            f"/api/v1/patients/{self.visit.no_exp}/medical-leaves"
+            f"/api/v1/patients/{llave_publica(self.visit)[0]}/medical-leaves"
         )
         self.assertEqual(get_response.status_code, status.HTTP_200_OK)
         self.assertEqual(get_response.data["total"], 1)
@@ -161,7 +162,7 @@ class MedicalLeaveAccessApiTests(APITestCase):
         self._login_as("incap_sin_permiso", "SinPermiso_123456")
 
         response = self.client.get(
-            f"/api/v1/patients/{self.visit.no_exp}/medical-leaves"
+            f"/api/v1/patients/{llave_publica(self.visit)[0]}/medical-leaves"
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

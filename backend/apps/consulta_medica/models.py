@@ -455,13 +455,12 @@ class MedicalLeave(models.Model):
         on_delete=models.PROTECT,
         related_name="medical_leaves",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
     # compatibilidad hasta que todas las lecturas usen id_paciente.
     patient = models.ForeignKey(
-        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
-        null=True, blank=True, related_name="+",
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
     leave_type = models.ForeignKey(
         "catalogos.Licencias",
@@ -622,13 +621,12 @@ class StudyResult(models.Model):
         on_delete=models.PROTECT,
         related_name="study_results",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
     # compatibilidad hasta que todas las lecturas usen id_paciente.
     patient = models.ForeignKey(
-        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
-        null=True, blank=True, related_name="+",
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
     study_type = models.ForeignKey(
         "catalogos.EstudiosMed",
@@ -688,13 +686,12 @@ class StomatologyHistory(models.Model):
     id_stomatology_history = models.BigAutoField(
         primary_key=True, db_column="id_historia_dental",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
     # compatibilidad hasta que todas las lecturas usen id_paciente.
     patient = models.ForeignKey(
-        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
-        null=True, blank=True, related_name="+",
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
     # HISTORIA_CLINICA ||--o| HC_ESTOMATOLOGIA (documento 5.3).
     clinical_history = models.OneToOneField(
@@ -799,13 +796,12 @@ class Allergy(models.Model):
     SOURCE_BY_SERVICE = {1: "general", 5: "stomatology"}
 
     id_allergy = models.BigAutoField(primary_key=True, db_column="id_alergia")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
     # compatibilidad hasta que todas las lecturas usen id_paciente.
     patient = models.ForeignKey(
-        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
-        null=True, blank=True, related_name="+",
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
 
     # ALERGIA.cd_tipo_alergia -> CAT_TIPO_ALERGIA (documento).
@@ -1283,8 +1279,8 @@ class ClinicalHistory(models.Model):
     Sex = Sex
 
     id_clinical_history = models.BigAutoField(primary_key=True, db_column="id_historia")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     patient = models.OneToOneField(
         Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="clinical_history",
     )
@@ -1496,13 +1492,12 @@ class Presence(models.TextChoices):
 class PatientRecordBase(models.Model):
     """Columnas comunes de los registros permanentes 1:N por paciente."""
 
-    no_exp = models.CharField(max_length=20, db_column="no_exp")
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
     # compatibilidad hasta que todas las lecturas usen id_paciente.
     patient = models.ForeignKey(
-        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
-        null=True, blank=True, related_name="+",
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
     source = models.CharField(
         max_length=20, db_column="origen", choices=SpecialtySource.choices,
@@ -1976,13 +1971,12 @@ class Odontogram(models.Model):
         MIGRATED = "migrated", "Migrado del odontograma anterior"
 
     id_odontogram = models.BigAutoField(primary_key=True, db_column="id_odontograma")
-    no_exp = models.CharField(max_length=20, db_column="no_exp")
-    pk_num = models.IntegerField(db_column="pk_num", default=0)
+    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
+    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
     # compatibilidad hasta que todas las lecturas usen id_paciente.
     patient = models.ForeignKey(
-        "Patient", db_column="id_paciente", on_delete=models.PROTECT,
-        null=True, blank=True, related_name="+",
+        "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
     # HC_ESTOMATOLOGIA ||--o{ ODONTOGRAMA (documento 5.3).
     stomatology_history = models.ForeignKey(

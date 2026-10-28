@@ -24,6 +24,7 @@ from apps.authentication.services.response_service import error_response, get_re
 from apps.authentication.services.session_service import authenticate_request
 from apps.recepcion.services.errors import VisitDomainError
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .serializers import DischargeSerializer, EnrollSerializer
 from .uses_case import padron_usecase as uc
 
@@ -72,7 +73,7 @@ def _audit(request, user, action, registry, enrollment, before, after):
         request, action, "SUCCESS", actor_user=user,
         resource_type=f"padron_{registry}", resource_id=enrollment.id,
         datos_antes=before, datos_despues=after,
-        meta={"module": "padrones", "registry": registry, "noExp": enrollment.no_exp},
+        meta={"module": "padrones", "registry": registry, "noExp": llave_publica(enrollment)[0]},
     )
 
 

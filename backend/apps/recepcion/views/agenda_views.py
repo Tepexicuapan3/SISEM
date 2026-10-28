@@ -21,6 +21,7 @@ from apps.authentication.repositories.user_repository import UserRepository
 from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.models import HorarioDisponible
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 CITAS_READ_CAPABILITY = "recepcion:citas:read"
 
@@ -122,7 +123,7 @@ class AgendaSemanalView(APIView):
                 cita_data = {
                     "id":             cita.id,
                     "folio":          cita.folio,
-                    "noExp":          cita.no_exp,
+                    "noExp":          llave_publica(cita)[0],
                     "nombrePaciente": None,  # se omite por privacidad en lista
                     "estatus":        cita.estatus,
                     "servicioTipo":   cita.servicio_tipo,

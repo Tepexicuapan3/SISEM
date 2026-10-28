@@ -37,6 +37,7 @@ from apps.consulta_medica.models import (
 )
 from apps.impresion.errors import PrintError
 from apps.impresion.registry import PrintContext
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 PRINT_TZ = ZoneInfo("America/Mexico_City")
 
@@ -140,7 +141,7 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
         "prescription_type": prescription.get_prescription_type_display(),
         "issued_date": fmt_date(issued),
         "patient": header,
-        "expediente": visit.no_exp or "",
+        "expediente": llave_publica(visit)[0] or "",
         "doctor": doctor_info(consultation.doctor),
         "center_name": getattr(center, "name", "") or "",
         "consultorio": getattr(visit.consultorio, "name", "") if visit.consultorio else "",
@@ -151,8 +152,8 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
     }
     return PrintContext(
         context=context,
-        no_exp=visit.no_exp,
-        pk_num=visit.pk_num,
+        no_exp=llave_publica(visit)[0],
+        pk_num=llave_publica(visit)[1],
         folio=folio,
         filename=f"receta_{folio or visit.folio}.pdf",
         is_cancelled=False,
