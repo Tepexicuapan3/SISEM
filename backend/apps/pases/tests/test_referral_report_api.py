@@ -182,6 +182,14 @@ class ReferralReportApiTests(APITestCase):
         )
         self.assertEqual(response.data["items"][0]["specialtyName"], "Cardiología")
 
+    def test_rows_include_authorization_status(self):
+        # Motor de autorizaciones: sin interruptor, todo pase queda NO_REQUIERE.
+        self._login_as("pases_reader", self.reader_password)
+
+        response = self.client.get("/api/v1/reportes/pases")
+
+        self.assertEqual(response.data["items"][0]["authorizationStatus"], "NO_REQUIERE")
+
     def test_explicit_range_includes_both_days(self):
         self._login_as("pases_reader", self.reader_password)
 

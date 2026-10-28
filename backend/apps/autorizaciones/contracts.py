@@ -142,6 +142,18 @@ def cancelar_por_origen(tipo_origen: str, id_origen: int, *, id_usuario: int) ->
     return SolicitudUseCase.cancelar_por_origen(tipo_origen, id_origen, id_usuario=id_usuario)
 
 
+def uuid_solicitud_pendiente(tipo_origen: str, id_origen: int):
+    """uuid publico de la solicitud PENDIENTE del documento de origen, o None.
+    Sirve para llevar al usuario a su detalle en la bandeja."""
+    from .models import Solicitud
+
+    return (
+        Solicitud.objects.filter(tipo_origen=tipo_origen, id_origen=id_origen, estatus=Solicitud.Estatus.PENDIENTE)
+        .values_list("uuid_publico", flat=True)
+        .first()
+    )
+
+
 def tiene_solicitud_pendiente(tipo_origen: str, id_origen: int) -> bool:
     """True si el documento de origen tiene una solicitud PENDIENTE en el motor
     (su decision se toma desde la bandeja de autorizaciones)."""

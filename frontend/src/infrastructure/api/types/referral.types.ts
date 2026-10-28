@@ -9,6 +9,9 @@ export type ReferralVisitType = "primera_vez" | "subsecuente";
 
 export type ReferralStatus = "activo" | "cancelado";
 
+/** Motor de autorizaciones (solo laboratorio y gabinete con estudios marcados). */
+export type ReferralAuthorizationStatus = "NO_REQUIERE" | "PENDIENTE" | "AUTORIZADO" | "RECHAZADO" | "VENCIDO";
+
 export interface ReferralStudyItem {
   id: number;
   studyTypeId: number;
@@ -33,6 +36,7 @@ export interface ReferralItem {
   folio: string;
   status: ReferralStatus;
   cancellationReasonId: number | null;
+  authorizationStatus: ReferralAuthorizationStatus;
   studies: ReferralStudyItem[];
   isActive: boolean;
   createdAt: string;

@@ -14,6 +14,11 @@ import { useReferralReport } from "@features/admin/modules/reportes/queries/useR
 import { useExportReferralReport } from "@features/admin/modules/reportes/mutations/useExportReferralReport";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import type { ReferralReportItem } from "@api/types";
+import { Badge } from "@shared/ui/badge";
+import {
+  ETIQUETA_AUTORIZACION_PASE,
+  VARIANTE_AUTORIZACION_PASE,
+} from "@features/autorizaciones/domain/pase-autorizacion.format";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -68,6 +73,19 @@ export function ReportePasesPage() {
       render: (row) => row.destinationCenterName ?? row.specialtyName ?? "—",
     },
     { key: "status", header: "Estatus", accessorKey: "status" },
+    {
+      // Motor de autorizaciones: solo laboratorio y gabinete con estudios marcados lo usan.
+      key: "authorizationStatus",
+      header: "Autorización",
+      render: (row) =>
+        row.authorizationStatus ? (
+          <Badge variant={VARIANTE_AUTORIZACION_PASE[row.authorizationStatus]} className="text-xs">
+            {ETIQUETA_AUTORIZACION_PASE[row.authorizationStatus]}
+          </Badge>
+        ) : (
+          "—"
+        ),
+    },
   ];
 
   if (!canRead) {

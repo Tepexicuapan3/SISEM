@@ -139,6 +139,9 @@ class InterruptorEncendidoTests(_Base):
                 )
             self.assertEqual((capturado.exception.code, capturado.exception.status_code),
                              ("AUTHORIZATION_MANAGED_BY_INBOX", 409))
+            # La pantalla lleva al usuario a la solicitud en la bandeja.
+            self.assertEqual(capturado.exception.details,
+                             {"solicitudUuid": str(Solicitud.objects.get().uuid_publico)})
         autorizacion.refresh_from_db()
         self.assertEqual(autorizacion.status, "pendiente")
 

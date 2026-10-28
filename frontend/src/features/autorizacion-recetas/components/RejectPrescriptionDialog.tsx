@@ -13,7 +13,9 @@ import {
   type RejectPrescriptionFormValues,
 } from "@features/autorizacion-recetas/domain/prescription-authorizations.schemas";
 import { getPrescriptionAuthErrorMessage } from "@features/autorizacion-recetas/utils/prescription-authorizations.feedback";
+import { useNavigate } from "react-router-dom";
 import { ApiError } from "@api/utils/errors";
+import { rutaSolicitudEnBandeja } from "@features/autorizacion-recetas/utils/solicitud-en-bandeja";
 import type { PrescriptionAuthorizationItem } from "@api/types";
 
 interface RejectPrescriptionDialogProps {
@@ -30,6 +32,8 @@ const NON_CRITICAL_CODES = new Set([
   "AUTHORIZATION_ALREADY_RESOLVED",
   "SELF_AUTHORIZATION_NOT_ALLOWED",
   "ROLE_NOT_ALLOWED",
+  // Con AUTORIZACIONES_RECETAS_V2 la receta se decide en la bandeja del motor.
+  "AUTHORIZATION_MANAGED_BY_INBOX",
 ]);
 
 const DEFAULT_VALUES: RejectPrescriptionFormValues = { reason: "" };
@@ -41,6 +45,7 @@ export function RejectPrescriptionDialog({
   authorization,
 }: RejectPrescriptionDialogProps) {
   const rejectPrescription = useRejectPrescription();
+  const navigate = useNavigate();
 
   const form = useForm<RejectPrescriptionFormValues>({
     resolver: zodResolver(rejectPrescriptionSchema),
@@ -61,8 +66,13 @@ export function RejectPrescriptionDialog({
       onOpenChange(false);
     } catch (error) {
       const description = getPrescriptionAuthErrorMessage(error, "Error al rechazar la receta");
+      const rutaSolicitud = rutaSolicitudEnBandeja(error);
 
-      if (error instanceof ApiError && error.code === "AUTHORIZATION_ALREADY_RESOLVED") {
+      if (rutaSolicitud) {
+        toast.info(description, {
+          action: { label: "Ver solicitud", onClick: () => void navigate(rutaSolicitud) },
+        });
+      } else if (error instanceof ApiError && error.code === "AUTHORIZATION_ALREADY_RESOLVED") {
         toast.info(description);
       } else if (error instanceof ApiError && NON_CRITICAL_CODES.has(error.code)) {
         toast.warning(description);

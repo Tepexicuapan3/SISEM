@@ -1,4 +1,9 @@
-import type { ReferralType, ReferralStatus, ReferralVisitType } from "@api/types/referral.types";
+import type {
+  ReferralAuthorizationStatus,
+  ReferralType,
+  ReferralStatus,
+  ReferralVisitType,
+} from "@api/types/referral.types";
 
 export interface ReferralReportParams {
   fechaInicio?: string;
@@ -21,6 +26,7 @@ export interface ReferralReportItem {
   specialtyName: string | null;
   visitType: ReferralVisitType | null;
   status: ReferralStatus;
+  authorizationStatus: ReferralAuthorizationStatus;
 }
 
 export interface ReferralReportResponse {

@@ -5,6 +5,7 @@ const PRESCRIPTION_AUTH_ERROR_MESSAGES: Record<string, string> = {
   AUTHORIZATION_ALREADY_RESOLVED: "Otro autorizador ya resolvio esta receta.",
   SELF_AUTHORIZATION_NOT_ALLOWED: "No puedes autorizar tu propia receta.",
   ROLE_NOT_ALLOWED: "No tienes permiso para autorizar recetas.",
+  AUTHORIZATION_MANAGED_BY_INBOX: "Esta receta se autoriza desde Solicitudes de autorización.",
   VALIDATION_ERROR: "Revisa los datos capturados.",
   SESSION_EXPIRED: "Tu sesion expiro. Inicia sesion nuevamente.",
   NETWORK_ERROR: "No hay conexion con el servidor. Intenta nuevamente.",

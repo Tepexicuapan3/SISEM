@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Send, Loader2 } from "lucide-react";
 import * as z from "zod";
 import { ApiError } from "@api/utils/errors";
+import { avisoAutorizacionPaseEmitido } from "@features/autorizaciones/domain/pase-autorizacion.format";
 import { Button } from "@shared/ui/button";
 import {
   Dialog,
@@ -236,7 +237,10 @@ export function EmitirPaseButton({ visitId, disabled }: EmitirPaseButtonProps) {
         },
       });
       toast.success("Pase emitido", {
-        description: `Folio ${referral.folio} — ${REFERRAL_TYPE_LABEL[referral.referralType]}.`,
+        description:
+          `Folio ${referral.folio} — ${REFERRAL_TYPE_LABEL[referral.referralType]}.` +
+          // Motor de autorizaciones: avisa si los estudios marcados quedaron por autorizar.
+          avisoAutorizacionPaseEmitido(referral.authorizationStatus),
       });
       handleOpenChange(false);
     } catch (error) {

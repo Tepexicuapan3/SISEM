@@ -157,6 +157,8 @@ class ReferralRepository:
             "specialtyName": referral.specialty.name if referral.specialty_id else None,
             "visitType": referral.visit_type,
             "status": referral.status,
+            # Motor de autorizaciones: NO_REQUIERE | PENDIENTE | AUTORIZADO | RECHAZADO | VENCIDO.
+            "authorizationStatus": referral.estatus_autorizacion,
         }
 
     @staticmethod

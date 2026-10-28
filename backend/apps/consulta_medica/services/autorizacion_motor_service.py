@@ -90,12 +90,15 @@ def sincronizar_solicitud(authorization: PrescriptionAuthorization):
 
 
 def asegurar_no_gestionada_por_motor(authorization: PrescriptionAuthorization):
-    """La pantalla anterior no decide recetas que esperan en el motor."""
-    if contracts.tiene_solicitud_pendiente(TIPO_ORIGEN, authorization.pk):
+    """La pantalla anterior no decide recetas que esperan en el motor. El detalle
+    lleva el uuid de la solicitud para que la pantalla ofrezca ir a ella."""
+    uuid_solicitud = contracts.uuid_solicitud_pendiente(TIPO_ORIGEN, authorization.pk)
+    if uuid_solicitud:
         raise VisitDomainError(
             "AUTHORIZATION_MANAGED_BY_INBOX",
             "Esta receta se autoriza desde Solicitudes de autorización.",
             409,
+            details={"solicitudUuid": str(uuid_solicitud)},
         )
 
 
