@@ -232,9 +232,6 @@ if IDENTIDAD_PACIENTE["VERIFICAR_SERMED"] not in ("apagado", "observar", "bloque
 AUTORIZACIONES_RECETAS_V2 = config("AUTORIZACIONES_RECETAS_V2", default=False, cast=bool)
 # Pases de laboratorio y gabinete con estudios marcados (cat_estudiosmed.autorizado='S').
 AUTORIZACIONES_PASES_V2 = config("AUTORIZACIONES_PASES_V2", default=False, cast=bool)
-# Cancelacion de nota decidida por el modulo de autorizadores (tipo CNO) en vez
-# de la designacion vieja. Encender despues de `migrar_designaciones --aplicar`.
-AUTORIZACIONES_NOTA_V2 = config("AUTORIZACIONES_NOTA_V2", default=False, cast=bool)
 
 DATABASE_ROUTERS = [
     "routers.ExpedientesRouter",

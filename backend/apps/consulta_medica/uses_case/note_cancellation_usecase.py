@@ -3,7 +3,7 @@
 Flujo:
   FUERA del atomic (barato, sin locks): payload (422) -> permiso (403) ->
   visita/consulta (404) -> estado (409) -> autocancelacion (403) -> centro de
-  la nota (422) -> `puede_cancelar_notas(actor, centro, hoy)` (403) ->
+  la nota (422) -> `puede_autorizar(actor, "CN", centro, hoy)` (403) ->
   reconciliacion RH de solo lectura -> re-autenticacion con contrasena propia
   (403 REAUTH_FAILED / 423 REAUTH_LOCKED / 503).
 
@@ -36,6 +36,8 @@ from apps.authentication.services.permission_dependencies import (
     evaluate_permission_requirement,
 )
 from apps.catalogos.models import MotivoCancelacionNota
+from apps.catalogos.models.designacion_autorizador import TIPO_CANCELAR_NOTA
+from apps.catalogos.services.designacion_autorizador_service import puede_autorizar
 from apps.consulta_medica.models import (
     ChangeLog,
     ConsultationCancellationItem as Item,
@@ -45,8 +47,6 @@ from apps.consulta_medica.models import (
     VisitPrescription,
     VisitPrescriptionItem,
 )
-# Designacion vieja o modulo de autorizadores, segun AUTORIZACIONES_NOTA_V2.
-from apps.consulta_medica.services.autorizador_nota_service import puede_cancelar_notas
 from apps.consulta_medica.repositories.consultation_cancellation_repository import (
     ConsultationCancellationRepository,
 )
@@ -351,12 +351,6 @@ def _build_snapshot(*, visit, consultation, motivo, motivo_detalle, actor_id, de
                       "startDate": leave.start_date, "endDate": leave.end_date})
     items.sort(key=lambda row: (row["type"], row["id"]))
 
-    autorizador = {
-        "id": actor_id, "designationId": decision.designacion_id,
-        "scope": decision.alcance_aplicado, "outsideAssignment": outside_assignment,
-    }
-    if decision.id_autorizador_tipo is not None:  # solo con AUTORIZACIONES_NOTA_V2
-        autorizador["authorizerTypeId"] = decision.id_autorizador_tipo
     return {
         "schema": SCHEMA,
         "visit": {"id": visit.id_visit, "folio": visit.folio, "status": visit.status,
@@ -367,7 +361,10 @@ def _build_snapshot(*, visit, consultation, motivo, motivo_detalle, actor_id, de
             "cie": consultation.cie_id, "finalNote": consultation.final_note,
         },
         "motivo": {"id": motivo.pk, "name": motivo.name, "detail": motivo_detalle},
-        "autorizador": autorizador,
+        "autorizador": {
+            "id": actor_id, "designationId": decision.designacion_id,
+            "scope": decision.alcance_aplicado, "outsideAssignment": outside_assignment,
+        },
         "centro": {"id": center_id},
         "items": items,
     }
@@ -397,7 +394,7 @@ def get_cancellation_preview(visit_id, actor, permissions):
     except VisitDomainError as exc:
         reason = exc.code
     if center_id is not None:
-        decision = puede_cancelar_notas(actor_id, center_id, timezone.localdate())
+        decision = puede_autorizar(actor_id, TIPO_CANCELAR_NOTA, center_id, timezone.localdate())
         can_authorize = bool(decision)
         reason = None if can_authorize else "AUTHORIZER_NOT_DESIGNATED"
         outside = _assignment_center_id(actor) != center_id
@@ -467,7 +464,7 @@ def cancel_consultation(
         )
 
     center_id = _resolve_center_id(visit)
-    decision = puede_cancelar_notas(actor_id, center_id, timezone.localdate())
+    decision = puede_autorizar(actor_id, TIPO_CANCELAR_NOTA, center_id, timezone.localdate())
     if not decision:
         raise VisitDomainError(
             "AUTHORIZER_NOT_DESIGNATED",
@@ -523,8 +520,6 @@ def cancel_consultation(
             consultation=locked_consultation, visit=locked_visit, reason=motivo,
             reason_detail=motivo_detalle, authorizer=actor,
             designation_id=decision.designacion_id,
-            authorizer_record_id=decision.id_autorizador,
-            authorizer_type_id=decision.id_autorizador_tipo,
             applied_scope=decision.alcance_aplicado or "", center_id=center_id,
             outside_assignment=outside_assignment, signature_method=signature.metodo,
             canonical_snapshot=snapshot_text, content_hash=content_hash,
