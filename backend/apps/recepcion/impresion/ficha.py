@@ -5,6 +5,7 @@ Builder de la Ficha de Consulta para el modulo ``impresion`` (solo lectura)
 y renderer alterno ``docx`` (FICHA_ENGINE=docx, solo hosts Windows con Word).
 """
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from apps.impresion.errors import PrintError
 from apps.impresion.registry import PrintContext
 from apps.impresion.services.barcode import code128_data_uri
@@ -30,7 +31,7 @@ def build_ficha_context(visit_id, actor, *, permissions=None, roles=None):
             code="VISIT_NOT_FOUND", message="Visita no encontrada.", status_code=404
         )
 
-    header = get_patient_header(visit.no_exp, visit.pk_num, visit.nombre_paciente or "")
+    header = get_patient_header(*llave_publica(visit), visit.nombre_paciente or "")
     if header["source"] is None:
         raise PrintError(
             code="DOCUMENT_NOT_PRINTABLE",
@@ -58,8 +59,8 @@ def build_ficha_context(visit_id, actor, *, permissions=None, roles=None):
     center = _center(visit)
     return PrintContext(
         context=context,
-        no_exp=visit.no_exp,
-        pk_num=visit.pk_num,
+        no_exp=llave_publica(visit)[0],
+        pk_num=llave_publica(visit)[1],
         folio=visit.folio or "",
         filename=f"ficha_{visit.folio}.pdf",
         center_id=getattr(center, "pk", None),

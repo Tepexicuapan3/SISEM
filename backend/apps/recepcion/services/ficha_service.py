@@ -8,6 +8,8 @@ import os
 import tempfile
 from datetime import date, datetime
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
+
 logger = logging.getLogger(__name__)
 
 TEMPLATE_PATH = os.path.join(
@@ -174,7 +176,7 @@ def build_context(visit, usuario_nombre: str = "", nombre: dict | None = None) -
     from django.utils import timezone as tz
 
     if nombre is None:
-        nombre = _get_nombre_components(visit.no_exp or "", visit.pk_num)
+        nombre = _get_nombre_components(llave_publica(visit)[0] or "", llave_publica(visit)[1])
     vitals  = _get_vitals(visit)
     # Usar hora local (Mexico_City) para día/mes/año de la ficha
     fecha   = tz.localtime(visit.fch_alta) if visit.fch_alta else datetime.now()
@@ -205,7 +207,7 @@ def build_context(visit, usuario_nombre: str = "", nombre: dict | None = None) -
         "usuario_recepcion":     usuario_nombre,
         "edad":                  nombre.get("edad", ""),
         "fecnac":                nombre.get("fecha_nac", ""),
-        "expediente":            visit.no_exp or "",
+        "expediente":            llave_publica(visit)[0] or "",
         "folio_ficha":           visit.folio,
         # Turno y número secuencial de ficha
         **_get_turno_context(visit),

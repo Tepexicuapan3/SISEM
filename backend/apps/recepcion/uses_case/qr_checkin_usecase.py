@@ -20,6 +20,7 @@ Flujo:
 
 import logging
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from django.db import transaction
 from django.utils import timezone
 
@@ -239,7 +240,7 @@ def buscar_candidatos_checkin(nombre: str | None, folio: str | None) -> list[dic
         if cita.estatus in _ESTATUS_NO_CHECKIN or cita.verificado_en is not None:
             continue
 
-        nombre_paciente, vigente = _resolver_paciente(cita.no_exp, cita.pk_num)
+        nombre_paciente, vigente = _resolver_paciente(*llave_publica(cita))
         if nombre_buscado and nombre_buscado not in nombre_paciente.lower():
             continue
 
@@ -266,7 +267,7 @@ def verificar_qr(payload: str) -> dict:
 
     _validar_estatus_checkin(cita)
 
-    nombre_paciente, vigente = _resolver_paciente(cita.no_exp, cita.pk_num)
+    nombre_paciente, vigente = _resolver_paciente(*llave_publica(cita))
     return _serializar_ficha(cita, nombre_paciente, vigente)
 
 
@@ -355,7 +356,7 @@ def checkin_por_folio(
 
     _validar_estatus_checkin(cita)
 
-    nombre_paciente, vigente = _resolver_paciente(cita.no_exp, cita.pk_num)
+    nombre_paciente, vigente = _resolver_paciente(*llave_publica(cita))
     autorizacion = (autorizacion_capital_humano or "").strip() or None
     _validar_vigencia_checkin(vigente, autorizacion)
     # Con vigencia la autorización no aplica y no se guarda.
@@ -373,8 +374,8 @@ def checkin_por_folio(
         _validar_checkin_no_duplicado(cita)
 
         visit = create_visit(
-            no_exp=cita.no_exp,
-            pk_num=cita.pk_num,
+            no_exp=llave_publica(cita)[0],
+            pk_num=llave_publica(cita)[1],
             nombre_paciente=nombre_paciente or None,
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             service_type=cita.servicio_tipo,
