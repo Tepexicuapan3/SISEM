@@ -34,6 +34,7 @@ from apps.consulta_medica.services.change_log_service import (
 )
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
 from apps.consulta_medica.services.patient_link_service import for_patient
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -96,7 +97,7 @@ def _resolve_tooth(tooth_fdi, _no_exp):
 def _resolve_visit(visit_id, no_exp):
     if visit_id is None:
         return None
-    if not Visit.objects.filter(id_visit=visit_id, no_exp=no_exp).exists():
+    if not Visit.objects.filter(id_visit=visit_id, patient__no_exp=normalizar_no_exp(no_exp)).exists():
         raise _validation_error("visitId", "La visita no existe o no es de este paciente.")
     return visit_id
 

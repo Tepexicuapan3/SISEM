@@ -1,4 +1,6 @@
 from apps.pases.models import Referral, ReferralStudyDetail
+from apps.consulta_medica.services.paciente_entrada import q_registro
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
 _STUDY_TYPES = {Referral.ReferralType.LABORATORIO, Referral.ReferralType.GABINETE}
 
@@ -97,7 +99,7 @@ class ReferralRepository:
     @staticmethod
     def list_for_patient(no_exp, pk_num):
         return (
-            Referral.objects.filter(no_exp=no_exp, pk_num=pk_num, is_active=True)
+            Referral.objects.filter(q_registro(no_exp, pk_num), is_active=True)
             .select_related("destination_center", "specialty", "cancellation_reason")
             .prefetch_related("study_details__study_type")
             .order_by("-created_at")
@@ -131,7 +133,7 @@ class ReferralRepository:
         if status is not None:
             queryset = queryset.filter(status=status)
         if no_exp is not None:
-            queryset = queryset.filter(no_exp=no_exp)
+            queryset = queryset.filter(patient__no_exp=normalizar_no_exp(no_exp))
         return queryset
 
     @staticmethod

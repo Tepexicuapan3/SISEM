@@ -25,6 +25,8 @@ from apps.consulta_medica.repositories.clinical_history_repository import Patien
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
 from apps.padrones.models import ChronicEnrollment, DisabilityEnrollment, RegistryStatus
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import q_pk_registro
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
 READ_REQUIREMENT = {"allOf": ["clinico:padrones:read"]}
 WRITE_REQUIREMENT = {"allOf": ["clinico:padrones:write"]}
@@ -122,9 +124,10 @@ def list_enrollments(kind, *, permissions, roles=None, no_exp=None, pk_num=None,
     spec = get_kind(kind)
     qs = _base_queryset(spec)
     if no_exp:
-        qs = qs.filter(no_exp=no_exp)
+        # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
+        qs = qs.filter(patient__no_exp=normalizar_no_exp(no_exp))
         if pk_num is not None:
-            qs = qs.filter(pk_num=pk_num)
+            qs = qs.filter(q_pk_registro(pk_num))
     if center_id:
         qs = qs.filter(center_id=center_id)
     if status:

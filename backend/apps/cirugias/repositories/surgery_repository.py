@@ -3,6 +3,7 @@ import datetime
 from apps.administracion.models import CatClinica
 from apps.cirugias.models import SurgeryCancellation, SurgeryDiagnosis, SurgerySchedule
 from apps.medicos.identity import display_name as medico_display_name
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
 
 def _clinic_name(clinic_id):
@@ -101,7 +102,8 @@ class SurgeryRepository:
         if status is not None:
             queryset = queryset.filter(status=status)
         if no_exp is not None:
-            queryset = queryset.filter(no_exp=no_exp)
+            # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
+            queryset = queryset.filter(patient__no_exp=normalizar_no_exp(no_exp))
         return queryset
 
     @staticmethod

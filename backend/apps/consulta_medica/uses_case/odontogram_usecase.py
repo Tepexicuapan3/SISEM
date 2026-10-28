@@ -6,6 +6,7 @@ from apps.consulta_medica.odontogram_constants import (
     PERMANENT_TEETH_FDI,
 )
 from apps.consulta_medica.repositories.odontogram_repository import OdontogramRepository
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -113,7 +114,7 @@ def upsert_tooth_condition(
         raise _validation_error("condition", "Condicion invalida.")
 
     if visit_id is not None and not Visit.objects.filter(
-        id_visit=visit_id, no_exp=no_exp,
+        id_visit=visit_id, patient__no_exp=normalizar_no_exp(no_exp),
     ).exists():
         raise _validation_error("visitId", "La visita no existe o no es de este paciente.")
 

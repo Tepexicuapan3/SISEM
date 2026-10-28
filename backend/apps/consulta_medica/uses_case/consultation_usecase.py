@@ -241,7 +241,7 @@ def suggest_morbidity(visit_id, roles, cie_code, permissions=None):
 
     previous = (
         VisitConsultation.objects.filter(
-            id_visit__no_exp=visit.no_exp, id_visit__pk_num=visit.pk_num, is_active=True,
+            id_visit__patient_id=visit.patient_id, is_active=True,
         )
         .exclude(id_visit=visit)
         .filter(

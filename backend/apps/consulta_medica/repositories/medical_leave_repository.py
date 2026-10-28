@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from apps.consulta_medica.models import MedicalLeave
 from apps.consulta_medica.services.patient_link_service import for_patient
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
 
 class MedicalLeaveRepository:
@@ -88,7 +89,8 @@ class MedicalLeaveRepository:
         if leave_type_id is not None:
             queryset = queryset.filter(leave_type_id=leave_type_id)
         if no_exp is not None:
-            queryset = queryset.filter(no_exp=no_exp)
+            # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
+            queryset = queryset.filter(patient__no_exp=normalizar_no_exp(no_exp))
         return queryset
 
     @staticmethod

@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from apps.administracion.models import CatClinica
 from apps.ambulancias.models import AmbulanceRequest, AmbulanceRequestSchedule
+from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
 
 def _clinic_name(clinic_id):
@@ -94,7 +95,8 @@ class AmbulanceRequestRepository:
         if status is not None:
             queryset = queryset.filter(status=status)
         if no_exp is not None:
-            queryset = queryset.filter(no_exp=no_exp)
+            # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
+            queryset = queryset.filter(patient__no_exp=normalizar_no_exp(no_exp))
         return queryset
 
     @staticmethod

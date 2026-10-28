@@ -1,12 +1,9 @@
-from django.conf import settings
-from django.db.models import Q
-
 from apps.consulta_medica.models import (
     ConsultationAddendum,
     VisitConsultation,
     VisitConsultationRevision,
 )
-from apps.consulta_medica.services.patient_link_service import keys_for_person, records_for_key
+from apps.consulta_medica.services.patient_link_service import records_for_key
 
 
 # Columnas de his_notas ampliada (documento "Historia Clinica Unificada", 5.2): texto.
@@ -24,20 +21,14 @@ class ConsultationRepository:
 
     @staticmethod
     def list_for_patient(no_exp, pk_num):
-        # Plan identidad, Fase 4: consultas de la PERSONA. Las visitas todavia
-        # se identifican por (no_exp, pk_num): se piden todas sus llaves.
-        llaves = Q()
-        for llave_no_exp, llave_pk_num in keys_for_person(no_exp, pk_num):
-            llaves |= Q(id_visit__no_exp=llave_no_exp, id_visit__pk_num=llave_pk_num)
-        # Fase 5: con el interruptor encendido tambien por id_paciente de la
-        # visita (necesario para el recien nacido provisional, sin pk_num). Se
-        # suma a la lectura por llave: encenderlo no hace perder nada.
-        if settings.IDENTIDAD_PACIENTE.get("LECTURA_OPERATIVA_POR_ID"):
-            registros = records_for_key(no_exp, pk_num)
-            if registros:
-                llaves |= Q(id_visit__patient__in=registros)
+        # Consultas de la PERSONA (todas sus afiliaciones), por el id_paciente
+        # de cada visita (plan contraer la llave vieja: la visita ya no guarda
+        # no_exp/pk_num). Retira el interruptor LECTURA_OPERATIVA_POR_ID.
+        registros = records_for_key(no_exp, pk_num)
+        if not registros:
+            return VisitConsultation.objects.none()
         return (
-            VisitConsultation.objects.filter(llaves, is_active=True)
+            VisitConsultation.objects.filter(id_visit__patient__in=registros, is_active=True)
             .select_related("id_visit", "doctor", "doctor__detalle", "cie")
             .order_by("-id_visit__fecha_consulta", "-created_at")
         )
