@@ -42,6 +42,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Configuración de Autorizaciones",
     grupo: "Administración",
   },
+  "/admin/autorizacion/auditoria": {
+    label: "Auditoría de Autorizaciones",
+    grupo: "Administración",
+  },
   "/admin/catalogos": { label: "Catálogos", grupo: "Catálogos" },
   "/admin/catalogos/areas": { label: "Áreas", grupo: "Catálogos" },
   "/admin/catalogos/areas-clinicas": {

@@ -55,6 +55,7 @@ import SucursalesPage from "@features/admin/modules/catalogos/sucursales/pages/S
 import PlaceholderPage from "@shared/components/PlaceholderPage";
 import AutorizadoresPage from "@features/admin/modules/autorizadores/pages/AutorizadoresPage";
 import ConfiguracionAutorizacionesPage from "@features/admin/modules/autorizaciones-config/pages/ConfiguracionAutorizacionesPage";
+import AuditoriaAutorizacionesPage from "@features/admin/modules/autorizaciones-auditoria/pages/AuditoriaAutorizacionesPage";
 import MedicosPage from "@features/admin/modules/medicos/pages/MedicosPage";
 import MenusPage from "@features/admin/modules/menus/pages/MenusPage";
 import BitacoraAccesoPage from "@features/admin/modules/bitacora-acceso/pages/BitacoraAccesoPage";
@@ -708,6 +709,14 @@ export const adminRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute requiredAllPermissions={["admin:autorizaciones-config:read"]} dependencyAware>
         <ConfiguracionAutorizacionesPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "autorizacion/auditoria",
+    element: (
+      <ProtectedRoute requiredAllPermissions={["admin:autorizaciones-auditoria:read"]} dependencyAware>
+        <AuditoriaAutorizacionesPage />
       </ProtectedRoute>
     ),
   },
