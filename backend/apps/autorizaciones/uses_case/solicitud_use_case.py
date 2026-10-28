@@ -213,7 +213,7 @@ class SolicitudUseCase:
                 folio_origen=folio_origen,
                 centro_atencion=centro,
                 clues=centro.code,
-                id_paciente=id_paciente,
+                paciente_id=id_paciente,
                 id_usuario_solicitante=id_usuario_solicitante,
                 motivos=motivos,
                 modalidad=modalidad,

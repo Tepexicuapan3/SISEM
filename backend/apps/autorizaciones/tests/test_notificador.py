@@ -14,6 +14,7 @@ from rest_framework.test import APITestCase
 from apps.autorizaciones.contracts import solicitar_autorizacion
 from apps.autorizaciones.models import Solicitud, SolicitudDestinatario, SolicitudTransicion
 from apps.autorizaciones.uses_case.solicitud_use_case import SolicitudUseCase
+from apps.consulta_medica.models import Patient
 from apps.notificaciones.models import Notificacion
 from apps.notificaciones.services import notificacion_service
 
@@ -39,12 +40,13 @@ class _Base(APITestCase):
         self.b = crear_autorizador(inicio=hoy - timedelta(days=5), fin=hoy + timedelta(days=100))
         for autorizador in (self.a, self.b):
             agregar_alcance(asignar_tipo(autorizador, "GAB"), "CENTRO", self.centro)
+        self.paciente = Patient.objects.create(no_exp="8080", pk_num=0)
 
     def solicitar(self, **extra):
         datos = dict(
             clave_tipo="GAB", id_origen=31, folio_origen="REF-2026-000031", id_centro=self.centro.id,
             id_usuario_solicitante=self.medico.id_usuario, items=ITEMS, motivos=["ESTUDIO_MARCADO"],
-            resumen_minimo={"estudios": 1}, id_paciente=8080,
+            resumen_minimo={"estudios": 1}, id_paciente=self.paciente.pk,
         )
         datos.update(extra)
         return solicitar_autorizacion(**datos)

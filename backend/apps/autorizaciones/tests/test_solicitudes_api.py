@@ -16,6 +16,7 @@ from apps.authentication.services.token_service import CSRF_COOKIE
 from apps.autorizaciones.contracts import solicitar_autorizacion
 from apps.autorizaciones.models import SolicitudDestinatario
 from apps.catalogos.models import CatPermiso, CatRol
+from apps.consulta_medica.models import Patient
 
 from .fabricas import agregar_alcance, asignar_tipo, crear_autorizador, crear_centro, crear_usuario, motivo
 
@@ -68,7 +69,7 @@ class _Base(APITestCase):
                     "cantidad": 30, "motivo": "MEDICAMENTO_CONTROLADO"}],
             motivos=["MEDICAMENTO_CONTROLADO"],
             resumen_minimo={"medicamentos": 1},
-            id_paciente=4242,
+            id_paciente=Patient.objects.create(no_exp="4242", pk_num=0).pk,
         )
         self.detalle = f"{URL}{self.solicitud.uuid_publico}/"
 

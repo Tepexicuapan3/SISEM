@@ -46,8 +46,11 @@ class Solicitud(RegistroAuditable):
         "catalogos.CatCentroAtencion", on_delete=models.PROTECT, db_column="id_centro_atencion", related_name="+",
     )
     clues = models.CharField(max_length=50)  # copia al crear
-    # Referencia opaca; nunca se expone en la API.
-    id_paciente = models.BigIntegerField(null=True, blank=True)
+    # Paciente atendido (cns_paciente). Interno: nunca se expone en la API.
+    paciente = models.ForeignKey(
+        "consulta_medica.Patient", on_delete=models.PROTECT, db_column="id_paciente",
+        related_name="+", null=True, blank=True,
+    )
     id_usuario_solicitante = models.BigIntegerField()
     motivos = models.JSONField(default=list)
     modalidad = models.CharField(max_length=16, choices=Modalidad.choices)
@@ -68,8 +71,6 @@ class Solicitud(RegistroAuditable):
     sin_elegibles = models.BooleanField(default=False)
     # Se escala una sola vez (F7): NULL = todavia no.
     fecha_escalamiento = models.DateTimeField(null=True, blank=True)
-    tabla_legado = models.CharField(max_length=30, null=True, blank=True)
-    id_legado = models.CharField(max_length=40, null=True, blank=True)
     version = models.PositiveIntegerField(default=1)
 
     class Meta:
@@ -83,10 +84,9 @@ class Solicitud(RegistroAuditable):
                 condition=~Q(modalidad="PRIMERO_VALIDO") | Q(aprobaciones_requeridas=1),
                 name="aut_solicitud_modalidad_ck",
             ),
-            # Autorizada o rechazada <=> tiene quien y cuando la resolvio (salvo historico del legado).
+            # Autorizada o rechazada <=> tiene quien y cuando la resolvio.
             models.CheckConstraint(
-                condition=Q(tabla_legado__isnull=False)
-                | (
+                condition=(
                     Q(estatus__in=["AUTORIZADA", "RECHAZADA"])
                     & Q(id_usuario_resolucion__isnull=False, fecha_resolucion__isnull=False)
                 )
@@ -94,16 +94,12 @@ class Solicitud(RegistroAuditable):
                 name="aut_solicitud_resolucion_ck",
             ),
             models.CheckConstraint(
-                condition=~Q(estatus="RECHAZADA") | Q(motivo_cierre__isnull=False) | Q(tabla_legado__isnull=False),
+                condition=~Q(estatus="RECHAZADA") | Q(motivo_cierre__isnull=False),
                 name="aut_solicitud_rechazo_motivo_ck",
             ),
             models.UniqueConstraint(
                 fields=["tipo_origen", "id_origen"], condition=Q(estatus="PENDIENTE"),
                 name="aut_solicitud_origen_pendiente_uq",
-            ),
-            models.UniqueConstraint(
-                fields=["tabla_legado", "id_legado"], condition=Q(id_legado__isnull=False),
-                name="aut_solicitud_legado_uq",
             ),
         ]
         indexes = [

@@ -243,3 +243,26 @@ class MovimientoSoloInsercionTests(TestCase):
     def test_no_se_puede_borrar_el_historial(self):
         with self.assertRaises(Exception):
             _atomico(AutorizadorMovimiento.objects.filter(pk=self.movimiento.pk).delete)
+
+
+class SolicitudPacienteTests(TestCase):
+    """Aviso del manager (2026-10-28): el paciente va por id_paciente con integridad
+    referencial y el modulo no guarda referencias al legado."""
+
+    def test_paciente_es_fk_protegida_a_cns_paciente(self):
+        from django.db.models import PROTECT
+
+        from apps.autorizaciones.models import Solicitud
+        from apps.consulta_medica.models import Patient
+
+        campo = Solicitud._meta.get_field("paciente")
+        self.assertIs(campo.related_model, Patient)
+        self.assertIs(campo.remote_field.on_delete, PROTECT)
+        self.assertEqual(campo.column, "id_paciente")
+        self.assertTrue(campo.null)
+
+    def test_no_tiene_columnas_del_legado(self):
+        from apps.autorizaciones.models import Solicitud
+
+        columnas = {f.column for f in Solicitud._meta.concrete_fields}
+        self.assertFalse({"tabla_legado", "id_legado"} & columnas)
