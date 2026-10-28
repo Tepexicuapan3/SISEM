@@ -12,6 +12,7 @@ from .views import (
     UsuariosElegiblesView,
 )
 
+from .views_auditoria import AuditoriaSolicitudDetalleView, AuditoriaSolicitudesView
 from .views_configuracion import (
     MotivoConfiguracionDetalleView,
     MotivosConfiguracionView,
@@ -46,6 +47,8 @@ urlpatterns = [
     path("autorizadores/<int:pk>/renovar/", AutorizadorRenovarView.as_view()),
     path("autorizadores/<int:pk>/historial/", AutorizadorHistorialView.as_view()),
     path("autorizaciones/catalogos/", CatalogosAutorizacionView.as_view()),
+    path("autorizaciones/auditoria/solicitudes/", AuditoriaSolicitudesView.as_view()),
+    path("autorizaciones/auditoria/solicitudes/<uuid:uuid_publico>/", AuditoriaSolicitudDetalleView.as_view()),
     path("autorizaciones/configuracion/tipos/", TiposConfiguracionView.as_view()),
     path("autorizaciones/configuracion/tipos/<int:pk>/", TipoConfiguracionDetalleView.as_view()),
     path("autorizaciones/configuracion/reglas/", ReglasCentroView.as_view()),

@@ -774,6 +774,21 @@ NAV_SEED = [
         "permisos": ["admin:autorizaciones-config:read"],
     },
     {
+        # Agregado 2026-10-28 (change autorizadores-medicos): auditoria de
+        # solicitudes (trazabilidad NOM-024). La migracion autorizaciones 0015
+        # lo crea; aqui queda para que --prune no lo de de baja.
+        "clave": "administracion.autorizaciones_auditoria",
+        "titulo": "Auditoría de autorizaciones",
+        "icono": "scroll-text",
+        "url": "/admin/autorizacion/auditoria",
+        "badge": None,
+        "orden": 5,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion",
+        "permisos": ["admin:autorizaciones-auditoria:read"],
+    },
+    {
         "clave": "administracion.reportes.consultas_diario",
         "titulo": "Informe Diario de Consulta Médica",
         "icono": None,

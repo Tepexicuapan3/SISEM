@@ -289,4 +289,7 @@ NAVIGATION_PERMISSIONS_SEED += [
     # Configuracion del modulo (2026-10-28): migracion autorizaciones 0014.
     ("admin:autorizaciones-config:read", "Ver la configuración del módulo de autorizaciones"),
     ("admin:autorizaciones-config:update", "Editar tipos, reglas por centro y motivos de autorizaciones"),
+    # Auditoria de solicitudes (2026-10-28): migracion autorizaciones 0015.
+    ("admin:autorizaciones-auditoria:read", "Ver la auditoría de solicitudes de autorización (firmas, IP y destinatarios)"),
+    ("admin:autorizaciones-auditoria:export", "Exportar a Excel la auditoría de solicitudes de autorización"),
 ]
