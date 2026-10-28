@@ -57,6 +57,14 @@ class MotivosCancelacionApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_quien_solo_puede_cancelar_citas_puede_leerlos(self):
+        self._crear_usuario("cancela_user", ["recepcion:citas:write"])
+        self._login("cancela_user")
+
+        response = self.client.get(URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def test_sin_permiso_de_agenda_ni_cola_responde_403(self):
         self._crear_usuario("otro_user", ["clinico:somatometria:read"])
         self._login("otro_user")

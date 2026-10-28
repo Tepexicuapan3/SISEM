@@ -42,7 +42,9 @@ export function MotivoCancelacionFields({
           <SelectTrigger id={`${idPrefix}-motivo`} className="w-full" aria-invalid={!motivoId}>
             <SelectValue placeholder={isLoading ? "Cargando motivos..." : "Selecciona un motivo"} />
           </SelectTrigger>
-          <SelectContent>
+          {/* z-[160]: el dialogo de cancelar ficha es un AlertDialog (z-[150]) y
+              la lista por defecto (z-[130]) quedaria detras. */}
+          <SelectContent className="z-[160]">
             {motivos.map((motivo) => (
               <SelectItem key={motivo.id} value={String(motivo.id)}>{motivo.name}</SelectItem>
             ))}

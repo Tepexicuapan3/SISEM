@@ -401,8 +401,9 @@ class MotivosCancelacionView(APIView):
         if err:
             return err
         permisos = UserRepository.build_auth_user(user).get("permissions", [])
-        if not (has_capability(permisos, CITAS_READ_CAPABILITY)
-                or has_capability(permisos, RECEPCION_WRITE_CAPABILITY)):
+        if not any(has_capability(permisos, cap) for cap in (
+            CITAS_READ_CAPABILITY, CITAS_WRITE_CAPABILITY, RECEPCION_WRITE_CAPABILITY,
+        )):
             return _domain_error(request, VisitDomainError("ROLE_NOT_ALLOWED", "No tienes permiso.", 403))
 
         motivos = (
