@@ -85,6 +85,9 @@ class AutorizadorTipo(RegistroAuditable):
     )
     fecha_inicio_vigencia = models.DateField(null=True, blank=True)
     fecha_fin_vigencia = models.DateField(null=True, blank=True)
+    # Trazabilidad de la migracion desde cat_designacion_autorizador (F8);
+    # NULL en los tipos dados de alta en la pantalla nueva.
+    id_designacion_origen = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "aut_autorizador_tipo"
@@ -93,6 +96,12 @@ class AutorizadorTipo(RegistroAuditable):
                 fields=["autorizador", "tipo_autorizacion"],
                 condition=Q(esta_activo=True, fecha_baja__isnull=True),
                 name="aut_autorizador_tipo_uq",
+            ),
+            # Una designacion vieja se migra una sola vez.
+            models.UniqueConstraint(
+                fields=["id_designacion_origen"],
+                condition=Q(id_designacion_origen__isnull=False),
+                name="aut_autorizador_tipo_origen_uq",
             ),
             models.CheckConstraint(
                 condition=Q(fecha_inicio_vigencia__isnull=True)
