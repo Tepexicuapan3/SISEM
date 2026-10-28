@@ -7,7 +7,6 @@ estado de alergias e importacion de his_clinicad.
 import datetime
 from decimal import Decimal
 from io import StringIO
-from unittest.mock import patch
 
 from django.core.cache import cache
 from django.core.management import call_command
@@ -21,7 +20,6 @@ from apps.catalogos.models import CatCies, CatHabito, CatRegionCorporal
 from apps.catalogos.services.sensitive_diagnosis_service import invalidate_cache
 from apps.consulta_medica.models import (
     Allergy,
-    FamilyHistory,
     Habit,
     HistoricalNote,
     LegacyVitalSigns,
@@ -38,7 +36,6 @@ from apps.consulta_medica.services.legacy_history_parsing import (
 )
 from apps.consulta_medica.tests.test_consultation_audit_api import _ConsultationAuditApiTestBase
 from apps.consulta_medica.repositories.clinical_history_repository import ClinicalHistoryRepository
-from apps.consulta_medica.tests.test_migrar_historial_clinico_legacy import _mock_conn
 
 
 class LegacyTextParsingTests(SimpleTestCase):
@@ -520,66 +517,3 @@ class PhysicalExamAndAllergyStatusApiTests(_UnifiedApiBase):
         self.assertEqual(self._post(url, {"status": "A", "reason": "x"}).status_code, 404)
 
 
-class MigrarHistoriaEstomatologiaLegacyTests(_ConsultationAuditApiTestBase):
-    ROW = {
-        "no_hisclin": 77, "no_exp": "EXPDENT1", "tp_paciente": "0", "fe_hisclin": None,
-        "cd_medico": "M01", "cd_clinica": 3, "ds_ocupacion": None, "ds_edocivil": None,
-        "sw_diabetes": "S", "sw_cancer": None, "sw_presalta": None, "sw_presbaja": None,
-        "ds_muerte": "Infarto", "sw_diabetesp": None, "sw_asma": "S", "sw_presaltap": None,
-        "sw_presbajap": None, "sw_hepatitis": None, "sw_sida": None, "sw_tabaquismo": "S",
-        "sw_alcoholismo": None, "sw_toxicomias": None, "ds_habitos": None,
-        "ds_alimentos": "Dieta blanda", "ds_antquir": "Amigdalectomia",
-        "ds_antecedentes": "Sin datos relevantes", "ds_alemedicam": "Ampicilina",
-        "ds_alemdental": None, "ds_aleanestes": "NEGADAS", "ds_aleambient": None,
-        "ds_alealiment": None, "ds_aleotros": None, "ds_terapias": "Dolor molar",
-        "no_peso": "70", "no_talla": "1.70", "no_ta": "120/80", "no_pulso": None,
-        "no_temp": None, "no_resp": None,
-    }
-
-    @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
-    def test_maps_his_clinicad_respecting_p_suffix_and_is_idempotent(self, mock_connect):
-        out = StringIO()
-        for _ in range(2):
-            mock_connect.return_value = _mock_conn([dict(self.ROW)])
-            call_command("migrar_historia_estomatologia_legacy", host="x", user="x", password="x",
-                         database="x", stdout=out)
-
-        legado = {"no_exp": "EXPDENT1", "pk_num": 0}
-        # Plan contraer la llave vieja: las tablas de la historia se buscan por paciente.
-        base = {"patient__no_exp": "EXPDENT1", "patient__pk_num": 0}
-        # SIN sufijo = familiar; CON sufijo p / asma = personal.
-        self.assertEqual(
-            set(FamilyHistory.objects.filter(**base).values_list("description", flat=True)),
-            {"Diabetes mellitus", "Familiar finado"},
-        )
-        self.assertEqual(list(PersonalHistory.objects.filter(**base).values_list("description", flat=True)), ["Asma"])
-        self.assertEqual(
-            set(Habit.objects.filter(**base).values_list("habit__code", flat=True)), {"tabaquismo", "alimentacion"},
-        )
-        self.assertEqual(SurgicalHistory.objects.get(**base).procedure, "Amigdalectomia")
-        self.assertEqual(list(Allergy.objects.filter(**base).values_list("substance", flat=True)), ["Ampicilina"])
-        vitals = LegacyVitalSigns.objects.get(**legado)
-        self.assertEqual((vitals.weight_kg, vitals.height_cm), (Decimal("70.00"), Decimal("170.00")))
-        self.assertEqual((vitals.blood_pressure_systolic, vitals.blood_pressure_diastolic), (120, 80))
-        self.assertIsNone(vitals.measured_on)
-        self.assertFalse(HistoricalNote.objects.filter(**legado, section="signos_vitales").exists())
-        self.assertTrue(HistoricalNote.objects.filter(**legado, section="padecimiento", content="Dolor molar").exists())
-        self.assertIn("Ya importadas: 1", out.getvalue())
-
-    @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
-    def test_duplicate_his_clinicad_rows_do_not_duplicate_permanent_records(self, mock_connect):
-        # 26 pacientes del dump tienen mas de una fila en his_clinicad.
-        second = dict(self.ROW, no_hisclin=78, sw_cancer="S")
-        mock_connect.return_value = _mock_conn([dict(self.ROW), second])
-        call_command("migrar_historia_estomatologia_legacy", host="x", user="x", password="x",
-                     database="x", stdout=StringIO())
-
-        base = {"patient__no_exp": "EXPDENT1", "patient__pk_num": 0}
-        self.assertEqual(
-            sorted(FamilyHistory.objects.filter(**base).values_list("description", flat=True)),
-            ["Cancer", "Diabetes mellitus", "Familiar finado"],
-        )
-        self.assertEqual(Habit.objects.filter(**base).count(), 2)
-        self.assertEqual(SurgicalHistory.objects.filter(**base).count(), 1)
-        # Cada fila conserva su propia medicion de signos (fecha desconocida).
-        self.assertEqual(LegacyVitalSigns.objects.filter(**base).count(), 2)

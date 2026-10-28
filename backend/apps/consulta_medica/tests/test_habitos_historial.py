@@ -4,10 +4,6 @@ una sola fila vigente por paciente y habito: editar crea una version nueva, la
 anterior pasa a B y el cambio va a la bitacora (ACTUALIZACION).
 """
 import datetime
-from io import StringIO
-from unittest.mock import patch
-
-from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
@@ -16,12 +12,7 @@ from rest_framework import status
 
 from apps.catalogos.models import CatHabito
 from apps.consulta_medica.models import ChangeLog, Habit
-from apps.consulta_medica.tests.test_consultation_audit_api import _ConsultationAuditApiTestBase
-# Se importa el modulo para la fila de ejemplo: una clase de test importada
-# aqui la descubriria el runner otra vez y repetiria sus tests.
-from apps.consulta_medica.tests import test_unified_history
 from apps.consulta_medica.tests.test_unified_history import _UnifiedApiBase
-from apps.consulta_medica.tests.test_migrar_historial_clinico_legacy import _mock_conn
 
 
 def _habit_id(code):
@@ -155,27 +146,6 @@ class HabitRulesTests(_UnifiedApiBase):
         response = self._post_habit({"status": "E", "since": 2005, "until": 2015})
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-
-class HabitLegacyImportTests(_ConsultationAuditApiTestBase):
-    ROW = test_unified_history.MigrarHistoriaEstomatologiaLegacyTests.ROW
-
-    @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
-    def test_el_legado_no_pisa_el_habito_vigente_capturado_en_sires(self, mock_connect):
-        # Mismo habito con OTRO texto: el legado entra como version anterior.
-        Habit.objects.create(
-            no_exp="EXPDENT1", pk_num=0, habit_id=_habit_id("alimentacion"), notes="Dieta capturada en SIRES",
-        )
-        mock_connect.return_value = _mock_conn([dict(self.ROW)])
-
-        call_command("migrar_historia_estomatologia_legacy", host="x", user="x", password="x",
-                     database="x", stdout=StringIO())
-
-        diet = Habit.objects.filter(patient__no_exp="EXPDENT1", habit__code="alimentacion")
-        self.assertEqual(diet.count(), 2)
-        self.assertEqual(diet.get(record_status="A").notes, "Dieta capturada en SIRES")
-        legacy = diet.get(record_status="B")
-        self.assertEqual((legacy.notes, legacy.source), ("Dieta blanda", "legacy"))
 
 
 class HabitHistoryDataMigrationTests(TransactionTestCase):

@@ -3,66 +3,9 @@
 HISTORIA_CLINICA.tabla_origen / no_hisclin_origen, tanto al importar como en
 el relleno de lo ya migrado (migracion 0049, solo con evidencia).
 """
-from io import StringIO
-from unittest.mock import patch
-
-from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
-
-from apps.catalogos.models import EdoCivil, Ocupaciones
-from apps.consulta_medica.models import Allergy, ClinicalHistory
-from apps.consulta_medica.tests.test_migrar_historial_clinico_legacy import _LEGACY_ROW_BASE, _mock_conn
-# Se importa el modulo, no la clase: una clase de test importada aqui la
-# descubriria el runner otra vez y repetiria sus tests.
-from apps.consulta_medica.tests import test_unified_history
-
-_CONNECT = "apps.authentication.management.commands._legacy_mysql_base.pymysql.connect"
-_DENTAL_ROW = test_unified_history.MigrarHistoriaEstomatologiaLegacyTests.ROW
-
-
-def _run(command, rows, mock_connect):
-    mock_connect.return_value = _mock_conn(rows)
-    call_command(command, host="x", user="x", password="x", database="x", stdout=StringIO())
-
-
-class ImportTraceabilityTests(TestCase):
-    def setUp(self):
-        Ocupaciones.objects.create(name="Contador")
-        EdoCivil.objects.create(name="Soltero")
-
-    @patch(_CONNECT)
-    def test_his_clinica_guarda_origen_y_texto_original_de_cada_alergia(self, mock_connect):
-        row = dict(_LEGACY_ROW_BASE, no_hisclin=12, ds_alergias="Penicilina, mariscos")
-
-        _run("migrar_historial_clinico_legacy", [row], mock_connect)
-
-        history = ClinicalHistory.objects.get(patient__no_exp="EXP-0001")
-        self.assertEqual((history.legacy_source_table, history.legacy_source_id), ("his_clinica", 12))
-        self.assertEqual(
-            dict(Allergy.objects.values_list("substance", "original_text")),
-            {"Penicilina": "Penicilina, mariscos", "mariscos": "Penicilina, mariscos"},
-        )
-
-    @patch(_CONNECT)
-    def test_his_clinicad_sola_deja_su_origen(self, mock_connect):
-        _run("migrar_historia_estomatologia_legacy", [dict(_DENTAL_ROW)], mock_connect)
-
-        history = ClinicalHistory.objects.get(patient__no_exp="EXPDENT1")
-        self.assertEqual((history.legacy_source_table, history.legacy_source_id), ("his_clinicad", 77))
-        self.assertEqual(Allergy.objects.get(patient__no_exp="EXPDENT1").original_text, "Ampicilina")
-
-    @patch(_CONNECT)
-    def test_his_clinica_manda_sobre_his_clinicad(self, mock_connect):
-        _run("migrar_historia_estomatologia_legacy", [dict(_DENTAL_ROW)], mock_connect)
-        _run("migrar_historial_clinico_legacy",
-             [dict(_LEGACY_ROW_BASE, no_exp="EXPDENT1", no_hisclin=5)], mock_connect)
-        # Otra corrida de estomatologia no le quita el origen a his_clinica.
-        _run("migrar_historia_estomatologia_legacy", [dict(_DENTAL_ROW, no_hisclin=78)], mock_connect)
-
-        history = ClinicalHistory.objects.get(patient__no_exp="EXPDENT1")
-        self.assertEqual((history.legacy_source_table, history.legacy_source_id), ("his_clinica", 5))
+from django.test import TransactionTestCase
 
 
 class TraceabilityBackfillMigrationTests(TransactionTestCase):

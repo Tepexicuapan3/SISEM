@@ -1,7 +1,8 @@
 """
 Importacion del modelo anterior (MySQL `dbclinicas`) a la historia clinica
-unificada, fila por fila -- la usan `migrar_historial_clinico_legacy`
-(his_clinica) y `migrar_historia_estomatologia_legacy` (his_clinicad).
+unificada, fila por fila -- la usa la confirmacion del medico
+(`legado_confirmacion`). Los importadores masivos que tambien la usaban
+(his_clinica, his_clinicad) se retiraron en C7 (plan contraer la llave vieja).
 
 Mapeo: seccion 7 del documento "Historia Clinica Unificada". Idempotente
 por `legacy_ref` ("his_clinica:<no_hisclin>" / "his_clinicad:<no_hisclin>"):

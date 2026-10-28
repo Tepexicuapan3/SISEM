@@ -3,20 +3,12 @@ Identidad del paciente en PACIENTE (`Patient`): CURP y sexo
 (H/M/X), versionados como el resto de la historia; y limpieza del texto
 libre de alergias (deprecado a favor de `Allergy`).
 """
-from io import StringIO
-from unittest.mock import patch
-
 from django.core.cache import cache
-from django.core.management import call_command
 from rest_framework import status
 
 from apps.administracion.models import AuditoriaEvento
-from apps.consulta_medica.models import Allergy, HistoricalNote, Patient, PatientRevision
+from apps.consulta_medica.models import Patient, PatientRevision
 from apps.consulta_medica.tests.test_consultation_audit_api import _ConsultationAuditApiTestBase
-from apps.consulta_medica.tests.test_migrar_historial_clinico_legacy import (
-    _LEGACY_ROW_BASE,
-    _mock_conn,
-)
 
 VALID_CURP = "PEGJ850315HDFRRN09"
 
@@ -89,44 +81,3 @@ class ClinicalHistoryIdentityApiTests(_ConsultationAuditApiTestBase):
         self.assertNotIn("allergies", response.data)
 
 
-class LegacyCommandAllergyImportTests(_ConsultationAuditApiTestBase):
-    @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
-    def test_legacy_allergies_go_to_structured_table_idempotently(self, mock_connect):
-        # Texto acumulado real del legado: una anotacion firmada por captura.
-        row = dict(
-            _LEGACY_ROW_BASE,
-            ds_alergias="Penicilina, sulfas [01/02/2020 (jperez)] - NEGADAS [03/04/2021 (mlopez)] - ",
-        )
-        mock_connect.return_value = _mock_conn([row])
-        out = StringIO()
-
-        call_command("migrar_historial_clinico_legacy", host="x", user="x", password="x", database="x", stdout=out)
-        mock_connect.return_value = _mock_conn([row])
-        call_command("migrar_historial_clinico_legacy", host="x", user="x", password="x", database="x")
-
-        substances = sorted(Allergy.objects.filter(patient__no_exp="EXP-0001").values_list("substance", flat=True))
-        # Una fila por elemento, tipo "otro" (documento); "NEGADAS" no es alergia.
-        self.assertEqual(substances, ["Penicilina", "sulfas"])
-        self.assertEqual(
-            set(Allergy.objects.values_list("allergy_type_id", flat=True)), {9},
-        )
-        notes = HistoricalNote.objects.filter(no_exp="EXP-0001", section="alergias").order_by("noted_on")
-        self.assertEqual(
-            [(n.content, n.author, str(n.noted_on)) for n in notes],
-            [("Penicilina, sulfas", "jperez", "2020-02-01"), ("NEGADAS", "mlopez", "2021-04-03")],
-        )
-        self.assertIn("Alergias importadas a cns_allergy: 2", out.getvalue())
-
-    @patch("apps.authentication.management.commands._legacy_mysql_base.pymysql.connect")
-    def test_dry_run_counts_allergies_without_writing(self, mock_connect):
-        mock_connect.return_value = _mock_conn([dict(_LEGACY_ROW_BASE, ds_alergias="Sulfas")])
-        out = StringIO()
-
-        call_command(
-            "migrar_historial_clinico_legacy", host="x", user="x", password="x", database="x",
-            dry_run=True, stdout=out,
-        )
-
-        self.assertFalse(Allergy.objects.exists())
-        self.assertFalse(HistoricalNote.objects.exists())
-        self.assertIn("[dry-run]", out.getvalue())

@@ -57,9 +57,8 @@ RESIDENCIA_LEGADO = (
 
 class Command(BaseCommand):
     help = (
-        "Corrige/completa los catalogos que necesita la migracion de "
-        "historia clinica del legado (ver "
-        "consulta_medica/management/commands/migrar_historial_clinico_legacy.py): "
+        "Corrige/completa los catalogos que usa la historia clinica que "
+        "viene del legado (confirmacion del medico, legado_confirmacion): "
         "borra los 5 valores de 'Ocupaciones' mal cargados a mano (roles de "
         "personal, no ocupacion del paciente) y siembra los valores reales del "
         "legado en Ocupaciones/EdoCivil/Religion/TipoResidencia. Por defecto "

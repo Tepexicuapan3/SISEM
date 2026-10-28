@@ -1314,8 +1314,7 @@ class ClinicalHistory(models.Model):
 class LegacyConsultationRecord(models.Model):
     """
     Archivo de SOLO LECTURA de las consultas del legado (`his_notas`,
-    migradas desde MySQL -- ver
-    `management/commands/migrar_notas_clinicas_legacy.py`). NO participa
+    migradas desde MySQL; el importador masivo se retiro en C7). NO participa
     del flujo operativo vivo: a diferencia de `VisitConsultation`, no esta
     enlazada a `recepcion.Visit` a proposito, para no contaminar reportes/
     colas/turnos de hoy con 600k+ filas historicas sinteticas. Es

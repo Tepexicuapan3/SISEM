@@ -3,8 +3,8 @@
 conflictos de migracion que ya estaban en cns_conflicto_migracion. Los nuevos
 ya entran solos. cns_conflicto_migracion se conserva para la revision humana.
 
-Correr despues de corregir_llave_familiares_legacy, para que los conflictos de
-familiares encuentren a su paciente. Idempotente. --dry-run no escribe nada.
+Los conflictos de familiares con la llave del legado (cd_familiar) se resuelven
+por cns_identificador_paciente. Idempotente. --dry-run no escribe nada.
 """
 from django.core.management.base import BaseCommand
 
@@ -36,6 +36,6 @@ class Command(BaseCommand):
             if counts["sin_paciente"]:
                 self.stdout.write(self.style.WARNING(
                     "  Los conflictos sin paciente suelen ser familiares con la llave del legado: "
-                    "correr antes corregir_llave_familiares_legacy."
+                    "revisar que su cd_familiar este registrado (registrar_llaves_legado)."
                 ))
             self.stdout.write(f"Bitacora de ejecucion: cns_bitacora_migracion.id_ejecucion={run.pk}")
