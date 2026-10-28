@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   OdontogramDentition,
   OdontogramVersionsResponse,
@@ -14,17 +15,19 @@ export const odontogramAPI = {
     dentition: OdontogramDentition = "permanent",
     versionId?: number | null,
   ): Promise<PatientOdontogramResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `odontogram`);
     const response = await apiClient.get<PatientOdontogramResponse>(
-      `/patients/${noExp}/odontogram`,
-      { params: { pkNum, dentition, versionId: versionId ?? undefined } },
+      ruta.url,
+      { params: { ...ruta.params, dentition, versionId: versionId ?? undefined } },
     );
     return response.data;
   },
 
   listVersions: async (noExp: string, pkNum = 0): Promise<OdontogramVersionsResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `odontogram/versions`);
     const response = await apiClient.get<OdontogramVersionsResponse>(
-      `/patients/${noExp}/odontogram/versions`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },
@@ -35,10 +38,11 @@ export const odontogramAPI = {
     toothFdi: string,
     data: UpdateOdontogramToothRequest,
   ): Promise<UpdateOdontogramToothResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `odontogram/${toothFdi}`);
     const response = await apiClient.patch<UpdateOdontogramToothResponse>(
-      `/patients/${noExp}/odontogram/${toothFdi}`,
+      ruta.url,
       data,
-      { params: { pkNum } },
+      { params: ruta.params },
     );
     return response.data;
   },

@@ -6,6 +6,7 @@
  */
 
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   CreateStudyResultRequest,
   PatientStudyResultsResponse,
@@ -42,9 +43,10 @@ export const studyResultAPI = {
     noExp: string,
     pkNum = 0,
   ): Promise<PatientStudyResultsResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `study-results`);
     const response = await apiClient.get<PatientStudyResultsResponse>(
-      `/patients/${noExp}/study-results`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },

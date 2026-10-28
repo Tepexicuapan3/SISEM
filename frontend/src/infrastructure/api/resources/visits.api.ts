@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { registrarIdsPaciente } from "@api/paciente-ids";
 import type {
   AddPrescriptionItemRequest,
   AddPrescriptionItemResult,
@@ -232,12 +233,14 @@ export const visitsAPI = {
       "/visits/patient-lookup",
       { params: { noExp, ...(historico ? { historico: "true" } : {}) } },
     );
+    registrarIdsPaciente([response.data.titular, ...response.data.dependientes]);
     return response.data;
   },
 
   /** Abre en SIRES al miembro elegido que todavia no tiene idPaciente (pkNum = el de SERMED). */
   openPatient: async (noExp: string, pkNum: number): Promise<{ idPaciente: number }> => {
     const response = await apiClient.post<{ idPaciente: number }>("/visits/patient-open", { noExp, pkNum });
+    registrarIdsPaciente([{ noExp, pkNum, idPaciente: response.data.idPaciente }]);
     return response.data;
   },
 

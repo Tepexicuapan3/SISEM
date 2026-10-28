@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   BloodTypeResponse,
   ClinicalCatalogs,
@@ -13,14 +14,16 @@ import type {
 /** CRUD generico de los registros permanentes del paciente. */
 export const patientRecordsAPI = {
   list: async <T>(resource: PatientRecordResource, noExp: string, pkNum = 0): Promise<RecordListResponse<T>> => {
-    const response = await apiClient.get<RecordListResponse<T>>(`/patients/${noExp}/${resource}`, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `${resource}`);
+    const response = await apiClient.get<RecordListResponse<T>>(ruta.url, {
+      params: ruta.params,
     });
     return response.data;
   },
 
   create: async <T>(resource: PatientRecordResource, noExp: string, pkNum: number, data: object): Promise<T> => {
-    const response = await apiClient.post<T>(`/patients/${noExp}/${resource}`, data, { params: { pkNum } });
+    const ruta = await rutaPaciente(noExp, pkNum, `${resource}`);
+    const response = await apiClient.post<T>(ruta.url, data, { params: ruta.params });
     return response.data;
   },
 
@@ -31,8 +34,9 @@ export const patientRecordsAPI = {
     recordId: number,
     data: object,
   ): Promise<T> => {
-    const response = await apiClient.patch<T>(`/patients/${noExp}/${resource}/${recordId}`, data, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `${resource}/${recordId}`);
+    const response = await apiClient.patch<T>(ruta.url, data, {
+      params: ruta.params,
     });
     return response.data;
   },
@@ -45,8 +49,9 @@ export const patientRecordsAPI = {
     recordId: number,
     reason: string,
   ): Promise<void> => {
-    await apiClient.delete(`/patients/${noExp}/${resource}/${recordId}`, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `${resource}/${recordId}`);
+    await apiClient.delete(ruta.url, {
+      params: ruta.params,
       data: { reason },
     });
   },
@@ -58,8 +63,9 @@ export const historicalNotesAPI = {
     pkNum = 0,
     filters: { section?: string; specialty?: string } = {},
   ): Promise<HistoricalNotesResponse> => {
-    const response = await apiClient.get<HistoricalNotesResponse>(`/patients/${noExp}/historical-notes`, {
-      params: { pkNum, ...filters },
+    const ruta = await rutaPaciente(noExp, pkNum, `historical-notes`);
+    const response = await apiClient.get<HistoricalNotesResponse>(ruta.url, {
+      params: { ...ruta.params, ...filters },
     });
     return response.data;
   },
@@ -83,15 +89,17 @@ export const physicalExamAPI = {
 /** GRUPO_SANGUINEO (5.2): vigente + historial; PUT captura o corrige. */
 export const bloodTypeAPI = {
   get: async (noExp: string, pkNum = 0): Promise<BloodTypeResponse> => {
-    const response = await apiClient.get<BloodTypeResponse>(`/patients/${noExp}/blood-type`, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `blood-type`);
+    const response = await apiClient.get<BloodTypeResponse>(ruta.url, {
+      params: ruta.params,
     });
     return response.data;
   },
 
   save: async (noExp: string, pkNum: number, data: SaveBloodTypeRequest): Promise<BloodTypeResponse> => {
-    const response = await apiClient.put<BloodTypeResponse>(`/patients/${noExp}/blood-type`, data, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `blood-type`);
+    const response = await apiClient.put<BloodTypeResponse>(ruta.url, data, {
+      params: ruta.params,
     });
     return response.data;
   },

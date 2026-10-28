@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   StomatologyHistory,
   UpdateStomatologyHistoryRequest,
@@ -6,9 +7,10 @@ import type {
 
 export const stomatologyHistoryAPI = {
   get: async (noExp: string, pkNum = 0): Promise<StomatologyHistory> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `stomatology-history`);
     const response = await apiClient.get<StomatologyHistory>(
-      `/patients/${noExp}/stomatology-history`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },
@@ -18,10 +20,11 @@ export const stomatologyHistoryAPI = {
     pkNum: number,
     data: UpdateStomatologyHistoryRequest,
   ): Promise<StomatologyHistory> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `stomatology-history`);
     const response = await apiClient.patch<StomatologyHistory>(
-      `/patients/${noExp}/stomatology-history`,
+      ruta.url,
       data,
-      { params: { pkNum } },
+      { params: ruta.params },
     );
     return response.data;
   },

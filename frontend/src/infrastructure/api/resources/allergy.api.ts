@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   Allergy,
   ChangeAllergyStatusRequest,
@@ -9,9 +10,10 @@ import type {
 
 export const allergyAPI = {
   list: async (noExp: string, pkNum = 0): Promise<PatientAllergiesResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `allergies`);
     const response = await apiClient.get<PatientAllergiesResponse>(
-      `/patients/${noExp}/allergies`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },
@@ -21,10 +23,11 @@ export const allergyAPI = {
     pkNum: number,
     data: CreateAllergyRequest,
   ): Promise<Allergy> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `allergies`);
     const response = await apiClient.post<Allergy>(
-      `/patients/${noExp}/allergies`,
+      ruta.url,
       data,
-      { params: { pkNum } },
+      { params: ruta.params },
     );
     return response.data;
   },
@@ -35,10 +38,11 @@ export const allergyAPI = {
     allergyId: number,
     data: UpdateAllergyRequest,
   ): Promise<Allergy> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `allergies/${allergyId}`);
     const response = await apiClient.patch<Allergy>(
-      `/patients/${noExp}/allergies/${allergyId}`,
+      ruta.url,
       data,
-      { params: { pkNum } },
+      { params: ruta.params },
     );
     return response.data;
   },
@@ -49,10 +53,11 @@ export const allergyAPI = {
     allergyId: number,
     data: ChangeAllergyStatusRequest,
   ): Promise<Allergy> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `allergies/${allergyId}/status`);
     const response = await apiClient.post<Allergy>(
-      `/patients/${noExp}/allergies/${allergyId}/status`,
+      ruta.url,
       data,
-      { params: { pkNum } },
+      { params: ruta.params },
     );
     return response.data;
   },

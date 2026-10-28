@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type { PatientConsultationsHistoryResponse } from "@api/types/patient-consultations.types";
 
 export const patientConsultationsAPI = {
@@ -6,9 +7,10 @@ export const patientConsultationsAPI = {
     noExp: string,
     pkNum = 0,
   ): Promise<PatientConsultationsHistoryResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `consultations`);
     const response = await apiClient.get<PatientConsultationsHistoryResponse>(
-      `/patients/${noExp}/consultations`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },

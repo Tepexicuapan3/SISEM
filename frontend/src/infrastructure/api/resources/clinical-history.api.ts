@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   ClinicalHistory,
   PatientProfile,
@@ -8,9 +9,10 @@ import type {
 /** HISTORIA_CLINICA (cabecera, solo lectura). */
 export const clinicalHistoryAPI = {
   get: async (noExp: string, pkNum = 0): Promise<ClinicalHistory> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `clinical-history`);
     const response = await apiClient.get<ClinicalHistory>(
-      `/patients/${noExp}/clinical-history`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },
@@ -19,8 +21,9 @@ export const clinicalHistoryAPI = {
 /** PACIENTE (ficha: identidad + datos sociodemograficos). */
 export const patientProfileAPI = {
   get: async (noExp: string, pkNum = 0): Promise<PatientProfile> => {
-    const response = await apiClient.get<PatientProfile>(`/patients/${noExp}/profile`, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `profile`);
+    const response = await apiClient.get<PatientProfile>(ruta.url, {
+      params: ruta.params,
     });
     return response.data;
   },
@@ -30,8 +33,9 @@ export const patientProfileAPI = {
     pkNum: number,
     data: UpdatePatientProfileRequest,
   ): Promise<PatientProfile> => {
-    const response = await apiClient.patch<PatientProfile>(`/patients/${noExp}/profile`, data, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `profile`);
+    const response = await apiClient.patch<PatientProfile>(ruta.url, data, {
+      params: ruta.params,
     });
     return response.data;
   },

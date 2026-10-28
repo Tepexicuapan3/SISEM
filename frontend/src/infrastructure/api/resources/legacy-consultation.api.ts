@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type { LegacyConsultationHistoryResponse } from "@api/types/legacy-consultation.types";
 import type {
   ConfirmLegacyReviewRequest,
@@ -11,16 +12,18 @@ export const legacyConsultationAPI = {
     noExp: string,
     pkNum = 0,
   ): Promise<LegacyConsultationHistoryResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `legacy-consultations`);
     const response = await apiClient.get<LegacyConsultationHistoryResponse>(
-      `/patients/${noExp}/legacy-consultations`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },
 
   getReview: async (noExp: string, pkNum = 0): Promise<LegacyReviewResponse> => {
-    const response = await apiClient.get<LegacyReviewResponse>(`/patients/${noExp}/legacy-review`, {
-      params: { pkNum },
+    const ruta = await rutaPaciente(noExp, pkNum, `legacy-review`);
+    const response = await apiClient.get<LegacyReviewResponse>(ruta.url, {
+      params: ruta.params,
     });
     return response.data;
   },
@@ -30,10 +33,11 @@ export const legacyConsultationAPI = {
     pkNum: number,
     data: ConfirmLegacyReviewRequest,
   ): Promise<ConfirmLegacyReviewResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `legacy-review`);
     const response = await apiClient.post<ConfirmLegacyReviewResponse>(
-      `/patients/${noExp}/legacy-review`,
+      ruta.url,
       data,
-      { params: { pkNum } },
+      { params: ruta.params },
     );
     return response.data;
   },

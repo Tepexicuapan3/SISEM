@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   CancelReferralRequest,
   CreateReferralRequest,
@@ -11,9 +12,10 @@ export const referralsAPI = {
     noExp: string,
     pkNum = 0,
   ): Promise<PatientReferralsResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `referrals`);
     const response = await apiClient.get<PatientReferralsResponse>(
-      `/patients/${noExp}/referrals`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },

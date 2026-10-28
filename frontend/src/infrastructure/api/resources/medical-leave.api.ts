@@ -1,4 +1,5 @@
 import apiClient from "@api/client";
+import { rutaPaciente } from "@api/paciente-ids";
 import type {
   CreateMedicalLeaveRequest,
   MedicalLeaveItem,
@@ -10,9 +11,10 @@ export const medicalLeaveAPI = {
     noExp: string,
     pkNum = 0,
   ): Promise<PatientMedicalLeavesResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, `medical-leaves`);
     const response = await apiClient.get<PatientMedicalLeavesResponse>(
-      `/patients/${noExp}/medical-leaves`,
-      { params: { pkNum } },
+      ruta.url,
+      { params: ruta.params },
     );
     return response.data;
   },
