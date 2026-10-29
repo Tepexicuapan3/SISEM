@@ -74,7 +74,8 @@ def cargar_mapa(no_exp=None) -> MapaPuente:
     # El titular puede venir con ceros a la izquierda en el legado: se filtra por
     # valor numerico y se normaliza al armar el mapa.
     filas = legado_archivo.consultar(
-        sql + f" WHERE {legado_archivo.sin_ceros('no_expf')} = %s", [normalizar_no_exp(no_exp)],
+        sql + f" WHERE {legado_archivo.sin_ceros('no_expf')} = %s",
+        [legado_archivo.valor_expediente(normalizar_no_exp(no_exp))],
     )
     return MapaPuente.desde_filas(filas)
 

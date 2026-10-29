@@ -40,7 +40,7 @@ def _condicion(llaves, alias="n") -> tuple[str, list]:
     partes, params = [], []
     for no_exp, tp in llaves:
         partes.append(f"({legado_archivo.sin_ceros(f'{alias}.no_exp')} = %s AND {alias}.tp_paciente = %s)")
-        params.extend([no_exp, tp])
+        params.extend([legado_archivo.valor_expediente(no_exp), tp])
     return "(" + " OR ".join(partes) + ")", params
 
 
@@ -102,7 +102,7 @@ def _diagnosticos(esquema, notas) -> dict[tuple, list[dict]]:
         SELECT d.cd_snota, d.cd_clinica, x.cd_cie, x.ds_cie
         FROM {detalle} d
         LEFT JOIN {cie} x ON {T('x.no_cie')} = {T('d.cd_cie')}
-        WHERE {T('d.cd_snota')} IN ({marcas}) AND d.sw_status = 'A'
+        WHERE {legado_archivo.clave('d.cd_snota')} IN ({marcas}) AND d.sw_status = 'A'
         ORDER BY d.cd_detcie
         """,
         folios,

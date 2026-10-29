@@ -79,7 +79,10 @@ class LegadoEspejoMysqlTests(SimpleTestCase):
 
     def test_comparaciones_en_sintaxis_mysql(self):
         self.assertEqual(legado_archivo.texto("n.cd_medico"), "CAST(n.cd_medico AS CHAR)")
-        self.assertEqual(legado_archivo.sin_ceros("n.no_exp"), "TRIM(LEADING '0' FROM CAST(n.no_exp AS CHAR))")
+        # Sin envolver las columnas con indice: MySQL convierte el parametro y usa el indice.
+        self.assertEqual(legado_archivo.sin_ceros("n.no_exp"), "n.no_exp")
+        self.assertEqual(legado_archivo.valor_expediente("040041"), 40041)
+        self.assertEqual(legado_archivo.clave("d.cd_snota"), "d.cd_snota")
 
     def test_esquemas_con_tabla_traduce_las_bases(self):
         filas = [{"esquema": "dbclinicas2015"}, {"esquema": "dbclinicas"},

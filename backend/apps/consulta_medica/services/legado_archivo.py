@@ -91,11 +91,25 @@ def texto(expresion: str) -> str:
     return f"CAST({expresion} AS CHAR)" if _es_mysql() else f"CAST({expresion} AS text)"
 
 
+def clave(expresion: str) -> str:
+    """Columna lista para compararla con un parametro de texto. En MySQL va tal
+    cual: MySQL convierte el parametro y usa el indice; envolverla en CAST
+    obliga a recorrer la tabla entera en cada base."""
+    return expresion if _es_mysql() else texto(expresion)
+
+
 def sin_ceros(expresion: str) -> str:
-    """La expresion como texto y sin ceros a la izquierda (asi compara SIRES el expediente)."""
+    """El expediente sin ceros a la izquierda (asi compara SIRES). En MySQL la
+    columna es numerica: se compara contra valor_expediente() y usa el indice."""
     if _es_mysql():
-        return f"TRIM(LEADING '0' FROM {texto(expresion)})"
+        return expresion
     return f"ltrim({texto(expresion)}, '0')"
+
+
+def valor_expediente(no_exp):
+    """Parametro para comparar con sin_ceros(): numero en MySQL, texto en Postgres."""
+    texto_exp = str(no_exp).strip()
+    return int(texto_exp) if _es_mysql() and texto_exp.isdigit() else texto_exp
 
 
 # ── Consulta ─────────────────────────────────────────────────────────────────
