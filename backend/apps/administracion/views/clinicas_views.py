@@ -15,6 +15,11 @@ from .rbac_views import _authorize
 
 
 class ClinicasListView(APIView):
+    # La sesion va en cookies y la valida _authorize: sin esto DRF corre
+    # JWTAuthentication + IsAuthenticated por defecto y responde 401.
+    authentication_classes = []
+    permission_classes = []
+
     def get(self, request):
         user, error = _authorize(request)
         if error:
