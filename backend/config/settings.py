@@ -362,6 +362,11 @@ PRINT_MAX_CONCURRENCY = config("PRINT_MAX_CONCURRENCY", default=2, cast=int)
 PRINT_QUEUE_TIMEOUT_S = config("PRINT_QUEUE_TIMEOUT_S", default=15, cast=int)
 
 CITAS_BASE_URL = config("CITAS_BASE_URL", default="https://sires.metro.cdmx.gob.mx")
+# Base del enlace "inicia sesión" en los correos de notificaciones (lleva a {base}/login).
+SIRES_BASE_URL = config(
+    "SIRES_BASE_URL",
+    default="http://50.192.43.35" if DEBUG else "https://187.217.145.12",
+)
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

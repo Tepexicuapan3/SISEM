@@ -25,7 +25,7 @@ def enviar_correo_notificacion(id_notificacion):
     nombre = " ".join(filter(None, [getattr(detalle, "nombre", None), getattr(detalle, "paterno", None)])).strip()
     mensaje = (
         f"{notificacion.cuerpo}\n\n"
-        f"Para revisarla inicia sesión en SIRES: {_url_publica(notificacion.url_accion)}\n\n"
+        f"Para revisarla inicia sesión en SIRES: {_url_publica('/login')}\n\n"
         "Por seguridad, este correo no contiene información clínica y el enlace no autoriza "
         "nada por sí mismo: la decisión se toma dentro de SIRES y requiere confirmar tu contraseña."
     )

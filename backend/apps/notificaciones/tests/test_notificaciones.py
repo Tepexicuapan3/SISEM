@@ -6,7 +6,7 @@ from unittest import mock
 
 from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
@@ -110,13 +110,25 @@ class ServicioTests(TestCase):
         self.assertEqual(Entrega.objects.get(notificacion=notificacion, canal="CORREO").estatus, "ENVIADA")
         mensaje = enviar.call_args.args[2]
         self.assertIn("AUT-2026-000001", mensaje)
-        self.assertIn("/autorizaciones/solicitudes/6f1c", mensaje)
 
         with mock.patch("apps.notificaciones.tasks.send_notification_email_batch",
                         return_value={"sent": 0, "failed": [{"email": "x"}]}):
             enviar_correo_notificacion(notificacion.pk)
         entrega = Entrega.objects.get(notificacion=notificacion, canal="CORREO")
         self.assertEqual((entrega.estatus, entrega.intentos), ("FALLIDA", 2))
+
+    def test_enlace_del_correo_lleva_al_login_del_servidor_configurado(self):
+        a = _usuario()
+        with mock.patch.object(servicio, "_publicar_tiempo_real"), mock.patch.object(servicio, "_encolar_correo"):
+            notificacion = _notificar([a])[0]
+
+        with override_settings(SIRES_BASE_URL="https://187.217.145.12/"), \
+                mock.patch("apps.notificaciones.tasks.send_notification_email_batch",
+                           return_value={"sent": 1, "failed": []}) as enviar:
+            enviar_correo_notificacion(notificacion.pk)
+        mensaje = enviar.call_args.args[2]
+        self.assertIn("https://187.217.145.12/login", mensaje)
+        self.assertNotIn("/autorizaciones/solicitudes/6f1c", mensaje)
 
 
 class ApiTests(APITestCase):
