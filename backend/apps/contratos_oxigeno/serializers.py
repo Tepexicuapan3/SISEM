@@ -53,8 +53,9 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
     statusLabel   = serializers.SerializerMethodField()
     fchAlta       = serializers.DateTimeField(source="fch_alta", read_only=True)
     fchModf       = serializers.DateTimeField(source="fch_modf", read_only=True)
-    pkNum             = serializers.IntegerField(source="pk_num", required=False)
-    # Plan contraer la llave vieja: el derechohabiente elegido llega por idPaciente.
+    # Plan contraer la llave vieja (C7): la tabla guarda solo id_paciente. El
+    # derechohabiente llega por idPaciente (la pantalla abre antes al que nunca
+    # se atendio); en la respuesta expediente/pkNum salen de cns_paciente.
     idPaciente        = serializers.IntegerField(min_value=1, required=False, write_only=True)
     fechaNacimiento   = serializers.DateField(source="fecha_nacimiento", allow_null=True, required=False)
     vigenciaDh        = serializers.SerializerMethodField()
@@ -98,7 +99,7 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ContratoOxigeno
         fields = [
-            "id", "sucursal", "numContrato", "nombre", "expediente", "pkNum", "idPaciente",
+            "id", "sucursal", "numContrato", "nombre", "idPaciente",
             "fechaNacimiento",
             "tpDer", "tpDerLabel", "clinica", "servicio", "servicio2", "servicio3",
             "telefono",
@@ -117,20 +118,23 @@ class ContratoOxigenoSerializer(serializers.ModelSerializer):
             "fchAlta", "fchModf",
             "vigenciaDh", "edadDh",
         )
-        extra_kwargs = {"expediente": {"required": False}}
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["expediente"], data["pkNum"] = llave_publica(instance)
+        return data
 
     def validate(self, attrs):
-        """idPaciente -> expediente + pk_num desde cns_paciente (transitorio: tambien
-        se acepta el expediente directo). Un contrato nuevo necesita uno de los dos."""
-        from apps.consulta_medica.services.paciente_entrada import llave_de_paciente
+        """El derechohabiente llega por idPaciente; un contrato nuevo lo necesita."""
+        from apps.consulta_medica.models import Patient
 
         attrs = super().validate(attrs)
         id_paciente = attrs.pop("idPaciente", None)
         if id_paciente is not None:
-            llave = llave_de_paciente(id_paciente)
-            if llave is None:
+            paciente = Patient.objects.filter(pk=id_paciente).first()
+            if paciente is None:
                 raise serializers.ValidationError({"idPaciente": ["Paciente no encontrado."]})
-            attrs["expediente"], attrs["pk_num"] = llave
-        elif self.instance is None and not attrs.get("expediente"):
+            attrs["patient"] = paciente
+        elif self.instance is None:
             raise serializers.ValidationError({"idPaciente": ["Indica el derechohabiente."]})
         return attrs

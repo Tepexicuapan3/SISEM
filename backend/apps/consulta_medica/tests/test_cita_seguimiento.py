@@ -18,6 +18,7 @@ from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsul
 from apps.recepcion.models import CitaMedica, HorarioDisponible, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _noop_audit_hook(**kwargs):
@@ -59,7 +60,7 @@ class CitaSeguimientoTests(TestCase):
     def _visit(self):
         n = Visit.objects.count() + 1
         return Visit.objects.create(
-            folio=f"SEG-{n}", no_exp="EXP-SEG", pk_num=0, arrival_type=Visit.ArrivalType.APPOINTMENT,
+            folio=f"SEG-{n}", patient=_paciente_de_llave("EXP-SEG", 0), arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-SEG-{n}", status="en_consulta", fecha_consulta=self.today,
         )
 

@@ -8,6 +8,7 @@ from datetime import date
 from docxtpl import DocxTemplate
 
 from apps.administracion.services.fecha_service import calcular_edad
+from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .models import ContratoOxigeno
 
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "formato_oxigeno.docx")
@@ -35,7 +36,7 @@ def build_context(contrato: ContratoOxigeno) -> dict:
         "anio": str(hoy.year),
 
         "nombre_paciente":  contrato.nombre,
-        "expediente":       contrato.expediente,
+        "expediente":       llave_publica(contrato)[0],
         "derechohabiencia": _derechohabiencia_label(contrato),
         "edad":             edad if edad is not None else "",
         "clinica":          contrato.clinica,

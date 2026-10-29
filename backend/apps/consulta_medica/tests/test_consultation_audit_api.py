@@ -54,6 +54,7 @@ from apps.consulta_medica.uses_case.consultation_usecase import (
 from apps.consulta_medica.uses_case.prescription_item_usecase import add_prescription_item
 from apps.recepcion.models import Visit
 from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 _TEST_MEDIA_ROOT = tempfile.mkdtemp(prefix="sires_test_media_consulta_medica_audit_")
 
@@ -160,7 +161,7 @@ class _ConsultationAuditApiTestBase(APITestCase):
         self._visit_seq += 1
         n = self._visit_seq
         return Visit.objects.create(
-            folio=f"AUD-{n}", no_exp=f"EXPAUD{n}",
+            folio=f"AUD-{n}", patient=_paciente_de_llave(f"EXPAUD{n}", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-AUD-{n}", status=status_,
         )

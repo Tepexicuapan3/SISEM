@@ -19,6 +19,7 @@ from django.test import TestCase
 
 from apps.recepcion.models import Visit
 from apps.somatometria.repositories.vitals_repository import VitalsRepository
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _payload(**overrides):
@@ -43,8 +44,7 @@ def _pid(no_exp, pk_num):
 def _create_visit(*, folio, no_exp, pk_num=0, status="lista_para_doctor"):
     return Visit.objects.create(
         folio=folio,
-        no_exp=no_exp,
-        pk_num=pk_num,
+        patient=_paciente_de_llave(no_exp, pk_num),
         arrival_type=Visit.ArrivalType.WALK_IN,
         status=status,
     )

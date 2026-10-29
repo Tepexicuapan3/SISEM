@@ -12,6 +12,7 @@ from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import Permisos, Roles
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class VitalsContractsApiTests(APITestCase):
@@ -57,14 +58,14 @@ class VitalsContractsApiTests(APITestCase):
 
         self.visit_in_somato = Visit.objects.create(
             folio="SMT-9001",
-            no_exp="EXP9001",
+            patient=_paciente_de_llave("EXP9001", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-SMT-9001",
             status="en_somatometria",
         )
         self.visit_in_wait = Visit.objects.create(
             folio="SMT-9002",
-            no_exp="EXP9002",
+            patient=_paciente_de_llave("EXP9002", 0),
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="en_espera",
         )

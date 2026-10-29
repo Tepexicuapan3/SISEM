@@ -36,6 +36,7 @@ from apps.consulta_medica.services.legacy_history_parsing import (
 )
 from apps.consulta_medica.tests.test_consultation_audit_api import _ConsultationAuditApiTestBase
 from apps.consulta_medica.repositories.clinical_history_repository import ClinicalHistoryRepository
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class LegacyTextParsingTests(SimpleTestCase):
@@ -500,7 +501,7 @@ class PhysicalExamAndAllergyStatusApiTests(_UnifiedApiBase):
 
     def test_allergy_status_change_requires_reason_and_affects_alerts(self):
         allergy = Allergy.objects.create(
-            no_exp=self.no_exp, pk_num=0, allergy_type_id=1, substance="Penicilina",
+            patient=_paciente_de_llave(self.no_exp, 0), allergy_type_id=1, substance="Penicilina",
             severity="G", service_origin_code=1,
         )
         url = self._url(f"allergies/{allergy.id_allergy}/status")

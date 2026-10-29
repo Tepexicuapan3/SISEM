@@ -6,12 +6,10 @@ class ConsultaMedicaConfig(AppConfig):
     name = "apps.consulta_medica"
 
     def ready(self):
-        # 5.1 paso 7c: todo registro clinico nuevo se guarda con su id_paciente.
+        # Plan contraer la llave vieja: las tablas de atencion guardan solo
+        # id_paciente; la cuenta del portal se vincula por su llave.
         from apps.consulta_medica.services.operational_link_service import connect_operational_signals
-        from apps.consulta_medica.services.patient_link_service import connect_signals
 
-        connect_signals()
-        # Plan identidad, Fase 5: lo mismo en las tablas operativas.
         connect_operational_signals()
 
         # Motor de autorizaciones: la decision tomada en la bandeja se refleja en la receta.

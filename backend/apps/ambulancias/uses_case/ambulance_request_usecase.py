@@ -16,6 +16,7 @@ from apps.catalogos.models import (
     Parentesco,
 )
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave
 
 AMBULANCE_READ_REQUIREMENT = {"allOf": ["clinico:ambulancias:read"]}
 AMBULANCE_WRITE_REQUIREMENT = {"allOf": ["clinico:ambulancias:write"]}
@@ -111,8 +112,9 @@ def create_request(
         folio = next_folio(FolioType.AMBULANCIA)
         ambulance_request = AmbulanceRequestRepository.create(
             folio=folio,
-            no_exp=no_exp,
-            pk_num=pk_num or 0,
+            # Solo id_paciente (plan contraer la llave vieja): el registro se
+            # resuelve, o se abre, por la puerta central.
+            patient=paciente_de_llave(no_exp, pk_num or 0, created_by_id=actor_id),
             requesting_clinic_id=requesting_clinic_id,
             requested_by_name=requested_by_name,
             requested_by_relationship=relationship,

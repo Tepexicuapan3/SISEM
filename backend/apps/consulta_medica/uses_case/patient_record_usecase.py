@@ -38,7 +38,7 @@ from apps.consulta_medica.services.patient_registry_service import normalizar_no
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
 
-from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.paciente_entrada import llave_publica, paciente_de_llave
 from .consultation_usecase import ensure_doctor_role
 
 
@@ -425,8 +425,13 @@ def create_record(spec, no_exp, pk_num, roles, validated_data, actor_id, permiss
     values = _model_fields(spec, validated_data, no_exp)
     source = validated_data.get("source") or SpecialtySource.GENERAL
 
+    # Solo id_paciente (plan contraer la llave vieja): el registro se resuelve,
+    # o se abre, por la puerta central.
+    paciente = paciente_de_llave(no_exp, pk_num, created_by_id=actor_id)
+    if paciente is None:
+        raise VisitDomainError("PATIENT_NOT_FOUND", "No se encontró al paciente.", 404)
     record = spec.model(
-        no_exp=no_exp, pk_num=pk_num, source=source,
+        patient=paciente, source=source,
         created_by_id=actor_id, updated_by_id=actor_id, **values,
     )
     if spec.validate:
@@ -468,7 +473,7 @@ def _update_versioned(spec, no_exp, pk_num, record, values, validated_data, acto
         return spec.contract(record, permissions, roles)
 
     new_version = spec.model(
-        no_exp=llave_publica(record)[0], pk_num=llave_publica(record)[1], patient_id=record.patient_id,
+        patient_id=record.patient_id,
         source=validated_data.get("source") or record.source,
         created_by_id=actor_id, updated_by_id=actor_id, **current,
     )

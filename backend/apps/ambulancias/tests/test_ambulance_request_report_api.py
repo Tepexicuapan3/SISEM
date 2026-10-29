@@ -12,6 +12,7 @@ from apps.ambulancias.models import AmbulanceRequest
 from apps.catalogos.models import CatDestinoAmbulancia, CatMotivoTraslado, Permisos, Roles
 
 from ._clinic_mock import mock_clinic
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class AmbulanceRequestReportApiTests(APITestCase):
@@ -32,7 +33,7 @@ class AmbulanceRequestReportApiTests(APITestCase):
         self.destination = CatDestinoAmbulancia.objects.create(name="Hospital Regional")
 
         AmbulanceRequest.objects.create(
-            folio="AMB-0002", no_exp="EXP-A200", requesting_clinic_id=self.clinic_id,
+            folio="AMB-0002", patient=_paciente_de_llave("EXP-A200", 0), requesting_clinic_id=self.clinic_id,
             requested_by_name="Ana Diaz", reason=self.reason, destination=self.destination,
         )
 

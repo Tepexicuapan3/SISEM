@@ -20,6 +20,7 @@ from apps.consulta_medica.models import (
 )
 from apps.consulta_medica.services import legado_archivo, legado_confirmacion as lc
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 HIS_CLINICA = [{"no_hisclin": 11, "fe_hisclin": date(2024, 2, 1), "ds_alergias": "PENICILINA, SULFAS; NEGADAS"}]
 HIS_CLINICAD = [{
@@ -100,7 +101,7 @@ class ConfirmacionTests(TestCase):
         self.assertFalse(Allergy.objects.exists())
 
     def test_lo_capturado_en_sires_no_se_propone(self):
-        Allergy.objects.create(no_exp="40041", pk_num=3, allergy_type_id=9, substance="penicilina",
+        Allergy.objects.create(patient=_paciente_de_llave("40041", 3), allergy_type_id=9, substance="penicilina",
                                severity=Allergy.Severity.MODERATE, service_origin_code=1)
         textos = [i["texto"] for i in self._secciones()[lc.ALERGIAS]["items"]]
         self.assertNotIn("PENICILINA", textos)

@@ -7,8 +7,7 @@ class StudyResultRepository:
     def create(
         *,
         consultation,
-        no_exp,
-        pk_num,
+        patient,
         study_type,
         result_date,
         notes,
@@ -18,8 +17,7 @@ class StudyResultRepository:
     ):
         return StudyResult.objects.create(
             consultation=consultation,
-            no_exp=no_exp,
-            pk_num=pk_num,
+            patient=patient,
             study_type=study_type,
             result_date=result_date,
             notes=notes,

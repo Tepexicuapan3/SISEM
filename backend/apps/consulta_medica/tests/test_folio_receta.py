@@ -24,6 +24,7 @@ from apps.consulta_medica.uses_case.prescription_item_usecase import (
     get_prescription_items,
 )
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 PHARMACY = ["farmacia:recetas:dispensar"]
 
@@ -62,7 +63,7 @@ class PrescriptionFolioFlowTests(TestCase):
     def _visit(self):
         n = Visit.objects.count() + 1
         return Visit.objects.create(
-            folio=f"FOL-{n}", no_exp=f"EXP-FOL-{n}", arrival_type=Visit.ArrivalType.APPOINTMENT,
+            folio=f"FOL-{n}", patient=_paciente_de_llave(f"EXP-FOL-{n}", 0), arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-FOL-{n}", status="en_consulta",
         )
 

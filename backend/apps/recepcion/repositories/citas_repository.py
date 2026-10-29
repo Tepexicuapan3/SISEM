@@ -5,7 +5,7 @@ Encapsula todo acceso a CitaMedica y HorarioDisponible.
 """
 
 import math
-from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.paciente_entrada import llave_publica, paciente_de_llave
 from datetime import date, timedelta
 
 from django.db import transaction
@@ -280,10 +280,14 @@ class CitasRepository:
             ).exists():
                 raise ValueError("El médico ya tiene una cita agendada en ese horario.")
 
-            # 3. El paciente no debe tener otra cita activa a la misma hora
+            # 3. El paciente no debe tener otra cita activa a la misma hora.
+            #    La cita guarda solo id_paciente (plan contraer la llave vieja):
+            #    el registro se resuelve (o se abre) por la puerta central.
+            paciente = paciente_de_llave(no_exp, pk_num, created_by_id=created_by_id)
+            if paciente is None:
+                raise ValueError("No se encontró al paciente.")
             if CitaMedica.objects.filter(
-                no_exp=no_exp,
-                pk_num=pk_num,
+                patient=paciente,
                 fecha_hora=fecha_hora,
                 estatus__in=[EstatusCita.AGENDADA, EstatusCita.CONFIRMADA],
             ).exists():
@@ -297,8 +301,7 @@ class CitasRepository:
 
             cita = CitaMedica.objects.create(
                 folio=CitaMedica.generar_folio(),
-                no_exp=no_exp,
-                pk_num=pk_num,
+                patient=paciente,
                 medico_id=medico_id,
                 consultorio_id=consultorio_id,
                 fecha_hora=fecha_hora,

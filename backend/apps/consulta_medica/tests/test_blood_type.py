@@ -10,6 +10,7 @@ from apps.consulta_medica.models import BloodType, ChangeLog, StudyResult, Visit
 from apps.consulta_medica.repositories.clinical_history_repository import PatientRepository
 from apps.consulta_medica.tests.test_unified_history import _UnifiedApiBase
 from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _type_id(name):
@@ -121,11 +122,11 @@ class BloodTypeLabResultTests(_UnifiedApiBase):
         self.no_exp = llave_publica(visit)[0]
         consultation = VisitConsultation.objects.get(id_visit=visit)
         self.result = StudyResult.objects.create(
-            consultation=consultation, no_exp=llave_publica(visit)[0], pk_num=0, study_type=self.study_type,
+            consultation=consultation, patient=_paciente_de_llave(llave_publica(visit)[0], 0), study_type=self.study_type,
             result_date="2026-02-01", file="resultados/grupo.pdf",
         )
         self.other_result = StudyResult.objects.create(
-            consultation=consultation, no_exp="OTRO-EXP", pk_num=0, study_type=self.study_type,
+            consultation=consultation, patient=_paciente_de_llave("OTRO-EXP", 0), study_type=self.study_type,
             result_date="2026-02-01", file="resultados/otro.pdf",
         )
 

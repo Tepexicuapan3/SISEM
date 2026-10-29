@@ -64,8 +64,7 @@ class OdontogramRepository:
         # ODONTOGRAMA cuelga de HC_ESTOMATOLOGIA (documento 5.3).
         section, _ = StomatologyHistoryRepository.get_or_create_for_patient(no_exp, pk_num)
         version = Odontogram.objects.create(
-            no_exp=no_exp,
-            pk_num=pk_num,
+            patient_id=section.patient_id,
             stomatology_history=section,
             visit_id=visit_id,
             dentition=latest.dentition if latest else Odontogram.Dentition.PERMANENT,

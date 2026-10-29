@@ -14,6 +14,7 @@ from apps.authentication.services.session_registry import start_session
 from apps.catalogos.models import CatSucursal
 from apps.contratos_oxigeno.models import ContratoOxigeno
 from apps.contratos_oxigeno.serializers import ContratoOxigenoSerializer
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _contrato_kwargs(sucursal, **overrides):
@@ -21,7 +22,7 @@ def _contrato_kwargs(sucursal, **overrides):
         sucursal=sucursal,
         num_contrato=f"CTR-{ContratoOxigeno.objects.count() + 1}",
         nombre="Paciente de Prueba",
-        expediente="EXP001",
+        patient=_paciente_de_llave("EXP001", 0),
         clinica="Clinica Centro",
         servicio="CONCENTRADOR",
     )

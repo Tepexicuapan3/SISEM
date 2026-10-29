@@ -6,6 +6,7 @@ from apps.catalogos.models import TipoDeCitas
 from apps.recepcion.models import Visit
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.serializers import ListVisitsQuerySerializer
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class ListVisitsQuerySerializerSearchTests(TestCase):
@@ -39,8 +40,7 @@ class VisitRepositorySearchFilterTests(TestCase):
     def _make_visit(self, *, no_exp, pk_num, nombre_paciente, folio=None, status="en_espera"):
         return Visit.objects.create(
             folio=folio or f"VIS-{no_exp}-{pk_num}",
-            no_exp=no_exp,
-            pk_num=pk_num,
+            patient=_paciente_de_llave(no_exp, pk_num),
             nombre_paciente=nombre_paciente,
             arrival_type=Visit.ArrivalType.WALK_IN,
             service_type=Visit.ServiceType.MEDICINA_GENERAL,

@@ -14,6 +14,7 @@ from apps.consulta_medica.uses_case.prescription_item_usecase import (
 )
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 AUTHORIZE_PERMISSION = ["clinico:recetas:authorize"]
 
@@ -54,7 +55,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
     def _visit_in_consultation(self):
         visit = Visit.objects.create(
             folio=f"RXAUTH-{Visit.objects.count() + 1}",
-            no_exp=f"EXP{9000 + Visit.objects.count() + 1}",
+            patient=_paciente_de_llave(f"EXP{9000 + Visit.objects.count() + 1}", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-RXAUTH-{Visit.objects.count() + 1}",
             status="en_consulta",

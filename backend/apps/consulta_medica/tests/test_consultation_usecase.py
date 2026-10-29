@@ -18,6 +18,7 @@ from apps.consulta_medica.uses_case.consultation_usecase import (
 )
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _noop_audit_hook(**kwargs):
@@ -51,7 +52,7 @@ class ConsultationUseCaseTests(TestCase):
     def _visit(self, status):
         return Visit.objects.create(
             folio=f"CNS-{status}-{Visit.objects.count() + 1}",
-            no_exp=f"EXP{5000 + Visit.objects.count() + 1}",
+            patient=_paciente_de_llave(f"EXP{5000 + Visit.objects.count() + 1}", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-{Visit.objects.count() + 1}",
             status=status,

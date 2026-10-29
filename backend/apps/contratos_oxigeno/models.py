@@ -25,11 +25,6 @@ class ContratoOxigeno(models.Model):
     )
     num_contrato  = models.CharField(max_length=50, unique=True)
     nombre        = models.CharField(max_length=200)
-    expediente    = models.CharField(max_length=50, null=True, blank=True)
-    # pk_num = 0 → el propio trabajador (cat_empleados.no_exp).
-    # pk_num > 0 → derechohabiente (cat_familiar.pk_num), ya que el mismo
-    # expediente se repite entre varios familiares de un mismo trabajador.
-    pk_num        = models.IntegerField(default=0, null=True, blank=True)
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(

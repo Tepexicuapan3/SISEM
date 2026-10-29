@@ -33,8 +33,6 @@ class SurgerySchedule(models.Model):
         max_length=20, null=True, blank=True, db_column="folio_legado",
     )
 
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
@@ -109,7 +107,6 @@ class SurgerySchedule(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cir_surgery_patient_idx"),
             models.Index(fields=["scheduled_date"], name="cir_surgery_date_idx"),
         ]
 

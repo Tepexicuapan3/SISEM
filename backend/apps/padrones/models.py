@@ -29,8 +29,6 @@ class RegistryEnrollmentBase(models.Model):
     id = models.BigAutoField(primary_key=True, db_column="id_inscripcion")
     # Mismo criterio que los registros permanentes del paciente
     # (PatientRecordBase): no_exp/pk_num + FK al paciente.
-    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     patient = models.ForeignKey(
         "consulta_medica.Patient", db_column="id_paciente", on_delete=models.PROTECT,
         related_name="+",
@@ -80,7 +78,6 @@ class ChronicEnrollment(RegistryEnrollmentBase):
             ),
         ]
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cns_padcron_paciente_idx"),
             models.Index(fields=["center", "status"], name="cns_padcron_centro_idx"),
         ]
 
@@ -100,6 +97,5 @@ class DisabilityEnrollment(RegistryEnrollmentBase):
             ),
         ]
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cns_paddisc_paciente_idx"),
             models.Index(fields=["center", "status"], name="cns_paddisc_centro_idx"),
         ]

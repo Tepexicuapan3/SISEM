@@ -39,14 +39,7 @@ class CitaMedica(models.Model):
 
     folio        = models.CharField(max_length=32, unique=True)
 
-    # Paciente (núcleo familiar — mismo esquema que rcp_visits)
-    no_exp       = models.CharField(max_length=20, db_index=True, null=True, blank=True)
-    # IntegerField, no smallint: los PK_NUM de SERMED pasan de 32 767 (p. ej.
-    # 48411) y en Postgres la cita fallaba con "smallint out of range". Mismo
-    # arreglo que rcp_visits (recepcion.0006).
-    # Nulo solo si se pasa None explicito (recien nacido provisional, Fase 6);
-    # el 0 por defecto (titular) se conserva para quien lo omite.
-    pk_num = models.IntegerField(default=0, null=True, blank=True)
+    # Plan contraer la llave vieja, C7: el paciente se guarda solo en id_paciente.
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
@@ -135,14 +128,13 @@ class CitaMedica(models.Model):
         db_table = "citas_medicas"
         indexes  = [
             models.Index(fields=["medico", "fecha_hora"],            name="citas_medico_fechahora_idx"),
-            models.Index(fields=["no_exp", "pk_num"],                name="citas_noexp_pknum_idx"),
             models.Index(fields=["estatus", "fecha_hora"],           name="citas_estatus_fechahora_idx"),
             models.Index(fields=["consultorio"],                     name="citas_consultorio_idx"),
             models.Index(fields=["medico", "estatus", "fecha_hora"], name="citas_medico_estatus_fecha_idx"),
         ]
 
     def __str__(self):
-        return f"Cita {self.folio} — {self.no_exp}/{self.pk_num} ({self.estatus})"
+        return f"Cita {self.folio} — paciente {self.patient_id} ({self.estatus})"
 
     @staticmethod
     def generar_folio() -> str:
@@ -243,13 +235,7 @@ class Visit(models.Model):
     id_visit = models.BigAutoField(primary_key=True, db_column="id_visit")
     # unique=True ya crea indice, no hace falta db_index=True
     folio = models.CharField(max_length=32, db_column="folio", unique=True)
-    # Identificación del paciente: expediente del titular + número de miembro familiar.
-    # pk_num = 0 → el propio trabajador (titular).
-    # pk_num > 0 → derechohabiente (cat_familiar.pk_num).
-    no_exp     = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    # Nulo solo si se pasa None explicito (recien nacido provisional, Fase 6);
-    # el 0 por defecto (titular) se conserva para quien lo omite.
-    pk_num = models.IntegerField(default=0, null=True, blank=True, db_column="pk_num")
+    # Plan contraer la llave vieja, C7: el paciente se guarda solo en id_paciente.
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
@@ -362,7 +348,6 @@ class Visit(models.Model):
             # Soporta el lookup de "signos vitales de hoy" por integrante
             # familiar (join VisitVitalSigns -> Visit filtrando por
             # no_exp+pk_num) usado por el reuso mismo dia (Fase 2).
-            models.Index(fields=["no_exp", "pk_num"], name="rcp_visits_noexp_pknum_idx"),
         ]
         constraints = [
             models.CheckConstraint(

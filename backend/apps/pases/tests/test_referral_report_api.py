@@ -12,6 +12,7 @@ from apps.catalogos.models import CatCentroAtencion, Especialidades, Permisos, R
 from apps.consulta_medica.models import VisitConsultation
 from apps.pases.models import Referral
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class ReferralReportApiTests(APITestCase):
@@ -98,7 +99,7 @@ class ReferralReportApiTests(APITestCase):
     ):
         visit = Visit.objects.create(
             folio=visit_folio,
-            no_exp=no_exp,
+            patient=_paciente_de_llave(no_exp, 0),
             nombre_paciente=f"Paciente {no_exp}",
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="cerrada",
@@ -113,8 +114,7 @@ class ReferralReportApiTests(APITestCase):
         )
         referral = Referral.objects.create(
             consultation=consultation,
-            no_exp=no_exp,
-            pk_num=0,
+            patient=_paciente_de_llave(no_exp, 0),
             referral_type=referral_type,
             destination_center=destination_center,
             specialty=specialty,

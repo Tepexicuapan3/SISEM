@@ -455,10 +455,7 @@ class MedicalLeave(models.Model):
         on_delete=models.PROTECT,
         related_name="medical_leaves",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
@@ -509,7 +506,6 @@ class MedicalLeave(models.Model):
     class Meta:
         db_table = "cns_medical_leave"
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cns_medleave_patient_idx"),
             models.Index(fields=["is_active"], name="cns_medleave_active_idx"),
         ]
 
@@ -621,10 +617,7 @@ class StudyResult(models.Model):
         on_delete=models.PROTECT,
         related_name="study_results",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
@@ -659,7 +652,6 @@ class StudyResult(models.Model):
     class Meta:
         db_table = "cns_study_result"
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cns_studyres_patient_idx"),
             models.Index(fields=["is_active"], name="cns_studyres_active_idx"),
         ]
 
@@ -686,10 +678,7 @@ class StomatologyHistory(models.Model):
     id_stomatology_history = models.BigAutoField(
         primary_key=True, db_column="id_historia_dental",
     )
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
@@ -718,7 +707,7 @@ class StomatologyHistory(models.Model):
     class Meta:
         db_table = "cns_stomatology_history"
         constraints = [
-            models.UniqueConstraint(fields=["no_exp", "pk_num"], name="cns_stomhist_patient_uniq"),
+            models.UniqueConstraint(fields=["patient"], name="cns_stomhist_paciente_uq"),
         ]
         indexes = [
             models.Index(fields=["is_active"], name="cns_stomhist_active_idx"),
@@ -796,10 +785,7 @@ class Allergy(models.Model):
     SOURCE_BY_SERVICE = {1: "general", 5: "stomatology"}
 
     id_allergy = models.BigAutoField(primary_key=True, db_column="id_alergia")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
@@ -865,14 +851,14 @@ class Allergy(models.Model):
     class Meta:
         db_table = "cns_allergy"
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="cns_allergy_patient_idx"),
-            # Documento: ix_alergia_paciente (no_exp, tp_paciente, estado).
-            models.Index(fields=["no_exp", "pk_num", "status"], name="ix_alergia_paciente"),
+            # Documento: ix_alergia_paciente (no_exp, tp_paciente, estado); desde C7
+            # el paciente es id_paciente.
+            models.Index(fields=["patient", "status"], name="ix_alergia_paciente"),
             models.Index(fields=["is_active"], name="cns_allergy_active_idx"),
         ]
 
     def __str__(self) -> str:
-        return f"Alergia {self.substance} ({self.no_exp}/{self.pk_num})"
+        return f"Alergia {self.substance} (paciente {self.patient_id})"
 
 
 class AllergyRevision(models.Model):
@@ -1279,8 +1265,6 @@ class ClinicalHistory(models.Model):
     Sex = Sex
 
     id_clinical_history = models.BigAutoField(primary_key=True, db_column="id_historia")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     patient = models.OneToOneField(
         Patient, db_column="id_paciente", on_delete=models.PROTECT, related_name="clinical_history",
     )
@@ -1304,7 +1288,6 @@ class ClinicalHistory(models.Model):
     class Meta:
         db_table = "cns_clinical_history"
         constraints = [
-            models.UniqueConstraint(fields=["no_exp", "pk_num"], name="cns_clinhist_patient_uniq"),
         ]
         indexes = [
             models.Index(fields=["is_active"], name="cns_clinhist_active_idx"),
@@ -1346,8 +1329,7 @@ class LegacyConsultationRecord(models.Model):
     legacy_source_db = models.CharField(max_length=64, db_column="db_origen", default="", blank=True)
     no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True)
     pk_num = models.IntegerField(db_column="pk_num", default=0)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT,
         null=True, blank=True, related_name="+",
@@ -1491,10 +1473,7 @@ class Presence(models.TextChoices):
 class PatientRecordBase(models.Model):
     """Columnas comunes de los registros permanentes 1:N por paciente."""
 
-    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
@@ -1545,7 +1524,6 @@ class PersonalHistory(PatientRecordBase):
 
     class Meta:
         db_table = "cns_antecedente_personal"
-        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_antpers_patient_idx")]
 
 
 class FamilyHistory(PatientRecordBase):
@@ -1569,7 +1547,6 @@ class FamilyHistory(PatientRecordBase):
 
     class Meta:
         db_table = "cns_antecedente_familiar"
-        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_antfam_patient_idx")]
 
 
 class SurgicalHistory(PatientRecordBase):
@@ -1586,7 +1563,6 @@ class SurgicalHistory(PatientRecordBase):
 
     class Meta:
         db_table = "cns_antecedente_quirurgico"
-        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_antquir_patient_idx")]
 
 
 class Habit(PatientRecordBase):
@@ -1630,10 +1606,9 @@ class Habit(PatientRecordBase):
 
     class Meta:
         db_table = "cns_habito"
-        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_habito_patient_idx")]
         constraints = [
             models.UniqueConstraint(
-                fields=["no_exp", "pk_num", "habit"],
+                fields=["patient", "habit"],
                 condition=models.Q(record_status="A", is_active=True),
                 name="cns_habito_vigente_uq",
             ),
@@ -1735,8 +1710,7 @@ class HistoricalNote(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT,
         null=True, blank=True, related_name="+",
@@ -1779,8 +1753,7 @@ class LegacyVitalSigns(models.Model):
     )
     no_exp = models.CharField(max_length=20, db_column="no_exp")
     pk_num = models.IntegerField(db_column="pk_num", default=0)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT,
         null=True, blank=True, related_name="+",
@@ -1970,10 +1943,7 @@ class Odontogram(models.Model):
         MIGRATED = "migrated", "Migrado del odontograma anterior"
 
     id_odontogram = models.BigAutoField(primary_key=True, db_column="id_odontograma")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # 5.1 paso 7: el registro apunta al paciente. no_exp/pk_num quedan como
-    # compatibilidad hasta que todas las lecturas usen id_paciente.
+    # 5.1 paso 7: el registro apunta al paciente (C7: ya sin no_exp/pk_num).
     patient = models.ForeignKey(
         "Patient", db_column="id_paciente", on_delete=models.PROTECT, related_name="+",
     )
@@ -2005,7 +1975,6 @@ class Odontogram(models.Model):
     class Meta:
         db_table = "cns_odontograma"
         ordering = ["-created_at", "-id_odontogram"]
-        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_odontograma_patient_idx")]
 
     @property
     def dmft_index(self):
@@ -2072,7 +2041,6 @@ class DentalTreatment(PatientRecordBase):
 
     class Meta:
         db_table = "cns_tratamiento_dental"
-        indexes = [models.Index(fields=["no_exp", "pk_num"], name="cns_tratdent_patient_idx")]
 
 
 # ── Bitacora de cambios (documento "Historia Clinica Unificada", seccion 6) ──

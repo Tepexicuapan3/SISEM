@@ -1,6 +1,6 @@
 import math
 import uuid
-from apps.consulta_medica.services.paciente_entrada import llave_publica, q_pk_registro
+from apps.consulta_medica.services.paciente_entrada import llave_publica, paciente_de_llave, q_pk_registro
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 from datetime import datetime
 
@@ -35,8 +35,9 @@ class VisitRepository:
     ) -> Visit:
         return Visit.objects.create(
             folio=VisitRepository._build_folio(),
-            no_exp=no_exp,
-            pk_num=pk_num,
+            # Solo id_paciente (plan contraer la llave vieja): el registro se
+            # resuelve, o se abre, por la puerta central.
+            patient=paciente_de_llave(no_exp, pk_num, created_by_id=created_by_id),
             nombre_paciente=nombre_paciente,
             arrival_type=arrival_type,
             service_type=service_type,

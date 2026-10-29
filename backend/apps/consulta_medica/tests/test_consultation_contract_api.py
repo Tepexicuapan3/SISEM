@@ -8,6 +8,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import CatCies, Permisos, Roles
 from apps.consulta_medica.models import VisitConsultation
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class ConsultationContractsApiTests(APITestCase):
@@ -41,14 +42,14 @@ class ConsultationContractsApiTests(APITestCase):
 
         self.visit_ready = Visit.objects.create(
             folio="CNS-7001",
-            no_exp="EXP7001",
+            patient=_paciente_de_llave("EXP7001", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-7001",
             status="lista_para_doctor",
         )
         self.visit_in_consultation = Visit.objects.create(
             folio="CNS-7002",
-            no_exp="EXP7002",
+            patient=_paciente_de_llave("EXP7002", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-7002",
             status="en_consulta",

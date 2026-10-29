@@ -146,7 +146,44 @@ De estas pruebas salió un defecto que ya existía, ajeno a este cambio: al canc
 en recepción se mandaba un motivo en texto libre, y el backend exige el motivo del catálogo
 (`c80cfa21`, `24c1c9b4`).
 
-**Pendiente para C7** (versión siguiente, con respaldo previo):
+## C7 — borrar la llave vieja (2026-10-28)
+
+Hecho en código:
+- Se borran `no_exp`/`pk_num` (`expediente` en contratos) de las 22 tablas, con sus índices y únicos
+  viejos. Migraciones `*_borrar_llave_vieja`: recepcion 0031, somatometria 0013, consulta_medica 0067,
+  cirugias 0005, hospitalizacion 0005, ambulancias 0005, pases 0006, contratos_oxigeno 0011, padrones 0003.
+- Reemplazos por paciente: `cns_stomhist_paciente_uq` (una estomatología por paciente),
+  `cns_habito_vigente_uq` (patient, hábito; vigente) e `ix_alergia_paciente` (patient, status).
+- Cada alta resuelve el paciente explícitamente (`paciente_de_llave` o el de la visita); la señal de las
+  tablas de atención solo completa el paciente desde la visita y aplica la regla del recién nacido con la
+  llave de `cns_paciente`.
+- Se retiraron `vincular_id_paciente`/`link_existing`, `keys_for_person`, la escritura doble y los
+  importadores masivos del legado (también `migrar_usuarios_legacy` y `corregir_llave_familiares_legacy`).
+  `for_patient` conserva el respaldo por llave solo para tablas que todavía la tienen (archivo del legado).
+- Corregido: la validación "el paciente ya tiene una cita a esa hora" filtraba por la llave vieja (vacía
+  desde C6) y no detectaba nada; ahora filtra por paciente.
+
+**Antes de migrar en el servidor (solo lectura; tienen que dar 0 filas):**
+```sql
+-- Una estomatología por paciente
+SELECT id_paciente, COUNT(*) FROM cns_stomatology_history GROUP BY id_paciente HAVING COUNT(*) > 1;
+-- Un hábito vigente por paciente y hábito
+SELECT id_paciente, id_habito, COUNT(*) FROM cns_habito
+WHERE sw_status = 'A' AND est_activo GROUP BY id_paciente, id_habito HAVING COUNT(*) > 1;
+-- Vistas de la base que usen las columnas que se borran
+SELECT DISTINCT v.table_name, v.view_schema, c.table_name AS usa_tabla, c.column_name
+FROM information_schema.view_column_usage c JOIN information_schema.views v
+  ON v.table_name = c.view_name AND v.table_schema = c.view_schema
+WHERE c.column_name IN ('no_exp', 'pk_num', 'expediente');
+```
+Después, respaldo completo (`pg_dump`) y recién entonces `migrate`.
+
+**Decidido (opción 2):** cirugías, ambulancias, padrones y contratos de oxígeno aceptan **solo `idPaciente`**.
+Si el miembro nunca se atendió, el front primero lo abre con `POST /visits/patient-open {noExp, pkNum}`
+(`conIdPaciente` en `paciente-ids.ts`) y después guarda con el `idPaciente` que recibe. `patient-open`
+acepta, además de la cola de recepción, los permisos de alta de esos módulos.
+
+**Pendiente para C7** (versión siguiente, con respaldo previo) — ya resuelto arriba salvo lo indicado:
 - Borrar `no_exp`/`pk_num` (`expediente` en contratos) de las 22 tablas, con sus índices y únicos viejos.
 - Quitar el respaldo por llave vieja de `for_patient` y la copia en `keys_for_person`.
 - Retirar los importadores masivos del legado y `corregir_llave_familiares_legacy`

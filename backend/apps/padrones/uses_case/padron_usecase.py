@@ -225,7 +225,7 @@ def enroll(kind, *, no_exp, pk_num, item_id, center_id=None, enrolled_on=None, n
                     "ALREADY_ENROLLED", "El paciente ya está inscrito en el padrón por ese padecimiento.", 409,
                 )
             enrollment = spec.model.objects.create(
-                no_exp=no_exp, pk_num=pk_num or 0, patient=patient, center=center,
+                patient=patient, center=center,
                 enrolled_on=enrolled_on, enrolled_by=actor, notes=(notes or "").strip() or None,
                 **{spec.item_field: item},
             )

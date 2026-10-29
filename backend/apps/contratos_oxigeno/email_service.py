@@ -5,6 +5,8 @@ from datetime import date
 from django.core.mail import EmailMessage
 from django.conf import settings
 
+from apps.consulta_medica.services.paciente_entrada import llave_publica
+
 
 # ── Template HTML ─────────────────────────────────────────────────────────────
 
@@ -38,7 +40,7 @@ def build_vencimiento_html(contratos, cuerpo_intro: str = "") -> str:
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-weight:600;color:#1d4ed8">{c.num_contrato}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">{c.nombre}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-family:monospace;color:#6b7280">{c.expediente}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-family:monospace;color:#6b7280">{llave_publica(c)[0]}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">{c.servicio}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-family:monospace">{fecha}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:{color}">{label}</td>

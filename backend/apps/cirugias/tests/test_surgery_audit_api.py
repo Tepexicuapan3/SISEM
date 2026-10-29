@@ -30,6 +30,7 @@ from apps.catalogos.models import (
 from apps.cirugias.models import SurgerySchedule
 from apps.medicos.models import CatMedico
 from apps.medicos.tests.factories import crear_medico
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 JSON_PRIMITIVES = (str, int, float, bool, type(None))
 
@@ -91,8 +92,7 @@ class SurgeryAuditApiTests(APITestCase):
 
     def _payload(self, **overrides):
         payload = {
-            "noExp": "EXP-A001",
-            "pkNum": 0,
+            "idPaciente": _paciente_de_llave("EXP-A001", 0).pk,
             "surgeonId": self.surgeon.id,
             "surgeryTypeId": self.surgery_type.id,
             "classificationId": self.classification.id,

@@ -158,8 +158,6 @@ class ClinicalHistoryRepository:
             history, created = ClinicalHistory.objects.get_or_create(
                 patient=patient,
                 defaults={
-                    "no_exp": patient.no_exp,
-                    "pk_num": pk_num,
                     "opened_on": opened_on or timezone.localdate(),
                     "opening_clinic_code": clinic_code,
                     "opening_doctor_code": doctor_code,

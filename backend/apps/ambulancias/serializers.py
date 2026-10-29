@@ -9,9 +9,7 @@ class AmbulanceScheduleItemSerializer(serializers.Serializer):
 
 
 class CreateAmbulanceRequestSerializer(serializers.Serializer):
-    idPaciente = serializers.IntegerField(min_value=1, required=False)
-    noExp = serializers.CharField(required=False)
-    pkNum = serializers.IntegerField(required=False, default=0)
+    idPaciente = serializers.IntegerField(min_value=1)
     requestingClinicId = serializers.CharField()
     requestedByName = serializers.CharField()
     requestedByRelationshipId = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -29,7 +27,8 @@ class CreateAmbulanceRequestSerializer(serializers.Serializer):
     schedules = AmbulanceScheduleItemSerializer(many=True)
 
     def validate(self, attrs):
-        # Plan contraer la llave vieja: idPaciente; noExp/pkNum transitorio.
+        # Plan contraer la llave vieja (C7): solo idPaciente. La pantalla abre antes
+        # al miembro que nunca se atendio (POST /visits/patient-open).
         from apps.consulta_medica.services.paciente_entrada import resolver_paciente_en_datos
 
         return resolver_paciente_en_datos(super().validate(attrs))

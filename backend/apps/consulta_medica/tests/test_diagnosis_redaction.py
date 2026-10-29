@@ -11,6 +11,7 @@ from apps.consulta_medica.uses_case.patient_history_usecase import (
     get_patient_consultations_history,
 )
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 VIH_PERMISSION = ["clinico:diagnosticos_vih:read"]
 
@@ -40,7 +41,7 @@ class DiagnosisRedactionTests(TestCase):
     def _visit_with_diagnosis(self, no_exp, *, cie_code):
         visit = Visit.objects.create(
             folio=f"REDACT-{Visit.objects.count() + 1}",
-            no_exp=no_exp,
+            patient=_paciente_de_llave(no_exp, 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-REDACT-{Visit.objects.count() + 1}",
             status="en_consulta",

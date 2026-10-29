@@ -19,6 +19,7 @@ from apps.impresion.models import PrintLog
 from apps.impresion.registry import REGISTRY
 from apps.impresion.uses_case import print_document_usecase as uc
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 HEADER = "apps.consulta_medica.impresion.common.get_patient_header"
 RENDER = "apps.impresion.uses_case.print_document_usecase.engine.render_pdf"
@@ -48,7 +49,7 @@ class _Base(TestCase):
 
     def _visit(self, folio, status="cerrada"):
         return Visit.objects.create(
-            folio=folio, no_exp="E1", pk_num=0, arrival_type="walk_in",
+            folio=folio, patient=_paciente_de_llave("E1", 0), arrival_type="walk_in",
             service_type="medicina_general", status=status, nombre_paciente="Visit Name",
         )
 

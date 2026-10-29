@@ -1,7 +1,7 @@
 from apps.catalogos.models import CatTipoAlergia
 from apps.consulta_medica.models import Allergy, AllergyRevision
 from apps.consulta_medica.services.patient_link_service import for_patient
-from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.paciente_entrada import llave_publica, paciente_de_llave
 
 # Campos editables via update() -- se usa para saber que "previous_<campo>"
 # snapshotear en AllergyRevision. No incluye no_exp/pk_num/source/is_active
@@ -44,9 +44,10 @@ class AllergyRepository:
 
     @staticmethod
     def create(*, no_exp, pk_num, allergy_type_id, substance, severity, source, medication_id=None, reaction=None, created_by_id=None):
+        # Solo id_paciente (plan contraer la llave vieja): el registro se
+        # resuelve, o se abre, por la puerta central.
         return Allergy.objects.create(
-            no_exp=no_exp,
-            pk_num=pk_num,
+            patient=paciente_de_llave(no_exp, pk_num, created_by_id=created_by_id),
             allergy_type_id=allergy_type_id,
             substance=substance,
             medication_id=medication_id,

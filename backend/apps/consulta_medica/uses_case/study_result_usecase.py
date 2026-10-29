@@ -10,7 +10,6 @@ from apps.consulta_medica.services.visit_guards import (
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
 
-from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .consultation_usecase import ensure_doctor_role
 
 
@@ -57,8 +56,7 @@ def create_study_result(
         lock_visit_not_cancelled(visit.id_visit)
         result = StudyResultRepository.create(
             consultation=consultation,
-            no_exp=llave_publica(visit)[0],
-            pk_num=llave_publica(visit)[1],
+            patient=visit.patient,
             study_type=study_type,
             result_date=result_date,
             notes=notes,

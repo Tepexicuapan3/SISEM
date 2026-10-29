@@ -16,6 +16,7 @@ from apps.cirugias.models import SurgerySchedule
 from apps.cirugias.repositories.surgery_repository import SurgeryRepository
 from apps.medicos.models import CatMedico
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave
 
 SURGERY_READ_REQUIREMENT = {"allOf": ["clinico:cirugias:read"]}
 SURGERY_WRITE_REQUIREMENT = {"allOf": ["clinico:cirugias:write"]}
@@ -115,8 +116,9 @@ def schedule_surgery(
         folio = next_folio(FolioType.CIRUGIA)
         surgery = SurgeryRepository.create(
             folio=folio,
-            no_exp=no_exp,
-            pk_num=pk_num or 0,
+            # Solo id_paciente (plan contraer la llave vieja): el registro se
+            # resuelve, o se abre, por la puerta central.
+            patient=paciente_de_llave(no_exp, pk_num or 0, created_by_id=actor_id),
             surgeon=surgeon,
             surgery_type=surgery_type,
             classification=classification,

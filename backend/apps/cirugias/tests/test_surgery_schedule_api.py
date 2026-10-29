@@ -11,6 +11,7 @@ from apps.catalogos.models import CatClasificacionCirugia, CatTipoCirugia, Permi
 from apps.cirugias.models import SurgerySchedule
 from apps.medicos.models import CatMedico
 from apps.medicos.tests.factories import crear_medico
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class SurgeryScheduleApiTests(APITestCase):
@@ -76,8 +77,7 @@ class SurgeryScheduleApiTests(APITestCase):
 
     def _payload(self, **overrides):
         payload = {
-            "noExp": "EXP-C001",
-            "pkNum": 0,
+            "idPaciente": _paciente_de_llave("EXP-C001", 0).pk,
             "surgeonId": self.surgeon.id,
             "surgeryTypeId": self.surgery_type.id,
             "classificationId": self.classification.id,

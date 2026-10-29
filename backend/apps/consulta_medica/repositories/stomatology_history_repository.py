@@ -26,7 +26,7 @@ class StomatologyHistoryRepository:
         # Plan contraer la llave vieja: una por registro del paciente.
         history, created = StomatologyHistory.objects.get_or_create(
             patient_id=clinical_history.patient_id,
-            defaults={"clinical_history": clinical_history, "no_exp": no_exp, "pk_num": pk_num},
+            defaults={"clinical_history": clinical_history},
         )
         return history, created
 

@@ -11,6 +11,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import CatCies, Permisos, Roles
 from apps.consulta_medica.models import VisitConsultation
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class DailyConsultationReportApiTests(APITestCase):
@@ -63,7 +64,7 @@ class DailyConsultationReportApiTests(APITestCase):
 
         self.visit_today = Visit.objects.create(
             folio="REP-0001",
-            no_exp="EXP-0001",
+            patient=_paciente_de_llave("EXP-0001", 0),
             nombre_paciente="Paciente De Hoy",
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="cerrada",
@@ -82,7 +83,7 @@ class DailyConsultationReportApiTests(APITestCase):
 
         self.visit_yesterday = Visit.objects.create(
             folio="REP-0002",
-            no_exp="EXP-0002",
+            patient=_paciente_de_llave("EXP-0002", 0),
             nombre_paciente="Paciente De Ayer",
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="cerrada",

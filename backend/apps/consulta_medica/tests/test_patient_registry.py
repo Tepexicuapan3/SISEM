@@ -15,7 +15,6 @@ from apps.consulta_medica.repositories.clinical_history_repository import (
     PatientRepository,
 )
 from apps.consulta_medica.services import patient_registry_service as registro
-from apps.consulta_medica.services.patient_link_service import link_existing
 from apps.recepcion.services.errors import VisitDomainError
 
 EXISTE = "apps.consulta_medica.services.patient_registry_service.existe_en_sermed"
@@ -54,8 +53,7 @@ class NormalizarNoExpTests(TestCase):
 
     def test_la_historia_usa_el_no_exp_guardado_en_el_paciente(self):
         historia, _ = ClinicalHistoryRepository.get_or_create_for_patient(" 040041", 902)
-        # Plan contraer la llave vieja: la cabecera ya no guarda la llave; la del paciente, normalizada.
-        self.assertIsNone(historia.no_exp)
+        # Plan contraer la llave vieja: la cabecera ya no tiene llave; la del paciente, normalizada.
         self.assertEqual(historia.patient.no_exp, "40041")
 
 
@@ -118,16 +116,3 @@ class VerificarSermedTests(TestCase):
             ClinicalHistoryRepository.get_or_create_for_patient("100", 900)
         self.assertFalse(ClinicalHistory.objects.exists())
 
-    @_modo("bloquear")
-    def test_vincular_id_paciente_regulariza_sin_consultar_sermed(self):
-        from apps.consulta_medica.models import Allergy
-
-        # Fila clinica sin paciente (como antes de la etapa 7b).
-        Allergy.objects.create(
-            no_exp="300", pk_num=0, allergy_type_id=9, substance="PENICILINA",
-            severity="M", service_origin_code=1,
-        )
-        with mock.patch(EXISTE, return_value=False) as existe:
-            link_existing()
-        existe.assert_not_called()
-        self.assertTrue(Patient.objects.filter(no_exp="300", pk_num=0).exists())

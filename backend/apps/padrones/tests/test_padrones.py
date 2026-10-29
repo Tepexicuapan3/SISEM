@@ -16,6 +16,7 @@ from apps.consulta_medica.models import Patient
 from apps.padrones.models import ChronicEnrollment, DisabilityEnrollment, RegistryStatus
 from apps.padrones.uses_case import padron_usecase as uc
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 WRITE = ["clinico:padrones:read", "clinico:padrones:write"]
 CLASSIFY = "apps.consulta_medica.services.diagnosis_redaction_service.classify_cie"
@@ -161,7 +162,7 @@ class PadronesApiTests(_Base):
 
     def test_enroll_list_and_discharge_with_audit(self):
         created = self.client_api.post(
-            "/api/v1/padrones/cronicos", {"noExp": "EXP-API", "itemId": "E11"}, format="json",
+            "/api/v1/padrones/cronicos", {"idPaciente": _paciente_de_llave("EXP-API", 0).pk, "itemId": "E11"}, format="json",
         )
         self.assertEqual(created.status_code, 201, created.content)
         self.assertEqual(created.data["center"]["id"], self.center.pk)  # centro de adscripcion

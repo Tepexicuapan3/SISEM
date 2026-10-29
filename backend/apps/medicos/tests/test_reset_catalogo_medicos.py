@@ -25,6 +25,7 @@ from apps.hospitalizacion.models import HospitalAdmission, HospitalAdmissionRevi
 from apps.medicos.models import CatMedico, RelMedicoCentro
 from apps.medicos.tests.factories import crear_medico
 from apps.recepcion.models import CitaMedica, HorarioDisponible
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class ResetCatalogoMedicosTests(TestCase):
@@ -46,7 +47,7 @@ class ResetCatalogoMedicosTests(TestCase):
 
         tipo = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
         self.adm = HospitalAdmission.objects.create(
-            no_exp="EXP0001", reason="Motivo", admission_date=datetime.date(2026, 1, 1),
+            patient=_paciente_de_llave("EXP0001", 0), reason="Motivo", admission_date=datetime.date(2026, 1, 1),
             admission_type=tipo,
             admitting_doctor=self.m1, admitting_doctor_code_legacy="0010",
             discharge_doctor=self.m2, discharge_doctor_code_legacy="20",
@@ -69,13 +70,13 @@ class ResetCatalogoMedicosTests(TestCase):
 
     def _crear_cita(self):
         return CitaMedica.objects.create(
-            folio=CitaMedica.generar_folio(), no_exp="40041", pk_num=0,
+            folio=CitaMedica.generar_folio(), patient=_paciente_de_llave("40041", 0),
             medico=self.m1, fecha_hora=timezone.now() + datetime.timedelta(days=1),
         )
 
     def _crear_cirugia(self):
         return SurgerySchedule.objects.create(
-            folio="CIR-RST-1", no_exp="EXP-R1", pk_num=0, surgeon=self.m2,
+            folio="CIR-RST-1", patient=_paciente_de_llave("EXP-R1", 0), surgeon=self.m2,
             surgery_type=CatTipoCirugia.objects.create(name="Apendicectomia"),
             classification=CatClasificacionCirugia.objects.create(name="Corta"),
             scheduled_date=datetime.date(2026, 2, 1), scheduled_time=datetime.time(10, 0),

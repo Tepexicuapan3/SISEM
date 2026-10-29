@@ -348,10 +348,18 @@ class PatientOpenView(APIView):
     busqueda que todavia no tiene idPaciente (familiar de SERMED que nunca se
     atendio). pkNum es SOLO el de SERMED (0 = titular): el provisional ya trae
     su idPaciente desde la busqueda y nunca pasa por aqui.
+
+    C7: cirugias, ambulancias, padrones y contratos de oxigeno tambien abren
+    aqui al paciente antes de guardar (solo mandan idPaciente), asi que basta
+    con poder dar de alta en alguno de esos modulos.
     """
 
     authentication_classes = []
     permission_classes = []
+    PERMISOS_DE_ALTA = {"anyOf": [
+        "clinico:cirugias:write", "clinico:ambulancias:write", "clinico:padrones:write",
+        "servicios:contratos_oxigeno:read",
+    ]}
 
     def post(self, request):
         from apps.consulta_medica.services.newborn_service import es_clave_provisional
@@ -366,7 +374,11 @@ class PatientOpenView(APIView):
         try:
             _require_visit_queue_access(user)
         except VisitDomainError as exc:
-            return _visit_error_response(request, exc)
+            from apps.authentication.services.permission_dependencies import evaluate_permission_requirement
+
+            permisos = UserRepository.build_auth_user(user).get("permissions", [])
+            if not evaluate_permission_requirement(self.PERMISOS_DE_ALTA, permisos)["granted"]:
+                return _visit_error_response(request, exc)
 
         serializer = PatientOpenSerializer(data=request.data)
         if not serializer.is_valid() or es_clave_provisional(serializer.validated_data["pkNum"]):

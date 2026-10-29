@@ -1,7 +1,6 @@
 from django.utils import timezone
 
 from apps.somatometria.models import PatientLatestVitals, VisitVitalSigns
-from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 
 class VitalsRepository:
@@ -44,13 +43,9 @@ class VitalsRepository:
         fields = VitalsRepository._metric_fields_from_payload(vitals_payload)
         vital_signs = VisitVitalSigns.objects.create(
             id_visit=visit,
-            # Denormalizado desde la visita al crear -- no_exp/pk_num de una
-            # visita no cambian despues de creada, asi que esta copia nunca
-            # se desincroniza en el uso normal del sistema.
+            # Denormalizado desde la visita al crear (el paciente de una visita
+            # no cambia despues de creada).
             patient_id=visit.patient_id,
-            # Copia de la llave vieja: se deja de escribir en C6 (plan contraer la llave).
-            no_exp=llave_publica(visit)[0],
-            pk_num=llave_publica(visit)[1],
             reused_from_visit=reused_from,
             captured_by=captured_by,
             **fields,
@@ -100,8 +95,6 @@ class VitalsRepository:
         latest_defaults = dict(fields)
         latest_defaults.pop("notes", None)
         latest_defaults["id_visit_origen"] = visit
-        # Copia de la llave vieja hasta C6.
-        latest_defaults["no_exp"], latest_defaults["pk_num"] = llave_publica(visit)[0], llave_publica(visit)[1]
         PatientLatestVitals.objects.update_or_create(
             patient_id=visit.patient_id,
             defaults=latest_defaults,

@@ -21,6 +21,7 @@ from apps.medicos.uses_case.medico_usecase import update_medico
 from apps.portal_citas.services.slots_service import get_slots_portal
 from apps.recepcion.models import CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 DIA = timezone.localdate() + timedelta(days=10)
 
@@ -57,7 +58,7 @@ class HorariosViejosTests(TestCase):
     def _agendar_9am(self):
         slot = HorarioDisponible.objects.get(fecha=DIA, hora="09:00")
         cita = CitaMedica.objects.create(
-            folio=CitaMedica.generar_folio(), no_exp="EXP-VIE", pk_num=0,
+            folio=CitaMedica.generar_folio(), patient=_paciente_de_llave("EXP-VIE", 0),
             medico=self.medico, consultorio=self.consultorio,
             fecha_hora=timezone.make_aware(datetime.combine(DIA, slot.hora)),
             duracion_min=20, servicio_tipo="medicina_general", estatus=EstatusCita.AGENDADA,

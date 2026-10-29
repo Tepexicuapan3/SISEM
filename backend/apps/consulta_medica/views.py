@@ -195,7 +195,7 @@ def _log_sensitive_diagnosis_redaction_if_any(
 
     # BITACORA_ACCESO: lectura con diagnosticos restringidos.
     if no_exp is None and visit_id is not None:
-        visit = Visit.objects.filter(pk=visit_id).only("no_exp", "pk_num").first()
+        visit = Visit.objects.filter(pk=visit_id).select_related("patient").first()
         if visit is not None:
             no_exp, pk_num = llave_publica(visit)[0], llave_publica(visit)[1]
     log_restricted_access(

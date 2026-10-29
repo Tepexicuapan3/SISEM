@@ -29,6 +29,7 @@ from apps.portal_citas.models import PortalMiembro, PortalSesion
 from apps.portal_citas.services.token_service import issue_portal_access_token
 from apps.recepcion.models import CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 DIA = timezone.localdate() + timedelta(days=10)
 
@@ -74,7 +75,7 @@ class _Base:
     def _cita_en(self, hora):
         fecha_hora = timezone.make_aware(datetime.combine(DIA, time.fromisoformat(hora)))
         cita = CitaMedica.objects.create(
-            folio=CitaMedica.generar_folio(), no_exp="EXP-AUS", pk_num=0,
+            folio=CitaMedica.generar_folio(), patient=_paciente_de_llave("EXP-AUS", 0),
             medico=self.medico, consultorio=self.consultorio, fecha_hora=fecha_hora,
             duracion_min=20, servicio_tipo="medicina_general", estatus=EstatusCita.AGENDADA,
         )

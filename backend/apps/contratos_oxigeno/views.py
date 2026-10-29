@@ -47,7 +47,7 @@ class ContratoOxigenoViewSet(viewsets.ModelViewSet):
     serializer_class       = ContratoOxigenoSerializer
     pagination_class       = StandardListPagination
     filter_backends        = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields    = ["nombre", "num_contrato", "expediente", "diagnostico"]
+    search_fields    = ["nombre", "num_contrato", "patient__no_exp", "diagnostico"]
     ordering_fields  = [
         "num_contrato", "nombre", "fecha_renovar",
         "dias_faltan", "status", "sucursal", "clinica",

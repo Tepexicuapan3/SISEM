@@ -103,6 +103,11 @@ class LatestVitalsPkNumRebuildMigrationTests(TransactionTestCase):
         self.Latest = self.new_apps.get_model("somatometria", "PatientLatestVitals")
 
     def tearDown(self):
+        # Este test crea visitas SIN expediente (ver test_visitas_sin_no_exp_se_descartan):
+        # no hay llave para darles id_paciente al llegar al NOT NULL, asi que se
+        # borran antes de dejar el schema en el ultimo estado.
+        for label in ("somatometria.PatientLatestVitals", "somatometria.VisitVitalSigns", "recepcion.Visit"):
+            self.new_apps.get_model(*label.split(".")).objects.all().delete()
         # Deja el schema en el ultimo estado de la app para no interferir
         # con el resto de la suite de tests.
         executor = MigrationExecutor(connection)

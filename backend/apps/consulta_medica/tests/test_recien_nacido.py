@@ -15,6 +15,7 @@ from apps.consulta_medica.repositories.clinical_history_repository import Patien
 from apps.consulta_medica.services import newborn_service as rn
 from apps.consulta_medica.services.patient_link_service import records_for_key
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 NACIMIENTO = date(2026, 10, 1)
 ENCENDIDO = override_settings(IDENTIDAD_PACIENTE={
@@ -285,8 +286,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
         from apps.recepcion.models import Visit
 
         # Plan contraer la llave vieja: la ficha guarda solo el id_paciente del provisional.
-        ficha = Visit.objects.get(patient_id=self.provisional["idPaciente"])
-        self.assertEqual((ficha.no_exp, ficha.pk_num), (None, None))
+        self.assertTrue(Visit.objects.filter(patient_id=self.provisional["idPaciente"]).exists())
 
     def test_vinculado_se_atiende_desde_sermed(self):
         rn.vincular(self.provisional["idPaciente"], 777)
@@ -306,7 +306,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
 
         self.familiares = []
         cita = CitaMedica.objects.create(
-            folio="T-1", no_exp="40041", pk_num=self.provisional["cdProvisional"], medico=self.medico,
+            folio="T-1", patient=_paciente_de_llave("40041", self.provisional["cdProvisional"]), medico=self.medico,
             fecha_hora=timezone.now() + timedelta(days=1))
         self.familiares = [_familiar(777)]   # aparece la coincidencia despues
         cita.notas = "Reprogramar"
@@ -494,7 +494,7 @@ class RecepcionProvisionalTests(_SermedSimulado, TestCase):
     def test_la_visita_queda_en_el_registro_del_provisional(self):
         from apps.recepcion.models import Visit
 
-        visita = Visit.objects.create(folio="RN-1", no_exp="40041", pk_num=self.clave, arrival_type="walk_in",
+        visita = Visit.objects.create(folio="RN-1", patient=_paciente_de_llave("40041", self.clave), arrival_type="walk_in",
                                       service_type="medicina_general", nombre_paciente="BEBE")
         self.assertEqual(visita.patient_id, self.provisional["idPaciente"])
         self.assertEqual(Patient.objects.filter(no_exp="40041").count(), 1)   # no creo otro

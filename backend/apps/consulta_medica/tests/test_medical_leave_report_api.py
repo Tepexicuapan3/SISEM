@@ -11,6 +11,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import Licencias, Permisos, Roles
 from apps.consulta_medica.models import MedicalLeave, VisitConsultation
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class MedicalLeaveReportApiTests(APITestCase):
@@ -68,7 +69,7 @@ class MedicalLeaveReportApiTests(APITestCase):
     def _create_leave(self, *, folio, no_exp, visit_folio, start_date):
         visit = Visit.objects.create(
             folio=visit_folio,
-            no_exp=no_exp,
+            patient=_paciente_de_llave(no_exp, 0),
             nombre_paciente=f"Paciente {no_exp}",
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="cerrada",
@@ -83,8 +84,7 @@ class MedicalLeaveReportApiTests(APITestCase):
         )
         return MedicalLeave.objects.create(
             consultation=consultation,
-            no_exp=no_exp,
-            pk_num=0,
+            patient=_paciente_de_llave(no_exp, 0),
             leave_type=self.leave_type,
             is_subsequent=False,
             days=3,

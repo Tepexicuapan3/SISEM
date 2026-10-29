@@ -14,6 +14,7 @@ from apps.hospitalizacion.models import HospitalAdmission, HospitalAdmissionRevi
 from apps.hospitalizacion.uses_case import hospital_admission_usecase
 from apps.medicos.models import LegacyMedico
 from apps.medicos.tests.factories import crear_medico
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 ING = "admitting_doctor_code_legacy"
 ALTA = "discharge_doctor_code_legacy"
@@ -39,7 +40,7 @@ class DoctorCodeBridgeBase(TestCase):
     def _admission(self, ingreso=None, alta=None):
         self._n += 1
         return HospitalAdmission.objects.create(
-            no_exp=f"EXP{self._n:04d}",
+            patient=_paciente_de_llave(f"EXP{self._n:04d}", 0),
             reason="Motivo",
             admission_date=datetime.date(2026, 1, 1),
             admission_type=self.tipo,

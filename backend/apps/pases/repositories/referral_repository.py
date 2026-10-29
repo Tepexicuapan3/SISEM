@@ -24,8 +24,7 @@ class ReferralRepository:
     def create(
         *,
         consultation,
-        no_exp,
-        pk_num,
+        patient,
         referral_type,
         destination_center=None,
         specialty=None,
@@ -37,8 +36,7 @@ class ReferralRepository:
     ):
         return Referral.objects.create(
             consultation=consultation,
-            no_exp=no_exp,
-            pk_num=pk_num,
+            patient=patient,
             referral_type=referral_type,
             destination_center=destination_center,
             specialty=specialty,

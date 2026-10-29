@@ -42,8 +42,6 @@ class HospitalAdmission(models.Model):
     legacy_folio = models.CharField(max_length=20, unique=True, null=True, blank=True, db_column="folio_legado")
     hospital_service_folio = models.CharField(max_length=20, null=True, blank=True, db_column="folio_servicio")
 
-    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
-    pk_num = models.IntegerField(default=0, db_column="pk_num", null=True, blank=True)
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
@@ -116,14 +114,13 @@ class HospitalAdmission(models.Model):
         # ClinicalHistory (un registro por paciente), un paciente tiene N
         # ingresos hospitalarios a lo largo del tiempo.
         indexes = [
-            models.Index(fields=["no_exp", "pk_num"], name="hsp_admission_no_exp_pk_idx"),
             models.Index(fields=["admission_date"], name="hsp_admission_admdate_idx"),
             models.Index(fields=["is_active"], name="hsp_admission_active_idx"),
         ]
         ordering = ["-admission_date"]
 
     def __str__(self) -> str:
-        return f"Ingreso {self.id} — {self.no_exp} ({self.admission_date})"
+        return f"Ingreso {self.id} — paciente {self.patient_id} ({self.admission_date})"
 
     @property
     def is_discharged(self) -> bool:

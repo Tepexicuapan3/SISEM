@@ -22,6 +22,7 @@ from apps.realtime.events import (
 )
 from apps.realtime.publisher import REALTIME_EVENT_HANDLER
 from apps.realtime.schemas import ENVELOPE_VERSION
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class VisitStreamRealtimeEventsApiTests(APITestCase):
@@ -60,27 +61,27 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
 
         self.visit_recepcion = Visit.objects.create(
             folio="WS-RCP-0001",
-            no_exp="EXP91001",
+            patient=_paciente_de_llave("EXP91001", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-WS-0001",
             status="en_espera",
         )
         self.visit_somatometria = Visit.objects.create(
             folio="WS-SMT-0001",
-            no_exp="EXP92001",
+            patient=_paciente_de_llave("EXP92001", 0),
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="en_somatometria",
         )
         self.visit_doctor_ready = Visit.objects.create(
             folio="WS-DOC-0001",
-            no_exp="EXP93001",
+            patient=_paciente_de_llave("EXP93001", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-WS-0002",
             status="lista_para_doctor",
         )
         self.visit_doctor_open = Visit.objects.create(
             folio="WS-DOC-0002",
-            no_exp="EXP93002",
+            patient=_paciente_de_llave("EXP93002", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-WS-0003",
             status="en_consulta",

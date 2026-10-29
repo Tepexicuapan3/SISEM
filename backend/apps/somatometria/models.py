@@ -9,16 +9,9 @@ class VisitVitalSigns(models.Model):
         on_delete=models.CASCADE,
         related_name="vital_signs",
     )
-    # Denormalizado desde `id_visit.no_exp`/`id_visit.pk_num` al crear la
-    # fila (ver `VitalsRepository.create_for_visit`). El JOIN contra Visit ya
-    # esta indexado y cubre los casos de uso actuales -- esto es solo para
-    # que reportes/consultas directas sobre esta tabla no necesiten el JOIN.
-    # Nunca se reescribe despues de creada: no_exp/pk_num de una visita no
-    # cambian una vez que existe.
-    no_exp = models.CharField(max_length=20, db_column="no_exp", null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
-    # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
-    # solo al guardar: consulta_medica.services.operational_link_service.
+    # Plan identidad, Fase 5: el registro (afiliacion) atendido, copiado de la
+    # visita al crear (VitalsRepository.create_for_visit). Desde C7 es lo unico
+    # que identifica al paciente en esta tabla.
     patient = models.ForeignKey(
         "consulta_medica.Patient", db_column="id_paciente",
         on_delete=models.PROTECT, related_name="+",
@@ -116,10 +109,6 @@ class VisitVitalSigns(models.Model):
         db_table = "smt_visit_vitals"
         indexes = [
             models.Index(fields=["fch_alta"], name="smt_visit_vitals_fchalta_idx"),
-            models.Index(
-                fields=["no_exp", "pk_num"],
-                name="smt_vitals_noexp_pknum_idx",
-            ),
         ]
 
 
@@ -141,8 +130,6 @@ class PatientLatestVitals(models.Model):
     """
 
     id_latest = models.BigAutoField(primary_key=True, db_column="id_latest")
-    no_exp = models.CharField(max_length=20, db_column="no_exp", db_index=True, null=True, blank=True)
-    pk_num = models.IntegerField(db_column="pk_num", default=0, null=True, blank=True)
     # Plan identidad, Fase 5: el registro (afiliacion) atendido. Se resuelve
     # solo al guardar: consulta_medica.services.operational_link_service.
     patient = models.ForeignKey(
@@ -207,10 +194,6 @@ class PatientLatestVitals(models.Model):
     class Meta:
         db_table = "smt_patient_latest_vitals"
         constraints = [
-            models.UniqueConstraint(
-                fields=["no_exp", "pk_num"],
-                name="smt_latest_vitals_noexp_pknum_uq",
-            ),
             # Plan contraer la llave vieja: una fila por registro del paciente.
             models.UniqueConstraint(
                 fields=["patient"], condition=models.Q(patient__isnull=False),

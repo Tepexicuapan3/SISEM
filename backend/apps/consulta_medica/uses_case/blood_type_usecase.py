@@ -10,7 +10,6 @@ del paciente con su fuente (L laboratorio, D declarado) y su historial.
 - Mismo tipo, fuente y resultado que el vigente: no hace nada.
 """
 from django.db import transaction
-from django.db.models import Q
 
 from apps.catalogos.models import TiposSanguineo
 from apps.consulta_medica.models import BloodType, ChangeLog, StudyResult
@@ -82,12 +81,8 @@ def _validate(patient, validated_data):
         if source != BloodType.Source.LAB:
             raise _validation_error({"labResultId": ["Solo un tipo de sangre de laboratorio lleva resultado."]})
         # El resultado tiene que ser de ESTE paciente: si no, el respaldo es de
-        # otra persona. Mientras id_paciente siga nullable (etapa 7e), tambien
-        # vale el resultado aun no vinculado con la misma llave no_exp/pk_num.
-        same_patient = Q(patient=patient) | Q(
-            patient__isnull=True, no_exp=patient.no_exp, pk_num=patient.pk_num,
-        )
-        if not StudyResult.objects.filter(same_patient, pk=lab_result_id, is_active=True).exists():
+        # otra persona.
+        if not StudyResult.objects.filter(patient=patient, pk=lab_result_id, is_active=True).exists():
             raise _validation_error({"labResultId": ["El resultado no existe o no es de este paciente."]})
     return blood_type_id, source, lab_result_id
 

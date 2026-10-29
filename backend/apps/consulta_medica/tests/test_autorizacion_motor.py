@@ -33,6 +33,7 @@ from apps.consulta_medica.uses_case.prescription_item_usecase import (
 )
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 AUTORIZAR = ["clinico:recetas:authorize"]
 CLAVE = "Clave_12345"
@@ -68,7 +69,7 @@ class _Base(TestCase):
     def _visita(self, *, con_consultorio=True):
         n = Visit.objects.count() + 1
         visit = Visit.objects.create(
-            folio=f"MOTOR-{n}", no_exp=f"EXP{7000 + n}", arrival_type=Visit.ArrivalType.APPOINTMENT,
+            folio=f"MOTOR-{n}", patient=_paciente_de_llave(f"EXP{7000 + n}", 0), arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-MOTOR-{n}", status="en_consulta",
             consultorio=self.consultorio if con_consultorio else None,
         )

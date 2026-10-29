@@ -18,6 +18,7 @@ from apps.catalogos.models import Permisos, Roles
 from apps.recepcion.models import Visit
 from apps.somatometria.models import VisitVitalSigns
 from apps.somatometria.repositories.vitals_repository import VitalsRepository
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class VitalsReuseApiTests(APITestCase):
@@ -35,8 +36,7 @@ class VitalsReuseApiTests(APITestCase):
 
         self.source_visit = Visit.objects.create(
             folio="REUSE-SOURCE-1",
-            no_exp="EXP-REUSE-1",
-            pk_num=0,
+            patient=_paciente_de_llave("EXP-REUSE-1", 0),
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="lista_para_doctor",
             service_type=Visit.ServiceType.MEDICINA_GENERAL,
@@ -55,8 +55,7 @@ class VitalsReuseApiTests(APITestCase):
 
         self.current_visit = Visit.objects.create(
             folio="REUSE-CURRENT-1",
-            no_exp="EXP-REUSE-1",
-            pk_num=0,
+            patient=_paciente_de_llave("EXP-REUSE-1", 0),
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="en_somatometria",
             service_type=Visit.ServiceType.ESPECIALIDAD,

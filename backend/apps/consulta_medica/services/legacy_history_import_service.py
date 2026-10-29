@@ -173,21 +173,21 @@ class LegacyHistoryImporter:
         y cada una repetiria sus casillas (p. ej. "Diabetes mellitus"
         familiar). Cuenta tambien lo dado de baja: si alguien lo desactivo en
         SIRES, el legado no lo revive."""
-        # Plan contraer la llave vieja: estas tablas ya no guardan la llave; se
+        # Plan contraer la llave vieja: estas tablas guardan solo id_paciente; se
         # deduplica por el registro del paciente.
         patient = _paciente(base["no_exp"], base["pk_num"])
-        identity = {"patient": patient, **fields} if patient else {"no_exp": base["no_exp"], "pk_num": base["pk_num"], **fields}
-        if model.objects.filter(**identity).exists():
+        if patient is None or model.objects.filter(patient=patient, **fields).exists():
             return None
         if model is Habit and Habit.objects.filter(
-            **({"patient": patient} if patient else {"no_exp": base["no_exp"], "pk_num": base["pk_num"]}),
+            patient=patient,
             habit_id=fields["habit_id"], record_status=Habit.RecordStatus.CURRENT, is_active=True,
         ).exists():
             # Una sola fila vigente por habito (5.2): si ya hay una (capturada
             # en SIRES u otra fila del legado), esta entra como anterior. No se
             # pierde y no pisa lo vigente.
             fields = {**fields, "record_status": Habit.RecordStatus.PREVIOUS}
-        created = model.objects.create(**base, **fields)
+        datos = {k: v for k, v in base.items() if k not in ("no_exp", "pk_num")}
+        created = model.objects.create(patient=patient, **datos, **fields)
         self.counters["records"] += 1
         return created
 
@@ -196,11 +196,10 @@ class LegacyHistoryImporter:
         if not substance or is_negative_allergy(substance):
             return
         patient = _paciente(no_exp, pk_num)
-        mismo = {"patient": patient} if patient else {"no_exp": no_exp, "pk_num": pk_num}
-        if Allergy.objects.filter(**mismo, substance__iexact=substance).exists():
+        if patient is None or Allergy.objects.filter(patient=patient, substance__iexact=substance).exists():
             return
         Allergy.objects.create(
-            no_exp=no_exp, pk_num=pk_num, allergy_type_id=allergy_type_id, substance=substance,
+            patient=patient, allergy_type_id=allergy_type_id, substance=substance,
             severity=Allergy.Severity.MODERATE, service_origin_code=Allergy.SERVICE_BY_SOURCE[source],
             # Documento 5.2: el texto tal como venia, antes de partirlo.
             original_text=(original_text or "").strip() or None,
@@ -274,7 +273,7 @@ class LegacyHistoryImporter:
         # Plan contraer la llave vieja: una seccion dental por registro del paciente.
         StomatologyHistory.objects.get_or_create(
             patient_id=history.patient_id,
-            defaults={"clinical_history": history, "no_exp": no_exp, "pk_num": pk_num},
+            defaults={"clinical_history": history},
         )
 
         base = {"no_exp": no_exp, "pk_num": pk_num, "source": SpecialtySource.LEGACY, "legacy_ref": ref}

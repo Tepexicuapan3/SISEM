@@ -6,6 +6,7 @@ from apps.consulta_medica.uses_case.allergy_usecase import create_allergy
 from apps.consulta_medica.uses_case.consultation_usecase import save_diagnosis
 from apps.consulta_medica.uses_case.prescription_item_usecase import add_prescription_item
 from apps.recepcion.models import Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _noop_audit_hook(**kwargs):
@@ -38,7 +39,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
     def _visit_in_consultation(self, no_exp):
         visit = Visit.objects.create(
             folio=f"RXALLERGY-{Visit.objects.count() + 1}",
-            no_exp=no_exp,
+            patient=_paciente_de_llave(no_exp, 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-RXALLERGY-{Visit.objects.count() + 1}",
             status="en_consulta",

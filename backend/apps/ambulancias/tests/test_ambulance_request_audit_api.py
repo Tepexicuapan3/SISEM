@@ -31,6 +31,7 @@ from apps.catalogos.models import (
 )
 
 from ._clinic_mock import mock_clinic
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class AmbulanceRequestAuditApiTests(APITestCase):
@@ -96,7 +97,7 @@ class AmbulanceRequestAuditApiTests(APITestCase):
 
     def _create_payload(self, **overrides):
         payload = {
-            "noExp": "EXP-A200",
+            "idPaciente": _paciente_de_llave("EXP-A200", 0).pk,
             "requestingClinicId": self.clinic_id,
             "requestedByName": "Maria Perez",
             "reasonId": self.reason.id,
@@ -121,7 +122,7 @@ class AmbulanceRequestAuditApiTests(APITestCase):
 
     def _make_request(self):
         request = AmbulanceRequest.objects.create(
-            folio="AMB-AUDIT-0001", no_exp="EXP-A201", requesting_clinic_id=self.clinic_id,
+            folio="AMB-AUDIT-0001", patient=_paciente_de_llave("EXP-A201", 0), requesting_clinic_id=self.clinic_id,
             requested_by_name="Juan Lopez", reason=self.reason, destination=self.destination,
         )
         AmbulanceRequestSchedule.objects.create(

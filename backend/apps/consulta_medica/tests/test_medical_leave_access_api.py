@@ -19,6 +19,7 @@ from apps.catalogos.models import Licencias, Permisos, Roles
 from apps.consulta_medica.uses_case.consultation_usecase import save_diagnosis
 from apps.recepcion.models import Visit
 from apps.consulta_medica.services.paciente_entrada import llave_publica
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _noop_audit_hook(**kwargs):
@@ -52,7 +53,7 @@ class MedicalLeaveAccessApiTests(APITestCase):
 
         self.visit = Visit.objects.create(
             folio="VIS-INCAP-001",
-            no_exp="EXP-INCAP-001",
+            patient=_paciente_de_llave("EXP-INCAP-001", 0),
             nombre_paciente="Paciente Incapacidad",
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="en_consulta",

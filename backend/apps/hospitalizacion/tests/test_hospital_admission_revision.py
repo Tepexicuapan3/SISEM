@@ -11,6 +11,7 @@ from apps.hospitalizacion.repositories.hospital_admission_repository import Hosp
 from apps.hospitalizacion.uses_case import hospital_admission_usecase
 from apps.medicos.models import CatMedico
 from apps.medicos.tests.factories import crear_medico
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 def _noop_audit_hook(**kwargs):
@@ -23,7 +24,7 @@ class HospitalAdmissionRevisionAppendOnlyTests(TestCase):
     def setUp(self):
         self.tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
         self.admission = HospitalAdmission.objects.create(
-            no_exp="EXP0001",
+            patient=_paciente_de_llave("EXP0001", 0),
             reason="Motivo inicial",
             admission_date=datetime.date(2026, 1, 1),
             admission_type=self.tipo_hosp,
@@ -51,7 +52,7 @@ class HospitalAdmissionRepositoryDirtyCheckTests(TestCase):
     def setUp(self):
         self.tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
         self.admission = HospitalAdmission.objects.create(
-            no_exp="EXP0002",
+            patient=_paciente_de_llave("EXP0002", 0),
             reason="Motivo inicial",
             admission_date=datetime.date(2026, 1, 1),
             admission_type=self.tipo_hosp,
@@ -126,7 +127,7 @@ class ResolvePendingFkTests(TestCase):
         self.tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
         self.medico = crear_medico(id=512, nombre="Prueba", paterno="Dr")
         self.admission = HospitalAdmission.objects.create(
-            no_exp="EXP0003",
+            patient=_paciente_de_llave("EXP0003", 0),
             reason="Motivo",
             admission_date=datetime.date(2026, 1, 1),
             admission_type=self.tipo_hosp,
@@ -180,7 +181,7 @@ class HospitalAdmissionUseCaseAtomicityTests(TestCase):
     def setUp(self):
         self.tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
         self.admission = HospitalAdmission.objects.create(
-            no_exp="EXP0004",
+            patient=_paciente_de_llave("EXP0004", 0),
             reason="Motivo inicial",
             admission_date=datetime.date(2026, 1, 1),
             admission_type=self.tipo_hosp,
@@ -226,7 +227,7 @@ class HospitalAdmissionProtectTests(TestCase):
         tipo_hosp = CatTipoHospitalizacion.objects.create(name="HOSPITALIZACIÓN", legacy_code=4)
         tipo_alta = CatTipoAlta.objects.create(name="ALTA VOLUNTARIA", legacy_code=1)
         HospitalAdmission.objects.create(
-            no_exp="EXP0005",
+            patient=_paciente_de_llave("EXP0005", 0),
             reason="Motivo",
             admission_date=datetime.date(2026, 1, 1),
             admission_type=tipo_hosp,

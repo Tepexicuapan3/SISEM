@@ -13,6 +13,7 @@ from apps.impresion.uses_case import print_document_usecase as uc
 from apps.recepcion.impresion.ficha import build_ficha_context
 from apps.recepcion.models import Visit
 from apps.recepcion.views.ficha_views import FichaVisitView
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 RENDER = "apps.impresion.uses_case.print_document_usecase.engine.render_pdf"
 HEADER = "apps.recepcion.impresion.ficha.get_patient_header"
@@ -31,7 +32,7 @@ class FichaBuilderTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = SyUsuario.objects.create(usuario="u_ficha", clave_hash="x")
-        cls.visit = Visit.objects.create(folio="FOL-001", no_exp="E1", pk_num=0, arrival_type="walk_in", service_type="medicina_general", nombre_paciente="Visit Name")
+        cls.visit = Visit.objects.create(folio="FOL-001", patient=_paciente_de_llave("E1", 0), arrival_type="walk_in", service_type="medicina_general", nombre_paciente="Visit Name")
 
     def test_registry_ficha_spec(self):
         spec = REGISTRY["ficha"]
@@ -81,7 +82,7 @@ class FichaReprintTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = SyUsuario.objects.create(usuario="u_ficha2", clave_hash="x")
-        cls.visit = Visit.objects.create(folio="FOL-002", no_exp="E1", pk_num=0, arrival_type="walk_in", service_type="medicina_general", nombre_paciente="Visit Name")
+        cls.visit = Visit.objects.create(folio="FOL-002", patient=_paciente_de_llave("E1", 0), arrival_type="walk_in", service_type="medicina_general", nombre_paciente="Visit Name")
 
     def _print(self):
         return uc.print_document(
@@ -127,7 +128,7 @@ class FichaAliasViewTests(TestCase):
 class FichaRealPdfTests(TestCase):
     def test_real_pdf(self):
         user = SyUsuario.objects.create(usuario="u_real", clave_hash="x")
-        visit = Visit.objects.create(folio="FOL-REAL", no_exp="E1", pk_num=0, arrival_type="walk_in", service_type="medicina_general", nombre_paciente="X")
+        visit = Visit.objects.create(folio="FOL-REAL", patient=_paciente_de_llave("E1", 0), arrival_type="walk_in", service_type="medicina_general", nombre_paciente="X")
         try:
             with mock.patch(HEADER, return_value=_header()):
                 result = uc.print_document(

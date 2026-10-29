@@ -153,11 +153,16 @@ def list_pending_dispensation_queue(roles, permissions=None, *, id_almacen=None)
         return {"items": [], "total": 0}
 
     visit_ids = [row["prescription__id_visit_id"] for row in pending_rows]
+    # El expediente que se muestra sale de cns_paciente (plan contraer la llave vieja).
+    from apps.consulta_medica.services.paciente_entrada import llave_publica
+
     visits_by_id = {
-        row["id_visit"]: row
-        for row in Visit.objects.filter(pk__in=visit_ids).values(
-            "id_visit", "no_exp", "pk_num", "nombre_paciente", "consultorio__id_center_id",
-        )
+        visit.id_visit: {
+            "llave": llave_publica(visit),
+            "nombre_paciente": visit.nombre_paciente,
+            "consultorio__id_center_id": visit.consultorio.id_center_id if visit.consultorio_id else None,
+        }
+        for visit in Visit.objects.filter(pk__in=visit_ids).select_related("patient", "consultorio")
     }
 
     items = []
@@ -182,8 +187,8 @@ def list_pending_dispensation_queue(roles, permissions=None, *, id_almacen=None)
             "prescriptionId": prescription_id,
             "folio": row["prescription__folio"],
             "visitId": visit_id,
-            "noExp": visit["no_exp"],
-            "pkNum": visit["pk_num"],
+            "noExp": visit["llave"][0],
+            "pkNum": visit["llave"][1],
             "patientName": visit["nombre_paciente"],
         })
 

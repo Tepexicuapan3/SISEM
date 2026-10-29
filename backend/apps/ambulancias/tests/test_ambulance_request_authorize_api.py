@@ -12,6 +12,7 @@ from apps.catalogos.models import (
 )
 
 from ._clinic_mock import mock_clinic
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class AmbulanceRequestAuthorizeApiTests(APITestCase):
@@ -42,7 +43,7 @@ class AmbulanceRequestAuthorizeApiTests(APITestCase):
         self.service_type = CatTipoServicioAmbulancia.objects.create(name="Basica")
 
         self.ambulance_request = AmbulanceRequest.objects.create(
-            folio="AMB-0001", no_exp="EXP-A100", requesting_clinic_id=self.clinic_id,
+            folio="AMB-0001", patient=_paciente_de_llave("EXP-A100", 0), requesting_clinic_id=self.clinic_id,
             requested_by_name="Juan Lopez", reason=self.reason, destination=self.destination,
         )
         AmbulanceRequestSchedule.objects.create(

@@ -52,7 +52,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.portal_citas.errors import PortalReservaError
-from apps.consulta_medica.services.paciente_entrada import q_registro
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave, q_registro
 from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
 from apps.portal_citas.tasks import enviar_comprobante_portal_task
@@ -206,8 +206,9 @@ def reservar_cita(
 
         cita = CitaMedica.objects.create(
             folio=CitaMedica.generar_folio(),
-            no_exp=miembro_objetivo.no_exp,
-            pk_num=miembro_objetivo.pk_num,
+            # Solo id_paciente (plan contraer la llave vieja): la cita abre el
+            # registro por la puerta central si todavia no existe.
+            patient=paciente_de_llave(miembro_objetivo.no_exp, miembro_objetivo.pk_num),
             medico=slot.medico,
             consultorio=slot.consultorio,
             fecha_hora=inicio_nuevo,

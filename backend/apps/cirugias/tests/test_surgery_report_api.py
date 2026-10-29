@@ -13,6 +13,7 @@ from apps.catalogos.models import CatClasificacionCirugia, CatTipoCirugia, Permi
 from apps.cirugias.models import SurgerySchedule
 from apps.medicos.models import CatMedico
 from apps.medicos.tests.factories import crear_medico
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class SurgeryReportApiTests(APITestCase):
@@ -34,7 +35,7 @@ class SurgeryReportApiTests(APITestCase):
 
         self.today = datetime.date.today()
         SurgerySchedule.objects.create(
-            folio="CIR-0001", no_exp="EXP-R001", pk_num=0,
+            folio="CIR-0001", patient=_paciente_de_llave("EXP-R001", 0),
             surgeon=self.surgeon, surgery_type=self.surgery_type,
             classification=self.classification,
             scheduled_date=self.today, scheduled_time=datetime.time(10, 0),

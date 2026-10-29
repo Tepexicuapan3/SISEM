@@ -19,6 +19,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import Permisos, Roles
 from apps.recepcion.models import Visit
 from apps.somatometria.models import VisitVitalSigns
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class VitalsCaptureAttributionApiTests(APITestCase):
@@ -36,7 +37,7 @@ class VitalsCaptureAttributionApiTests(APITestCase):
 
         self.visit = Visit.objects.create(
             folio="ATTR-0001",
-            no_exp="EXP-ATTR-API-1",
+            patient=_paciente_de_llave("EXP-ATTR-API-1", 0),
             arrival_type=Visit.ArrivalType.WALK_IN,
             status="en_somatometria",
             service_type=Visit.ServiceType.MEDICINA_GENERAL,

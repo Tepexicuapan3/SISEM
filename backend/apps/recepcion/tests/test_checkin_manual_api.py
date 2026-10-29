@@ -20,6 +20,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import Permisos, Roles
 from apps.medicos.models import CatMedico
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 # Mismo no_exp/nombre reales usados en la verificación manual de esta tarea
 # contra el servidor real (empleado #40041). Acá se mockea ``buscar_expediente``
@@ -136,7 +137,7 @@ class CheckinManualApiTests(APITestCase):
         fecha_hora = overrides.pop("fecha_hora", hoy + timedelta(hours=2))
         defaults = dict(
             folio=CitaMedica.generar_folio(),
-            no_exp=PACIENTE_NO_EXP, pk_num=0,
+            patient=_paciente_de_llave(PACIENTE_NO_EXP, 0),
             medico_id=self.medico.id,
             fecha_hora=fecha_hora, duracion_min=20,
             servicio_tipo="medicina_general", estatus=EstatusCita.AGENDADA,

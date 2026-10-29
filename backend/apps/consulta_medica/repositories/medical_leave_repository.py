@@ -42,10 +42,10 @@ class MedicalLeaveRepository:
         created_by_id=None,
         updated_by_id=None,
     ):
+        # Solo id_paciente (plan contraer la llave vieja): el de la visita.
         return MedicalLeave.objects.create(
             consultation=consultation,
-            no_exp=no_exp,
-            pk_num=pk_num,
+            patient_id=consultation.id_visit.patient_id,
             leave_type=leave_type,
             is_subsequent=is_subsequent,
             days=days,

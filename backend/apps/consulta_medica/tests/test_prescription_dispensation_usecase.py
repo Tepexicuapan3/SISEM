@@ -31,6 +31,7 @@ from apps.consulta_medica.uses_case.consultation_usecase import save_diagnosis
 from apps.consulta_medica.uses_case.prescription_item_usecase import add_prescription_item
 from apps.recepcion.models import Visit
 from apps.recepcion.services.errors import VisitDomainError
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 DISPENSE_PERMISSION = ["farmacia:recetas:dispensar"]
 
@@ -119,7 +120,7 @@ class PrescriptionDispensationUseCaseTests(TestCase):
         n = Visit.objects.count() + 1
         visit = Visit.objects.create(
             folio=f"DISP-{n}",
-            no_exp=f"EXPDISP{9000 + n}",
+            patient=_paciente_de_llave(f"EXPDISP{9000 + n}", 0),
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id=f"APP-DISP-{n}",
             status="en_consulta",

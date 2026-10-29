@@ -15,6 +15,7 @@ from apps.recepcion.models import CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import _serialize_cita
 from apps.recepcion.services.notificacion_service import NotificacionCitaService
 from apps.recepcion.uses_case.qr_checkin_usecase import _nombre_medico
+from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
 class MedicoCallSitesTests(TestCase):
@@ -23,7 +24,7 @@ class MedicoCallSitesTests(TestCase):
             id=4321, nombre="Rosa", paterno="Villalobos", materno="Cruz",
         )
         self.cita = CitaMedica.objects.create(
-            folio=CitaMedica.generar_folio(), no_exp="40041", pk_num=0,
+            folio=CitaMedica.generar_folio(), patient=_paciente_de_llave("40041", 0),
             medico=self.medico, fecha_hora=timezone.now() + timedelta(days=1),
             duracion_min=20, servicio_tipo="medicina_general",
             estatus=EstatusCita.AGENDADA, motivo="Prueba",
