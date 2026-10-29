@@ -298,7 +298,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "citas-marcar-no-asistio": {
         "task": "apps.recepcion.tasks.marcar_no_asistio",
-        "schedule": crontab(minute=0),
+        "schedule": crontab(minute="*/5"),
     },
     "auth-cerrar-sesiones-abandonadas": {
         "task": "apps.authentication.tasks.cerrar_sesiones_abandonadas",

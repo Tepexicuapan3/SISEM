@@ -55,11 +55,21 @@ def validar_topes_cita(no_exp: str, pk_num: int, fecha_hora, *, desde_portal: bo
     """
     Topes del legado por día (por paciente y por expediente) y, en el
     portal, de citas futuras por paciente. Solo cuentan citas activas.
+    Tampoco se agenda una cita a la que el paciente ya no llega a
+    presentarse (parámetro citas.anticipacion_checkin_min).
     Se llama dentro de la transacción que crea la cita.
     """
     from django.conf import settings
 
     from apps.catalogos.services.parametro_service import get_param
+    from apps.recepcion.services.asistencia_cita_service import limite_checkin, limite_vencido
+
+    if limite_vencido(fecha_hora):
+        raise TopeCitaExcedido(
+            "CITA_SIN_TIEMPO_CHECKIN",
+            "Ya no se puede agendar a esa hora: el paciente tendría que presentarse a más tardar "
+            f"a las {timezone.localtime(limite_checkin(fecha_hora)):%H:%M}.",
+        )
 
     # Plan contraer la llave vieja: titular y familiares se cuentan por cns_paciente.
     from apps.consulta_medica.services.paciente_entrada import q_pk_registro

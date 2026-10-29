@@ -18,6 +18,7 @@ from apps.consulta_medica.repositories.visit_diagnosis_repository import VisitDi
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
 from apps.consulta_medica.uses_case.follow_up_usecase import follow_up_contract, schedule_follow_up
 from apps.recepcion.repositories.visit_repository import VisitRepository
+from apps.recepcion.services.asistencia_cita_service import marcar_atendida
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
     ROLE_DOCTOR,
@@ -560,6 +561,8 @@ def close_consultation(
             to_status=next_state,
             changed_by_id=doctor_id,
         )
+        # Si la ficha vino de una cita, la cita queda atendida.
+        marcar_atendida(visit.appointment_id, doctor_id)
         # Cita de seguimiento elegida por el médico: si el horario ya no se
         # puede usar, se revierte el cierre completo y el médico elige otro.
         follow_up = None

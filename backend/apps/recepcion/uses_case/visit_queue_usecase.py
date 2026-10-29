@@ -7,6 +7,7 @@ from apps.authentication.services.authorization_service import has_capability
 from apps.medicos.identity import medico_id_for_usuario
 from apps.recepcion.models import HorarioDisponible, Visit
 from apps.recepcion.repositories.visit_repository import VisitRepository
+from apps.recepcion.services import asistencia_cita_service
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
     ROLE_RECEPCION,
@@ -268,6 +269,12 @@ def create_visit(
             409,
         )
 
+    # Con cita: el paciente tuvo que presentarse con la anticipación del
+    # parámetro citas.anticipacion_checkin_min; si no, no se lo atiende.
+    cita = asistencia_cita_service.cita_de_ficha(appointment_id)
+    if cita is not None:
+        asistencia_cita_service.exigir_checkin_a_tiempo(cita)
+
     if medico_id is None:
         medico_id = medico_id_for_usuario(doctor_id)
 
@@ -307,6 +314,7 @@ def create_visit(
             changed_by_id=created_by_id,
             notes="Check-in inicial",
         )
+        asistencia_cita_service.confirmar_por_checkin(appointment_id, created_by_id)
     return VisitRepository.to_contract(visit)
 
 

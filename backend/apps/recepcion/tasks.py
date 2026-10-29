@@ -14,14 +14,14 @@ from apps.catalogos.models import MotivoCita
 from apps.medicos.models import CatMedico
 from .models import CitaMedica, EstatusCita
 from .repositories.citas_repository import CitasRepository
+from .services.asistencia_cita_service import (
+    MOTIVO_NO_ASISTIO_AUTOMATICO,
+    anticipacion_checkin,
+    citas_vencidas_sin_checkin,
+)
 from .services.notificacion_service import NotificacionCitaService
 
 logger = logging.getLogger(__name__)
-
-# Motivo tipificado (catálogo MotivoCita, ver migración
-# catalogos/0021_motivos_cita) usado por el marcado automático de
-# no_asistio -- mismo texto semilla que carga esa migración.
-_MOTIVO_NO_ASISTIO_AUTOMATICO = "Paciente no se presentó"
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
@@ -146,21 +146,19 @@ def generar_slots_todos_medicos(self):
 @shared_task
 def marcar_no_asistio():
     """
-    Cada hora.
+    Cada 5 minutos.
 
-    Citas con fecha_hora <= now - 2h y estatus agendada/confirmada
-    pasan a no_asistio.
+    Citas agendadas/confirmadas sin check-in cuyo límite de presentación
+    (hora de la cita menos ``citas.anticipacion_checkin_min``) ya pasó
+    pasan a no_asistio. El check-in rechaza por su cuenta a quien llega
+    tarde, así que la frecuencia de esta tarea no habilita a nadie: solo
+    deja el estado al día y libera el horario.
     """
-    ahora = timezone.now()
-    limite = ahora - timedelta(hours=2)
-
-    citas = CitaMedica.objects.filter(
-        fecha_hora__lte=limite,
-        estatus__in=[EstatusCita.AGENDADA, EstatusCita.CONFIRMADA],
-    )
+    minutos = int(anticipacion_checkin().total_seconds() // 60)
+    citas = citas_vencidas_sin_checkin()
 
     motivo_automatico = MotivoCita.objects.filter(
-        name=_MOTIVO_NO_ASISTIO_AUTOMATICO, is_active=True,
+        name=MOTIVO_NO_ASISTIO_AUTOMATICO, is_active=True,
     ).first()
 
     actualizadas = 0
@@ -175,7 +173,7 @@ def marcar_no_asistio():
                 cita,
                 EstatusCita.NO_ASISTIO,
                 motivo_cancelacion=motivo_automatico,
-                motivo_detalle="Automático: sin confirmación 2 horas después de la hora de la cita.",
+                motivo_detalle=f"Automático: sin check-in {minutos} min antes de la hora de la cita.",
                 changed_by_id=None,
             )
             actualizadas += 1
@@ -184,7 +182,7 @@ def marcar_no_asistio():
             logger.exception("Error marcando no_asistio para cita %s: %s", cita.id, exc)
 
     logger.info(
-        "Citas marcadas como no_asistio: %s errores=%s (limite=%s)",
-        actualizadas, errores, limite,
+        "Citas marcadas como no_asistio: %s errores=%s (anticipacion=%s min)",
+        actualizadas, errores, minutos,
     )
     return {"actualizadas": actualizadas, "errores": errores}

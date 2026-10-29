@@ -28,6 +28,7 @@ from apps.medicos.identity import display_name, usuario_id_for_medico
 from apps.portal_citas.services.comprobante_service import verificar_payload_qr
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
+from apps.recepcion.services.asistencia_cita_service import exigir_checkin_a_tiempo
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.vigencia_service import buscar_fila_paciente, fila_tiene_vigencia
 from apps.recepcion.uses_case.visit_queue_usecase import (
@@ -266,6 +267,7 @@ def verificar_qr(payload: str) -> dict:
         )
 
     _validar_estatus_checkin(cita)
+    exigir_checkin_a_tiempo(cita)
 
     nombre_paciente, vigente = _resolver_paciente(*llave_publica(cita))
     return _serializar_ficha(cita, nombre_paciente, vigente)
@@ -355,6 +357,7 @@ def checkin_por_folio(
         )
 
     _validar_estatus_checkin(cita)
+    exigir_checkin_a_tiempo(cita)
 
     nombre_paciente, vigente = _resolver_paciente(*llave_publica(cita))
     autorizacion = (autorizacion_capital_humano or "").strip() or None

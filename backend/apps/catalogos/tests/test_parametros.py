@@ -19,6 +19,7 @@ SEEDED = {
     "citas.max_por_paciente_dia",
     "citas.max_por_expediente_dia",
     "portal.max_citas_futuras",
+    "citas.anticipacion_checkin_min",
     "incapacidad.max_dias",
     "incapacidad.max_dias_maternidad",
     "receta.leyenda",
@@ -37,12 +38,16 @@ class SeedMigrationTests(_CacheIsolated, TestCase):
         self.assertEqual(set(ParametroDefinicion.objects.values_list("key", flat=True)), SEEDED)
 
     def test_citas_limits_are_general_only(self):
-        for key in ("citas.max_por_paciente_dia", "citas.max_por_expediente_dia", "portal.max_citas_futuras"):
+        for key in (
+            "citas.max_por_paciente_dia", "citas.max_por_expediente_dia", "portal.max_citas_futuras",
+            "citas.anticipacion_checkin_min",
+        ):
             self.assertFalse(ParametroDefinicion.objects.get(key=key).allows_center_override)
 
     def test_seeded_values(self):
         self.assertEqual(get_param("incapacidad.max_dias"), 60)
         self.assertEqual(get_param("receta.leyenda"), "CUIDA TU PESO, ALIMENTATE SANAMENTE")
+        self.assertEqual(get_param("citas.anticipacion_checkin_min"), 30)
 
 
 class ParseValueTests(TestCase):

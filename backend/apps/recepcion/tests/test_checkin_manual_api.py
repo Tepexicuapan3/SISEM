@@ -220,6 +220,62 @@ class CheckinManualApiTests(APITestCase):
         visit_exists = Visit.objects.filter(appointment_id=cita.folio).exists()
         self.assertTrue(visit_exists)
 
+    # ── anticipación (citas.anticipacion_checkin_min) ────────────────────
+
+    def _confirmar(self, cita):
+        return self.client.post(
+            "/api/v1/citas/checkin/confirmar-folio",
+            {"folio": cita.folio}, format="json", **self._csrf_headers(),
+        )
+
+    def _a_las(self, minuto):
+        # Congela el minuto con el que se compara el límite.
+        patcher = mock.patch(
+            "apps.recepcion.services.asistencia_cita_service._minuto_actual", return_value=minuto,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_el_checkin_confirma_la_cita(self):
+        cita = self._cita_hoy()
+
+        self.assertEqual(self._confirmar(cita).status_code, status.HTTP_201_CREATED)
+
+        cita.refresh_from_db()
+        self.assertEqual(cita.estatus, EstatusCita.CONFIRMADA)
+
+    def test_media_hora_antes_todavia_llega(self):
+        cita = self._cita_hoy()
+        self._a_las(cita.fecha_hora - timedelta(minutes=30))
+
+        self.assertEqual(self._confirmar(cita).status_code, status.HTTP_201_CREATED)
+
+    def test_un_minuto_despues_del_limite_no_se_atiende(self):
+        cita = self._cita_hoy()
+        self._a_las(cita.fecha_hora - timedelta(minutes=29))
+
+        response = self._confirmar(cita)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "CITA_FUERA_DE_TIEMPO")
+        self.assertFalse(Visit.objects.filter(appointment_id=cita.folio).exists())
+
+    def test_la_anticipacion_sale_del_parametro(self):
+        from django.core.cache import cache
+
+        from apps.catalogos.models import ParametroDefinicion
+        from apps.catalogos.services.parametro_service import _cache_key
+
+        clave = "citas.anticipacion_checkin_min"
+        ParametroDefinicion.objects.filter(key=clave).update(general_value="10")
+        # Solo la cache del parámetro: limpiar toda la cache cierra la sesión.
+        cache.delete(_cache_key(clave))
+        self.addCleanup(cache.delete, _cache_key(clave))
+        cita = self._cita_hoy()
+        self._a_las(cita.fecha_hora - timedelta(minutes=15))
+
+        self.assertEqual(self._confirmar(cita).status_code, status.HTTP_201_CREATED)
+
     def test_confirmar_folio_duplicado_devuelve_409(self):
         cita = self._cita_hoy()
         self.client.post(
