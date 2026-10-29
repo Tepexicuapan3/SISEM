@@ -170,6 +170,19 @@ if config("LEGADO_NAME", default=""):
         },
     }
 
+# Alternativa: leer directo el espejo MySQL del legado (dbclinicas,
+# dbclinicas2015...), con PyMySQL y sin alias de Django (Django 6 no acepta
+# MySQL anteriores a 8.0.11). Ver apps/consulta_medica/services/legado_archivo.py.
+# El usuario tiene que ser de solo SELECT.
+LEGADO_MOTOR = config("LEGADO_MOTOR", default="postgresql")
+LEGADO_MYSQL = {
+    "host": config("LEGACY_MYSQL_HOST", default=""),
+    "port": config("LEGACY_MYSQL_PORT", default=3306, cast=int),
+    "user": config("LEGACY_MYSQL_USER", default=""),
+    "password": config("LEGACY_MYSQL_PASSWORD", default=""),
+    "base_actual": config("LEGACY_MYSQL_DATABASE", default="dbclinicas"),
+}
+
 # Fuera de desarrollo, una contrasena de base faltante es un error de
 # despliegue: se detiene el arranque en vez de intentar una contrasena
 # escrita en el codigo.

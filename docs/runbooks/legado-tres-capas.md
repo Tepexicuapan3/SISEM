@@ -21,6 +21,32 @@
 > Las secciones "Capas 2 y 3: migrar a SIRES" de más abajo quedan **en desuso: no correrlas**.
 > Se conservan como referencia hasta retirar esos comandos.
 
+## Atajo vigente (2026-10-29): leer el espejo MySQL del legado
+
+Ya existe un **espejo MySQL del legado** (mismas bases `dbclinicas`, `dbclinicas2015`…, sin
+transformar) que mantiene otra persona. Mientras no se arme la copia en Postgres, SIRES lo lee
+**directo**, con PyMySQL (Django 6 no acepta MySQL anteriores a 8.0.11). Los pasos 3 a 7 y 11 de
+abajo no hacen falta con este atajo.
+
+En el `.env` del servidor (sin `LEGADO_NAME`):
+
+```
+LEGADO_MOTOR=mysql
+LEGACY_MYSQL_HOST=ip_del_espejo
+LEGACY_MYSQL_PORT=3306
+LEGACY_MYSQL_USER=usuario_de_solo_select
+LEGACY_MYSQL_PASSWORD=...
+LEGACY_MYSQL_DATABASE=dbclinicas
+```
+
+- `LEGACY_MYSQL_DATABASE` es la base **actual**; las anuales se encuentran solas por prefijo
+  (`dbclinicas2015` → `legado_2015`).
+- Protección: el usuario tiene que tener **solo `SELECT`**; además la sesión abre con
+  `SET SESSION TRANSACTION READ ONLY` y el código rechaza cualquier SQL que no sea `SELECT`.
+- Verificación desde el servidor:
+  `docker compose exec backend python manage.py shell -c "from apps.consulta_medica.services import legado_archivo as l; print(l.esquemas_con_tabla('his_notas'))"`
+  tiene que listar `legado_actual` y las anuales.
+
 ## Paso a paso (seguir en este orden)
 
 Todo lo que toca el legado es **solo lectura**. Marcá cada paso al terminarlo.

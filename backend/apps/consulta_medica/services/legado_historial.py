@@ -16,6 +16,7 @@ from apps.consulta_medica.services.patient_registry_service import normalizar_no
 
 MAX_NOTAS = 200
 ACTUAL = legado_archivo.ESQUEMA_ACTUAL
+T = legado_archivo.texto
 
 
 def llaves_legado(no_exp, pk_num) -> list[tuple[str, int]]:
@@ -38,7 +39,7 @@ def llaves_legado(no_exp, pk_num) -> list[tuple[str, int]]:
 def _condicion(llaves, alias="n") -> tuple[str, list]:
     partes, params = [], []
     for no_exp, tp in llaves:
-        partes.append(f"(ltrim(CAST({alias}.no_exp AS text), '0') = %s AND {alias}.tp_paciente = %s)")
+        partes.append(f"({legado_archivo.sin_ceros(f'{alias}.no_exp')} = %s AND {alias}.tp_paciente = %s)")
         params.extend([no_exp, tp])
     return "(" + " OR ".join(partes) + ")", params
 
@@ -70,9 +71,9 @@ def _notas_de_esquema(esquema, llaves):
                m.ds_paterno AS med_paterno, m.ds_materno AS med_materno, m.ds_nombre AS med_nombre,
                c.ds_clinica, x.cd_cie, x.ds_cie
         FROM {notas} n
-        LEFT JOIN {medicos} m ON CAST(m.no_medico AS text) = CAST(n.cd_medico AS text)
-        LEFT JOIN {clinicas} c ON CAST(c.cd_clinica AS text) = CAST(n.cd_clinica AS text)
-        LEFT JOIN {cie} x ON CAST(x.no_cie AS text) = CAST(n.no_cie AS text)
+        LEFT JOIN {medicos} m ON {T('m.no_medico')} = {T('n.cd_medico')}
+        LEFT JOIN {clinicas} c ON {T('c.cd_clinica')} = {T('n.cd_clinica')}
+        LEFT JOIN {cie} x ON {T('x.no_cie')} = {T('n.no_cie')}
         WHERE {condicion}
         ORDER BY n.fe_nota DESC, n.hh_nota DESC
         LIMIT {MAX_NOTAS}
@@ -100,8 +101,8 @@ def _diagnosticos(esquema, notas) -> dict[tuple, list[dict]]:
         f"""
         SELECT d.cd_snota, d.cd_clinica, x.cd_cie, x.ds_cie
         FROM {detalle} d
-        LEFT JOIN {cie} x ON CAST(x.no_cie AS text) = CAST(d.cd_cie AS text)
-        WHERE CAST(d.cd_snota AS text) IN ({marcas}) AND d.sw_status = 'A'
+        LEFT JOIN {cie} x ON {T('x.no_cie')} = {T('d.cd_cie')}
+        WHERE {T('d.cd_snota')} IN ({marcas}) AND d.sw_status = 'A'
         ORDER BY d.cd_detcie
         """,
         folios,
