@@ -149,12 +149,31 @@ DATABASES = {
     },
 }
 
-# Copia tal cual del legado (docs/runbooks/legado-tres-capas.md, capa 1): base
-# sisem_legado, un esquema por base del legado. SIRES solo la lee con SQL
-# directo; la sesion abre en solo lectura, asi que ni un error de codigo puede
-# escribir. Sin LEGADO_NAME no hay alias y el historial del legado se muestra
-# como no disponible (no detiene el arranque).
-if config("LEGADO_NAME", default=""):
+# Copia tal cual del legado (docs/runbooks/legado-tres-capas.md). SIRES solo
+# la lee con SQL directo y en solo lectura. Mismas variables para los dos
+# motores; solo cambia LEGADO_MOTOR:
+# - "mysql": el espejo MySQL del legado, leido con PyMySQL sin alias de Django
+#   (Django 6 no acepta MySQL anteriores a 8.0.11). Cada base del legado es una
+#   base MySQL: LEGADO_NAME no se usa. El usuario tiene que ser de solo SELECT.
+# - "postgresql": base LEGADO_NAME con un esquema por base del legado.
+# LEGADO_ESQUEMA_ACTUAL: base/esquema actual del legado (dbclinicas). Las
+# anuales se encuentran por ese prefijo (dbclinicas2015, dbclinicas2024_a...).
+# Vacio, en Postgres, = la copia ya usa legado_actual, legado_2015...
+# Sin LEGADO_HOST (MySQL) o LEGADO_NAME (Postgres) el historial del legado se
+# muestra como no disponible (no detiene el arranque).
+LEGADO_MOTOR = config("LEGADO_MOTOR", default="postgresql")
+LEGADO_ESQUEMA_ACTUAL = config(
+    "LEGADO_ESQUEMA_ACTUAL", default="dbclinicas" if LEGADO_MOTOR == "mysql" else "",
+)
+LEGADO_MYSQL = {}
+if LEGADO_MOTOR == "mysql":
+    LEGADO_MYSQL = {
+        "host": config("LEGADO_HOST", default=""),
+        "port": config("LEGADO_PORT", default=3306, cast=int),
+        "user": config("LEGADO_USER", default=""),
+        "password": config("LEGADO_PASSWORD", default=""),
+    }
+elif config("LEGADO_NAME", default=""):
     DATABASES["legado"] = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": config("LEGADO_NAME"),
@@ -169,23 +188,6 @@ if config("LEGADO_NAME", default=""):
             "options": "-c default_transaction_read_only=on -c statement_timeout=15000",
         },
     }
-
-# Alternativa: leer directo el espejo MySQL del legado (dbclinicas,
-# dbclinicas2015...), con PyMySQL y sin alias de Django (Django 6 no acepta
-# MySQL anteriores a 8.0.11). Ver apps/consulta_medica/services/legado_archivo.py.
-# El usuario tiene que ser de solo SELECT.
-LEGADO_MOTOR = config("LEGADO_MOTOR", default="postgresql")
-# Copia en Postgres cargada SIN renombrar los esquemas (dbclinicas,
-# dbclinicas2015...): nombre del esquema de la base actual. Vacio = la copia
-# usa legado_actual, legado_2015...
-LEGADO_ESQUEMA_ACTUAL = config("LEGADO_ESQUEMA_ACTUAL", default="")
-LEGADO_MYSQL = {
-    "host": config("LEGACY_MYSQL_HOST", default=""),
-    "port": config("LEGACY_MYSQL_PORT", default=3306, cast=int),
-    "user": config("LEGACY_MYSQL_USER", default=""),
-    "password": config("LEGACY_MYSQL_PASSWORD", default=""),
-    "base_actual": config("LEGACY_MYSQL_DATABASE", default="dbclinicas"),
-}
 
 # Fuera de desarrollo, una contrasena de base faltante es un error de
 # despliegue: se detiene el arranque en vez de intentar una contrasena

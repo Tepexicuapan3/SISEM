@@ -21,40 +21,31 @@
 > Las secciones "Capas 2 y 3: migrar a SIRES" de más abajo quedan **en desuso: no correrlas**.
 > Se conservan como referencia hasta retirar esos comandos.
 
-## Atajo vigente (2026-10-29): leer el espejo MySQL del legado
+## Atajo vigente (2026-10-29): leer el espejo del legado
 
 Ya existe un **espejo MySQL del legado** (mismas bases `dbclinicas`, `dbclinicas2015`…, sin
-transformar) que mantiene otra persona. Mientras no se arme la copia en Postgres, SIRES lo lee
-**directo**, con PyMySQL (Django 6 no acepta MySQL anteriores a 8.0.11). Los pasos 3 a 7 y 11 de
-abajo no hacen falta con este atajo.
+transformar) que mantiene un tercero; más adelante puede pasar a una copia en Postgres que
+también mantiene él (sin recarga nocturna de nuestro lado). SIRES lee cualquiera de las dos
+**con las mismas variables**; solo cambia `LEGADO_MOTOR`. Los pasos 3 a 7 y 11 de abajo no
+hacen falta.
 
-En el `.env` del servidor (sin `LEGADO_NAME`):
+| Variable | Espejo MySQL | Copia en Postgres |
+|---|---|---|
+| `LEGADO_MOTOR` | `mysql` | `postgresql` |
+| `LEGADO_HOST` / `LEGADO_PORT` | IP del espejo / `3306` | host / `5432` |
+| `LEGADO_USER` / `LEGADO_PASSWORD` | usuario de **solo SELECT** | usuario de **solo lectura** |
+| `LEGADO_NAME` | no se usa (cada base del legado es una base MySQL) | base Postgres que tiene los esquemas |
+| `LEGADO_ESQUEMA_ACTUAL` | `dbclinicas` | `dbclinicas` (o vacío si se renombraron a `legado_*`) |
 
-```
-LEGADO_MOTOR=mysql
-LEGACY_MYSQL_HOST=ip_del_espejo
-LEGACY_MYSQL_PORT=3306
-LEGACY_MYSQL_USER=usuario_de_solo_select
-LEGACY_MYSQL_PASSWORD=...
-LEGACY_MYSQL_DATABASE=dbclinicas
-```
-
-- `LEGACY_MYSQL_DATABASE` es la base **actual**; las anuales se encuentran solas por prefijo
-  (`dbclinicas2015` → `legado_2015`).
-- Protección: el usuario tiene que tener **solo `SELECT`**; además la sesión abre con
-  `SET SESSION TRANSACTION READ ONLY` y el código rechaza cualquier SQL que no sea `SELECT`.
+- `LEGADO_ESQUEMA_ACTUAL` es la base/esquema **actual**. Las anuales se encuentran por ese
+  prefijo: cuando se agregue `dbclinicas2026`, aparece sola en el historial.
+- Protección: usuario de solo lectura, sesión en solo lectura y el código rechaza cualquier
+  SQL que no sea `SELECT`. Al usuario MySQL: `GRANT SELECT ON \`dbclinicas%\`.* TO ...`.
+- Lo que los médicos confirman guarda el origen con nombres lógicos (`legado_2015:…`), así
+  que cambiar de motor no duplica ni vuelve a ofrecer nada.
 - Verificación desde el servidor:
   `docker compose exec backend python manage.py shell -c "from apps.consulta_medica.services import legado_archivo as l; print(l.esquemas_con_tabla('his_notas'))"`
   tiene que listar `legado_actual` y las anuales.
-
-**Pasar después a una copia en Postgres** (la carga o la actualiza un tercero, sin recarga
-nocturna de nuestro lado): se cambian solo variables. Si la copia conserva los nombres
-originales (`dbclinicas`, `dbclinicas2015`… como esquemas, lo que deja pgloader sin el
-`ALTER SCHEMA … RENAME`), en el `.env` se quita `LEGADO_MOTOR=mysql` y se ponen
-`LEGADO_NAME`, `LEGADO_USER`, `LEGADO_PASSWORD`, `LEGADO_HOST`, `LEGADO_PORT` y
-`LEGADO_ESQUEMA_ACTUAL=dbclinicas`. Si se renombraron a `legado_*`, sin `LEGADO_ESQUEMA_ACTUAL`.
-Lo que los médicos ya confirmaron sigue valiendo: SIRES guarda el origen con los nombres
-lógicos (`legado_2015:…`), no con el físico.
 
 ## Paso a paso (seguir en este orden)
 

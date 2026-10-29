@@ -7,8 +7,9 @@ tablas y catalogos. Dos motores posibles (LEGADO_MOTOR):
   (legado_actual, legado_2015...), alias de Django "legado".
 - "mysql": el espejo MySQL del legado tal cual (dbclinicas, dbclinicas2015...),
   leido con PyMySQL directo: Django 6 no acepta MySQL anteriores a 8.0.11 y el
-  espejo puede ser mas viejo. Variables LEGACY_MYSQL_* (las mismas de los
-  comandos del legado).
+  espejo puede ser mas viejo.
+
+Mismas variables LEGADO_* para los dos motores (config/settings.py).
 
 El resto del codigo usa siempre los nombres LOGICOS (legado_actual,
 legado_2015); aca se traducen a la base fisica. Las dos conexiones abren en
@@ -61,9 +62,8 @@ def _base_actual() -> str:
     nombres logicos (legado_actual, legado_2015...). El espejo MySQL siempre
     tiene los originales; una copia en Postgres puede tener cualquiera de los
     dos (LEGADO_ESQUEMA_ACTUAL=dbclinicas si se cargo sin renombrar)."""
-    if _es_mysql():
-        return _mysql().get("base_actual") or "dbclinicas"
-    return getattr(settings, "LEGADO_ESQUEMA_ACTUAL", "") or ""
+    actual = getattr(settings, "LEGADO_ESQUEMA_ACTUAL", "") or ""
+    return actual or ("dbclinicas" if _es_mysql() else "")
 
 
 def _fisico(esquema: str) -> str:

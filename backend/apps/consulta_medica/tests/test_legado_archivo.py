@@ -59,10 +59,10 @@ class LegadoArchivoTests(SimpleTestCase):
                              ["legado_actual", "legado_2024_a", "legado_2015"])
 
 
-ESPEJO_MYSQL = {"host": "espejo", "port": 3306, "user": "lectura", "password": "x", "base_actual": "dbclinicas"}
+ESPEJO_MYSQL = {"host": "espejo", "port": 3306, "user": "lectura", "password": "x"}
 
 
-@override_settings(LEGADO_MOTOR="mysql", LEGADO_MYSQL=ESPEJO_MYSQL)
+@override_settings(LEGADO_MOTOR="mysql", LEGADO_MYSQL=ESPEJO_MYSQL, LEGADO_ESQUEMA_ACTUAL="dbclinicas")
 class LegadoEspejoMysqlTests(SimpleTestCase):
     """Espejo MySQL del legado: mismos nombres logicos, traducidos a dbclinicas*."""
 
