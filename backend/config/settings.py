@@ -175,6 +175,10 @@ if config("LEGADO_NAME", default=""):
 # MySQL anteriores a 8.0.11). Ver apps/consulta_medica/services/legado_archivo.py.
 # El usuario tiene que ser de solo SELECT.
 LEGADO_MOTOR = config("LEGADO_MOTOR", default="postgresql")
+# Copia en Postgres cargada SIN renombrar los esquemas (dbclinicas,
+# dbclinicas2015...): nombre del esquema de la base actual. Vacio = la copia
+# usa legado_actual, legado_2015...
+LEGADO_ESQUEMA_ACTUAL = config("LEGADO_ESQUEMA_ACTUAL", default="")
 LEGADO_MYSQL = {
     "host": config("LEGACY_MYSQL_HOST", default=""),
     "port": config("LEGACY_MYSQL_PORT", default=3306, cast=int),

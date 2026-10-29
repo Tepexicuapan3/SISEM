@@ -56,9 +56,21 @@ def disponible() -> bool:
 
 # ── Nombres ──────────────────────────────────────────────────────────────────
 
-def _base_mysql(esquema: str) -> str:
-    """legado_actual -> dbclinicas; legado_2015 -> dbclinicas2015."""
-    base = _mysql().get("base_actual") or "dbclinicas"
+def _base_actual() -> str:
+    """Nombre fisico de la base actual del legado, o "" si la copia ya usa los
+    nombres logicos (legado_actual, legado_2015...). El espejo MySQL siempre
+    tiene los originales; una copia en Postgres puede tener cualquiera de los
+    dos (LEGADO_ESQUEMA_ACTUAL=dbclinicas si se cargo sin renombrar)."""
+    if _es_mysql():
+        return _mysql().get("base_actual") or "dbclinicas"
+    return getattr(settings, "LEGADO_ESQUEMA_ACTUAL", "") or ""
+
+
+def _fisico(esquema: str) -> str:
+    """legado_actual -> dbclinicas; legado_2015 -> dbclinicas2015 (o igual, sin traduccion)."""
+    base = _base_actual()
+    if not base:
+        return esquema
     fisica = base if esquema == ESQUEMA_ACTUAL else base + esquema[len(_PREFIJO):]
     if not _BASE_MYSQL.match(fisica):
         raise ValueError(f"Nombre de base del legado invalido: {fisica!r}")
@@ -67,7 +79,7 @@ def _base_mysql(esquema: str) -> str:
 
 def _esquema_logico(base: str) -> str | None:
     """dbclinicas -> legado_actual; dbclinicas2024_a -> legado_2024_a; otra -> None."""
-    actual = _mysql().get("base_actual") or "dbclinicas"
+    actual = _base_actual()
     if base == actual:
         return ESQUEMA_ACTUAL
     if base.startswith(actual):
@@ -82,8 +94,8 @@ def tabla(esquema: str, nombre: str) -> str:
     if not _ESQUEMA.match(esquema or "") or not _TABLA.match(nombre or ""):
         raise ValueError(f"Nombre de esquema o tabla del legado invalido: {esquema!r}.{nombre!r}")
     if _es_mysql():
-        return f"`{_base_mysql(esquema)}`.`{nombre}`"
-    return f'"{esquema}"."{nombre}"'
+        return f"`{_fisico(esquema)}`.`{nombre}`"
+    return f'"{_fisico(esquema)}"."{nombre}"'
 
 
 def texto(expresion: str) -> str:
@@ -169,8 +181,8 @@ def esquemas_con_tabla(nombre: str) -> list[str]:
     La actual va primero; las anuales, de la mas reciente a la mas vieja."""
     if not _TABLA.match(nombre or ""):
         raise ValueError(f"Nombre de tabla del legado invalido: {nombre!r}")
-    if _es_mysql():
-        base = _mysql().get("base_actual") or "dbclinicas"
+    base = _base_actual()
+    if base:
         filas = consultar(
             "SELECT table_schema AS esquema FROM information_schema.tables "
             "WHERE table_name = %s AND table_schema LIKE %s",

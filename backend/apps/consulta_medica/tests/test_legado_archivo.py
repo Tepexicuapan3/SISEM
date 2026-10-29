@@ -21,7 +21,7 @@ def _cursor(filas, columnas):
     return conexion, cursor
 
 
-@override_settings(LEGADO_MOTOR="postgresql")
+@override_settings(LEGADO_MOTOR="postgresql", LEGADO_ESQUEMA_ACTUAL="")
 class LegadoArchivoTests(SimpleTestCase):
     def test_sin_configurar_no_esta_disponible(self):
         self.assertFalse(legado_archivo.disponible())
@@ -113,3 +113,18 @@ class LegadoEspejoMysqlTests(SimpleTestCase):
         with mock.patch("pymysql.connect", side_effect=pymysql.err.OperationalError(2003, "refused")):
             with self.assertRaises(legado_archivo.LegadoNoDisponible):
                 legado_archivo.consultar("SELECT 1")
+
+
+@override_settings(LEGADO_MOTOR="postgresql", LEGADO_ESQUEMA_ACTUAL="dbclinicas", DATABASES=CON_LEGADO)
+class LegadoPostgresSinRenombrarTests(SimpleTestCase):
+    """Copia en Postgres con los nombres originales: se traduce igual que el espejo MySQL."""
+
+    def test_tabla_usa_el_esquema_original(self):
+        self.assertEqual(legado_archivo.tabla("legado_actual", "his_notas"), '"dbclinicas"."his_notas"')
+        self.assertEqual(legado_archivo.tabla("legado_2015", "his_notas"), '"dbclinicas2015"."his_notas"')
+
+    def test_esquemas_con_tabla_traduce_los_esquemas(self):
+        filas = [("dbclinicas2015",), ("dbclinicas",), ("public",)]
+        conexion, _ = _cursor(filas, ["esquema"])
+        with mock.patch.object(legado_archivo, "connections", {"legado": conexion}):
+            self.assertEqual(legado_archivo.esquemas_con_tabla("his_notas"), ["legado_actual", "legado_2015"])

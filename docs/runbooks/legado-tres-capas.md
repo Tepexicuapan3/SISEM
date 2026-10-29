@@ -47,6 +47,15 @@ LEGACY_MYSQL_DATABASE=dbclinicas
   `docker compose exec backend python manage.py shell -c "from apps.consulta_medica.services import legado_archivo as l; print(l.esquemas_con_tabla('his_notas'))"`
   tiene que listar `legado_actual` y las anuales.
 
+**Pasar después a una copia en Postgres** (la carga o la actualiza un tercero, sin recarga
+nocturna de nuestro lado): se cambian solo variables. Si la copia conserva los nombres
+originales (`dbclinicas`, `dbclinicas2015`… como esquemas, lo que deja pgloader sin el
+`ALTER SCHEMA … RENAME`), en el `.env` se quita `LEGADO_MOTOR=mysql` y se ponen
+`LEGADO_NAME`, `LEGADO_USER`, `LEGADO_PASSWORD`, `LEGADO_HOST`, `LEGADO_PORT` y
+`LEGADO_ESQUEMA_ACTUAL=dbclinicas`. Si se renombraron a `legado_*`, sin `LEGADO_ESQUEMA_ACTUAL`.
+Lo que los médicos ya confirmaron sigue valiendo: SIRES guarda el origen con los nombres
+lógicos (`legado_2015:…`), no con el físico.
+
 ## Paso a paso (seguir en este orden)
 
 Todo lo que toca el legado es **solo lectura**. Marcá cada paso al terminarlo.
