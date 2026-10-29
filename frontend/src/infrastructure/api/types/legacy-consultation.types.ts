@@ -14,6 +14,27 @@ export interface LegacyCie {
   descripcion: string | null;
 }
 
+/** Medicamento recetado en la nota (det_receta + cat_medicamentos). */
+export interface LegacyMedication {
+  name: string;
+  activeIngredient: string | null;
+  quantity: number | null;
+  instructions: string | null;
+  /** YYYY-MM-DD, null si no se surtió. */
+  dispensedOn: string | null;
+  cancelled: boolean;
+}
+
+/** Base del legado (una por año) donde el paciente tiene notas. */
+export interface LegacyBase {
+  /** legado_actual, legado_2024... */
+  sourceDb: string;
+  total: number;
+  /** YYYY-MM-DD de la nota más vieja y la más nueva en esa base. */
+  from: string | null;
+  to: string | null;
+}
+
 export interface LegacyConsultationItem {
   id: number | string;
   legacyFolio: string;
@@ -39,6 +60,13 @@ export interface LegacyConsultationItem {
   diagnoses?: LegacyCie[];
   statusLegacy?: string | null;
   diagnosisRestricted?: boolean;
+  serviceName?: string | null;
+  consultationType?: string | null;
+  specialtyName?: string | null;
+  medications?: LegacyMedication[];
+  respirationLegacy?: string | null;
+  bmiLegacy?: string | null;
+  glucoseLegacy?: string | null;
   // Solo desde el archivo migrado:
   doctorCodeLegacy?: string | null;
   clinicCodeLegacy?: number | null;
@@ -54,4 +82,8 @@ export interface LegacyConsultationHistoryResponse {
   /** false: la copia del legado no respondió (se muestra `mensaje`). Ausente con el archivo migrado. */
   disponible?: boolean;
   mensaje?: string;
+  /** Base de la que vienen los `items` (solo desde la copia del legado). */
+  base?: string | null;
+  /** Bases con notas; solo viene cuando se pidió sin `base`. */
+  bases?: LegacyBase[];
 }

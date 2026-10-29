@@ -83,21 +83,22 @@ def _redact_legacy_item(item, permissions, roles):
     return item
 
 
-def get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions=None):
+def get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions=None, base=None):
     """
     Historial de notas del legado (previas a SIRES) -- archivo de solo
     lectura, no participa del flujo operativo (ver docstring de
     LegacyConsultationRecord). `totalCount` es el conteo REAL en la base
     (puede ser mayor a `len(items)` si se recorto por _MAX_RESULTS del
-    repository).
+    repository). `base` (legado_actual, legado_2024...) elige el año en la
+    copia del legado; el archivo migrado no la usa.
     """
     ensure_doctor_role(roles, permissions)
 
     # Diseño del 2026-10-27: con la copia del legado configurada, se lee de
-    # ahi (por persona, todas las bases). Sin ella, el archivo migrado de antes.
+    # ahi (por persona, una base por vez). Sin ella, el archivo migrado de antes.
     if legado_archivo.disponible():
         try:
-            payload = legado_historial.historial(no_exp, pk_num)
+            payload = legado_historial.historial(no_exp, pk_num, base=base)
         except legado_archivo.LegadoNoDisponible as exc:
             return {"items": [], "total": 0, "totalCount": 0, "disponible": False, "mensaje": str(exc)}
         payload["items"] = [_redact_legacy_item(item, permissions, roles) for item in payload["items"]]

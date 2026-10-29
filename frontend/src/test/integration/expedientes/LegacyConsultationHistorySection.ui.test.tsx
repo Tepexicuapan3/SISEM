@@ -1,0 +1,109 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { render, screen } from "@/test/utils";
+import { LegacyConsultationHistorySection } from "@features/expedientes/components/LegacyConsultationHistorySection";
+import { useLegacyConsultationsHistory } from "@features/expedientes/queries/useLegacyConsultationsHistory";
+import type {
+  LegacyConsultationHistoryResponse,
+  LegacyConsultationItem,
+} from "@api/types/legacy-consultation.types";
+
+vi.mock("@features/expedientes/queries/useLegacyConsultationsHistory", () => ({
+  useLegacyConsultationsHistory: vi.fn(),
+}));
+
+const nota = (folio: string, date: string, sourceDb: string): LegacyConsultationItem => ({
+  id: `${sourceDb}:7:${folio}`,
+  legacyFolio: folio,
+  sourceDb,
+  date,
+  time: "10:00",
+  doctorName: "PEREZ LOPEZ ANA",
+  clinicName: "CLINICA 7",
+  serviceName: "SERVICIO ESPECIAL",
+  consultationType: "NORMAL",
+  specialtyName: null,
+  subjective: "TOS DE 3 DIAS",
+  objective: "FARINGE HIPEREMICA",
+  assessment: null,
+  plan: "REPOSO",
+  diagnosticImpression: "FARINGITIS",
+  diagnoses: [{ codigo: "J02", descripcion: "FARINGITIS AGUDA" }],
+  primaryCie: { codigo: "J02", descripcion: "FARINGITIS AGUDA" },
+  medications: [
+    {
+      name: "PARACETAMOL 500 MG",
+      activeIngredient: "PARACETAMOL",
+      quantity: 2,
+      instructions: "1 CADA 8 HORAS",
+      dispensedOn: "2025-03-01",
+      cancelled: false,
+    },
+  ],
+  addendumLegacy: null,
+  statusLegacy: "A",
+  weightLegacy: "70",
+  heightLegacy: null,
+  bloodPressureLegacy: "120/80",
+  pulseLegacy: null,
+  temperatureLegacy: null,
+});
+
+const respuesta = (
+  items: LegacyConsultationItem[],
+  extra: Partial<LegacyConsultationHistoryResponse> = {},
+): LegacyConsultationHistoryResponse => ({
+  items,
+  total: items.length,
+  totalCount: items.length,
+  disponible: true,
+  ...extra,
+});
+
+const inicial = respuesta([nota("CC25-1", "2025-03-01", "legado_actual")], {
+  base: "legado_actual",
+  bases: [
+    { sourceDb: "legado_actual", total: 1, from: "2025-03-01", to: "2025-03-01" },
+    { sourceDb: "legado_2016", total: 4, from: "2016-01-08", to: "2016-05-02" },
+  ],
+});
+const de2016 = respuesta([nota("CC16-9", "2016-05-02", "legado_2016")], { base: "legado_2016" });
+
+describe("LegacyConsultationHistorySection", () => {
+  beforeEach(() => {
+    vi.mocked(useLegacyConsultationsHistory).mockImplementation(
+      (_noExp, _pkNum, _enabled, base) =>
+        ({ data: base === "legado_2016" ? de2016 : inicial, isLoading: false }) as never,
+    );
+  });
+
+  it("muestra la fecha sin correrla un día, el servicio y los medicamentos con su detalle", async () => {
+    render(<LegacyConsultationHistorySection noExp="40041" pkNum={0} />);
+    await userEvent.click(screen.getByRole("button", { name: /Historial previo a SIRES/ }));
+
+    expect(screen.getByText(/1 de marzo de 2025/)).toBeInTheDocument();
+    expect(screen.getByText("Dr(a). PEREZ LOPEZ ANA · CLINICA 7")).toBeInTheDocument();
+    expect(screen.getByText("SERVICIO ESPECIAL · NORMAL")).toBeInTheDocument();
+    expect(screen.getByText(/PARACETAMOL 500 MG/)).toBeInTheDocument();
+    // El detalle aparece solo al pedirlo.
+    expect(screen.queryByText(/1 CADA 8 HORAS/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Ver detalle" }));
+    expect(screen.getByText(/1 CADA 8 HORAS/)).toBeInTheDocument();
+    expect(screen.getByText(/Surtido el 1 de marzo de 2025/)).toBeInTheDocument();
+    expect(screen.getByText("TOS DE 3 DIAS")).toBeInTheDocument();
+    expect(screen.getByText(/Peso 70 kg · TA 120\/80/)).toBeInTheDocument();
+  });
+
+  it("el selector de año trae las notas de esa base", async () => {
+    render(<LegacyConsultationHistorySection noExp="40041" pkNum={0} />);
+    await userEvent.click(screen.getByRole("button", { name: /Historial previo a SIRES/ }));
+
+    await userEvent.selectOptions(screen.getByLabelText("Año del legado"), "legado_2016");
+
+    expect(screen.getByText("CC16-9 · Base 2016")).toBeInTheDocument();
+    expect(screen.queryByText(/CC25-1/)).not.toBeInTheDocument();
+    expect(vi.mocked(useLegacyConsultationsHistory)).toHaveBeenLastCalledWith(
+      "40041", 0, true, "legado_2016",
+    );
+  });
+});

@@ -11,11 +11,12 @@ export const legacyConsultationAPI = {
   getForPatient: async (
     noExp: string,
     pkNum = 0,
+    base?: string,
   ): Promise<LegacyConsultationHistoryResponse> => {
     const ruta = await rutaPaciente(noExp, pkNum, `legacy-consultations`);
     const response = await apiClient.get<LegacyConsultationHistoryResponse>(
       ruta.url,
-      { params: ruta.params },
+      { params: base ? { ...ruta.params, base } : ruta.params },
     );
     return response.data;
   },

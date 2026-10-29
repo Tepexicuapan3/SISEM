@@ -1060,7 +1060,9 @@ class PatientLegacyConsultationsHistoryView(APIView):
         actor_id, roles, permissions = _actor_context(user)
 
         try:
-            payload = get_patient_legacy_consultations_history(no_exp, pk_num, roles, permissions)
+            payload = get_patient_legacy_consultations_history(
+                no_exp, pk_num, roles, permissions, base=request.query_params.get("base") or None,
+            )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
 

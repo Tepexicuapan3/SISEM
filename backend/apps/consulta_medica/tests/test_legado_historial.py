@@ -1,6 +1,7 @@
 """
 Historial previo a SIRES leido de la copia del legado: llaves por persona,
-todas las bases, catalogos de la base actual y diagnosticos sensibles ocultos.
+una base (año) por vez, catalogos de la base actual, medicamentos y
+diagnosticos sensibles ocultos.
 La copia no existe en tests: sus respuestas se simulan por consulta.
 """
 from datetime import date
@@ -27,23 +28,32 @@ def _nota(folio, fecha, cie=None, diagnostico=None, **kw):
             "no_peso": None, "no_estatura": None, "no_ta": None, "no_pulso": None, "no_temp": None,
             "no_resp": None, "no_imc": None, "no_gluc": None,
             "med_paterno": "PEREZ", "med_materno": None, "med_nombre": "ANA", "ds_clinica": "CLINICA 7",
+            "cd_servicio": 22, "tp_consulta": 1, "cd_especialidad": 0,
+            "ds_servicio": "SERVICIO ESPECIAL", "ds_tpconsulta": "NORMAL", "ds_especialidad": " SIN ESPECIALIDAD",
             "cd_cie": cie, "ds_cie": f"DESC {cie}" if cie else None, **kw}
 
 
 class _CopiaSimulada:
-    """Responde segun la consulta: esquemas, notas por esquema y diagnosticos."""
+    """Responde segun la consulta: esquemas, conteo por base, notas por esquema,
+    diagnosticos y medicamentos."""
 
-    def __init__(self, notas_por_esquema, diagnosticos=()):
+    def __init__(self, notas_por_esquema, diagnosticos=(), medicamentos=()):
         self.notas = notas_por_esquema
         self.diagnosticos = list(diagnosticos)
+        self.medicamentos = list(medicamentos)
         self.llamadas = []
 
     def __call__(self, sql, params=()):
         self.llamadas.append((sql, list(params or [])))
         if "information_schema" in sql:
             return [{"table_schema": e} for e in self.notas]
+        if "UNION ALL" in sql or "AS esquema" in sql:
+            return [{"esquema": e, "total": len(f), "desde": min(n["fe_nota"] for n in f),
+                     "hasta": max(n["fe_nota"] for n in f)} for e, f in self.notas.items() if f]
         if "det_hisnotcie" in sql:
             return self.diagnosticos
+        if "det_receta" in sql:
+            return self.medicamentos
         for esquema, filas in self.notas.items():
             if f'"{esquema}"."his_notas"' in sql:
                 return filas
@@ -88,23 +98,73 @@ class HistorialTests(TestCase):
                 mock.patch.object(legado_archivo, "consultar", side_effect=copia):
             return get_patient_legacy_consultations_history("40041", 3, [ROLE_DOCTOR], list(permissions))
 
-    def test_junta_todas_las_bases_con_catalogos_de_la_actual(self):
-        copia = _CopiaSimulada(
+    def _correr_base(self, copia, base):
+        with mock.patch.object(legado_archivo, "disponible", return_value=True),                 mock.patch.object(legado_archivo, "consultar", side_effect=copia):
+            return get_patient_legacy_consultations_history("40041", 3, [ROLE_DOCTOR], [], base=base)
+
+    def _dos_bases(self):
+        return _CopiaSimulada(
             {"legado_actual": [_nota("CC25-1", date(2025, 3, 1), cie="J00")],
-             "legado_2016": [_nota("CC16-9", date(2016, 5, 2))]},
+             "legado_2016": [_nota("CC16-9", date(2016, 5, 2)), _nota("CC16-3", date(2016, 1, 8))]},
             diagnosticos=[{"cd_snota": "CC25-1", "cd_clinica": 7, "cd_cie": "J00", "ds_cie": "RINOFARINGITIS"}],
+            medicamentos=[
+                {"cd_snota": "CC25-1", "no_medic": 10, "no_cantidad": 2, "ds_indicaciones": "1 CADA 8 HORAS",
+                 "fe_surtida": date(2025, 3, 1), "sw_status": "A", "ds_medic": "PARACETAMOL 500 MG",
+                 "ds_activo": "PARACETAMOL"},
+                {"cd_snota": "CC25-1", "no_medic": 11, "no_cantidad": 1, "ds_indicaciones": None,
+                 "fe_surtida": "0000-00-00", "sw_status": "B", "ds_medic": None, "ds_activo": None},
+            ],
         )
+
+    def test_sin_base_lista_las_bases_y_trae_la_mas_reciente(self):
+        copia = self._dos_bases()
         payload = self._correr(copia)
         self.assertTrue(payload["disponible"])
-        self.assertEqual([i["legacyFolio"] for i in payload["items"]], ["CC25-1", "CC16-9"])
+        self.assertEqual(payload["base"], "legado_actual")
+        self.assertEqual(
+            payload["bases"],
+            [{"sourceDb": "legado_actual", "total": 1, "from": date(2025, 3, 1), "to": date(2025, 3, 1)},
+             {"sourceDb": "legado_2016", "total": 2, "from": date(2016, 1, 8), "to": date(2016, 5, 2)}],
+        )
+        # Solo se leen las notas de la base elegida.
+        self.assertEqual([i["legacyFolio"] for i in payload["items"]], ["CC25-1"])
+        self.assertFalse(any('"legado_2016"."his_notas"' in sql and "AS esquema" not in sql
+                             for sql, _ in copia.llamadas))
         primera = payload["items"][0]
         self.assertEqual((primera["doctorName"], primera["clinicName"], primera["sourceDb"]),
                          ("PEREZ ANA", "CLINICA 7", "legado_actual"))
+        self.assertEqual((primera["serviceName"], primera["consultationType"], primera["specialtyName"]),
+                         ("SERVICIO ESPECIAL", "NORMAL", None))
         self.assertEqual(primera["diagnoses"], [{"codigo": "J00", "descripcion": "RINOFARINGITIS"}])
+        self.assertEqual(primera["medications"], [
+            {"name": "PARACETAMOL 500 MG", "activeIngredient": "PARACETAMOL", "quantity": 2,
+             "instructions": "1 CADA 8 HORAS", "dispensedOn": date(2025, 3, 1), "cancelled": False},
+            {"name": "Medicamento 11", "activeIngredient": None, "quantity": 1,
+             "instructions": None, "dispensedOn": None, "cancelled": True},
+        ])
+
+    def test_con_base_trae_solo_esa_base(self):
+        copia = self._dos_bases()
+        payload = self._correr_base(copia, "legado_2016")
+        self.assertEqual(payload["base"], "legado_2016")
+        self.assertNotIn("bases", payload)
+        self.assertEqual([i["legacyFolio"] for i in payload["items"]], ["CC16-9", "CC16-3"])
+        self.assertEqual(payload["totalCount"], 2)
         # Por la llave del puente (expediente del titular + cd_familiar), con catalogos de la actual.
         sql_notas, params = next(l for l in copia.llamadas if '"legado_2016"."his_notas"' in l[0])
         self.assertIn('"legado_actual"."cat_medicos"', sql_notas)
+        self.assertIn('"legado_actual"."cat_servicios"', sql_notas)
         self.assertEqual(params, ["40041", 501])
+
+    def test_base_que_no_existe_no_lee_notas(self):
+        copia = self._dos_bases()
+        payload = self._correr_base(copia, "legado_1999")
+        self.assertEqual((payload["items"], payload["base"]), ([], "legado_1999"))
+        self.assertFalse(any("his_notas" in sql for sql, _ in copia.llamadas if "information_schema" not in sql))
+
+    def test_sin_notas_en_ninguna_base(self):
+        payload = self._correr(_CopiaSimulada({"legado_actual": []}))
+        self.assertEqual((payload["items"], payload["bases"], payload["base"]), ([], [], None))
 
     def test_oculta_el_diagnostico_sensible_sin_permiso(self):
         copia = _CopiaSimulada({"legado_actual": [_nota("CC25-2", date(2025, 4, 1), cie="B24",
