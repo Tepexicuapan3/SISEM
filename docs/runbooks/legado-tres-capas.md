@@ -40,7 +40,7 @@ hacen falta.
 - `LEGADO_ESQUEMA_ACTUAL` es la base/esquema **actual**. Las anuales se encuentran por ese
   prefijo: cuando se agregue `dbclinicas2026`, aparece sola en el historial.
 - Protección: usuario de solo lectura, sesión en solo lectura y el código rechaza cualquier
-  SQL que no sea `SELECT`. Al usuario MySQL: `GRANT SELECT ON \`dbclinicas%\`.* TO ...`.
+  SQL que no sea `SELECT`. Al usuario MySQL: ``GRANT SELECT ON `dbclinicas%`.* TO ...``.
 - Lo que los médicos confirman guarda el origen con nombres lógicos (`legado_2015:…`), así
   que cambiar de motor no duplica ni vuelve a ofrecer nada.
 - Verificación desde el servidor:
