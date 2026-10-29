@@ -171,10 +171,9 @@ SELECT id_paciente, COUNT(*) FROM cns_stomatology_history GROUP BY id_paciente H
 SELECT id_paciente, id_habito, COUNT(*) FROM cns_habito
 WHERE sw_status = 'A' AND est_activo GROUP BY id_paciente, id_habito HAVING COUNT(*) > 1;
 -- Vistas de la base que usen las columnas que se borran
-SELECT DISTINCT v.table_name, v.view_schema, c.table_name AS usa_tabla, c.column_name
-FROM information_schema.view_column_usage c JOIN information_schema.views v
-  ON v.table_name = c.view_name AND v.table_schema = c.view_schema
-WHERE c.column_name IN ('no_exp', 'pk_num', 'expediente');
+SELECT DISTINCT view_schema, view_name, table_name AS usa_tabla, column_name
+FROM information_schema.view_column_usage
+WHERE column_name IN ('no_exp', 'pk_num', 'expediente');
 ```
 Después, respaldo completo (`pg_dump`) y recién entonces `migrate`.
 
