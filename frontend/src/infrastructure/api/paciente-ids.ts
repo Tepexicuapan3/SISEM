@@ -71,9 +71,10 @@ export const rutaPaciente = async (
 };
 
 /**
- * Cuerpo para guardar algo del paciente: si se conoce su idPaciente, viaja
- * solo ese id (sin expediente ni pkNum). Si no (nunca se atendió), viaja la
- * llave y el backend lo abre por la puerta central.
+ * Cuerpo para guardar algo del paciente: viaja SOLO su idPaciente (sin
+ * expediente ni pkNum). Si el miembro nunca se atendió y todavía no lo tiene,
+ * primero se abre en SIRES por la puerta central (`POST /visits/patient-open`),
+ * igual que en recepción. Plan contraer la llave vieja, C7.
  */
 export const conIdPaciente = async <T extends { pkNum?: number }>(
   datos: T,
@@ -87,7 +88,11 @@ export const conIdPaciente = async <T extends { pkNum?: number }>(
     await buscarExpediente(noExp);
     id = ids.get(clave(noExp, pkNum));
   }
-  if (id === undefined) return datos;
+  if (id === undefined) {
+    const { data } = await apiClient.post<{ idPaciente: number }>("/visits/patient-open", { noExp, pkNum });
+    id = data.idPaciente;
+    registrarIdsPaciente([{ noExp, pkNum, idPaciente: id }]);
+  }
   const resto: Record<string, unknown> = { ...datos };
   delete resto[campoExpediente];
   delete resto.pkNum;

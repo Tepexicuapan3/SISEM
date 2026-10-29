@@ -73,11 +73,15 @@ describe("conIdPaciente", () => {
     });
   });
 
-  it("si no lo conoce deja la llave para que el backend lo abra", async () => {
-    const mockedGet = (apiClient as unknown as { get: ReturnType<typeof vi.fn> }).get;
-    mockedGet.mockResolvedValueOnce({ data: { titular: null, dependientes: [] } });
+  it("si no lo conoce, lo abre en SIRES y manda solo el idPaciente", async () => {
+    const cliente = apiClient as unknown as { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> };
+    cliente.get.mockResolvedValueOnce({ data: { titular: null, dependientes: [] } });
+    cliente.post.mockResolvedValueOnce({ data: { idPaciente: 77 } });
 
-    const datos = { noExp: "60060", pkNum: 0, itemId: "E11" };
-    await expect(conIdPaciente(datos)).resolves.toEqual(datos);
+    await expect(conIdPaciente({ noExp: "60060", pkNum: 0, itemId: "E11" })).resolves.toEqual({
+      itemId: "E11",
+      idPaciente: 77,
+    });
+    expect(cliente.post).toHaveBeenCalledWith("/visits/patient-open", { noExp: "60060", pkNum: 0 });
   });
 });
