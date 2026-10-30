@@ -26,6 +26,7 @@ def _nota(folio, fecha, cie=None, diagnostico=None, **kw):
             "ds_sintomas": "TOS", "ds_objetivo": None, "ds_analisis": None, "ds_plan": None,
             "ds_diagnostico": diagnostico, "sw_complemento": None, "sw_status": "A", "sw_incapacidad": None, "fe_cita": None,
             "sw_laboratorio": None, "sw_gabinete": None, "sw_hospitalizacion": None,
+            "sw_especialidad": None, "sw_morbi": None,
             "no_peso": None, "no_estatura": None, "no_ta": None, "no_pulso": None, "no_temp": None,
             "no_resp": None, "no_imc": None, "no_gluc": None,
             "med_paterno": "PEREZ", "med_materno": None, "med_nombre": "ANA", "ds_clinica": "CLINICA 7",
@@ -180,6 +181,13 @@ class HistorialTests(TestCase):
         sql, params = next(l for l in copia.llamadas if "det_licencia" in l[0] and "information_schema" not in l[0])
         self.assertEqual(params, ["CC25-7"])
 
+    def test_primera_vez_o_subsecuente_de_la_enfermedad(self):
+        copia = _CopiaSimulada({"legado_actual": [_nota("CC25-3", date(2025, 3, 3), sw_morbi="1"),
+                                                  _nota("CC25-2", date(2025, 3, 2), sw_morbi="2"),
+                                                  _nota("CC25-1", date(2025, 3, 1), sw_morbi="0")]})
+        items = self._correr(copia)["items"]
+        self.assertEqual([i["morbidityLegacy"] for i in items], ["1", "2", None])
+
     def test_proxima_cita_de_la_nota(self):
         copia = _CopiaSimulada({"legado_actual": [_nota("HAC25-1", date(2025, 2, 24), fe_cita=date(2025, 6, 4)),
                                                   _nota("HAC25-2", date(2025, 2, 23), fe_cita="0000-00-00")]})
@@ -212,7 +220,7 @@ class HistorialTests(TestCase):
     def test_pases_a_especialidad_y_a_hospital(self):
         copia = _CopiaSimulada(
             {"legado_actual": [_nota("CC14-628", date(2014, 1, 7), sw_hospitalizacion="S"),
-                               _nota("CC14-600", date(2014, 1, 6))]},
+                               _nota("CC14-600", date(2014, 1, 6), sw_especialidad="S")]},
             estudios={
                 "pas_especialidad": [{"cd_snota": "CC14-600", "sw_status": "A", "nombre": "CARDIOLOGÍA",
                                       "clave": 5, "nota": "CONSULTA"}],
@@ -232,8 +240,8 @@ class HistorialTests(TestCase):
         def llamada(tabla):
             return next(l for l in copia.llamadas if tabla in l[0] and "information_schema" not in l[0])
 
-        # Especialidad se busca para todas las notas; hospital solo para las marcadas.
-        self.assertEqual(sorted(llamada("pas_especialidad")[1]), ["CC14-600", "CC14-628"])
+        # Cada pase solo para las notas con su marca.
+        self.assertEqual(llamada("pas_especialidad")[1], ["CC14-600"])
         self.assertEqual(llamada("pas_hospital")[1], ["CC14-628"])
         self.assertIn('"legado_actual"."cat_tphospi"', llamada("pas_hospital")[0])
 

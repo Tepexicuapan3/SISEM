@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, History } from "lucide-react";
 import { useLegacyConsultationsHistory } from "@features/expedientes/queries/useLegacyConsultationsHistory";
+import { MORBIDITY_LABELS } from "@features/consulta-medica/modules/atencion/domain/consultation-morbidity";
 import type { LegacyBase, LegacyConsultationItem } from "@api/types/legacy-consultation.types";
 
 interface Props {
@@ -73,9 +74,15 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
   ];
   const diagnostico = (
     <>
-      {nota.diagnosticImpression && (
+      {(nota.diagnosticImpression || nota.morbidityLegacy) && (
         <p className="text-txt-body">
           <strong>Diagnóstico:</strong> {nota.diagnosticImpression}
+          {nota.morbidityLegacy && (
+            <span className="text-txt-muted">
+              {nota.diagnosticImpression ? " · " : ""}
+              {MORBIDITY_LABELS[nota.morbidityLegacy]}
+            </span>
+          )}
         </p>
       )}
       {nota.diagnoses && nota.diagnoses.length > 0 && (

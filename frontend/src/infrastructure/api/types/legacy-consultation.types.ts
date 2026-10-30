@@ -77,6 +77,8 @@ export interface LegacyConsultationItem {
     note: string | null;
     cancelled: boolean;
   }[];
+  /** his_notas.sw_morbi: "1" primera vez, "2" subsecuente de la enfermedad. */
+  morbidityLegacy?: "1" | "2" | null;
   /** YYYY-MM-DD de la próxima cita que dejó el médico (his_notas.fe_cita). */
   nextAppointment?: string | null;
   respirationLegacy?: string | null;

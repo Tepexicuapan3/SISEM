@@ -43,6 +43,7 @@ const nota = (folio: string, date: string, sourceDb: string): LegacyConsultation
   addendumLegacy: "SE AGREGA INCAPACIDAD",
   sickLeaves: [{ days: 7, cancelled: false }],
   nextAppointment: "2025-06-04",
+  morbidityLegacy: "2",
   referralStudies: [
     {
       type: "GABINETE",
@@ -95,6 +96,7 @@ describe("LegacyConsultationHistorySection", () => {
     expect(screen.getByText(/1 de marzo de 2025/)).toBeInTheDocument();
     expect(screen.getByText("Dr(a). PEREZ LOPEZ ANA · CLINICA 7")).toBeInTheDocument();
     expect(screen.getByText("SERVICIO ESPECIAL · NORMAL")).toBeInTheDocument();
+    expect(screen.getByText(/Subsecuente de la enfermedad/)).toBeInTheDocument();
     expect(screen.getByText("PARACETAMOL")).toBeInTheDocument();
     expect(screen.queryByText(/PARACETAMOL 500 MG/)).not.toBeInTheDocument();
     // El detalle aparece solo al pedirlo.

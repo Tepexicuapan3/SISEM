@@ -104,7 +104,7 @@ def _notas_de_esquema(esquema, llaves):
     sql = f"""
         SELECT n.cd_snota, n.cd_clinica, n.fe_nota, n.hh_nota, n.cd_medico,
                n.ds_sintomas, n.ds_objetivo, n.ds_analisis, n.ds_plan, n.ds_diagnostico,
-               n.sw_complemento, n.sw_status, n.sw_incapacidad, n.sw_laboratorio, n.sw_gabinete, n.sw_hospitalizacion, n.fe_cita, n.cd_servicio, n.tp_consulta, n.cd_especialidad,
+               n.sw_complemento, n.sw_status, n.sw_incapacidad, n.sw_laboratorio, n.sw_gabinete, n.sw_hospitalizacion, n.sw_especialidad, n.sw_morbi, n.fe_cita, n.cd_servicio, n.tp_consulta, n.cd_especialidad,
                n.no_peso, n.no_estatura, n.no_ta, n.no_pulso, n.no_temp, n.no_resp, n.no_imc, n.no_gluc,
                m.ds_paterno AS med_paterno, m.ds_materno AS med_materno, m.ds_nombre AS med_nombre,
                c.ds_clinica, x.cd_cie, x.ds_cie, s.ds_servicio, t.ds_tpconsulta, e.ds_especialidad
@@ -263,14 +263,13 @@ def _pases_especialidad_y_hospital(esquema, notas, con_tabla, resultado) -> None
     con la misma forma que los estudios: {type, name, note, cancelled}.
 
     - Especialidad: a que especialidad y el tipo de atencion ("CONSULTA").
-      sw_especialidad no es una marca confiable ('0', '', '90'...), asi que se
-      busca para todas las notas; pas_especialidad es chica (~72 mil filas).
+      Solo notas con sw_especialidad = 'S'.
     - Hospital: a que hospital y el tipo ("ATENCION EN URGENCIAS"), y el
       resumen clinico con que se envio. Solo notas con sw_hospitalizacion = 'S'.
     """
     consultas = []
     if "pas_especialidad" in con_tabla:
-        consultas.append(("ESPECIALIDAD", notas, f"""
+        consultas.append(("ESPECIALIDAD", [n for n in notas if _texto(n.get("sw_especialidad")) == "S"], f"""
             SELECT p.cd_snota, p.sw_status, e.ds_especialidad AS nombre, p.cd_especial AS clave,
                    p.ds_atencion AS nota
             FROM {legado_archivo.tabla(esquema, 'pas_especialidad')} p
@@ -332,6 +331,8 @@ def _contrato(esquema, nota, diagnosticos, medicamentos, incapacidades=None, est
         "diagnosticImpression": _texto(nota.get("ds_diagnostico")),
         "primaryCie": principal,
         "diagnoses": diagnosticos.get(llave, []),
+        # sw_morbi: "1" primera vez, "2" subsecuente de la enfermedad (mismos codigos que SIRES).
+        "morbidityLegacy": _texto(nota.get("sw_morbi")) if _texto(nota.get("sw_morbi")) in ("1", "2") else None,
         "medications": medicamentos.get(llave[1], []),
         "sickLeaves": (incapacidades or {}).get(llave[1], []),
         "referralStudies": (estudios or {}).get(llave[1], []),
