@@ -29,6 +29,8 @@ export interface CheckinCandidato {
   /** "RECEPCION" | "PORTAL" — distingue las citas reservadas desde el portal en línea. */
   origenCanal: OrigenCanalCita;
   estatus: EstatusCita;
+  /** P-03: registro del paciente, para el panel de consultorio familiar. */
+  idPaciente?: number | null;
 }
 
 /** Búsqueda por nombre (substring, case-insensitive) O por folio exacto — nunca ambos, el backend rechaza cualquier otra combinación. */

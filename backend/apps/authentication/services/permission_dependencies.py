@@ -45,6 +45,15 @@ EXPLICIT_PERMISSION_DEPENDENCIES: Dict[str, List[str]] = {
     # se hacen desde la pantalla de expedientes (lectura).
     "admin:gestion:expedientes:recien_nacidos": ["admin:gestion:expedientes:read"],
     "admin:gestion:expedientes:vincular": ["admin:gestion:expedientes:read"],
+    # P-03 adscripcion a consultorio familiar: write/excepcion/todos_centros/config
+    # no estan en WRITE_ACTIONS, asi que la dependencia de lectura va explicita.
+    "recepcion:consultorio_familiar:write": ["recepcion:consultorio_familiar:read"],
+    "recepcion:consultorio_familiar:excepcion": ["recepcion:consultorio_familiar:read"],
+    "recepcion:consultorio_familiar:todos_centros": ["recepcion:consultorio_familiar:write"],
+    "admin:catalogos:consultorio_familiar:config": [
+        "admin:catalogos:centros_atencion:read",
+        "admin:catalogos:consultorios:read",
+    ],
 }
 
 
@@ -367,6 +376,12 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "recepcion:citas:write": {
         "allOf": ["recepcion:citas:write"]
     },
+    # ── P-03 Adscripcion a consultorio familiar ───────────────────────────────
+    "recepcion:consultorio_familiar:read": {"allOf": ["recepcion:consultorio_familiar:read"]},
+    "recepcion:consultorio_familiar:write": {"allOf": ["recepcion:consultorio_familiar:write"]},
+    "recepcion:consultorio_familiar:excepcion": {"allOf": ["recepcion:consultorio_familiar:excepcion"]},
+    "recepcion:consultorio_familiar:todos_centros": {"allOf": ["recepcion:consultorio_familiar:todos_centros"]},
+    "admin:catalogos:consultorio_familiar:config": {"allOf": ["admin:catalogos:consultorio_familiar:config"]},
     # Documentos imprimibles (change `documentos-imprimibles`): mapean a permisos
     # EXISTENTES (sin seeds nuevos) para no dejar fuera a usuarios actuales.
     "documentos.ficha.imprimir": {

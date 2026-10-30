@@ -24,6 +24,7 @@ import TipoServicioAmbulanciaPage from "@features/admin/modules/catalogos/tipos-
 import DestinoAmbulanciaPage from "@features/admin/modules/catalogos/destinos-ambulancia/pages/DestinoAmbulanciaPage";
 import DesignacionAutorizadoresPage from "@features/admin/modules/catalogos/designacion-autorizadores/pages/DesignacionAutorizadoresPage";
 import ParametrosPage from "@features/admin/modules/catalogos/parametros/pages/ParametrosPage";
+import ConsultorioFamiliarConfigPage from "@features/admin/modules/catalogos/consultorio-familiar/pages/ConsultorioFamiliarConfigPage";
 import BajasPage from "@features/admin/modules/catalogos/bajas/pages/BajasPage";
 import CalidadLaboralPage from "@features/admin/modules/catalogos/calidad-laboral/pages/CalidadLaboralPage";
 import EdoCivilPage from "@features/admin/modules/catalogos/edo-civil/pages/EdoCivilPage";
@@ -224,6 +225,20 @@ export const adminRoutes: RouteObject[] = [
             dependencyAware
           >
             <ParametrosPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "consultorio-familiar",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin:catalogos:consultorio_familiar:config"
+            fallbackRequirement={{
+              allOf: ["admin:catalogos:consultorio_familiar:config"],
+            }}
+            dependencyAware
+          >
+            <ConsultorioFamiliarConfigPage />
           </ProtectedRoute>
         ),
       },

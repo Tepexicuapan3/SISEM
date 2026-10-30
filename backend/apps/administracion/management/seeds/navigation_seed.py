@@ -248,6 +248,18 @@ NAV_SEED = [
         "permisos": ["admin:catalogos:parametros:read"],
     },
     {
+        "clave": "administracion.catalogos.consultorio_familiar",
+        "titulo": "Consultorio familiar",
+        "icono": None,
+        "url": "/admin/catalogos/consultorio-familiar",
+        "badge": None,
+        "orden": 3,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:consultorio_familiar:config"],
+    },
+    {
         "clave": "administracion.catalogos.bajas",
         "titulo": "Bajas",
         "icono": None,

@@ -33,6 +33,8 @@ import { RecepcionQuickCheckinDialog } from "@features/recepcion/modules/agenda/
 import { DisponibilidadView } from "@features/recepcion/modules/agenda/components/DisponibilidadView";
 import { HistorialView } from "@features/recepcion/modules/agenda/components/HistorialView";
 import { BandejaView } from "@features/recepcion/modules/agenda/components/BandejaView";
+import { CitasPorReagendarCard } from "@features/recepcion/modules/adscripcion/components/CitasPorReagendarCard";
+import { useAdscripcionPermisos } from "@features/recepcion/modules/adscripcion/queries/useAdscripcionPermisos";
 import { mapVisitToCheckinDefaults } from "@features/recepcion/modules/checkin/domain/checkin.mappers";
 import type { CheckinFormInput } from "@features/recepcion/modules/checkin/domain/checkin.schemas";
 import { FichaModal } from "@features/recepcion/shared/components/FichaModal";
@@ -81,6 +83,7 @@ export const RecepcionAgendaPage = () => {
   const focusFolio = searchParams.get("folio");
 
   const { hasCapability } = usePermissionDependencies();
+  const permisosAdscripcion = useAdscripcionPermisos();
   const canReadAgenda = hasCapability(
     "flow.visits.queue.read",
     RECEPCION_QUEUE_PERMISSION_REQUIREMENT,
@@ -517,6 +520,11 @@ export const RecepcionAgendaPage = () => {
           allMedicos={allMedicos}
           onOpenQuickCheckin={handleOpenQuickCheckin}
         />
+      ) : null}
+
+      {/* P-03: citas canceladas por cambio de consultorio familiar, por reagendar */}
+      {view === "bandeja" && permisosAdscripcion.puedeLeer ? (
+        <CitasPorReagendarCard puedeEscribir={permisosAdscripcion.puedeAsignar} />
       ) : null}
 
       {view === "bandeja" ? (

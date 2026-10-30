@@ -53,8 +53,14 @@ export interface SlotDisponible {
 // ─── Requests ─────────────────────────────────────────────────────────────────
 
 export interface CreateCitaRequest {
-  noExp:         string;
+  /** Paciente elegido (interno). Si viene, no hace falta noExp/pkNum. */
+  idPaciente?:   number;
+  noExp?:        string;
   pkNum?:        number;
+  /** P-03: cita por reagendar que esta cita reemplaza. */
+  idCitaAfectada?: number;
+  /** P-03: motivo para agendar en un consultorio distinto al familiar. */
+  excepcionConsultorioFamiliar?: string;
   medicoId:      number;
   consultorioId?: number;
   fechaHora:     string;   // YYYY-MM-DDTHH:mm
@@ -130,6 +136,8 @@ export interface FichaQRResponse {
   yaVerificada: boolean;
   /** "RECEPCION" | "PORTAL" — distingue las citas reservadas desde el portal en línea. */
   origenCanal:  OrigenCanalCita;
+  /** P-03: registro del paciente, para el panel de consultorio familiar. */
+  idPaciente?:  number | null;
 }
 
 /** Resultado de `POST /citas/verificar-qr/confirmar` — crea el Visit y sella la cita como verificada. */
@@ -145,4 +153,6 @@ export interface ConfirmarQRCheckinResponse {
 /** Check-in de cita; `autorizacionCapitalHumano` solo se exige si el paciente no tiene vigencia (PACIENTE_SIN_VIGENCIA). */
 export interface ConfirmarCheckinOptions {
   autorizacionCapitalHumano?: string;
+  /** P-03: motivo para atender en un consultorio distinto al familiar. */
+  excepcionConsultorioFamiliar?: string;
 }

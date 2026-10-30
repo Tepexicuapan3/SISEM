@@ -24,6 +24,8 @@ class CreateVisitSerializer(serializers.Serializer):
     notes          = serializers.CharField(required=False, allow_blank=True, max_length=255)
     horaConsulta   = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None, max_length=8)
     fechaConsulta  = serializers.DateField(required=False, allow_null=True, default=None, input_formats=["%Y-%m-%d"])
+    # P-03: motivo para atender en un consultorio distinto al familiar.
+    excepcionConsultorioFamiliar = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
     def validate_tipoCitaId(self, value):
         # Se valida SOLO existencia, nunca `is_active`: un TipoDeCitas
@@ -175,6 +177,8 @@ class ConfirmarCheckinFolioSerializer(serializers.Serializer):
     autorizacionCapitalHumano = serializers.CharField(
         max_length=500, required=False, allow_blank=True,
     )
+    # P-03: motivo para atender en un consultorio distinto al familiar.
+    excepcionConsultorioFamiliar = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
 
 class ConfirmarQRCheckinSerializer(serializers.Serializer):
@@ -184,3 +188,5 @@ class ConfirmarQRCheckinSerializer(serializers.Serializer):
     autorizacionCapitalHumano = serializers.CharField(
         max_length=500, required=False, allow_blank=True,
     )
+    # P-03: motivo para atender en un consultorio distinto al familiar.
+    excepcionConsultorioFamiliar = serializers.CharField(max_length=255, required=False, allow_blank=True)

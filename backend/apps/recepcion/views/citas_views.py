@@ -6,6 +6,7 @@ Sigue el mismo patrón de autorización que views.py (visitas).
 import logging
 from datetime import date
 
+from django.db import transaction
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,6 +25,12 @@ from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 from apps.recepcion.services.vigencia_service import tiene_vigencia
 from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABILITY
+from apps.recepcion.uses_case.adscripcion_usecase import (
+    paciente_por_llave,
+    validar_consultorio_familiar,
+    vincular_reagenda,
+)
+from apps.recepcion.views.adscripcion_views import operador_de_usuario
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +128,10 @@ class CreateCitaSerializer(serializers.Serializer):
     )
     motivo        = serializers.CharField(max_length=255, required=False, allow_blank=True)
     notas         = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+    # P-03: cita que reagenda una cancelada por cambio de consultorio familiar,
+    # y motivo para agendar en un consultorio distinto al familiar.
+    idCitaAfectada = serializers.IntegerField(min_value=1, required=False)
+    excepcionConsultorioFamiliar = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
     def validate(self, attrs):
         from apps.consulta_medica.services.paciente_entrada import resolver_paciente_en_datos
@@ -274,6 +285,29 @@ class CitasListCreateView(APIView):
             except VisitDomainError as exc:
                 return _domain_error(request, exc)
 
+        # ── P-03 (A1): medicina general en el consultorio familiar ────────────
+        # El operador se arma solo si hace falta (excepción o reagendado).
+        def operador():
+            return operador_de_usuario(user)
+
+        try:
+            validar_consultorio_familiar(
+                paciente=paciente_por_llave(
+                    id_paciente=s.validated_data.get("idPaciente"),
+                    no_exp=s.validated_data["noExp"],
+                    pk_num=s.validated_data.get("pkNum", 0),
+                ),
+                consultorio_id=consultorio_id,
+                servicio_tipo=s.validated_data.get("servicioTipo", "medicina_general"),
+                excepcion_motivo=s.validated_data.get("excepcionConsultorioFamiliar"),
+                operador=operador,
+                request=request,
+                recurso="cita",
+            )
+        except VisitDomainError as exc:
+            return error_response(exc.code, exc.message, exc.status_code,
+                                  details=exc.details or None, request_id=get_request_id(request))
+
         # `medicoId` es CatMedico.id; se valida su existencia (resolve solo
         # por pk) ANTES de pasarlo a CitasRepository.create.
         medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
@@ -281,27 +315,40 @@ class CitasListCreateView(APIView):
             return err
 
         auth_user = UserRepository.build_auth_user(user)
+        id_cita_afectada = s.validated_data.get("idCitaAfectada")
         try:
-            cita = CitasRepository.create(
-                no_exp=s.validated_data["noExp"],
-                pk_num=s.validated_data.get("pkNum", 0),
-                medico_id=medico.id,
-                consultorio_id=s.validated_data.get("consultorioId"),
-                fecha_hora=s.validated_data["fechaHora"],
-                duracion_min=s.validated_data.get("duracionMin", 20),
-                servicio_tipo=s.validated_data.get("servicioTipo", "medicina_general"),
-                motivo=s.validated_data.get("motivo") or None,
-                notas=s.validated_data.get("notas") or None,
-                created_by_id=auth_user.get("id"),
-            )
+            # P-03: si reagenda una cita afectada, se marca en la misma
+            # transacción; si no se puede, la cita nueva no queda creada.
+            with transaction.atomic():
+                cita = CitasRepository.create(
+                    no_exp=s.validated_data["noExp"],
+                    pk_num=s.validated_data.get("pkNum", 0),
+                    medico_id=medico.id,
+                    consultorio_id=s.validated_data.get("consultorioId"),
+                    fecha_hora=s.validated_data["fechaHora"],
+                    duracion_min=s.validated_data.get("duracionMin", 20),
+                    servicio_tipo=s.validated_data.get("servicioTipo", "medicina_general"),
+                    motivo=s.validated_data.get("motivo") or None,
+                    notas=s.validated_data.get("notas") or None,
+                    created_by_id=auth_user.get("id"),
+                )
+                if id_cita_afectada:
+                    vincular_reagenda(
+                        id_cita_afectada=id_cita_afectada,
+                        cita_nueva=CitaMedica.objects.get(pk=cita["id"]),
+                        operador=operador(),
+                        request=request,
+                    )
         except ValueError as exc:
             return error_response("CITA_NOT_AVAILABLE", str(exc),
                                   status.HTTP_400_BAD_REQUEST,
                                   request_id=get_request_id(request))
         except VisitDomainError as exc:
             # Regla de negocio al abrir el paciente (p. ej. recien nacido
-            # pendiente de vincular): su mensaje dice que hacer, no un 500.
-            return _domain_error(request, exc)
+            # pendiente de vincular) o del reagendado de P-03: su mensaje
+            # dice que hacer, no un 500.
+            return error_response(exc.code, exc.message, exc.status_code,
+                                  details=exc.details or None, request_id=get_request_id(request))
         except Exception as exc:
             logger.exception("Error creando cita: %s", exc)
             return error_response("CITA_CREATE_ERROR", "No se pudo agendar la cita.",

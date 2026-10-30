@@ -171,6 +171,8 @@ def _serializar_ficha(cita: CitaMedica, nombre_paciente: str, vigente: bool = Tr
         # por QR solo la usa el portal (Fase 7), pero se expone igual para
         # que recepción vea explícitamente que es una cita "en línea".
         "origenCanal":        cita.origen_canal,
+        # P-03: para abrir el panel de consultorio familiar desde el check-in.
+        "idPaciente":         cita.patient_id,
     }
 
 
@@ -190,6 +192,8 @@ def _serializar_candidato(cita: CitaMedica, nombre_paciente: str, vigente: bool 
         "medicoNombre":      _nombre_medico(cita),
         "origenCanal":       cita.origen_canal,
         "estatus":           cita.estatus,
+        # P-03: para abrir el panel de consultorio familiar desde el check-in.
+        "idPaciente":        cita.patient_id,
     }
 
 

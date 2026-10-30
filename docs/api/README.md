@@ -20,6 +20,7 @@ docs/api/
     ├── auth.md
     ├── rbac.md
     ├── catalogos.md
+    ├── adscripcion.md      # P-03 consultorio familiar
     └── doc_front.md
 ```
 

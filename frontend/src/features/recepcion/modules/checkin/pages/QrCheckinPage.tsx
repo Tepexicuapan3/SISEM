@@ -23,6 +23,11 @@ import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermis
 import { FichaCheckinCard } from "@features/recepcion/modules/checkin/components/FichaCheckinCard";
 import { BusquedaCheckinPanel } from "@features/recepcion/modules/checkin/components/BusquedaCheckinPanel";
 import { AutorizacionVigenciaField } from "@features/recepcion/modules/checkin/components/AutorizacionVigenciaField";
+import { ConflictoCheckin } from "@features/recepcion/modules/adscripcion/components/ConflictoCheckin";
+import {
+  conflictoConsultorioFamiliar,
+  type ConflictoConsultorioFamiliar,
+} from "@features/recepcion/modules/adscripcion/domain/adscripcionEstado";
 import {
   autorizacionVigenciaCompleta,
   buildConfirmarCheckinOptions,
@@ -56,6 +61,7 @@ export const QrCheckinPage = () => {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [autorizacionVigencia, setAutorizacionVigencia] = useState("");
+  const [conflictoP03, setConflictoP03] = useState<ConflictoConsultorioFamiliar | null>(null);
 
   const { hasCapability } = usePermissionDependencies();
   const canConfirmCheckin = hasCapability(
@@ -81,6 +87,7 @@ export const QrCheckinPage = () => {
     setPayloadValue("");
     setVerifiedPayload(null);
     setFicha(null);
+    setConflictoP03(null);
     setVerifyError(null);
     setConfirmError(null);
     setAutorizacionVigencia("");
@@ -120,7 +127,7 @@ export const QrCheckinPage = () => {
     void handleVerify(payloadValue);
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (excepcionConsultorioFamiliar?: string) => {
     if (!verifiedPayload || !ficha) {
       return;
     }
@@ -131,12 +138,20 @@ export const QrCheckinPage = () => {
       const result = await confirmarCheckin.mutateAsync({
         payload: verifiedPayload,
         ...buildConfirmarCheckinOptions(ficha.vigenciaActiva, autorizacionVigencia),
+        ...(excepcionConsultorioFamiliar ? { excepcionConsultorioFamiliar } : {}),
       });
       toast.success("Check-in confirmado", {
         description: `${result.paciente || "Paciente"} — folio ${result.folio}.`,
       });
+      setConflictoP03(null);
       resetForNextScan();
     } catch (error) {
+      // P-03: la cita es de otro consultorio que el familiar.
+      const conflicto = conflictoConsultorioFamiliar(error);
+      if (conflicto) {
+        setConflictoP03(conflicto);
+        return;
+      }
       if (esErrorSinVigencia(error)) {
         // Perdió la vigencia después de escanear: se pide la autorización.
         setFicha({ ...ficha, vigenciaActiva: false });
@@ -237,6 +252,22 @@ export const QrCheckinPage = () => {
                     a un compañero con permisos de recepción que confirme.
                   </AlertDescription>
                 </Alert>
+              ) : null}
+
+              {conflictoP03 ? (
+                <ConflictoCheckin
+                  conflicto={conflictoP03}
+                  idPaciente={ficha.idPaciente}
+                  nombre={ficha.paciente}
+                  enviando={isConfirming}
+                  onExcepcion={(motivo) => void handleConfirm(motivo)}
+                  onReasignado={() => {
+                    setConflictoP03(null);
+                    toast.success("Consultorio familiar reasignado", {
+                      description: "Si la cita era del consultorio anterior, quedó en \"Citas por reagendar\".",
+                    });
+                  }}
+                />
               ) : null}
 
               {!ficha.vigenciaActiva ? (

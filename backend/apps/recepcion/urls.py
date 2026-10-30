@@ -19,6 +19,19 @@ from apps.recepcion.views.qr_checkin_views import (
 from apps.recepcion.views.turno_views import (
     TurnoFichaListCreateView, TurnoFichaDetailView, TurnoActualView,
 )
+from apps.recepcion.views.adscripcion_views import (
+    AdscripcionHistorialView,
+    AdscripcionOpcionesView,
+    AdscripcionPacienteView,
+    AdscripcionPrevisualizarView,
+    AdscripcionView,
+    CitasPorReagendarView,
+    ConsultorioFamiliarDetalleView,
+    ConsultoriosFamiliaresView,
+    DescartarCitaAfectadaView,
+    EquivalenciaDetalleView,
+    EquivalenciasView,
+)
 
 urlpatterns = [
     # ── Visitas (check-in y cola de recepción) ────────────────────────────────
@@ -49,4 +62,19 @@ urlpatterns = [
     # ── Check-in manual (sin QR): por nombre de paciente o folio ─────────────
     path("citas/checkin/candidatos",        CheckinCandidatosView.as_view(),      name="citas-checkin-candidatos"),
     path("citas/checkin/confirmar-folio",   ConfirmarCheckinPorFolioView.as_view(), name="citas-checkin-confirmar-folio"),
+
+    # ── P-03 Adscripción a consultorio familiar ──────────────────────────────
+    path("adscripcion",                                   AdscripcionView.as_view(),              name="adscripcion"),
+    path("adscripcion/opciones",                          AdscripcionOpcionesView.as_view(),      name="adscripcion-opciones"),
+    path("adscripcion/previsualizar",                     AdscripcionPrevisualizarView.as_view(), name="adscripcion-previsualizar"),
+    path("adscripcion/pacientes/<int:id_paciente>",       AdscripcionPacienteView.as_view(),      name="adscripcion-paciente"),
+    path("adscripcion/pacientes/<int:id_paciente>/historial", AdscripcionHistorialView.as_view(),  name="adscripcion-historial"),
+    path("adscripcion/citas-por-reagendar",               CitasPorReagendarView.as_view(),        name="adscripcion-citas-por-reagendar"),
+    path("adscripcion/citas-por-reagendar/<int:id_cita_afectada>/descartar",
+         DescartarCitaAfectadaView.as_view(), name="adscripcion-cita-afectada-descartar"),
+    path("adscripcion/config/clinicas",                   EquivalenciasView.as_view(),            name="adscripcion-config-clinicas"),
+    path("adscripcion/config/clinicas/<int:id_clinica_centro>", EquivalenciaDetalleView.as_view(), name="adscripcion-config-clinica"),
+    path("adscripcion/config/consultorios",               ConsultoriosFamiliaresView.as_view(),   name="adscripcion-config-consultorios"),
+    path("adscripcion/config/consultorios/<int:id_adscripcion_consultorio>",
+         ConsultorioFamiliarDetalleView.as_view(), name="adscripcion-config-consultorio"),
 ]

@@ -1353,6 +1353,35 @@ export type {
 export { ESTATUS_CITA, ORIGEN_CANAL_CITA } from "@api/types/citas.types";
 
 // =============================================================================
+// P-03 ADSCRIPCIÓN A CONSULTORIO FAMILIAR
+// =============================================================================
+export type {
+  EstadoAdscripcion,
+  OrigenAdscripcion,
+  AdscripcionResumen,
+  Adscripcion,
+  CitaAdscripcion,
+  AdscripcionPacienteResponse,
+  OpcionConsultorio,
+  OpcionesAdscripcionResponse,
+  PrevisualizarAdscripcionRequest,
+  PrevisualizarAdscripcionResponse,
+  AdscribirRequest,
+  CitaAfectada,
+  AdscribirResponse,
+  HistorialAdscripcionResponse,
+  CitasPorReagendarParams,
+  CitasPorReagendarResponse,
+  EquivalenciaClinica,
+  EquivalenciaClinicaCreateRequest,
+  EquivalenciaClinicaUpdateRequest,
+  ConsultorioFamiliar,
+  ConsultorioFamiliarCreateRequest,
+  ConsultorioFamiliarUpdateRequest,
+  ListaResponse,
+} from "@api/types/adscripcion.types";
+
+// =============================================================================
 // CHECK-IN MANUAL (sin QR) — buscador por nombre o folio
 // =============================================================================
 export type {

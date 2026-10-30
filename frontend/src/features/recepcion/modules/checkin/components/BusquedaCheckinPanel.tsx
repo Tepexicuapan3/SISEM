@@ -22,6 +22,11 @@ import {
   esErrorSinVigencia,
 } from "@features/recepcion/modules/checkin/domain/checkinVigencia";
 import { AutorizacionVigenciaField } from "@features/recepcion/modules/checkin/components/AutorizacionVigenciaField";
+import { ConflictoCheckin } from "@features/recepcion/modules/adscripcion/components/ConflictoCheckin";
+import {
+  conflictoConsultorioFamiliar,
+  type ConflictoConsultorioFamiliar,
+} from "@features/recepcion/modules/adscripcion/domain/adscripcionEstado";
 import {
   FichaCheckinCard,
   formatFichaFechaHora,
@@ -55,6 +60,11 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
   // Candidato sin vigencia esperando el motivo u oficio de Capital Humano.
   const [pendienteVigencia, setPendienteVigencia] = useState<CheckinCandidato | null>(null);
   const [autorizacionVigencia, setAutorizacionVigencia] = useState("");
+  // P-03: cita de otro consultorio que el familiar, esperando la decisión.
+  const [conflictoP03, setConflictoP03] = useState<{
+    candidato: CheckinCandidato;
+    conflicto: ConflictoConsultorioFamiliar;
+  } | null>(null);
 
   const debouncedQuery = useDebounce(query, 400);
   const searchParams = confirmedFicha ? null : resolveCheckinSearchParams(debouncedQuery);
@@ -74,6 +84,7 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
     setConfirmError(null);
     setConfirmingFolio(null);
     cerrarAutorizacion();
+    setConflictoP03(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
@@ -82,7 +93,7 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
     setAutorizacionVigencia("");
   };
 
-  const confirmarCandidato = async (candidato: CheckinCandidato) => {
+  const confirmarCandidato = async (candidato: CheckinCandidato, excepcionConsultorioFamiliar?: string) => {
     setConfirmError(null);
     setConfirmingFolio(candidato.folio);
 
@@ -90,14 +101,22 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
       const result = await confirmarFolio.mutateAsync({
         folio: candidato.folio,
         ...buildConfirmarCheckinOptions(candidato.vigenciaActiva, autorizacionVigencia),
+        ...(excepcionConsultorioFamiliar ? { excepcionConsultorioFamiliar } : {}),
       });
       const ficha = buildConfirmedFichaFromCandidato(candidato, result);
       setConfirmedFicha(ficha);
       cerrarAutorizacion();
+      setConflictoP03(null);
       toast.success("Check-in confirmado", {
         description: `${result.paciente || candidato.pacienteNombre} — folio ${result.folio}.`,
       });
     } catch (error) {
+      // P-03: la cita es de otro consultorio que el familiar.
+      const conflicto = conflictoConsultorioFamiliar(error);
+      if (conflicto) {
+        setConflictoP03({ candidato, conflicto });
+        return;
+      }
       if (esErrorSinVigencia(error)) {
         // Perdió la vigencia después de la búsqueda: se pide la autorización.
         setPendienteVigencia({ ...candidato, vigenciaActiva: false });
@@ -291,6 +310,21 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
                 </Button>
               </div>
             </div>
+          ) : null}
+          {!confirmedFicha && conflictoP03 ? (
+            <ConflictoCheckin
+              conflicto={conflictoP03.conflicto}
+              idPaciente={conflictoP03.candidato.idPaciente}
+              nombre={conflictoP03.candidato.pacienteNombre}
+              enviando={!!confirmingFolio}
+              onExcepcion={(motivo) => void confirmarCandidato(conflictoP03.candidato, motivo)}
+              onReasignado={() => {
+                setConflictoP03(null);
+                toast.success("Consultorio familiar reasignado", {
+                  description: "Si la cita era del consultorio anterior, quedó en \"Citas por reagendar\".",
+                });
+              }}
+            />
           ) : null}
         </CardContent>
       </Card>

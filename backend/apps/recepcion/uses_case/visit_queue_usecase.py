@@ -114,6 +114,31 @@ def _agregar_id_paciente(no_exp: str, miembros: list) -> None:
         miembro["idPaciente"] = por_pk_num.get(pk_num)
 
 
+def _agregar_adscripcion(titular_sermed: dict, miembros: list) -> None:
+    """
+    P-03: estado del consultorio familiar de cada miembro, con las filas de
+    SERMED que ya se leyeron (no vuelve a consultarlo). El recién nacido
+    provisional usa la clínica actual del titular. Si P-03 falla, el miembro
+    queda con ``adscripcion: None`` y la búsqueda sigue.
+    """
+    from apps.recepcion.services import adscripcion_evaluacion
+
+    for miembro in miembros:
+        if miembro is None:
+            continue
+        try:
+            clave = titular_sermed.get("CD_CLINICA") if miembro.get("provisional") else miembro.get("cdClinica")
+            evaluacion = adscripcion_evaluacion.estado_de_miembro(
+                id_paciente=miembro.get("idPaciente"),
+                clave_clinica=clave,
+                vigente=miembro.get("estatus") == "ACTIVO",
+            )
+            miembro["adscripcion"] = adscripcion_evaluacion.resumen_para_busqueda(evaluacion)
+        except Exception:
+            logger.exception("P-03: no se pudo evaluar la adscripción de %s/%s", miembro.get("noExp"), miembro.get("pkNum"))
+            miembro["adscripcion"] = None
+
+
 def lookup_patient(no_exp: str, historico: bool = False) -> dict:
     """
     Busca el titular y sus derechohabientes por expediente.
@@ -158,6 +183,7 @@ def lookup_patient(no_exp: str, historico: bool = False) -> dict:
 
     dependientes += miembros_recepcion(no_exp, historico=historico)
     _agregar_id_paciente(no_exp, [titular, *dependientes])
+    _agregar_adscripcion(emp, [titular, *dependientes])
 
     if not historico and titular is None and not dependientes:
         raise VisitDomainError(

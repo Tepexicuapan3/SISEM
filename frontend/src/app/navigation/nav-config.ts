@@ -138,6 +138,11 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:catalogos:parametros:read"],
           },
           {
+            title: "Consultorio familiar",
+            url: "/admin/catalogos/consultorio-familiar",
+            permissions: ["admin:catalogos:consultorio_familiar:config"],
+          },
+          {
             title: "Bajas",
             url: "/admin/catalogos/bajas",
             permissions: ["admin:catalogos:bajas:read"],

@@ -156,6 +156,27 @@ class VisitsView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=serializer.errors, request_id=get_request_id(request))
 
+        # P-03 (A1): medicina general en el consultorio familiar, salvo excepción.
+        from apps.recepcion.uses_case.adscripcion_usecase import paciente_por_llave, validar_consultorio_familiar
+        from apps.recepcion.views.adscripcion_views import operador_de_usuario
+
+        try:
+            validar_consultorio_familiar(
+                paciente=paciente_por_llave(
+                    id_paciente=serializer.validated_data.get("idPaciente"),
+                    no_exp=serializer.validated_data.get("noExp"),
+                    pk_num=serializer.validated_data.get("pkNum", 0),
+                ),
+                consultorio_id=serializer.validated_data.get("consultorioId"),
+                servicio_tipo=serializer.validated_data.get("serviceType"),
+                excepcion_motivo=serializer.validated_data.get("excepcionConsultorioFamiliar"),
+                operador=lambda: operador_de_usuario(user),
+                request=request,
+                recurso="ficha",
+            )
+        except VisitDomainError as exc:
+            return _visit_error_response(request, exc)
+
         hora_consulta = None
         hora_raw = serializer.validated_data.get("horaConsulta")
         if hora_raw:

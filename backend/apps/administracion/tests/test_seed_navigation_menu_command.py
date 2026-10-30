@@ -13,6 +13,16 @@ def _seed_permission_codes() -> set[str]:
     return codigos
 
 
+class NavSeedConsultorioFamiliarTests(TestCase):
+    def test_p03_configuracion_esta_en_el_menu_de_catalogos(self):
+        entrada = next(
+            (e for e in NAV_SEED if e["url"] == "/admin/catalogos/consultorio-familiar"), None,
+        )
+        self.assertIsNotNone(entrada)
+        self.assertEqual(entrada["parent_clave"], "administracion.catalogos")
+        self.assertEqual(entrada["permisos"], ["admin:catalogos:consultorio_familiar:config"])
+
+
 class SeedNavigationMenuCommandTests(TestCase):
     def _create_all_seed_permissions(self):
         for codigo in _seed_permission_codes():

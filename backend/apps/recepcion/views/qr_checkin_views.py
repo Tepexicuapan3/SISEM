@@ -46,7 +46,10 @@ from apps.recepcion.serializers import (
     ConfirmarQRCheckinSerializer,
     VerificarQRSerializer,
 )
+from apps.portal_citas.services.comprobante_service import verificar_payload_qr
 from apps.recepcion.services.errors import VisitDomainError
+from apps.recepcion.uses_case.adscripcion_usecase import validar_cita_en_checkin
+from apps.recepcion.views.adscripcion_views import operador_de_usuario
 from apps.recepcion.uses_case.qr_checkin_usecase import (
     CITAS_READ_CAPABILITY,
     RECEPCION_WRITE_CAPABILITY,
@@ -199,6 +202,19 @@ class ConfirmarQRCheckinView(APIView):
             return err
         payload = validated_data["payload"]
 
+        # P-03 (A2/A3): si el QR no es válido, confirmar_checkin responde como siempre.
+        folio = verificar_payload_qr(payload)
+        if folio:
+            try:
+                validar_cita_en_checkin(
+                    folio=folio,
+                    excepcion_motivo=validated_data.get("excepcionConsultorioFamiliar"),
+                    operador=lambda: operador_de_usuario(user),
+                    request=request,
+                )
+            except VisitDomainError as exc:
+                return _domain_error(request, exc)
+
         try:
             resultado = confirmar_checkin(
                 payload,
@@ -274,6 +290,17 @@ class ConfirmarCheckinPorFolioView(APIView):
         validated_data, err = _validate_body(request, ConfirmarCheckinFolioSerializer)
         if err:
             return err
+
+        # P-03 (A2/A3): medicina general en el consultorio familiar, salvo excepción.
+        try:
+            validar_cita_en_checkin(
+                folio=validated_data["folio"],
+                excepcion_motivo=validated_data.get("excepcionConsultorioFamiliar"),
+                operador=lambda: operador_de_usuario(user),
+                request=request,
+            )
+        except VisitDomainError as exc:
+            return _domain_error(request, exc)
 
         try:
             resultado = checkin_por_folio(

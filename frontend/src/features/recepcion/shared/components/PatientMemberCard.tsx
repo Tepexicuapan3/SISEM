@@ -4,6 +4,7 @@
  * Muestra al trabajador titular o a un derechohabiente con su relación
  * y edad. Solo se renderizan miembros ACTIVOS (el backend ya filtra).
  */
+import type { ReactNode } from "react";
 import { Badge } from "@shared/ui/badge";
 import type { PatientMember } from "@api/types";
 
@@ -34,11 +35,13 @@ interface PatientMemberCardProps {
   member:    PatientMember;
   selected:  boolean;
   onSelect:  () => void;
+  /** Contenido extra junto a la etiqueta Titular/Familiar. */
+  aside?:    ReactNode;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-export function PatientMemberCard({ member, selected, onSelect }: PatientMemberCardProps) {
+export function PatientMemberCard({ member, selected, onSelect, aside }: PatientMemberCardProps) {
   const esTitular    = member.pkNum === 0;
   const parentesco   = resolveParentesco(member.parentesco);
 
@@ -76,6 +79,9 @@ export function PatientMemberCard({ member, selected, onSelect }: PatientMemberC
           <p className="truncate text-xs text-txt-muted">Madre: {member.madre}</p>
         ) : null}
       </div>
+
+      {/* Contenido extra opcional (p. ej. consultorio familiar, P-03) */}
+      {aside}
 
       {/* Badge: Titular o Familiar */}
       <Badge

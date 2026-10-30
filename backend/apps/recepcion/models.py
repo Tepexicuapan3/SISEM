@@ -1,6 +1,7 @@
 import uuid as _uuid
 
 from django.db import models
+from django.utils import timezone
 
 
 # ─── Citas ────────────────────────────────────────────────────────────────────
@@ -443,3 +444,245 @@ class CitaEstatusLog(models.Model):
 
     def __str__(self) -> str:
         return f"Cita {self.cita_id}: {self.from_status} → {self.to_status}"
+
+
+# ─── P-03 · Adscripción a consultorio familiar ────────────────────────────────
+#
+# Proceso nuevo de SIRES (docs/plans/p03-consultorio-familiar.md): las tablas
+# nacen vacías y no se migra nada del SISEM anterior. La clínica de cada
+# persona la manda SERMED (cd_clinica de cat_empleados / cat_familiar); SIRES
+# solo la compara. Campos en español con la convención de autorizaciones.
+
+
+class AdscripcionClinicaCentro(models.Model):
+    """Equivalencia entre la clave de clínica de SERMED y el centro de SIRES."""
+
+    id = models.BigAutoField(primary_key=True, db_column="id_clinica_centro")
+    # Valor de cd_clinica en SERMED, sin espacios (lo normaliza quien escribe).
+    clave_clinica_sermed = models.CharField(max_length=10)
+    centro = models.ForeignKey(
+        "catalogos.CatCentroAtencion", db_column="id_centro_atencion",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    esta_activo = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    id_usuario_creacion = models.BigIntegerField(null=True, blank=True)
+    fecha_modificacion = models.DateTimeField(null=True, blank=True)
+    id_usuario_modificacion = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "adscripcion_clinica_centro"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clave_clinica_sermed"], name="adscripcion_clinica_centro_clave_uq",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(clave_clinica_sermed=""),
+                name="adscripcion_clinica_centro_clave_ck",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Clínica SERMED {self.clave_clinica_sermed} → centro {self.centro_id}"
+
+
+class AdscripcionConsultorio(models.Model):
+    """
+    Consultorio que recibe pacientes familiares. Un centro sin filas activas
+    aquí tiene P-03 apagado y recepción trabaja como antes.
+    """
+
+    id = models.BigAutoField(primary_key=True, db_column="id_adscripcion_consultorio")
+    consultorio = models.OneToOneField(
+        "catalogos.Consultorios", db_column="id_consultorio",
+        on_delete=models.PROTECT, related_name="adscripcion_config",
+    )
+    esta_activo = models.BooleanField(default=True)
+    # Tope de adscripciones activas; nulo = sin tope.
+    capacidad_maxima = models.IntegerField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    id_usuario_creacion = models.BigIntegerField(null=True, blank=True)
+    fecha_modificacion = models.DateTimeField(null=True, blank=True)
+    id_usuario_modificacion = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "adscripcion_consultorio"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(capacidad_maxima__isnull=True) | models.Q(capacidad_maxima__gt=0),
+                name="adscripcion_consultorio_capacidad_ck",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Consultorio familiar {self.consultorio_id}"
+
+
+class AdscripcionPaciente(models.Model):
+    """
+    Adscripción de una persona a su consultorio familiar. La vigente es la
+    ACTIVA (una por paciente); las CERRADA son el historial. Reasignar cierra la
+    activa y crea otra: nunca se borra ni se edita una fila salvo para cerrarla
+    (en PostgreSQL lo garantiza un trigger, migración 0033).
+    """
+
+    class Estatus(models.TextChoices):
+        ACTIVA = "ACTIVA", "Activa"
+        CERRADA = "CERRADA", "Cerrada"
+
+    class Origen(models.TextChoices):
+        CHECKIN = "CHECKIN", "Check-in"
+        CITA = "CITA", "Cita"
+        MANUAL = "MANUAL", "Manual"
+
+    class MotivoCierre(models.TextChoices):
+        REASIGNACION = "REASIGNACION", "Reasignación"
+        CAMBIO_CLINICA = "CAMBIO_CLINICA", "Cambio de clínica en SERMED"
+        CONSULTORIO_INACTIVO = "CONSULTORIO_INACTIVO", "Consultorio inactivo"
+        UNIFICACION = "UNIFICACION", "Unificación de registros"
+
+    id = models.BigAutoField(primary_key=True, db_column="id_adscripcion")
+    paciente = models.ForeignKey(
+        "consulta_medica.Patient", db_column="id_paciente",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    centro = models.ForeignKey(
+        "catalogos.CatCentroAtencion", db_column="id_centro_atencion",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    # Lo que decía SERMED al adscribir: deja ver después de qué clínica venía.
+    clave_clinica_sermed = models.CharField(max_length=10)
+    consultorio = models.ForeignKey(
+        "catalogos.Consultorios", db_column="id_consultorio",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    # Copiado de cat_consultorios.id_trno al adscribir.
+    turno = models.ForeignKey(
+        "catalogos.Turnos", db_column="id_turno",
+        on_delete=models.PROTECT, related_name="+",
+    )
+    estatus = models.CharField(max_length=10, choices=Estatus.choices, default=Estatus.ACTIVA)
+    origen = models.CharField(max_length=10, choices=Origen.choices)
+    fue_sugerida = models.BooleanField(default=False)
+    motivo_cierre = models.CharField(max_length=20, choices=MotivoCierre.choices, null=True, blank=True)
+    observaciones = models.CharField(max_length=255, null=True, blank=True)
+    fecha_inicio = models.DateTimeField(default=timezone.now)
+    fecha_fin = models.DateTimeField(null=True, blank=True)
+    id_usuario_creacion = models.BigIntegerField()
+    id_usuario_cierre = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "adscripcion_paciente"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["paciente"], condition=models.Q(estatus="ACTIVA"),
+                name="adscripcion_paciente_una_activa_uq",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(estatus__in=["ACTIVA", "CERRADA"]),
+                name="adscripcion_paciente_estatus_ck",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(origen__in=["CHECKIN", "CITA", "MANUAL"]),
+                name="adscripcion_paciente_origen_ck",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(motivo_cierre__isnull=True)
+                    | models.Q(motivo_cierre__in=[
+                        "REASIGNACION", "CAMBIO_CLINICA", "CONSULTORIO_INACTIVO", "UNIFICACION",
+                    ])
+                ),
+                name="adscripcion_paciente_motivo_ck",
+            ),
+            # Activa: sin datos de cierre. Cerrada: con todos los datos de cierre.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        estatus="ACTIVA", fecha_fin__isnull=True,
+                        id_usuario_cierre__isnull=True, motivo_cierre__isnull=True,
+                    )
+                    | models.Q(
+                        estatus="CERRADA", fecha_fin__isnull=False,
+                        id_usuario_cierre__isnull=False, motivo_cierre__isnull=False,
+                    )
+                ),
+                name="adscripcion_paciente_cierre_ck",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(fecha_fin__isnull=True) | models.Q(fecha_fin__gte=models.F("fecha_inicio")),
+                name="adscripcion_paciente_fechas_ck",
+            ),
+        ]
+        indexes = [
+            # Carga por consultorio (sugerencia y capacidad).
+            models.Index(
+                fields=["consultorio"], condition=models.Q(estatus="ACTIVA"),
+                name="adscripcion_paciente_carga_idx",
+            ),
+            models.Index(fields=["paciente", "-fecha_inicio"], name="adscripcion_paciente_hist_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Adscripción {self.id} — paciente {self.paciente_id} ({self.estatus})"
+
+
+class AdscripcionCitaAfectada(models.Model):
+    """
+    Cita de medicina general cancelada por un cambio de consultorio. Queda
+    PENDIENTE hasta que recepción la reagenda en el consultorio nuevo o la
+    descarta con motivo.
+    """
+
+    class Estatus(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        REAGENDADA = "REAGENDADA", "Reagendada"
+        DESCARTADA = "DESCARTADA", "Descartada"
+
+    id = models.BigAutoField(primary_key=True, db_column="id_cita_afectada")
+    adscripcion = models.ForeignKey(
+        AdscripcionPaciente, db_column="id_adscripcion",
+        on_delete=models.PROTECT, related_name="citas_afectadas",
+    )
+    cita_cancelada = models.OneToOneField(
+        CitaMedica, db_column="id_cita_cancelada", on_delete=models.PROTECT, related_name="+",
+    )
+    cita_nueva = models.OneToOneField(
+        CitaMedica, db_column="id_cita_nueva", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="+",
+    )
+    estatus = models.CharField(max_length=12, choices=Estatus.choices, default=Estatus.PENDIENTE)
+    motivo_descarte = models.CharField(max_length=255, null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_resolucion = models.DateTimeField(null=True, blank=True)
+    id_usuario_creacion = models.BigIntegerField()
+    id_usuario_resolucion = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "adscripcion_cita_afectada"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(estatus__in=["PENDIENTE", "REAGENDADA", "DESCARTADA"]),
+                name="adscripcion_cita_afectada_estatus_ck",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(estatus="PENDIENTE", cita_nueva__isnull=True, fecha_resolucion__isnull=True)
+                    | models.Q(estatus="REAGENDADA", cita_nueva__isnull=False, fecha_resolucion__isnull=False)
+                    | models.Q(
+                        estatus="DESCARTADA", cita_nueva__isnull=True,
+                        fecha_resolucion__isnull=False, motivo_descarte__isnull=False,
+                    )
+                ),
+                name="adscripcion_cita_afectada_resolucion_ck",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["adscripcion"], condition=models.Q(estatus="PENDIENTE"),
+                name="adscripcion_cita_pend_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Cita {self.cita_cancelada_id} afectada ({self.estatus})"

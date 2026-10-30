@@ -77,6 +77,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Clasificaciones de Cirugía",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/consultorio-familiar": {
+    label: "Consultorio familiar",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/designacion-autorizadores": {
     label: "Designación de Autorizadores",
     grupo: "Catálogos",

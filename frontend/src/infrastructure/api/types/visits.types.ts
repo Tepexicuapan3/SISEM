@@ -1,4 +1,5 @@
 import type { ListResponse } from "@api/types/common.types";
+import type { AdscripcionResumen } from "@api/types/adscripcion.types";
 
 export const ARRIVAL_TYPE = {
   APPOINTMENT: "appointment",
@@ -97,6 +98,8 @@ export interface CreateVisitRequest {
   notes?:          string;
   horaConsulta?:   string;  // HH:mm
   fechaConsulta?:  string;  // YYYY-MM-DD — fecha elegida por recepcionista
+  /** P-03: motivo para atender en un consultorio distinto al familiar. */
+  excepcionConsultorioFamiliar?: string;
 }
 
 export interface VisitsListParams {
@@ -140,6 +143,8 @@ export interface PatientMember {
   orden?:     number;
   /** Solo provisionales y solo si el titular no es la madre. */
   madre?:     string | null;
+  /** P-03: estado del consultorio familiar; null si no se pudo evaluar. */
+  adscripcion?: AdscripcionResumen | null;
 }
 
 export interface PatientLookupResponse {

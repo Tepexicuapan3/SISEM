@@ -50,6 +50,15 @@ import { useMedicosDisponibles } from "@features/admin/modules/medicos/hooks/use
 import { useAgendaSemanal }       from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
 import { useDebounce } from "@shared/hooks/useDebounce";
+import { AdscripcionAviso, AdscripcionBadge } from "@features/recepcion/modules/adscripcion/components/AdscripcionAviso";
+import { ConflictoConsultorioAviso } from "@features/recepcion/modules/adscripcion/components/ConflictoConsultorioAviso";
+import { ReasignarAdscripcionDialog } from "@features/recepcion/modules/adscripcion/components/ReasignarAdscripcionDialog";
+import { useAdscripcionPermisos } from "@features/recepcion/modules/adscripcion/queries/useAdscripcionPermisos";
+import {
+  conflictoConsultorioFamiliar,
+  type ConflictoConsultorioFamiliar,
+} from "@features/recepcion/modules/adscripcion/domain/adscripcionEstado";
+import type { Adscripcion } from "@api/types";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -174,6 +183,11 @@ export const RecepcionQuickCheckinDialog = ({
   const [centroId,          setCentroId]          = useState<number | null>(null);
   const [consultorioFiltro, setConsultorioFiltro] = useState<number | null>(null);
   const [selectedMedico,    setSelectedMedico]    = useState<MedicoDisponible | null>(null);
+  // P-03: panel de consultorio familiar y respuesta 409 de consultorio diferente.
+  const [panelAdscripcion, setPanelAdscripcion] = useState(false);
+  const [conflicto,        setConflicto]        = useState<ConflictoConsultorioFamiliar | null>(null);
+  const [ultimosValores,   setUltimosValores]   = useState<CheckinFormValues | null>(null);
+  const permisosAdscripcion = useAdscripcionPermisos();
 
   const debouncedNoExp = useDebounce(noExpSearch, 400);
 
@@ -183,10 +197,11 @@ export const RecepcionQuickCheckinDialog = ({
     defaultValues: { ...DEFAULT_CHECKIN_FORM_VALUES, fechaConsulta: todayISO },
   });
 
-  const [pkNumWatch, horaConsultaWatch] = useWatch({
+  const [pkNumWatch, horaConsultaWatch, serviceTypeWatch] = useWatch({
     control: form.control,
-    name:    ["pkNum", "horaConsulta"],
+    name:    ["pkNum", "horaConsulta", "serviceType"],
   });
+  const esMedicinaGeneral = serviceTypeWatch === "medicina_general";
 
   const serviceTypeField    = form.register("serviceType");
   const { data: tiposCitasData } = useTiposCitasList({
@@ -230,6 +245,18 @@ export const RecepcionQuickCheckinDialog = ({
       setConsultorioFiltro(null);
     }
   }, [selectedMember, centros]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // P-03: con consultorio familiar vigente se preseleccionan su centro y su
+  // consultorio (va después del efecto anterior para prevalecer).
+  const adscripcionVigente =
+    selectedMember?.adscripcion?.estado === "VIGENTE" ? selectedMember.adscripcion : null;
+  useEffect(() => {
+    setConflicto(null);
+    if (!adscripcionVigente || !esMedicinaGeneral) return;
+    setCentroId(adscripcionVigente.idCentroAdscripcion);
+    setConsultorioFiltro(adscripcionVigente.idConsultorio);
+    setSelectedMedico(null);
+  }, [adscripcionVigente?.idAdscripcion, esMedicinaGeneral]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Médicos disponibles ───────────────────────────────────────────────────
   const { data: disponibilidadData, isFetching: cargandoMedicos } =
@@ -341,8 +368,16 @@ export const RecepcionQuickCheckinDialog = ({
     : null;
   const pacienteSinCentro = !!selectedMember && !!cdClinicaPaciente && !centroDelPaciente;
 
+  // P-03: al adscribir, la ficha sigue con el consultorio nuevo.
+  const handleAdscrito = (adscripcion: Adscripcion) => {
+    setConflicto(null);
+    setCentroId(adscripcion.idCentroAtencion);
+    setConsultorioFiltro(adscripcion.idConsultorio);
+    setSelectedMedico(null);
+  };
+
   // ── Submit ────────────────────────────────────────────────────────────────
-  const handleSubmit = async (values: CheckinFormValues) => {
+  const handleSubmit = async (values: CheckinFormValues, excepcionConsultorioFamiliar?: string) => {
     if (!canWrite) return;
     if (pacienteSinCentro) {
       toast.error("No se puede generar la ficha", {
@@ -357,15 +392,24 @@ export const RecepcionQuickCheckinDialog = ({
         (selectedMember
           ? (await visitsAPI.openPatient(selectedMember.noExp, selectedMember.pkNum)).idPaciente
           : undefined);
-      await createVisit.mutateAsync(
-        mapCheckinFormToCreateVisitRequest(values, selectedMember?.nombre, idPaciente),
-      );
+      await createVisit.mutateAsync({
+        ...mapCheckinFormToCreateVisitRequest(values, selectedMember?.nombre, idPaciente),
+        ...(excepcionConsultorioFamiliar ? { excepcionConsultorioFamiliar } : {}),
+      });
       toast.success("Ficha de consulta generada.");
       form.reset(DEFAULT_CHECKIN_FORM_VALUES);
       setNoExpSearch("");
       setSelectedMedico(null);
+      setConflicto(null);
       onOpenChange(false);
     } catch (error) {
+      // P-03: otro consultorio que el familiar → recepción decide cómo seguir.
+      const conflictoP03 = conflictoConsultorioFamiliar(error);
+      if (conflictoP03) {
+        setConflicto(conflictoP03);
+        setUltimosValores(values);
+        return;
+      }
       toast.error("No se pudo generar la ficha", {
         description: resolveDomainError(error),
       });
@@ -375,6 +419,7 @@ export const RecepcionQuickCheckinDialog = ({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -387,7 +432,7 @@ export const RecepcionQuickCheckinDialog = ({
         <form
           className="space-y-4"
           noValidate
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={form.handleSubmit((values) => handleSubmit(values))}
         >
 
           {/* ── 1. Paciente ─────────────────────────────────────────── */}
@@ -426,6 +471,7 @@ export const RecepcionQuickCheckinDialog = ({
                       onSelect={() =>
                         form.setValue("pkNum", member.pkNum, { shouldValidate: true })
                       }
+                      aside={<AdscripcionBadge resumen={member.adscripcion} />}
                     />
                   ))}
 
@@ -447,6 +493,15 @@ export const RecepcionQuickCheckinDialog = ({
                       ↑ Selecciona a quien se le generará la ficha.
                     </p>
                   )}
+
+                  {/* P-03: aviso del consultorio familiar (solo medicina general) */}
+                  {selectedMember && esMedicinaGeneral ? (
+                    <AdscripcionAviso
+                      resumen={selectedMember.adscripcion}
+                      puedeAsignar={permisosAdscripcion.puedeAsignar}
+                      onAccion={() => setPanelAdscripcion(true)}
+                    />
+                  ) : null}
                 </>
               )}
             </div>
@@ -748,6 +803,19 @@ export const RecepcionQuickCheckinDialog = ({
             />
           </div>
 
+          {conflicto ? (
+            <ConflictoConsultorioAviso
+              conflicto={conflicto}
+              puedeReasignar={permisosAdscripcion.puedeAsignar}
+              puedeExcepcion={permisosAdscripcion.puedeExcepcion}
+              enviando={createVisit.isPending}
+              onReasignar={() => setPanelAdscripcion(true)}
+              onExcepcion={(motivo) => {
+                if (ultimosValores) void handleSubmit(ultimosValores, motivo);
+              }}
+            />
+          ) : null}
+
           {pacienteSinCentro ? (
             <p className="text-sm text-status-critical" role="alert">
               El paciente pertenece a la clínica <strong>{cdClinicaPaciente}</strong> que no está
@@ -779,5 +847,14 @@ export const RecepcionQuickCheckinDialog = ({
         </form>
       </DialogContent>
     </Dialog>
+
+    {/* P-03: panel "Revisar y reasignar" */}
+    <ReasignarAdscripcionDialog
+      open={panelAdscripcion}
+      onOpenChange={setPanelAdscripcion}
+      member={selectedMember ?? null}
+      onAdscrito={handleAdscrito}
+    />
+    </>
   );
 };

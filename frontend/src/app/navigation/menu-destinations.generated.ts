@@ -41,6 +41,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/catalogos/cie9-mc","permissions":["admin:catalogos:cie9_mc:read"],"capability":"admin.catalogs.cie9mc.read"},
   {"path":"/admin/catalogos/cies","permissions":["admin:catalogos:cies:upload"]},
   {"path":"/admin/catalogos/clasificaciones-cirugia","permissions":["admin:catalogos:clasificaciones_cirugia:read"],"capability":"admin.catalogs.clasificacionescirugia.read"},
+  {"path":"/admin/catalogos/consultorio-familiar","permissions":["admin:catalogos:consultorio_familiar:config"],"capability":"admin:catalogos:consultorio_familiar:config"},
   {"path":"/admin/catalogos/designacion-autorizadores","permissions":["admin:autorizadores:designacion:read"],"capability":"admin.catalogs.designacionAutorizadores.read"},
   {"path":"/admin/catalogos/destinos-ambulancia","permissions":["admin:catalogos:destinos_ambulancia:read"],"capability":"admin.catalogs.destinosambulancia.read"},
   {"path":"/admin/catalogos/discapacidades","permissions":["admin:catalogos:discapacidades:read"]},
