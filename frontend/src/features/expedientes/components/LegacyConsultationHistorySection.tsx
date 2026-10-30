@@ -51,16 +51,40 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
   const servicio = [nota.serviceName, nota.consultationType, nota.specialtyName].filter(Boolean);
   const medicamentos = nota.medications ?? [];
   const incapacidades = nota.sickLeaves ?? [];
-  const vitales = [
-    nota.weightLegacy && `Peso ${nota.weightLegacy} kg`,
-    nota.heightLegacy && `Talla ${nota.heightLegacy}`,
-    nota.bmiLegacy && `IMC ${nota.bmiLegacy}`,
-    nota.bloodPressureLegacy && `TA ${nota.bloodPressureLegacy}`,
-    nota.pulseLegacy && `Pulso ${nota.pulseLegacy}`,
-    nota.respirationLegacy && `Resp. ${nota.respirationLegacy}`,
-    nota.temperatureLegacy && `Temp. ${nota.temperatureLegacy} °C`,
-    nota.glucoseLegacy && `Glucosa ${nota.glucoseLegacy}`,
-  ].filter(Boolean) as string[];
+  const conUnidad = (valor: string | null | undefined, unidad: string) =>
+    valor ? `${valor} ${unidad}` : "";
+  // Mismo acomodo que la pantalla de SISEM: dos columnas de etiqueta y valor.
+  const vitales: [string, string][] = [
+    ["Estatura", conUnidad(nota.heightLegacy, "m")],
+    ["Peso", conUnidad(nota.weightLegacy, "Kg")],
+    ["T.A.", conUnidad(nota.bloodPressureLegacy, "mmHg")],
+    ["Temperatura", conUnidad(nota.temperatureLegacy, "°C")],
+    ["Frecuencia cardiaca", conUnidad(nota.pulseLegacy, "lpm")],
+    ["Frecuencia respiratoria", conUnidad(nota.respirationLegacy, "rpm")],
+    ["IMC", conUnidad(nota.bmiLegacy, "Kg/m2")],
+    ["Glucosa capilar", conUnidad(nota.glucoseLegacy, "mg/dL")],
+  ];
+  const hayVitales = vitales.some(([, valor]) => valor);
+  const diagnostico = (
+    <>
+      {nota.diagnosticImpression && (
+        <p className="text-txt-body">
+          <strong>Diagnóstico:</strong> {nota.diagnosticImpression}
+        </p>
+      )}
+      {nota.diagnoses && nota.diagnoses.length > 0 && (
+        <ul className="text-txt-body list-disc pl-5">
+          {nota.diagnoses.map((cie, indice) => (
+            <li key={`${nota.id}-cie-${indice}`}>
+              {cie.codigo ? <span className="font-mono">{cie.codigo}</span> : null}
+              {cie.codigo && cie.descripcion ? " — " : ""}
+              {cie.descripcion}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
 
   return (
     <div className="p-3 bg-subtle rounded-md text-sm space-y-1">
@@ -89,32 +113,36 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
       {nota.statusLegacy && nota.statusLegacy !== "A" && (
         <p className="text-xs font-semibold text-txt-muted uppercase">Nota cancelada en el legado</p>
       )}
-      {nota.diagnosticImpression && (
-        <p className="text-txt-body">
-          <strong>Diagnóstico:</strong> {nota.diagnosticImpression}
-        </p>
+      {!detalle && (
+        <>
+          {nota.objective && (
+            <p className="text-txt-body">
+              <strong>Objetivo:</strong> {nota.objective}
+            </p>
+          )}
+          {diagnostico}
+        </>
       )}
-      {nota.diagnoses && nota.diagnoses.length > 0 && (
-        <ul className="text-txt-body list-disc pl-5">
-          {nota.diagnoses.map((cie, indice) => (
-            <li key={`${nota.id}-cie-${indice}`}>
-              {cie.codigo ? <span className="font-mono">{cie.codigo}</span> : null}
-              {cie.codigo && cie.descripcion ? " — " : ""}
-              {cie.descripcion}
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* Detalle, en el orden que pidió el médico: signos vitales, SOAP, próxima
-          cita y complemento; los medicamentos con sus indicaciones; al final
-          incapacidad y pases. */}
+      {/* Detalle, en el orden que pidió el médico: signos vitales, SOAP,
+          diagnóstico, próxima cita y complemento; los medicamentos con sus
+          indicaciones; al final incapacidad y pases. */}
       {detalle && (
         <div className="space-y-1 border-t border-line-struct pt-2 text-txt-body">
-          {vitales.length > 0 && <Campo titulo="Signos vitales" texto={vitales.join(" · ")} />}
+          {hayVitales && (
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-0.5 border-b border-line-struct pb-2 sm:grid-cols-2">
+              {vitales.map(([etiqueta, valor]) => (
+                <div key={etiqueta} className="flex justify-between gap-3">
+                  <dt className="font-semibold">{etiqueta}:</dt>
+                  <dd className="tabular-nums">{valor}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
           <Campo titulo="Subjetivo" texto={nota.subjective} />
           <Campo titulo="Objetivo" texto={nota.objective} />
           <Campo titulo="Análisis" texto={nota.assessment} />
           <Campo titulo="Plan" texto={nota.plan} />
+          {diagnostico}
           {nota.nextAppointment && (
             <Campo titulo="Próxima cita" texto={formatFecha(nota.nextAppointment)} />
           )}

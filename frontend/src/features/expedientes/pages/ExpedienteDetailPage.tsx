@@ -124,7 +124,7 @@ export const ExpedienteDetailPage = () => {
               <h1 className="text-3xl font-bold text-txt-body">
                 Expediente Clínico
               </h1>
-              <p className="text-txt-muted">Folio: {expediente.folio}</p>
+              <p className="text-txt-muted">Expediente: {expediente.folio}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -181,7 +181,7 @@ export const ExpedienteDetailPage = () => {
                     </span>
                   </div>
                   <div>
-                    <span className="text-txt-muted">Folio:</span>{" "}
+                    <span className="text-txt-muted">Expediente:</span>{" "}
                     <span className="font-mono text-txt-body">
                       {expediente.folio}
                     </span>

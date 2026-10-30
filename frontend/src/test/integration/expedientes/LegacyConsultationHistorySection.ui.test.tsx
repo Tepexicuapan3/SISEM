@@ -99,7 +99,9 @@ describe("LegacyConsultationHistorySection", () => {
     // El detalle aparece solo al pedirlo.
     expect(screen.queryByText(/1 CADA 8 HORAS/)).not.toBeInTheDocument();
     expect(screen.queryByText("CUADRO VIRAL")).not.toBeInTheDocument();
-    expect(screen.queryByText("FARINGE HIPEREMICA")).not.toBeInTheDocument();
+    // Sin abrir el detalle: objetivo antes del diagnóstico.
+    expect(screen.getByText("FARINGE HIPEREMICA")).toBeInTheDocument();
+    expect(screen.queryByText("TOS DE 3 DIAS")).not.toBeInTheDocument();
     expect(screen.queryByText(/RX ARTICULACION RODILLA/)).not.toBeInTheDocument();
     expect(screen.queryByText("SE AGREGA INCAPACIDAD")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Ver detalle" }));
@@ -117,13 +119,14 @@ describe("LegacyConsultationHistorySection", () => {
     ).toBeInTheDocument();
     // Orden del detalle: signos vitales primero y los pases al final.
     const texto = document.body.textContent ?? "";
-    const orden = ["Signos vitales", "Subjetivo", "Objetivo", "Análisis", "Plan", "Próxima cita",
+    const orden = ["Estatura", "Subjetivo", "Objetivo", "Análisis", "Plan", "Diagnóstico", "Próxima cita",
       "Complemento", "Medicamentos", "Días de incapacidad", "Pases de gabinete"];
     const posiciones = orden.map((titulo) => texto.indexOf(`${titulo}:`));
     expect(posiciones.every((posicion) => posicion >= 0)).toBe(true);
     expect([...posiciones].sort((a, b) => a - b)).toEqual(posiciones);
     expect(screen.getByText("Días de incapacidad:")).toBeInTheDocument();
-    expect(screen.getByText(/Peso 70 kg · TA 120\/80/)).toBeInTheDocument();
+    expect(screen.getByText("70 Kg")).toBeInTheDocument();
+    expect(screen.getByText("120/80 mmHg")).toBeInTheDocument();
   });
 
   it("el selector de año trae las notas de esa base", async () => {
