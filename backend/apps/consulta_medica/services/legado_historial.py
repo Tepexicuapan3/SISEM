@@ -104,7 +104,7 @@ def _notas_de_esquema(esquema, llaves):
     sql = f"""
         SELECT n.cd_snota, n.cd_clinica, n.fe_nota, n.hh_nota, n.cd_medico,
                n.ds_sintomas, n.ds_objetivo, n.ds_analisis, n.ds_plan, n.ds_diagnostico,
-               n.sw_complemento, n.sw_status, n.sw_incapacidad, n.sw_laboratorio, n.sw_gabinete, n.fe_cita, n.cd_servicio, n.tp_consulta, n.cd_especialidad,
+               n.sw_complemento, n.sw_status, n.sw_incapacidad, n.sw_laboratorio, n.sw_gabinete, n.sw_hospitalizacion, n.fe_cita, n.cd_servicio, n.tp_consulta, n.cd_especialidad,
                n.no_peso, n.no_estatura, n.no_ta, n.no_pulso, n.no_temp, n.no_resp, n.no_imc, n.no_gluc,
                m.ds_paterno AS med_paterno, m.ds_materno AS med_materno, m.ds_nombre AS med_nombre,
                c.ds_clinica, x.cd_cie, x.ds_cie, s.ds_servicio, t.ds_tpconsulta, e.ds_especialidad
@@ -258,6 +258,55 @@ def _estudios(esquema, notas, con_tabla) -> dict[str, list[dict]]:
     return resultado
 
 
+def _pases_especialidad_y_hospital(esquema, notas, con_tabla, resultado) -> None:
+    """Agrega a `resultado` los pases a especialidad y a hospital de esas notas,
+    con la misma forma que los estudios: {type, name, note, cancelled}.
+
+    - Especialidad: a que especialidad y el tipo de atencion ("CONSULTA").
+      sw_especialidad no es una marca confiable ('0', '', '90'...), asi que se
+      busca para todas las notas; pas_especialidad es chica (~72 mil filas).
+    - Hospital: a que hospital y el tipo ("ATENCION EN URGENCIAS"), y el
+      resumen clinico con que se envio. Solo notas con sw_hospitalizacion = 'S'.
+    """
+    consultas = []
+    if "pas_especialidad" in con_tabla:
+        consultas.append(("ESPECIALIDAD", notas, f"""
+            SELECT p.cd_snota, p.sw_status, e.ds_especialidad AS nombre, p.cd_especial AS clave,
+                   p.ds_atencion AS nota
+            FROM {legado_archivo.tabla(esquema, 'pas_especialidad')} p
+            LEFT JOIN {legado_archivo.tabla(ACTUAL, 'cat_especialidad')} e
+                   ON {C('e.cd_especialidad')} = {C('p.cd_especial')}
+            WHERE {C('p.cd_snota')} IN ({{marcas}})
+            ORDER BY p.cd_esp
+        """))
+    if "pas_hospital" in con_tabla:
+        consultas.append(("HOSPITAL", [n for n in notas if _texto(n.get("sw_hospitalizacion")) == "S"], f"""
+            SELECT p.cd_snota, p.sw_status, h.ds_hospital AS nombre, p.cd_hospital AS clave,
+                   t.ds_tphospi AS tipo, p.ds_diagnostico AS nota
+            FROM {legado_archivo.tabla(esquema, 'pas_hospital')} p
+            LEFT JOIN {legado_archivo.tabla(ACTUAL, 'cat_hospitales')} h
+                   ON {C('h.cd_hospital')} = {C('p.cd_hospital')}
+            LEFT JOIN {legado_archivo.tabla(ACTUAL, 'cat_tphospi')} t
+                   ON {C('t.cd_tphospi')} = {C('p.cd_tphospi')}
+            WHERE {C('p.cd_snota')} IN ({{marcas}})
+            ORDER BY p.cd_hosp
+        """))
+    for tipo, de_notas, sql in consultas:
+        folios, marcas = _folios(de_notas)
+        if not folios:
+            continue
+        for fila in legado_archivo.consultar(sql.format(marcas=marcas), folios):
+            nombre = _texto(fila["nombre"]) or f"{tipo.capitalize()} {fila['clave']}"
+            if _texto(fila.get("tipo")):
+                nombre = f"{nombre} — {_texto(fila['tipo'])}"
+            resultado.setdefault(str(fila["cd_snota"]), []).append({
+                "type": tipo,
+                "name": nombre,
+                "note": _texto(fila["nota"]),
+                "cancelled": (_texto(fila["sw_status"]) or "A") != "A",
+            })
+
+
 def _contrato(esquema, nota, diagnosticos, medicamentos, incapacidades=None, estudios=None) -> dict:
     llave = (str(nota["cd_clinica"]), str(nota["cd_snota"]))
     principal = None
@@ -332,9 +381,11 @@ def historial(no_exp, pk_num, base=None) -> dict:
     medicamentos = _medicamentos(base, notas) if base in legado_archivo.esquemas_con_tabla("det_receta") else {}
     incapacidades = (_incapacidades(base, notas)
                      if base in legado_archivo.esquemas_con_tabla("det_licencia") else {})
-    con_tabla = {detalle for detalle, *_ in _PASES_CON_ESTUDIOS
-                 if base in legado_archivo.esquemas_con_tabla(detalle)}
+    con_tabla = {tabla for tabla in [*(detalle for detalle, *_ in _PASES_CON_ESTUDIOS),
+                                     "pas_especialidad", "pas_hospital"]
+                 if base in legado_archivo.esquemas_con_tabla(tabla)}
     estudios = _estudios(base, notas, con_tabla)
+    _pases_especialidad_y_hospital(base, notas, con_tabla, estudios)
     items = [_contrato(base, nota, diagnosticos, medicamentos, incapacidades, estudios) for nota in notas]
     if bases is not None:
         total = bases[0]["total"]

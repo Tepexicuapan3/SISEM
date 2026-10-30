@@ -66,9 +66,12 @@ export interface LegacyConsultationItem {
   medications?: LegacyMedication[];
   /** Días de cada incapacidad de la nota (det_licencia); `days` es texto si el legado no guardó un número. */
   sickLeaves?: { days: number | string | null; cancelled: boolean }[];
-  /** Estudios de los pases de gabinete y laboratorio de la nota (det_pasgab/det_paslab + cat_estudios). */
+  /**
+   * Pases de la nota: estudios de gabinete y laboratorio (det_pasgab/det_paslab
+   * + cat_estudios), especialidad (pas_especialidad) y hospital (pas_hospital).
+   */
   referralStudies?: {
-    type: "GABINETE" | "LABORATORIO";
+    type: "GABINETE" | "LABORATORIO" | "ESPECIALIDAD" | "HOSPITAL";
     name: string;
     /** Lo que anotó el médico en el estudio (ds_complemento). */
     note: string | null;

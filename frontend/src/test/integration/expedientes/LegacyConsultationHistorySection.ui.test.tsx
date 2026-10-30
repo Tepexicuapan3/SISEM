@@ -50,6 +50,7 @@ const nota = (folio: string, date: string, sourceDb: string): LegacyConsultation
       note: "AP Y LATERAL CON INTERPRETACION",
       cancelled: false,
     },
+    { type: "HOSPITAL", name: "SANATORIO DURANGO — ATENCIÓN EN URGENCIAS", note: null, cancelled: false },
   ],
   statusLegacy: "A",
   weightLegacy: "70",
@@ -114,6 +115,9 @@ describe("LegacyConsultationHistorySection", () => {
     expect(screen.getByText(/4 de junio de 2025/)).toBeInTheDocument();
     expect(screen.getByText("FARINGE HIPEREMICA")).toBeInTheDocument();
     expect(screen.getByText("Pases de gabinete:")).toBeInTheDocument();
+    expect(screen.getByText("Pases a hospital:")).toBeInTheDocument();
+    // Signos vitales sin dato: la etiqueta se ve igual.
+    expect(screen.getByText("Glucosa capilar:")).toBeInTheDocument();
     expect(
       screen.getByText("RX ARTICULACION RODILLA (2 PROYECCIONES) — AP Y LATERAL CON INTERPRETACION"),
     ).toBeInTheDocument();

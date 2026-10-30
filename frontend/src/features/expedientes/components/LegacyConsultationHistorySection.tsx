@@ -39,6 +39,13 @@ const etiquetaBase = (base: LegacyBase) => {
   return [nombreBase(base.sourceDb), rango, notas].filter(Boolean).join(" · ");
 };
 
+const TITULO_PASE = {
+  GABINETE: "Pases de gabinete:",
+  LABORATORIO: "Pases de laboratorio:",
+  ESPECIALIDAD: "Pases a especialidad:",
+  HOSPITAL: "Pases a hospital:",
+} as const;
+
 const Campo = ({ titulo, texto }: { titulo: string; texto: string | null | undefined }) =>
   texto ? (
     <p>
@@ -64,7 +71,6 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
     ["IMC", conUnidad(nota.bmiLegacy, "Kg/m2")],
     ["Glucosa capilar", conUnidad(nota.glucoseLegacy, "mg/dL")],
   ];
-  const hayVitales = vitales.some(([, valor]) => valor);
   const diagnostico = (
     <>
       {nota.diagnosticImpression && (
@@ -128,16 +134,15 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
           indicaciones; al final incapacidad y pases. */}
       {detalle && (
         <div className="space-y-1 border-t border-line-struct pt-2 text-txt-body">
-          {hayVitales && (
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-0.5 border-b border-line-struct pb-2 sm:grid-cols-2">
-              {vitales.map(([etiqueta, valor]) => (
-                <div key={etiqueta} className="flex justify-between gap-3">
-                  <dt className="font-semibold">{etiqueta}:</dt>
-                  <dd className="tabular-nums">{valor}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
+          {/* Siempre, aunque vengan vacios: asi se ve que no se tomaron. */}
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-0.5 border-b border-line-struct pb-2 sm:grid-cols-2">
+            {vitales.map(([etiqueta, valor]) => (
+              <div key={etiqueta} className="flex justify-between gap-3">
+                <dt className="font-semibold">{etiqueta}:</dt>
+                <dd className="tabular-nums">{valor}</dd>
+              </div>
+            ))}
+          </dl>
           <Campo titulo="Subjetivo" texto={nota.subjective} />
           <Campo titulo="Objetivo" texto={nota.objective} />
           <Campo titulo="Análisis" texto={nota.assessment} />
@@ -187,11 +192,11 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
         </p>
       )}
       {detalle &&
-        (["GABINETE", "LABORATORIO"] as const).map((tipo) => {
+        (["GABINETE", "LABORATORIO", "ESPECIALIDAD", "HOSPITAL"] as const).map((tipo) => {
           const estudios = (nota.referralStudies ?? []).filter((estudio) => estudio.type === tipo);
           return estudios.length > 0 ? (
             <div key={`${nota.id}-pase-${tipo}`} className="text-txt-body">
-              <strong>{tipo === "GABINETE" ? "Pases de gabinete:" : "Pases de laboratorio:"}</strong>
+              <strong>{TITULO_PASE[tipo]}</strong>
               <ul className="list-disc pl-5">
                 {estudios.map((estudio, indice) => (
                   <li

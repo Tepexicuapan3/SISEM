@@ -25,7 +25,7 @@ def _nota(folio, fecha, cie=None, diagnostico=None, **kw):
     return {"cd_snota": folio, "cd_clinica": 7, "fe_nota": fecha, "hh_nota": "10:00", "cd_medico": "12",
             "ds_sintomas": "TOS", "ds_objetivo": None, "ds_analisis": None, "ds_plan": None,
             "ds_diagnostico": diagnostico, "sw_complemento": None, "sw_status": "A", "sw_incapacidad": None, "fe_cita": None,
-            "sw_laboratorio": None, "sw_gabinete": None,
+            "sw_laboratorio": None, "sw_gabinete": None, "sw_hospitalizacion": None,
             "no_peso": None, "no_estatura": None, "no_ta": None, "no_pulso": None, "no_temp": None,
             "no_resp": None, "no_imc": None, "no_gluc": None,
             "med_paterno": "PEREZ", "med_materno": None, "med_nombre": "ANA", "ds_clinica": "CLINICA 7",
@@ -205,6 +205,34 @@ class HistorialTests(TestCase):
         sql, params = next(l for l in copia.llamadas if "det_pasgab" in l[0] and "information_schema" not in l[0])
         self.assertIn('"legado_actual"."cat_estudios"', sql)
         self.assertEqual(params, ["TC26-2"])
+
+    def test_pases_a_especialidad_y_a_hospital(self):
+        copia = _CopiaSimulada(
+            {"legado_actual": [_nota("CC14-628", date(2014, 1, 7), sw_hospitalizacion="S"),
+                               _nota("CC14-600", date(2014, 1, 6))]},
+            estudios={
+                "pas_especialidad": [{"cd_snota": "CC14-600", "sw_status": "A", "nombre": "CARDIOLOGÍA",
+                                      "clave": 5, "nota": "CONSULTA"}],
+                "pas_hospital": [{"cd_snota": "CC14-628", "sw_status": "A", "nombre": "SANATORIO DURANGO",
+                                  "clave": 1, "tipo": "ATENCIÓN EN URGENCIAS", "nota": "SE ENVIA PARA RX"}],
+            },
+        )
+        items = self._correr(copia)["items"]
+        self.assertEqual(items[0]["referralStudies"], [
+            {"type": "HOSPITAL", "name": "SANATORIO DURANGO — ATENCIÓN EN URGENCIAS",
+             "note": "SE ENVIA PARA RX", "cancelled": False},
+        ])
+        self.assertEqual(items[1]["referralStudies"], [
+            {"type": "ESPECIALIDAD", "name": "CARDIOLOGÍA", "note": "CONSULTA", "cancelled": False},
+        ])
+
+        def llamada(tabla):
+            return next(l for l in copia.llamadas if tabla in l[0] and "information_schema" not in l[0])
+
+        # Especialidad se busca para todas las notas; hospital solo para las marcadas.
+        self.assertEqual(sorted(llamada("pas_especialidad")[1]), ["CC14-600", "CC14-628"])
+        self.assertEqual(llamada("pas_hospital")[1], ["CC14-628"])
+        self.assertIn('"legado_actual"."cat_tphospi"', llamada("pas_hospital")[0])
 
     def test_sin_notas_con_incapacidad_no_consulta_licencias(self):
         copia = self._dos_bases()
