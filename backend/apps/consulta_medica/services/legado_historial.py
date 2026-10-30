@@ -12,7 +12,7 @@ pueden no tenerlos).
 from __future__ import annotations
 
 from apps.consulta_medica.models import PatientIdentifier
-from apps.consulta_medica.services import legado_archivo
+from apps.consulta_medica.services import legado_archivo, legado_llaves
 from apps.consulta_medica.services.patient_link_service import records_for_key
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
@@ -357,12 +357,25 @@ def _vacio(base=None, bases=None) -> dict:
     return payload
 
 
+def _completar_llaves(no_exp, pk_num) -> None:
+    """Registra el CD_FAMILIAR de los familiares de la persona que no lo tienen.
+    Al crear al familiar se intenta, pero si el espejo no respondia quedaba sin
+    llave y sin historial: ya no hay recarga nocturna que lo complete. Mismas
+    reglas que al crearlo (nunca se adivina; ambiguo o en conflicto no se registra)."""
+    for paciente in records_for_key(no_exp, pk_num):
+        try:
+            legado_llaves.registrar_cd_familiar(paciente)
+        except legado_archivo.LegadoNoDisponible:
+            return
+
+
 def historial(no_exp, pk_num, base=None) -> dict:
     """Notas del legado de la persona en UNA base, las mas recientes primero.
 
     Sin `base`: devuelve tambien `bases` (donde tiene notas) y las notas de la
     primera. Con `base`: solo las notas de esa base (la lista ya la tiene la
     pantalla). Lanza LegadoNoDisponible si la copia no esta o no responde."""
+    _completar_llaves(no_exp, pk_num)
     llaves = llaves_legado(no_exp, pk_num)
     if not llaves:
         return _vacio(bases=[] if base is None else None)

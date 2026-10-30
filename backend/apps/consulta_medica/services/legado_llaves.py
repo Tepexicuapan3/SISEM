@@ -112,7 +112,8 @@ def registrar_cd_familiar(patient: Patient, mapa: MapaPuente | None = None, *, u
 
 def registrar_al_abrir(patient: Patient) -> None:
     """Al abrir un familiar en SIRES. Si la copia no esta o no responde, no
-    frena la atencion: lo completa la recarga nocturna."""
+    frena la atencion: se completa al abrir su historial del legado
+    (legado_historial._completar_llaves) o con registrar_llaves_legado."""
     if not _necesita_puente(patient) or not legado_archivo.disponible():
         return
     try:

@@ -44,12 +44,15 @@ class _CopiaSimulada:
         self.medicamentos = list(medicamentos)
         self.licencias = list(licencias)
         self.estudios = estudios or {}
+        self.familiares = []
         self.llamadas = []
 
     def __call__(self, sql, params=()):
         self.llamadas.append((sql, list(params or [])))
         if "information_schema" in sql:
             return [{"table_schema": e} for e in self.notas]
+        if "cat_familiar" in sql:
+            return self.familiares
         if "UNION ALL" in sql or "AS esquema" in sql:
             return [{"esquema": e, "total": len(f), "desde": min(n["fe_nota"] for n in f),
                      "hasta": max(n["fe_nota"] for n in f)} for e, f in self.notas.items() if f]
@@ -261,6 +264,22 @@ class HistorialTests(TestCase):
         item = self._correr(copia, permissions=["clinico:diagnosticos_vih:read"])["items"][0]
         self.assertFalse(item["diagnosisRestricted"])
         self.assertEqual(item["primaryCie"]["codigo"], "B24")
+
+    def test_familiar_sin_llave_la_registra_al_abrir_el_historial(self):
+        # Se abrio en SIRES con el espejo caido: tiene PK_NUM pero no CD_FAMILIAR.
+        familiar = Patient.objects.create(no_exp="40041", pk_num=48411)
+        _identificador(familiar, "PK_NUM", 48411)
+        copia = _CopiaSimulada({"legado_actual": [_nota("CC25-9", date(2025, 7, 1))]})
+        copia.familiares = [{"cd_familiar": 51506, "no_expf": 40041, "pk_num": 48411}]
+
+        with mock.patch.object(legado_archivo, "disponible", return_value=True),                 mock.patch.object(legado_archivo, "consultar", side_effect=copia):
+            payload = get_patient_legacy_consultations_history("40041", 48411, [ROLE_DOCTOR], [])
+
+        self.assertEqual([i["legacyFolio"] for i in payload["items"]], ["CC25-9"])
+        self.assertTrue(PatientIdentifier.objects.filter(
+            patient=familiar, id_type="CD_FAMILIAR", value="51506", status="A").exists())
+        _, params = next(l for l in copia.llamadas if "AS esquema" in l[0])
+        self.assertEqual(params[1:], ["40041", 51506])
 
     def test_si_la_copia_no_responde_lo_dice(self):
         with mock.patch.object(legado_archivo, "disponible", return_value=True), \
