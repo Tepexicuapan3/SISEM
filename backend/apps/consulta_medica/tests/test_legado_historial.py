@@ -24,7 +24,8 @@ def _identificador(paciente, tipo, valor):
 def _nota(folio, fecha, cie=None, diagnostico=None, **kw):
     return {"cd_snota": folio, "cd_clinica": 7, "fe_nota": fecha, "hh_nota": "10:00", "cd_medico": "12",
             "ds_sintomas": "TOS", "ds_objetivo": None, "ds_analisis": None, "ds_plan": None,
-            "ds_diagnostico": diagnostico, "sw_complemento": None, "sw_status": "A",
+            "ds_diagnostico": diagnostico, "sw_complemento": None, "sw_status": "A", "sw_incapacidad": None, "fe_cita": None,
+            "sw_laboratorio": None, "sw_gabinete": None,
             "no_peso": None, "no_estatura": None, "no_ta": None, "no_pulso": None, "no_temp": None,
             "no_resp": None, "no_imc": None, "no_gluc": None,
             "med_paterno": "PEREZ", "med_materno": None, "med_nombre": "ANA", "ds_clinica": "CLINICA 7",
@@ -37,10 +38,12 @@ class _CopiaSimulada:
     """Responde segun la consulta: esquemas, conteo por base, notas por esquema,
     diagnosticos y medicamentos."""
 
-    def __init__(self, notas_por_esquema, diagnosticos=(), medicamentos=()):
+    def __init__(self, notas_por_esquema, diagnosticos=(), medicamentos=(), licencias=(), estudios=None):
         self.notas = notas_por_esquema
         self.diagnosticos = list(diagnosticos)
         self.medicamentos = list(medicamentos)
+        self.licencias = list(licencias)
+        self.estudios = estudios or {}
         self.llamadas = []
 
     def __call__(self, sql, params=()):
@@ -54,6 +57,11 @@ class _CopiaSimulada:
             return self.diagnosticos
         if "det_receta" in sql:
             return self.medicamentos
+        if "det_licencia" in sql:
+            return self.licencias
+        for detalle, filas in self.estudios.items():
+            if detalle in sql:
+                return filas
         for esquema, filas in self.notas.items():
             if f'"{esquema}"."his_notas"' in sql:
                 return filas
@@ -155,6 +163,54 @@ class HistorialTests(TestCase):
         self.assertIn('"legado_actual"."cat_medicos"', sql_notas)
         self.assertIn('"legado_actual"."cat_servicios"', sql_notas)
         self.assertEqual(params, ["40041", 501])
+
+    def test_dias_de_incapacidad_solo_de_las_notas_marcadas(self):
+        copia = _CopiaSimulada(
+            {"legado_actual": [_nota("CC25-7", date(2025, 6, 2), sw_incapacidad="S"),
+                               _nota("CC25-6", date(2025, 6, 1))]},
+            licencias=[{"cd_snota": "CC25-7", "ds_dias": "07", "sw_status": "A"},
+                       {"cd_snota": "CC25-7", "ds_dias": "3", "sw_status": "B"}],
+        )
+        items = self._correr(copia)["items"]
+        self.assertEqual(items[0]["sickLeaves"], [{"days": 7, "cancelled": False}, {"days": 3, "cancelled": True}])
+        self.assertEqual(items[1]["sickLeaves"], [])
+        sql, params = next(l for l in copia.llamadas if "det_licencia" in l[0] and "information_schema" not in l[0])
+        self.assertEqual(params, ["CC25-7"])
+
+    def test_proxima_cita_de_la_nota(self):
+        copia = _CopiaSimulada({"legado_actual": [_nota("HAC25-1", date(2025, 2, 24), fe_cita=date(2025, 6, 4)),
+                                                  _nota("HAC25-2", date(2025, 2, 23), fe_cita="0000-00-00")]})
+        items = self._correr(copia)["items"]
+        self.assertEqual([i["nextAppointment"] for i in items], [date(2025, 6, 4), None])
+
+    def test_estudios_de_los_pases_de_gabinete_y_laboratorio(self):
+        copia = _CopiaSimulada(
+            {"legado_actual": [_nota("TC26-2", date(2026, 1, 5), sw_gabinete="S", sw_laboratorio="S"),
+                               _nota("TC26-1", date(2026, 1, 4))]},
+            estudios={
+                "det_pasgab": [{"cd_snota": "TC26-2", "cd_estudio": 1887, "sw_status": "A",
+                                "ds_complemento": "AP Y LATERAL CON INTERPRETACION",
+                                "ds_estudios": "RX ARTICULACION RODILLA (2 PROYECCIONES)"}],
+                "det_paslab": [{"cd_snota": "TC26-2", "cd_estudio": 9, "sw_status": "B", "ds_complemento": " ",
+                                "ds_estudios": None}],
+            },
+        )
+        items = self._correr(copia)["items"]
+        self.assertEqual(items[0]["referralStudies"], [
+            {"type": "GABINETE", "name": "RX ARTICULACION RODILLA (2 PROYECCIONES)",
+             "note": "AP Y LATERAL CON INTERPRETACION", "cancelled": False},
+            {"type": "LABORATORIO", "name": "Estudio 9", "note": None, "cancelled": True},
+        ])
+        self.assertEqual(items[1]["referralStudies"], [])
+        sql, params = next(l for l in copia.llamadas if "det_pasgab" in l[0] and "information_schema" not in l[0])
+        self.assertIn('"legado_actual"."cat_estudios"', sql)
+        self.assertEqual(params, ["TC26-2"])
+
+    def test_sin_notas_con_incapacidad_no_consulta_licencias(self):
+        copia = self._dos_bases()
+        self._correr(copia)
+        self.assertFalse(any(tabla in sql for sql, _ in copia.llamadas if "information_schema" not in sql
+                             for tabla in ("det_licencia", "det_pasgab", "det_paslab")))
 
     def test_base_que_no_existe_no_lee_notas(self):
         copia = self._dos_bases()

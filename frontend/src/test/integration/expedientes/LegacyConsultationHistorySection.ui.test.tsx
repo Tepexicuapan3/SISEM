@@ -25,7 +25,7 @@ const nota = (folio: string, date: string, sourceDb: string): LegacyConsultation
   specialtyName: null,
   subjective: "TOS DE 3 DIAS",
   objective: "FARINGE HIPEREMICA",
-  assessment: null,
+  assessment: "CUADRO VIRAL",
   plan: "REPOSO",
   diagnosticImpression: "FARINGITIS",
   diagnoses: [{ codigo: "J02", descripcion: "FARINGITIS AGUDA" }],
@@ -40,7 +40,17 @@ const nota = (folio: string, date: string, sourceDb: string): LegacyConsultation
       cancelled: false,
     },
   ],
-  addendumLegacy: null,
+  addendumLegacy: "SE AGREGA INCAPACIDAD",
+  sickLeaves: [{ days: 7, cancelled: false }],
+  nextAppointment: "2025-06-04",
+  referralStudies: [
+    {
+      type: "GABINETE",
+      name: "RX ARTICULACION RODILLA (2 PROYECCIONES)",
+      note: "AP Y LATERAL CON INTERPRETACION",
+      cancelled: false,
+    },
+  ],
   statusLegacy: "A",
   weightLegacy: "70",
   heightLegacy: null,
@@ -84,13 +94,35 @@ describe("LegacyConsultationHistorySection", () => {
     expect(screen.getByText(/1 de marzo de 2025/)).toBeInTheDocument();
     expect(screen.getByText("Dr(a). PEREZ LOPEZ ANA · CLINICA 7")).toBeInTheDocument();
     expect(screen.getByText("SERVICIO ESPECIAL · NORMAL")).toBeInTheDocument();
-    expect(screen.getByText(/PARACETAMOL 500 MG/)).toBeInTheDocument();
+    expect(screen.getByText("PARACETAMOL")).toBeInTheDocument();
+    expect(screen.queryByText(/PARACETAMOL 500 MG/)).not.toBeInTheDocument();
     // El detalle aparece solo al pedirlo.
     expect(screen.queryByText(/1 CADA 8 HORAS/)).not.toBeInTheDocument();
+    expect(screen.queryByText("CUADRO VIRAL")).not.toBeInTheDocument();
+    expect(screen.queryByText("FARINGE HIPEREMICA")).not.toBeInTheDocument();
+    expect(screen.queryByText(/RX ARTICULACION RODILLA/)).not.toBeInTheDocument();
+    expect(screen.queryByText("SE AGREGA INCAPACIDAD")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Ver detalle" }));
     expect(screen.getByText(/1 CADA 8 HORAS/)).toBeInTheDocument();
-    expect(screen.getByText(/Surtido el 1 de marzo de 2025/)).toBeInTheDocument();
+    expect(screen.queryByText(/Surtido|Sin surtir/)).not.toBeInTheDocument();
     expect(screen.getByText("TOS DE 3 DIAS")).toBeInTheDocument();
+    expect(screen.getByText("CUADRO VIRAL")).toBeInTheDocument();
+    expect(screen.getByText("SE AGREGA INCAPACIDAD")).toBeInTheDocument();
+    expect(screen.getByText("Complemento:")).toBeInTheDocument();
+    expect(screen.getByText(/4 de junio de 2025/)).toBeInTheDocument();
+    expect(screen.getByText("FARINGE HIPEREMICA")).toBeInTheDocument();
+    expect(screen.getByText("Pases de gabinete:")).toBeInTheDocument();
+    expect(
+      screen.getByText("RX ARTICULACION RODILLA (2 PROYECCIONES) — AP Y LATERAL CON INTERPRETACION"),
+    ).toBeInTheDocument();
+    // Orden del detalle: signos vitales primero y los pases al final.
+    const texto = document.body.textContent ?? "";
+    const orden = ["Signos vitales", "Subjetivo", "Objetivo", "Análisis", "Plan", "Próxima cita",
+      "Complemento", "Medicamentos", "Días de incapacidad", "Pases de gabinete"];
+    const posiciones = orden.map((titulo) => texto.indexOf(`${titulo}:`));
+    expect(posiciones.every((posicion) => posicion >= 0)).toBe(true);
+    expect([...posiciones].sort((a, b) => a - b)).toEqual(posiciones);
+    expect(screen.getByText("Días de incapacidad:")).toBeInTheDocument();
     expect(screen.getByText(/Peso 70 kg · TA 120\/80/)).toBeInTheDocument();
   });
 

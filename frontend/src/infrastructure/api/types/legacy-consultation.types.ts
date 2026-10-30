@@ -64,6 +64,18 @@ export interface LegacyConsultationItem {
   consultationType?: string | null;
   specialtyName?: string | null;
   medications?: LegacyMedication[];
+  /** Días de cada incapacidad de la nota (det_licencia); `days` es texto si el legado no guardó un número. */
+  sickLeaves?: { days: number | string | null; cancelled: boolean }[];
+  /** Estudios de los pases de gabinete y laboratorio de la nota (det_pasgab/det_paslab + cat_estudios). */
+  referralStudies?: {
+    type: "GABINETE" | "LABORATORIO";
+    name: string;
+    /** Lo que anotó el médico en el estudio (ds_complemento). */
+    note: string | null;
+    cancelled: boolean;
+  }[];
+  /** YYYY-MM-DD de la próxima cita que dejó el médico (his_notas.fe_cita). */
+  nextAppointment?: string | null;
   respirationLegacy?: string | null;
   bmiLegacy?: string | null;
   glucoseLegacy?: string | null;

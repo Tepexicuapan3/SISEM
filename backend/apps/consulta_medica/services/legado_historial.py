@@ -104,7 +104,7 @@ def _notas_de_esquema(esquema, llaves):
     sql = f"""
         SELECT n.cd_snota, n.cd_clinica, n.fe_nota, n.hh_nota, n.cd_medico,
                n.ds_sintomas, n.ds_objetivo, n.ds_analisis, n.ds_plan, n.ds_diagnostico,
-               n.sw_complemento, n.sw_status, n.cd_servicio, n.tp_consulta, n.cd_especialidad,
+               n.sw_complemento, n.sw_status, n.sw_incapacidad, n.sw_laboratorio, n.sw_gabinete, n.fe_cita, n.cd_servicio, n.tp_consulta, n.cd_especialidad,
                n.no_peso, n.no_estatura, n.no_ta, n.no_pulso, n.no_temp, n.no_resp, n.no_imc, n.no_gluc,
                m.ds_paterno AS med_paterno, m.ds_materno AS med_materno, m.ds_nombre AS med_nombre,
                c.ds_clinica, x.cd_cie, x.ds_cie, s.ds_servicio, t.ds_tpconsulta, e.ds_especialidad
@@ -184,7 +184,81 @@ def _medicamentos(esquema, notas) -> dict[str, list[dict]]:
     return resultado
 
 
-def _contrato(esquema, nota, diagnosticos, medicamentos) -> dict:
+def _dias(valor):
+    """ds_dias es texto ('3', '07'): numero si se puede, el texto tal cual si no."""
+    texto = _texto(valor)
+    return int(texto) if texto and texto.isdigit() else texto
+
+
+def _incapacidades(esquema, notas) -> dict[str, list[dict]]:
+    """Dias de incapacidad de esas notas: cd_snota -> [{days, cancelled}]. Solo
+    las notas marcadas con sw_incapacidad = 'S'; det_licencia no tiene indice
+    por cd_snota, pero es chica (unas 25 mil filas en la base actual). El resto
+    de la incapacidad se ve en su propia seccion."""
+    folios, marcas = _folios([n for n in notas if _texto(n.get("sw_incapacidad")) == "S"])
+    if not folios:
+        return {}
+    licencias = legado_archivo.tabla(esquema, "det_licencia")
+    filas = legado_archivo.consultar(
+        f"""
+        SELECT l.cd_snota, l.ds_dias, l.sw_status
+        FROM {licencias} l
+        WHERE {C('l.cd_snota')} IN ({marcas})
+        ORDER BY l.cd_licencia
+        """,
+        folios,
+    )
+    resultado: dict[str, list[dict]] = {}
+    for fila in filas:
+        resultado.setdefault(str(fila["cd_snota"]), []).append({
+            "days": _dias(fila["ds_dias"]),
+            "cancelled": (_texto(fila["sw_status"]) or "A") != "A",
+        })
+    return resultado
+
+
+# Pases con estudios: (tabla de detalle, columna del estudio, marca en la nota, tipo).
+# Las dos apuntan a cat_estudios.cd_estudios ("RX ARTICULACION RODILLA (2 PROYECCIONES)").
+_PASES_CON_ESTUDIOS = (
+    ("det_pasgab", "cd_estudiog", "sw_gabinete", "GABINETE"),
+    ("det_paslab", "cd_estudiol", "sw_laboratorio", "LABORATORIO"),
+)
+
+
+def _estudios(esquema, notas, con_tabla) -> dict[str, list[dict]]:
+    """Estudios de los pases de gabinete y laboratorio de esas notas:
+    cd_snota -> [{type, name, note, cancelled}]; note es lo que anoto el medico
+    en el estudio ("AP Y LATERAL CON INTERPRETACION"). Solo las notas con la marca del
+    pase; las tablas de detalle no tienen indice por cd_snota."""
+    catalogo = legado_archivo.tabla(ACTUAL, "cat_estudios")
+    resultado: dict[str, list[dict]] = {}
+    for detalle, columna, marca, tipo in _PASES_CON_ESTUDIOS:
+        if detalle not in con_tabla:
+            continue
+        folios, marcas = _folios([n for n in notas if _texto(n.get(marca)) == "S"])
+        if not folios:
+            continue
+        filas = legado_archivo.consultar(
+            f"""
+            SELECT d.cd_snota, d.{columna} AS cd_estudio, d.sw_status, d.ds_complemento, e.ds_estudios
+            FROM {legado_archivo.tabla(esquema, detalle)} d
+            LEFT JOIN {catalogo} e ON {C('e.cd_estudios')} = {C(f'd.{columna}')}
+            WHERE {C('d.cd_snota')} IN ({marcas})
+            ORDER BY d.cd_estudio
+            """,
+            folios,
+        )
+        for fila in filas:
+            resultado.setdefault(str(fila["cd_snota"]), []).append({
+                "type": tipo,
+                "name": _texto(fila["ds_estudios"]) or f"Estudio {fila['cd_estudio']}",
+                "note": _texto(fila["ds_complemento"]),
+                "cancelled": (_texto(fila["sw_status"]) or "A") != "A",
+            })
+    return resultado
+
+
+def _contrato(esquema, nota, diagnosticos, medicamentos, incapacidades=None, estudios=None) -> dict:
     llave = (str(nota["cd_clinica"]), str(nota["cd_snota"]))
     principal = None
     if nota.get("cd_cie") or nota.get("ds_cie"):
@@ -210,6 +284,10 @@ def _contrato(esquema, nota, diagnosticos, medicamentos) -> dict:
         "primaryCie": principal,
         "diagnoses": diagnosticos.get(llave, []),
         "medications": medicamentos.get(llave[1], []),
+        "sickLeaves": (incapacidades or {}).get(llave[1], []),
+        "referralStudies": (estudios or {}).get(llave[1], []),
+        # fe_cita es la proxima cita que dejo el medico (casi siempre vacia).
+        "nextAppointment": _fecha(nota.get("fe_cita")),
         "addendumLegacy": _texto(nota.get("sw_complemento")),
         "statusLegacy": _texto(nota.get("sw_status")),
         "weightLegacy": _texto(nota.get("no_peso")),
@@ -252,7 +330,12 @@ def historial(no_exp, pk_num, base=None) -> dict:
     notas = _notas_de_esquema(base, llaves)
     diagnosticos = _diagnosticos(base, notas) if base in legado_archivo.esquemas_con_tabla("det_hisnotcie") else {}
     medicamentos = _medicamentos(base, notas) if base in legado_archivo.esquemas_con_tabla("det_receta") else {}
-    items = [_contrato(base, nota, diagnosticos, medicamentos) for nota in notas]
+    incapacidades = (_incapacidades(base, notas)
+                     if base in legado_archivo.esquemas_con_tabla("det_licencia") else {})
+    con_tabla = {detalle for detalle, *_ in _PASES_CON_ESTUDIOS
+                 if base in legado_archivo.esquemas_con_tabla(detalle)}
+    estudios = _estudios(base, notas, con_tabla)
+    items = [_contrato(base, nota, diagnosticos, medicamentos, incapacidades, estudios) for nota in notas]
     if bases is not None:
         total = bases[0]["total"]
     else:

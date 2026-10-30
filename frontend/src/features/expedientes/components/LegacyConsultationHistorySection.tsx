@@ -39,10 +39,18 @@ const etiquetaBase = (base: LegacyBase) => {
   return [nombreBase(base.sourceDb), rango, notas].filter(Boolean).join(" · ");
 };
 
+const Campo = ({ titulo, texto }: { titulo: string; texto: string | null | undefined }) =>
+  texto ? (
+    <p>
+      <strong>{titulo}:</strong> {texto}
+    </p>
+  ) : null;
+
 const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
   const [detalle, setDetalle] = useState(false);
   const servicio = [nota.serviceName, nota.consultationType, nota.specialtyName].filter(Boolean);
   const medicamentos = nota.medications ?? [];
+  const incapacidades = nota.sickLeaves ?? [];
   const vitales = [
     nota.weightLegacy && `Peso ${nota.weightLegacy} kg`,
     nota.heightLegacy && `Talla ${nota.heightLegacy}`,
@@ -81,11 +89,6 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
       {nota.statusLegacy && nota.statusLegacy !== "A" && (
         <p className="text-xs font-semibold text-txt-muted uppercase">Nota cancelada en el legado</p>
       )}
-      {nota.objective && (
-        <p className="text-txt-body">
-          <strong>Objetivo:</strong> {nota.objective}
-        </p>
-      )}
       {nota.diagnosticImpression && (
         <p className="text-txt-body">
           <strong>Diagnóstico:</strong> {nota.diagnosticImpression}
@@ -102,10 +105,21 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
           ))}
         </ul>
       )}
-      {nota.assessment && (
-        <p className="text-txt-muted">
-          <strong>Análisis:</strong> {nota.assessment}
-        </p>
+      {/* Detalle, en el orden que pidió el médico: signos vitales, SOAP, próxima
+          cita y complemento; los medicamentos con sus indicaciones; al final
+          incapacidad y pases. */}
+      {detalle && (
+        <div className="space-y-1 border-t border-line-struct pt-2 text-txt-body">
+          {vitales.length > 0 && <Campo titulo="Signos vitales" texto={vitales.join(" · ")} />}
+          <Campo titulo="Subjetivo" texto={nota.subjective} />
+          <Campo titulo="Objetivo" texto={nota.objective} />
+          <Campo titulo="Análisis" texto={nota.assessment} />
+          <Campo titulo="Plan" texto={nota.plan} />
+          {nota.nextAppointment && (
+            <Campo titulo="Próxima cita" texto={formatFecha(nota.nextAppointment)} />
+          )}
+          <Campo titulo="Complemento" texto={nota.addendumLegacy} />
+        </div>
       )}
       {medicamentos.length > 0 && (
         <div className="text-txt-body">
@@ -116,20 +130,12 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
                 key={`${nota.id}-med-${indice}`}
                 className={medicamento.cancelled ? "text-txt-muted line-through" : undefined}
               >
-                {medicamento.name}
-                {medicamento.quantity ? ` (${medicamento.quantity})` : ""}
+                {/* Sin principio activo en el catálogo, el nombre del medicamento. */}
+                {medicamento.activeIngredient ?? medicamento.name}
                 {medicamento.cancelled ? " — cancelado" : ""}
-                {detalle && (
+                {detalle && medicamento.instructions && (
                   <span className="block text-txt-muted">
-                    {[
-                      medicamento.activeIngredient && `Principio activo: ${medicamento.activeIngredient}`,
-                      medicamento.instructions && `Indicaciones: ${medicamento.instructions}`,
-                      medicamento.dispensedOn
-                        ? `Surtido el ${formatFecha(medicamento.dispensedOn)}`
-                        : "Sin surtir",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    Indicaciones: {medicamento.instructions}
                   </span>
                 )}
               </li>
@@ -137,30 +143,42 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
           </ul>
         </div>
       )}
-      {nota.addendumLegacy && (
-        <p className="text-txt-muted italic">
-          <strong>Adenda del legado:</strong> {nota.addendumLegacy}
+      {detalle && incapacidades.length > 0 && (
+        <p className="text-txt-body">
+          <strong>Días de incapacidad:</strong>{" "}
+          {incapacidades.map((incapacidad, indice) => (
+            <span
+              key={`${nota.id}-inc-${indice}`}
+              className={incapacidad.cancelled ? "text-txt-muted line-through" : undefined}
+            >
+              {indice > 0 ? " · " : ""}
+              {incapacidad.days ?? "sin dato"}
+              {incapacidad.cancelled ? " (cancelada)" : ""}
+            </span>
+          ))}
         </p>
       )}
-      {detalle && (nota.subjective || nota.plan || vitales.length > 0) && (
-        <div className="space-y-1 border-t border-line-struct pt-2 text-txt-body">
-          {nota.subjective && (
-            <p>
-              <strong>Subjetivo:</strong> {nota.subjective}
-            </p>
-          )}
-          {nota.plan && (
-            <p>
-              <strong>Plan:</strong> {nota.plan}
-            </p>
-          )}
-          {vitales.length > 0 && (
-            <p>
-              <strong>Signos vitales:</strong> {vitales.join(" · ")}
-            </p>
-          )}
-        </div>
-      )}
+      {detalle &&
+        (["GABINETE", "LABORATORIO"] as const).map((tipo) => {
+          const estudios = (nota.referralStudies ?? []).filter((estudio) => estudio.type === tipo);
+          return estudios.length > 0 ? (
+            <div key={`${nota.id}-pase-${tipo}`} className="text-txt-body">
+              <strong>{tipo === "GABINETE" ? "Pases de gabinete:" : "Pases de laboratorio:"}</strong>
+              <ul className="list-disc pl-5">
+                {estudios.map((estudio, indice) => (
+                  <li
+                    key={`${nota.id}-${tipo}-${indice}`}
+                    className={estudio.cancelled ? "text-txt-muted line-through" : undefined}
+                  >
+                    {estudio.name}
+                    {estudio.note ? ` — ${estudio.note}` : ""}
+                    {estudio.cancelled ? " — cancelado" : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null;
+        })}
       <button
         type="button"
         onClick={() => setDetalle((v) => !v)}
