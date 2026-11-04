@@ -1,12 +1,20 @@
+from types import SimpleNamespace
 from unittest import mock
 
-from django.template.loader import render_to_string
+from django.template.loader import get_template, render_to_string
 from django.test import RequestFactory, TestCase
 
 from apps.authentication.models import SyUsuario
 from apps.catalogos.models import CatCies, Medicamentos
 from apps.consulta_medica.impresion.nota import build_nota_context
-from apps.consulta_medica.impresion.receta import build_receta_context, build_sheets
+from apps.consulta_medica.impresion.receta import (
+    SHEET_TEMPLATE_CONTROLADO,
+    SHEET_TEMPLATE_NORMAL,
+    _center_address,
+    _date_boxes,
+    build_receta_context,
+    build_sheets,
+)
 from apps.consulta_medica.models import (
     PrescriptionAuthorization,
     VisitConsultation,
@@ -70,16 +78,63 @@ class _Base(TestCase):
         return rx
 
 
+NORMAL = VisitPrescription.PrescriptionType.NORMAL
+TRANSCRIPTION = VisitPrescription.PrescriptionType.TRANSCRIPTION
+
+
 class RecetaSheetsTests(TestCase):
     def test_no_controlled_two_sheets(self):
-        sheets = build_sheets([{"is_controlled": False}])
+        sheets = build_sheets([{"is_controlled": False}], NORMAL)
         self.assertEqual([s["label"] for s in sheets], ["ORIGINAL", "COPIA"])
 
     def test_controlled_adds_sheet_with_only_controlled_items(self):
         rows = [{"is_controlled": False, "name": "a"}, {"is_controlled": True, "name": "b"}]
-        sheets = build_sheets(rows)
+        sheets = build_sheets(rows, NORMAL)
         self.assertEqual([s["label"] for s in sheets], ["ORIGINAL", "COPIA", "CONTROLADO"])
         self.assertEqual([r["name"] for r in sheets[2]["items"]], ["b"])
+
+    def test_original_and_copy_use_normal_design(self):
+        sheets = build_sheets([{"is_controlled": False}], NORMAL)
+        self.assertEqual({s["template"] for s in sheets}, {SHEET_TEMPLATE_NORMAL})
+
+    def test_transcription_uses_normal_design_until_it_has_its_own(self):
+        sheets = build_sheets([{"is_controlled": False}], TRANSCRIPTION)
+        self.assertEqual(sheets[0]["template"], SHEET_TEMPLATE_NORMAL)
+
+    def test_controlled_sheet_uses_controlled_design(self):
+        sheets = build_sheets([{"is_controlled": True}], NORMAL)
+        self.assertEqual(sheets[2]["template"], SHEET_TEMPLATE_CONTROLADO)
+
+    def test_only_copy_carries_stamp(self):
+        sheets = build_sheets([{"is_controlled": True}], NORMAL)
+        self.assertEqual([s["stamp"] for s in sheets], [None, "COPIA", None])
+
+    def test_every_sheet_template_exists(self):
+        for template in (SHEET_TEMPLATE_NORMAL, SHEET_TEMPLATE_CONTROLADO):
+            get_template(template)
+
+
+class RecetaContextHelpersTests(TestCase):
+    def test_date_boxes_splits_day_month_year(self):
+        self.assertEqual(_date_boxes("07/07/1959"), {"d": "07", "m": "07", "y": "1959"})
+
+    def test_date_boxes_empty_or_invalid_gives_empty_boxes(self):
+        for value in ("", None, "1959-07-07"):
+            with self.subTest(value=value):
+                self.assertEqual(_date_boxes(value), {"d": "", "m": "", "y": ""})
+
+    def test_center_address_skips_empty_parts(self):
+        center = SimpleNamespace(
+            address="AV. CHAPULTEPEC 98", neighborhood="ROMA NTE.", municipality="", postal_code="06700",
+            city="CIUDAD DE MEXICO", state=None,
+        )
+        self.assertEqual(
+            _center_address(center),
+            {"line1": "AV. CHAPULTEPEC 98, ROMA NTE., 06700", "line2": "CIUDAD DE MEXICO"},
+        )
+
+    def test_center_address_without_center(self):
+        self.assertEqual(_center_address(None), {"line1": "", "line2": ""})
 
 
 class RecetaBuilderTests(_Base):
@@ -97,6 +152,17 @@ class RecetaBuilderTests(_Base):
         self.assertFalse(pctx.is_cancelled)
         self.assertEqual([s["label"] for s in pctx.context["sheets"]], ["ORIGINAL", "COPIA", "CONTROLADO"])
         self.assertEqual(pctx.context["general_indications"], ["Tomar liquidos"])
+
+    def test_context_has_form_boxes_and_barcode(self):
+        visit = self._visit("V-R9")
+        self._consultation(visit)
+        self._prescription(visit, [self.med], folio="RX-2026-9")
+        ctx = self._build(visit).context
+        self.assertEqual(ctx["birth"], {"d": "01", "m": "01", "y": "1985"})
+        self.assertEqual(set(ctx["issued"]), {"d", "m", "y"})
+        self.assertTrue(ctx["issued"]["y"])
+        self.assertEqual(ctx["center_address"], {"line1": "", "line2": ""})
+        self.assertTrue(ctx["barcode_uri"].startswith("data:image/svg+xml;base64,"))
 
     def test_visit_not_found_404(self):
         with self.assertRaises(PrintError) as ctx:
@@ -160,6 +226,30 @@ class RecetaBuilderTests(_Base):
         html = render_to_string(REGISTRY["receta"].template, dict(pctx.context, watermarks=[], copy_number=1))
         for text in ("RX-2026-8", "ORIGINAL", "COPIA", "CONTROLADO", "Clonazepam 2mg", "720pt 490pt"):
             self.assertIn(text, html)
+
+    def _render(self, meds, folio):
+        visit = self._visit(f"V-{folio}")
+        self._consultation(visit)
+        self._prescription(visit, meds, folio=folio)
+        pctx = self._build(visit)
+        return render_to_string(REGISTRY["receta"].template, dict(pctx.context, watermarks=[], copy_number=1))
+
+    def _render_sheets(self, meds, folio):
+        # Una hoja por <div class="sheet">; el primer trozo es el <head>.
+        return self._render(meds, folio).split('<div class="sheet">')[1:]
+
+    def test_copy_sheet_has_stamp_and_original_does_not(self):
+        original, copia = self._render_sheets([self.med], "RX-2026-10")
+        self.assertIn('class="stamp"', copia)
+        self.assertNotIn('class="stamp"', original)
+
+    def test_controlled_sheet_omits_general_indications(self):
+        original, _copia, controlado = self._render_sheets([self.med_ctrl], "RX-2026-11")
+        self.assertIn("Tomar liquidos", original)
+        self.assertNotIn("Tomar liquidos", controlado)
+
+    def test_background_uses_local_asset(self):
+        self.assertIn('url("fondos/receta-fondo.jpg")', self._render([self.med], "RX-2026-12"))
 
 
 class NotaBuilderTests(_Base):

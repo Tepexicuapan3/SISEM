@@ -1,0 +1,11 @@
+{% extends "impresion/base.html" %}
+{% block page_css %}{% include "consulta_medica/impresion/receta/_estilos.html" %}{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+{% for sheet in sheets %}
+<div class="sheet">
+  {% if sheet.stamp %}<div class="stamp">{{ sheet.stamp }}</div>{% endif %}
+  {% include sheet.template %}
+</div>
+{% endfor %}
+{% endblock %}

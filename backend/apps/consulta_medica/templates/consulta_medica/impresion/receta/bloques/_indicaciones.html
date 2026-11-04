@@ -1,0 +1,5 @@
+{% if general_indications %}
+<div class="indications"><strong>Indicaciones generales:</strong>
+  <ul>{% for text in general_indications %}<li>{{ text }}</li>{% endfor %}</ul>
+</div>
+{% endif %}

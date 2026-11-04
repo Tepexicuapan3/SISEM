@@ -4,7 +4,8 @@ apps/consulta_medica/impresion/receta.py
 Builder de la Receta para el modulo ``impresion`` (solo lectura).
 
 Hojas en un solo PDF: ORIGINAL y COPIA siempre; CONTROLADO si algun
-medicamento es controlado (solo esos renglones). La hoja ANTIBIOTICO queda
+medicamento es controlado (solo esos renglones). Cada hoja dice que plantilla
+de ``receta/hojas/`` la dibuja (formato STC, docs/plans/receta-diseno-stc.md). La hoja ANTIBIOTICO queda
 fuera hasta que farmacia la confirme (decision 2026-10-16).
 
 Reglas de imprimibilidad (R4.2): consulta cerrada, nota no cancelada y sin
@@ -37,6 +38,7 @@ from apps.consulta_medica.models import (
 )
 from apps.impresion.errors import PrintError
 from apps.impresion.registry import PrintContext
+from apps.impresion.services.barcode import code128_data_uri
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 PRINT_TZ = ZoneInfo("America/Mexico_City")
@@ -44,6 +46,20 @@ PRINT_TZ = ZoneInfo("America/Mexico_City")
 SHEET_ORIGINAL = "ORIGINAL"
 SHEET_COPIA = "COPIA"
 SHEET_CONTROLADO = "CONTROLADO"
+
+_SHEETS_DIR = "consulta_medica/impresion/receta/hojas"
+SHEET_TEMPLATE_NORMAL = f"{_SHEETS_DIR}/normal.html"
+SHEET_TEMPLATE_CONTROLADO = f"{_SHEETS_DIR}/controlado.html"
+
+# Diseno de ORIGINAL/COPIA por tipo de receta. Transcripcion comparte el
+# normal hasta que tenga hoja propia.
+_TEMPLATE_BY_TYPE = {
+    VisitPrescription.PrescriptionType.NORMAL: SHEET_TEMPLATE_NORMAL,
+    VisitPrescription.PrescriptionType.TRANSCRIPTION: SHEET_TEMPLATE_NORMAL,
+}
+
+# Microtexto de seguridad entre renglones del formulario (solo decorativo).
+_MICROTEXT = "SISTEMADETRANSPORTECOLECTIVOMETRO" * 30
 
 _BLOCKING_AUTH = {
     PrescriptionAuthorization.Status.PENDIENTE: "La receta tiene una autorizacion pendiente.",
@@ -91,16 +107,40 @@ def _item_row(item):
     }
 
 
-def build_sheets(rows):
-    """Hojas a imprimir. Funcion pura para poder probar la seleccion."""
+def build_sheets(rows, prescription_type):
+    """Hojas a imprimir y el diseno de cada una. Funcion pura para poder
+    probar la seleccion."""
+    template = _TEMPLATE_BY_TYPE.get(prescription_type, SHEET_TEMPLATE_NORMAL)
     sheets = [
-        {"label": SHEET_ORIGINAL, "items": rows},
-        {"label": SHEET_COPIA, "items": rows},
+        {"label": SHEET_ORIGINAL, "template": template, "items": rows, "stamp": None},
+        {"label": SHEET_COPIA, "template": template, "items": rows, "stamp": SHEET_COPIA},
     ]
     controlled = [r for r in rows if r["is_controlled"]]
     if controlled:
-        sheets.append({"label": SHEET_CONTROLADO, "items": controlled})
+        sheets.append(
+            {"label": SHEET_CONTROLADO, "template": SHEET_TEMPLATE_CONTROLADO,
+             "items": controlled, "stamp": None}
+        )
     return sheets
+
+
+def _date_boxes(text):
+    """'dd/mm/aaaa' -> casillas Dia/Mes/Año del formulario."""
+    parts = (text or "").split("/")
+    if len(parts) != 3:
+        return {"d": "", "m": "", "y": ""}
+    return dict(zip(("d", "m", "y"), parts))
+
+
+def _center_address(center):
+    if center is None:
+        return {"line1": "", "line2": ""}
+    line1 = (center.address, center.neighborhood, center.municipality, center.postal_code)
+    line2 = (center.city, center.state)
+    return {
+        "line1": ", ".join(p for p in line1 if p),
+        "line2": ", ".join(p for p in line2 if p),
+    }
 
 
 def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
@@ -140,15 +180,23 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
         "folio": folio,
         "prescription_type": prescription.get_prescription_type_display(),
         "issued_date": fmt_date(issued),
+        "issued": _date_boxes(fmt_date(issued)),
+        "barcode_uri": code128_data_uri(folio, bar_height=18) if folio else "",
         "patient": header,
+        "birth": _date_boxes(header.get("birth_date")),
         "expediente": llave_publica(visit)[0] or "",
         "doctor": doctor_info(consultation.doctor),
         "center_name": getattr(center, "name", "") or "",
+        "center_address": _center_address(center),
         "consultorio": getattr(visit.consultorio, "name", "") if visit.consultorio else "",
         "general_indications": _general_indications(prescription.pk),
         # ope_param.ds_mreceta del legado, ahora parametro por centro.
         "legend": get_param("receta.leyenda", center_id=getattr(center, "pk", None), default=""),
-        "sheets": build_sheets(rows),
+        "health_message": get_param(
+            "receta.mensaje_salud", center_id=getattr(center, "pk", None), default=""
+        ),
+        "microtext": _MICROTEXT,
+        "sheets": build_sheets(rows, prescription.prescription_type),
     }
     return PrintContext(
         context=context,

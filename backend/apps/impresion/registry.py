@@ -56,7 +56,7 @@ REGISTRY = {
     ),
     "receta": DocumentSpec(
         key="receta",
-        template="consulta_medica/impresion/receta.html",
+        template="consulta_medica/impresion/receta/documento.html",
         builder="apps.consulta_medica.impresion.receta.build_receta_context",
         capability="documentos.receta.imprimir",
         section=RecordSection.RECETA,

@@ -1,0 +1,21 @@
+<table class="form sign">
+  <col style="width:45%"><col style="width:30%"><col style="width:12.5%"><col style="width:12.5%">
+  <tr class="labels">
+    <td>Nombre Completo del Médico Solicitante</td>
+    <td>Nombre y Firma del Médico</td><td>D.G.P.</td><td>Clave</td>
+  </tr>
+  <tr>
+    <td>{{ doctor.name }}{% if doctor.cedula %}<br><span class="strong">D.G.P. - {{ doctor.cedula }}</span>{% endif %}</td>
+    <td>{{ doctor.name }}</td>
+    <td class="strong">{{ doctor.cedula }}</td>
+    {# Clave del medico: pendiente de origen (D4) #}
+    <td class="strong"></td>
+  </tr>
+</table>
+
+<table class="foot">
+  <tr>
+    <td class="legend">{% if legend %}Nota: {{ legend }}{% endif %}</td>
+    <td class="health">{{ health_message }}</td>
+  </tr>
+</table>

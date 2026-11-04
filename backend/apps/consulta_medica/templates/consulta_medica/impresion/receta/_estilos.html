@@ -1,0 +1,67 @@
+/* Formato STC de la receta: hoja de 720 x 490 pt horizontal (receta_*.jrxml del legado). */
+@page {
+  size: 720pt 490pt;
+  margin: 6mm 8mm 9mm 8mm;
+  /* fondos/receta-fondo.jpg esta compuesto a la medida exacta de la hoja */
+  background: url("fondos/receta-fondo.jpg") no-repeat 0 0 / 720pt 490pt;
+}
+.sheet { position: relative; page-break-after: always; font-size: 8pt; }
+.sheet:last-child { page-break-after: auto; }
+
+/* Sello COPIA: absoluto dentro de la hoja (fixed se repetiria en todas) */
+.stamp { position: absolute; top: 140pt; left: 90pt; z-index: 5; font-size: 120pt; font-weight: bold;
+         letter-spacing: 24pt; color: #000; opacity: .75; transform: rotate(-30deg); }
+
+/* Encabezado: tres columnas */
+table.head { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 3pt; }
+table.head td { vertical-align: top; padding: 0; }
+.head .barcode { display: block; height: 12pt; width: 150pt; margin-top: 12pt; }
+.head .sheet-label { font-size: 7pt; letter-spacing: 1pt; }
+.head .center { text-align: center; }
+.head td.folio-col { padding-left: 14pt; }
+.head .gerencia { font-size: 10.5pt; font-weight: bold; margin-top: 8pt; }
+.head .doc-title { font-size: 11pt; font-weight: bold; letter-spacing: 5pt; margin-top: 16pt; }
+.head .folio { font-size: 14pt; font-weight: bold; margin-top: 18pt; }
+.head .fn { font-size: 9pt; margin-top: 3pt; }
+.head .right { float: right; }
+.head .fn em { font-size: 10pt; }
+
+/* Formulario: casillas con etiqueta chica */
+table.form { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.form td { border: .75pt solid #000; padding: 1pt 3pt; vertical-align: top; height: 20pt; }
+.form small { display: block; font-size: 6pt; }
+.form small.inline { display: inline; }
+.form .val { font-size: 9pt; }
+.form .bold { font-weight: bold; }
+.form td.box { text-align: center; padding: 1pt 0; }
+.form td.box .val { font-size: 9.5pt; }
+.form tr.labels td { height: auto; font-size: 6pt; padding: 0 3pt; }
+.form td.addr { text-align: center; font-size: 7pt; vertical-align: middle; }
+.form td.beneficiary { text-align: center; font-size: 11pt; vertical-align: middle; }
+
+/* Microtexto de seguridad */
+.micro { font-size: 1.6pt; line-height: 1.6pt; height: 1.6pt; white-space: nowrap; overflow: hidden; }
+
+/* Medicamentos: alto fijo para que el pie no se mueva */
+.rx-wrap { position: relative; height: 210pt; border: .75pt solid #000; border-top: 0; }
+table.rx { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.rx th { font-weight: normal; font-style: italic; font-size: 7.5pt; padding: 2pt;
+         border-bottom: .75pt solid #000; }
+.rx th + th, .rx td + td { border-left: .75pt solid #000; }
+.rx td { font-size: 8.5pt; padding: 3pt; vertical-align: middle; border-bottom: .75pt solid #000; }
+.rx td.num, .rx td.qty { text-align: center; }
+.rx-foot { position: absolute; bottom: 1pt; left: 0; right: 0; font-size: 2.6pt; line-height: 2.6pt;
+           white-space: nowrap; overflow: hidden; }
+.indications { font-size: 7pt; margin: 1pt 0 0 0; }
+.indications ul { margin: 0; padding-left: 12pt; }
+
+/* Firmas */
+table.sign td { text-align: center; vertical-align: bottom; height: 24pt; }
+table.sign tr.labels td { height: auto; font-size: 7pt; vertical-align: top; }
+.sign .strong { font-weight: bold; }
+
+/* Pie */
+table.foot { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 5pt; }
+table.foot td { font-size: 6.5pt; vertical-align: middle; padding: 0; }
+.foot td.legend { width: 58%; padding-left: 16pt; }
+.foot td.health { text-align: center; font-weight: bold; font-size: 8pt; }

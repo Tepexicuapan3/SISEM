@@ -1,0 +1,17 @@
+<table class="head">
+  <col style="width:26%"><col style="width:46%"><col style="width:28%">
+  <tr>
+    <td>
+      <div class="sheet-label">{{ sheet.label }}</div>
+      {% if barcode_uri %}<img class="barcode" src="{{ barcode_uri }}" alt="">{% endif %}
+    </td>
+    <td class="center">
+      <div class="gerencia">{{ institution_name }}</div>
+      <div class="doc-title">RECETA MÉDICA</div>
+    </td>
+    <td class="folio-col">
+      <div class="folio">NO.<span class="right">{{ folio }}</span></div>
+      <div class="fn">FN: {{ issued_date }}<em class="right">{{ prescription_type|upper }}</em></div>
+    </td>
+  </tr>
+</table>

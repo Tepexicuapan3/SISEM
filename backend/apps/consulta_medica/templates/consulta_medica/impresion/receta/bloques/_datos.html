@@ -1,0 +1,38 @@
+<table class="form">
+  <col style="width:40%"><col style="width:45%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
+  <tr>
+    <td><small class="inline">Unidad Médica</small> <span class="val">{{ center_name }}</span><br>
+        <small class="inline">Servicio</small> <span class="val">{{ consultorio }}</span></td>
+    <td class="addr">{{ center_address.line1 }}<br>{{ center_address.line2 }}</td>
+    <td class="box"><small>Día</small><span class="val">{{ issued.d }}</span></td>
+    <td class="box"><small>Mes</small><span class="val">{{ issued.m }}</span></td>
+    <td class="box"><small>Año</small><span class="val">{{ issued.y }}</span></td>
+  </tr>
+</table>
+<div class="micro">{{ microtext }}</div>
+
+<table class="form">
+  <col style="width:28%"><col style="width:30%"><col style="width:27%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
+  <tr>
+    <td><small>Nombre del Paciente</small><span class="val bold">{{ patient.paternal_surname }}</span></td>
+    <td><small>&nbsp;</small><span class="val bold">{{ patient.maternal_surname }}</span></td>
+    <td><small>&nbsp;</small><span class="val bold">{{ patient.first_name }}</span></td>
+    <td class="box"><small>Día</small><span class="val">{{ birth.d }}</span></td>
+    <td class="box"><small>Mes</small><span class="val">{{ birth.m }}</span></td>
+    <td class="box"><small>Año</small><span class="val">{{ birth.y }}</span></td>
+  </tr>
+  <tr class="labels">
+    <td>Apellido Paterno</td><td>Apellido Materno</td><td>Nombre</td>
+    <td colspan="3" style="text-align:center">Fec. Nacimiento</td>
+  </tr>
+</table>
+<div class="micro">{{ microtext }}</div>
+
+<table class="form">
+  <col style="width:45%"><col style="width:55%">
+  <tr>
+    <td><small class="inline">Expediente</small> &nbsp; <span class="val bold">{{ expediente }}</span></td>
+    {# Tipo de derechohabiente: pendiente de origen (D3) #}
+    <td class="beneficiary"></td>
+  </tr>
+</table>
