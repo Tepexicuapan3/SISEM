@@ -117,16 +117,29 @@ class ServicioTests(TestCase):
         entrega = Entrega.objects.get(notificacion=notificacion, canal="CORREO")
         self.assertEqual((entrega.estatus, entrega.intentos), ("FALLIDA", 2))
 
-    def test_enlace_del_correo_lleva_al_login_del_servidor_configurado(self):
+    def _mensaje_de_correo(self, **extra):
         a = _usuario()
         with mock.patch.object(servicio, "_publicar_tiempo_real"), mock.patch.object(servicio, "_encolar_correo"):
-            notificacion = _notificar([a])[0]
+            notificacion = _notificar([a], **extra)[0]
 
         with override_settings(SIRES_BASE_URL="https://187.217.145.12/"), \
                 mock.patch("apps.notificaciones.tasks.send_notification_email_batch",
                            return_value={"sent": 1, "failed": []}) as enviar:
             enviar_correo_notificacion(notificacion.pk)
-        mensaje = enviar.call_args.args[2]
+        return enviar.call_args.args[2]
+
+    def test_correo_de_pendientes_al_autorizador_no_lleva_url(self):
+        for categoria in ("AUT_SOLICITADA", "AUT_RECORDATORIO"):
+            with self.subTest(categoria=categoria):
+                mensaje = self._mensaje_de_correo(categoria=categoria)
+                self.assertNotIn("http", mensaje)
+                self.assertNotIn("/login", mensaje)
+                self.assertIn("Tienes autorizaciones pendientes", mensaje)
+                self.assertIn("Clínico > Autorizaciones", mensaje)
+                self.assertIn("AUT-2026-000001", mensaje)
+
+    def test_otros_correos_llevan_al_login_del_servidor_configurado(self):
+        mensaje = self._mensaje_de_correo(categoria="AUT_RESUELTA")
         self.assertIn("https://187.217.145.12/login", mensaje)
         self.assertNotIn("/autorizaciones/solicitudes/6f1c", mensaje)
 

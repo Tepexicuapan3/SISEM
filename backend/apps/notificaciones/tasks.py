@@ -8,10 +8,31 @@ from apps.authentication.services.email_service import send_notification_email_b
 from .models import Entrega, Notificacion
 from .services.notificacion_service import _registrar, reintentar_correos_fallidos
 
+# Avisos de pendientes al autorizador: van sin enlace para que el personal
+# aprenda que un correo de SIRES con enlace para autorizar es sospechoso.
+CATEGORIAS_SIN_ENLACE = {"AUT_SOLICITADA", "AUT_RECORDATORIO"}
+
 
 def _url_publica(ruta: str) -> str:
     base = getattr(settings, "SIRES_BASE_URL", None) or getattr(settings, "CITAS_BASE_URL", "")
     return f"{base.rstrip('/')}{ruta}"
+
+
+def _mensaje(notificacion) -> str:
+    if notificacion.categoria in CATEGORIAS_SIN_ENLACE:
+        return (
+            f"Tienes autorizaciones pendientes por revisar.\n\n"
+            f"{notificacion.cuerpo}\n\n"
+            "Ingresa a SIRES y revísalas en Clínico > Autorizaciones.\n\n"
+            "Por seguridad, este correo no contiene información clínica ni enlaces: la decisión "
+            "se toma dentro de SIRES y requiere confirmar tu contraseña."
+        )
+    return (
+        f"{notificacion.cuerpo}\n\n"
+        f"Para revisarla inicia sesión en SIRES: {_url_publica('/login')}\n\n"
+        "Por seguridad, este correo no contiene información clínica y el enlace no autoriza "
+        "nada por sí mismo: la decisión se toma dentro de SIRES y requiere confirmar tu contraseña."
+    )
 
 
 @shared_task
@@ -23,12 +44,7 @@ def enviar_correo_notificacion(id_notificacion):
 
     detalle = getattr(notificacion.usuario, "detalle", None)
     nombre = " ".join(filter(None, [getattr(detalle, "nombre", None), getattr(detalle, "paterno", None)])).strip()
-    mensaje = (
-        f"{notificacion.cuerpo}\n\n"
-        f"Para revisarla inicia sesión en SIRES: {_url_publica('/login')}\n\n"
-        "Por seguridad, este correo no contiene información clínica y el enlace no autoriza "
-        "nada por sí mismo: la decisión se toma dentro de SIRES y requiere confirmar tu contraseña."
-    )
+    mensaje = _mensaje(notificacion)
     try:
         resultado = send_notification_email_batch(
             [{"email": notificacion.usuario.correo, "name": nombre or notificacion.usuario.usuario,
