@@ -61,6 +61,8 @@ export interface DataTableProps<T> {
   getRowKey?: (row: T, index: number) => string;
   getRowClassName?: (row: T, index: number) => string | undefined;
   className?: string;
+  /** Nombre accesible de la tabla (lectores de pantalla y tests por rol). */
+  ariaLabel?: string;
   /**
    * Ancho minimo de la tabla (clase Tailwind, ej. "min-w-[900px]").
    * Ajustalo cuando la suma de los anchos explicitos de las columnas
@@ -101,6 +103,7 @@ export function DataTable<T>({
   getRowKey,
   getRowClassName,
   className,
+  ariaLabel,
   minWidthClassName = "min-w-[720px]",
 }: DataTableProps<T>) {
   const tableClassName = cn(minWidthClassName, "table-fixed");
@@ -144,7 +147,7 @@ export function DataTable<T>({
     <Card className={className}>
       <CardContent>
         {isLoading ? (
-          <Table className={tableClassName}>
+          <Table className={tableClassName} aria-label={ariaLabel}>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {columns.map((column) => (
@@ -220,7 +223,7 @@ export function DataTable<T>({
             </div>
           </Alert>
         ) : (
-          <Table className={tableClassName}>
+          <Table className={tableClassName} aria-label={ariaLabel}>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {columns.map((column) => (

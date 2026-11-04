@@ -224,6 +224,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Reporte de Ambulancias",
     grupo: "Administración",
   },
+  "/admin/reportes/adscripcion": {
+    label: "Padrón de adscripción",
+    grupo: "Administración",
+  },
   "/admin/reportes/cirugias": {
     label: "Reporte de Cirugías",
     grupo: "Administración",

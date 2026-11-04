@@ -31,6 +31,8 @@ from apps.recepcion.views.adscripcion_views import (
     DescartarCitaAfectadaView,
     EquivalenciaDetalleView,
     EquivalenciasView,
+    ReporteAdscritosView,
+    ReporteResumenView,
 )
 
 urlpatterns = [
@@ -72,7 +74,9 @@ urlpatterns = [
     path("adscripcion/citas-por-reagendar",               CitasPorReagendarView.as_view(),        name="adscripcion-citas-por-reagendar"),
     path("adscripcion/citas-por-reagendar/<int:id_cita_afectada>/descartar",
          DescartarCitaAfectadaView.as_view(), name="adscripcion-cita-afectada-descartar"),
-    path("adscripcion/config/clinicas",                   EquivalenciasView.as_view(),            name="adscripcion-config-clinicas"),
+    path("adscripcion/reporte/resumen",                   ReporteResumenView.as_view(),           name="adscripcion-reporte-resumen"),
+    path("adscripcion/reporte/adscritos",                 ReporteAdscritosView.as_view(),         name="adscripcion-reporte-adscritos"),
+    path("adscripcion/config/clinicas",                 EquivalenciasView.as_view(),            name="adscripcion-config-clinicas"),
     path("adscripcion/config/clinicas/<int:id_clinica_centro>", EquivalenciaDetalleView.as_view(), name="adscripcion-config-clinica"),
     path("adscripcion/config/consultorios",               ConsultoriosFamiliaresView.as_view(),   name="adscripcion-config-consultorios"),
     path("adscripcion/config/consultorios/<int:id_adscripcion_consultorio>",

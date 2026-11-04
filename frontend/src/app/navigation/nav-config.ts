@@ -368,6 +368,11 @@ export const NAV_CONFIG: NavSection[] = [
             url: "/admin/reportes/ambulancias",
             permissions: ["clinico:ambulancias:read"],
           },
+          {
+            title: "Padrón de adscripción",
+            url: "/admin/reportes/adscripcion",
+            permissions: ["admin:reportes:adscripcion:read"],
+          },
         ],
       },
       {

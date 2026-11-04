@@ -384,6 +384,7 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "recepcion:consultorio_familiar:excepcion": {"allOf": ["recepcion:consultorio_familiar:excepcion"]},
     "recepcion:consultorio_familiar:todos_centros": {"allOf": ["recepcion:consultorio_familiar:todos_centros"]},
     "admin:catalogos:consultorio_familiar:config": {"allOf": ["admin:catalogos:consultorio_familiar:config"]},
+    "admin:reportes:adscripcion:read": {"allOf": ["admin:reportes:adscripcion:read"]},
     # ── Alcance por centro de atención ────────────────────────────────────────
     "alcance:centros:todos": {"allOf": ["alcance:centros:todos"]},
     "recepcion:citas:agendar_otros_centros": {"allOf": ["recepcion:citas:agendar_otros_centros"]},

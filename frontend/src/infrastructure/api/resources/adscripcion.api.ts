@@ -3,6 +3,8 @@ import type {
   AdscribirRequest,
   AdscribirResponse,
   AdscripcionPacienteResponse,
+  AdscritosParams,
+  AdscritosResponse,
   CitaAfectada,
   CitasPorReagendarParams,
   CitasPorReagendarResponse,
@@ -17,6 +19,7 @@ import type {
   OpcionesAdscripcionResponse,
   PrevisualizarAdscripcionRequest,
   PrevisualizarAdscripcionResponse,
+  ResumenAdscripcionResponse,
 } from "@api/types";
 
 /** P-03 · Adscripción a consultorio familiar. */
@@ -59,6 +62,29 @@ export const adscripcionAPI = {
       { motivo },
     );
     return r.data;
+  },
+
+  // ── Reporte de adscritos (administrador) ───────────────────────────────────
+
+  getReporteResumen: async (centroId?: number): Promise<ResumenAdscripcionResponse> => {
+    const r = await apiClient.get<ResumenAdscripcionResponse>("/adscripcion/reporte/resumen", {
+      params: centroId ? { centroId } : {},
+    });
+    return r.data;
+  },
+
+  getReporteAdscritos: async (params: AdscritosParams): Promise<AdscritosResponse> => {
+    const r = await apiClient.get<AdscritosResponse>("/adscripcion/reporte/adscritos", { params });
+    return r.data;
+  },
+
+  /** Excel con el resumen y todos los adscritos que cumplen los filtros (sin paginar). */
+  exportReporteAdscritos: async (params: Omit<AdscritosParams, "page" | "pageSize">): Promise<Blob> => {
+    const r = await apiClient.get("/adscripcion/reporte/adscritos", {
+      params: { ...params, export: "xlsx" },
+      responseType: "blob",
+    });
+    return r.data as Blob;
   },
 
   // ── Configuración (administrador) ──────────────────────────────────────────

@@ -194,3 +194,70 @@ export interface ConsultorioFamiliarUpdateRequest {
 export interface ListaResponse<T> {
   items: T[];
 }
+
+// ── Reporte de adscritos (admin) ─────────────────────────────────────────────
+
+export type TipoDerechohabiente = "TITULAR" | "FAMILIAR";
+
+export interface ConteoAdscritos {
+  titulares: number;
+  familiares: number;
+  total: number;
+}
+
+export interface ResumenConsultorio extends ConteoAdscritos {
+  consultorioId: number;
+  consultorio: string;
+  numero: number | null;
+  turnoId: number;
+  turno: string;
+  capacidadMaxima: number | null;
+  estaActivo: boolean;
+  medicos: string[];
+}
+
+export interface ResumenCentro extends ConteoAdscritos {
+  idCentroAtencion: number;
+  centro: string;
+  consultorios: ResumenConsultorio[];
+}
+
+export interface ResumenAdscripcionResponse {
+  centros: ResumenCentro[];
+  totales: ConteoAdscritos;
+}
+
+export interface Adscrito {
+  idAdscripcion: number;
+  idPaciente: number;
+  noExp: string;
+  nombre: string;
+  tipo: TipoDerechohabiente;
+  idCentroAtencion: number;
+  centro: string;
+  consultorioId: number;
+  consultorio: string;
+  numeroConsultorio: number | null;
+  turnoId: number;
+  turno: string;
+  origen: OrigenAdscripcion;
+  fechaInicio: string;
+}
+
+export interface AdscritosParams {
+  centroId?: number;
+  consultorioId?: number;
+  turnoId?: number;
+  tipo?: TipoDerechohabiente;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdscritosResponse {
+  items: Adscrito[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}

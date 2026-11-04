@@ -83,6 +83,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/licencias","permissions":["admin:licencias:read"]},
   {"path":"/admin/medicos","permissions":["admin:gestion:medicos:read"],"capability":"admin.medicos.read"},
   {"path":"/admin/menus","permissions":["admin:gestion:modulos:read"],"capability":"admin.menus.read"},
+  {"path":"/admin/reportes/adscripcion","permissions":["admin:reportes:adscripcion:read"],"capability":"admin:reportes:adscripcion:read"},
   {"path":"/admin/reportes/ambulancias","permissions":["clinico:ambulancias:read"],"capability":"clinico.reportes.ambulancias.read"},
   {"path":"/admin/reportes/cirugias","permissions":["clinico:cirugias:read"],"capability":"clinico.reportes.cirugias.read"},
   {"path":"/admin/reportes/consultas-diario","permissions":["clinico:reportes:read"],"capability":"clinico.reportes.read"},

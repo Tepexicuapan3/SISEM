@@ -24,6 +24,7 @@ Base URL:
 | `recepcion:consultorio_familiar:excepcion` | Atender en un consultorio distinto al familiar (con motivo) | `read` |
 | `recepcion:consultorio_familiar:todos_centros` | Operar pacientes de otro centro | `write` |
 | `admin:catalogos:consultorio_familiar:config` | Equivalencias de clínica y consultorios familiares | `admin:catalogos:centros_atencion:read`, `admin:catalogos:consultorios:read` |
+| `admin:reportes:adscripcion:read` | Reporte de adscritos por centro, consultorio y turno | — |
 
 Sin `todos_centros`, quien opera solo actúa sobre pacientes cuyo centro SERMED es su centro (`DetUsuario`): si no, `403 CENTRO_NO_PERMITIDO`.
 
@@ -87,6 +88,23 @@ Ejemplo `POST /api/v1/adscripcion`:
 
 Pantalla: `/admin/catalogos/consultorio-familiar`.
 
+## Reporte de adscritos (admin)
+
+Solo lectura, permiso `admin:reportes:adscripcion:read`. Cuenta adscripciones `ACTIVA`; titular es `pk_num = 0` y todo lo demás (familiares, familiares sin PK_NUM, recién nacidos provisionales) es familiar.
+
+Los centros que se ven los decide el alcance del usuario (`centro_scope.alcance_de`), no `todos_centros`: su centro, o todos con `alcance:centros:todos`. Sin centro asignado no ve nada. Pedir un `centroId` fuera del alcance → `403 CENTRO_NO_PERMITIDO`.
+
+| Método | Ruta | Request | Response | Status |
+| --- | --- | --- | --- | --- |
+| GET | `/reporte/resumen` | `?centroId?` | `ResumenAdscripcionResponse` | 200 |
+| GET | `/reporte/adscritos` | `?centroId?&consultorioId?&turnoId?&tipo?&q?&page?&pageSize?` | `AdscritosResponse` (paginado) | 200 |
+| GET | `/reporte/adscritos?export=xlsx` | mismos filtros (sin paginar) | Excel con hojas `Resumen` y `Adscritos` | 200 |
+
+- `resumen`: `{ centros: [{ idCentroAtencion, centro, titulares, familiares, total, consultorios: [{ consultorioId, consultorio, numero, turnoId, turno, titulares, familiares, total, capacidadMaxima, estaActivo, medicos }] }], totales }`. Incluye los consultorios familiares en cero y los que tienen adscritos aunque ya no estén configurados (`estaActivo: false`). `medicos` son los de `RelMedicoConsultorio` vigentes hoy.
+- `adscritos`: `tipo` es `TITULAR` o `FAMILIAR`; `q` busca en nombre y expediente; `pageSize` máximo 100 (default 20). Cada consulta se audita como `ADSCRIPCION_REPORTE_LISTAR` con los filtros, el alcance y el total en `meta`; el resumen (solo conteos) no se audita. La exportación trae todas las filas que cumplen los filtros y se audita como `ADSCRIPCION_REPORTE_EXPORTAR`.
+
+Pantalla: `/admin/reportes/adscripcion` (Reportes y Analítica Operativa → Padrón de adscripción).
+
 ## Errores
 
 | Código | Status | Cuándo |
@@ -113,7 +131,7 @@ Pantalla: `/admin/catalogos/consultorio-familiar`.
 
 ## Auditoría
 
-`log_event` con `actor`, `timestamp`, `action`, `resource`, `result`, `requestId`, `ip`, `userAgent` y, en mutaciones, `beforeState`/`afterState`. Acciones: `ADSCRIPCION_ASIGNAR`, `ADSCRIPCION_REASIGNAR`, `ADSCRIPCION_EXCEPCION`, `ADSCRIPCION_REAGENDAR`, `ADSCRIPCION_DESCARTAR_CITA`, `ADSCRIPCION_EQUIVALENCIA`, `ADSCRIPCION_CONSULTORIO`. Los rechazos de negocio se auditan con `FAIL` fuera de la transacción.
+`log_event` con `actor`, `timestamp`, `action`, `resource`, `result`, `requestId`, `ip`, `userAgent` y, en mutaciones, `beforeState`/`afterState`. Acciones: `ADSCRIPCION_ASIGNAR`, `ADSCRIPCION_REASIGNAR`, `ADSCRIPCION_EXCEPCION`, `ADSCRIPCION_REAGENDAR`, `ADSCRIPCION_DESCARTAR_CITA`, `ADSCRIPCION_EQUIVALENCIA`, `ADSCRIPCION_CONSULTORIO`, `ADSCRIPCION_REPORTE_LISTAR` y `ADSCRIPCION_REPORTE_EXPORTAR` (lectura masiva). Los rechazos de negocio se auditan con `FAIL` fuera de la transacción.
 
 ## Datos y concurrencia
 

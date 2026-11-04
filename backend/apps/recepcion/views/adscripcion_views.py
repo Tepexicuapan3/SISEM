@@ -7,6 +7,8 @@ services/adscripcion_evaluacion.py y uses_case/adscripcion_*usecase.py.
 """
 
 from django.db.models import Count, Q
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +16,7 @@ from rest_framework.views import APIView
 from apps.authentication.models import DetUsuario
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.authorization_service import has_capability
+from apps.authentication.services.centro_scope import alcance_de
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
@@ -28,6 +31,7 @@ from apps.recepcion.models import (
 from apps.recepcion.services.adscripcion_evaluacion import evaluar_adscripcion, sugerir_consultorios
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case import adscripcion_config_usecase as config_usecase
+from apps.recepcion.uses_case import adscripcion_reporte_usecase as reporte_usecase
 from apps.recepcion.uses_case.adscripcion_usecase import (
     AdscripcionError,
     Operador,
@@ -41,6 +45,8 @@ PERMISO_ESCRIBIR = "recepcion:consultorio_familiar:write"
 PERMISO_TODOS_CENTROS = "recepcion:consultorio_familiar:todos_centros"
 PERMISO_EXCEPCION = "recepcion:consultorio_familiar:excepcion"
 PERMISO_CONFIG = "admin:catalogos:consultorio_familiar:config"
+PERMISO_REPORTE = "admin:reportes:adscripcion:read"
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def operador_de_usuario(user, permisos=None) -> Operador:
@@ -256,6 +262,21 @@ class ConsultoriosQuerySerializer(serializers.Serializer):
     centroId = serializers.IntegerField(min_value=1, required=False)
 
 
+class ReporteResumenQuerySerializer(serializers.Serializer):
+    centroId = serializers.IntegerField(min_value=1, required=False)
+
+
+class ReporteAdscritosQuerySerializer(serializers.Serializer):
+    centroId = serializers.IntegerField(min_value=1, required=False)
+    consultorioId = serializers.IntegerField(min_value=1, required=False)
+    turnoId = serializers.IntegerField(min_value=1, required=False)
+    tipo = serializers.ChoiceField(choices=[reporte_usecase.TITULAR, reporte_usecase.FAMILIAR], required=False)
+    q = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    page = serializers.IntegerField(min_value=1, required=False, default=1)
+    pageSize = serializers.IntegerField(min_value=1, max_value=100, required=False, default=20)
+    export = serializers.ChoiceField(choices=["xlsx"], required=False)
+
+
 # ── Vistas de recepción ──────────────────────────────────────────────────────
 
 class _Base(APIView):
@@ -412,6 +433,51 @@ class DescartarCitaAfectadaView(_Base):
                 id_cita_afectada=id_cita_afectada, motivo=datos["motivo"], operador=operador, request=request,
             )
             return Response(_cita_afectada(afectada))
+        return _responder(request, accion)
+
+
+# ── Vistas del reporte ───────────────────────────────────────────────────────
+
+class ReporteResumenView(_Base):
+    """GET /adscripcion/reporte/resumen?centroId= → conteos por centro, consultorio y turno."""
+
+    def get(self, request):
+        def accion():
+            operador = _operador(request, PERMISO_REPORTE)
+            datos = _validar(request, ReporteResumenQuerySerializer, request.query_params)
+            return Response(reporte_usecase.resumen_adscripcion(
+                alcance=alcance_de(operador.usuario), centro_id=datos.get("centroId"),
+            ))
+        return _responder(request, accion)
+
+
+class ReporteAdscritosView(_Base):
+    """GET /adscripcion/reporte/adscritos → detalle paginado; con ?export=xlsx, el Excel completo."""
+
+    def get(self, request):
+        def accion():
+            operador = _operador(request, PERMISO_REPORTE)
+            datos = _validar(request, ReporteAdscritosQuerySerializer, request.query_params)
+            filtros = reporte_usecase.FiltrosAdscritos(
+                centro_id=datos.get("centroId"),
+                consultorio_id=datos.get("consultorioId"),
+                turno_id=datos.get("turnoId"),
+                tipo=datos.get("tipo"),
+                q=datos.get("q"),
+            )
+            alcance = alcance_de(operador.usuario)
+            if datos.get("export") == "xlsx":
+                contenido = reporte_usecase.exportar_adscritos(
+                    operador=operador, alcance=alcance, filtros=filtros, request=request,
+                )
+                response = HttpResponse(contenido, content_type=XLSX)
+                nombre = f"padron_adscripcion_{timezone.localdate().isoformat()}.xlsx"
+                response["Content-Disposition"] = f'attachment; filename="{nombre}"'
+                return response
+            return Response(reporte_usecase.listar_adscritos(
+                operador=operador, alcance=alcance, filtros=filtros, page=datos["page"], page_size=datos["pageSize"],
+                request=request,
+            ))
         return _responder(request, accion)
 
 

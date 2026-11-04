@@ -9,6 +9,7 @@ import { ReportePasesPage } from "@features/admin/modules/reportes/pages/Reporte
 import { ReporteIncapacidadesPage } from "@features/admin/modules/reportes/pages/ReporteIncapacidadesPage";
 import { ReporteCirugiasPage } from "@features/admin/modules/reportes/pages/ReporteCirugiasPage";
 import { ReporteAmbulanciasPage } from "@features/admin/modules/reportes/pages/ReporteAmbulanciasPage";
+import { ReporteAdscripcionPage } from "@features/admin/modules/reportes/pages/ReporteAdscripcionPage";
 import AreasPage from "@features/admin/modules/catalogos/areas/pages/AreasPage";
 import CentrosAtencionPage from "@features/admin/modules/catalogos/centros-atencion/pages/CentrosAtencionPage";
 import CiesPage from "@features/admin/modules/catalogos/cies/pages/CiesPage";
@@ -682,6 +683,18 @@ export const adminRoutes: RouteObject[] = [
             dependencyAware
           >
             <ReporteAmbulanciasPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "adscripcion",
+        element: (
+          <ProtectedRoute
+            requiredCapability="admin:reportes:adscripcion:read"
+            fallbackRequirement={{ allOf: ["admin:reportes:adscripcion:read"] }}
+            dependencyAware
+          >
+            <ReporteAdscripcionPage />
           </ProtectedRoute>
         ),
       },

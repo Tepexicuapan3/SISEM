@@ -867,6 +867,18 @@ NAV_SEED = [
         "permisos": ["clinico:ambulancias:read"],
     },
     {
+        "clave": "administracion.reportes.adscripcion",
+        "titulo": "Padrón de adscripción",
+        "icono": None,
+        "url": "/admin/reportes/adscripcion",
+        "badge": None,
+        "orden": 5,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.reportes",
+        "permisos": ["admin:reportes:adscripcion:read"],
+    },
+    {
         "clave": "administracion.panel.menus",
         "titulo": "Menús y Submenús",
         "icono": None,

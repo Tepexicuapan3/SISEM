@@ -1379,6 +1379,14 @@ export type {
   ConsultorioFamiliarCreateRequest,
   ConsultorioFamiliarUpdateRequest,
   ListaResponse,
+  TipoDerechohabiente,
+  ConteoAdscritos,
+  ResumenConsultorio,
+  ResumenCentro,
+  ResumenAdscripcionResponse,
+  Adscrito,
+  AdscritosParams,
+  AdscritosResponse,
 } from "@api/types/adscripcion.types";
 
 // =============================================================================
