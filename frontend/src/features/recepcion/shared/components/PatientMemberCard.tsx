@@ -23,7 +23,7 @@ const PARENTESCO_LABEL: Record<string, string> = {
   CONCUBINA:  "Concubino(a)",
 };
 
-function resolveParentesco(raw: string | null | undefined): string {
+export function resolveParentesco(raw: string | null | undefined): string {
   if (!raw) return "Familiar";
   const upper = raw.toUpperCase();
   return PARENTESCO_LABEL[upper] ?? raw;

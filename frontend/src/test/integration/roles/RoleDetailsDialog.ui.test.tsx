@@ -17,7 +17,13 @@ vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
   },
+}));
+
+// Quien edita roles es administrador: puede dar cualquier permiso.
+vi.mock("@/domains/auth-access/hooks/useAuthSession", () => ({
+  useAuthSession: () => ({ data: { permissions: ["*"] } }),
 }));
 
 vi.mock("@/domains/auth-access/hooks/rbac/roles/useRoleDetail", () => ({
@@ -310,9 +316,7 @@ describe("RoleDetailsDialog UI", () => {
     );
 
     await user.click(screen.getByRole("tab", { name: /^Permisos(?!\s+por)/i }));
-    await user.click(
-      screen.getByRole("button", { name: "Agregar permiso perm:b" }),
-    );
+    await user.click(screen.getByRole("switch", { name: "B" }));
 
     expect(assignPermissionsMutate).not.toHaveBeenCalled();
 

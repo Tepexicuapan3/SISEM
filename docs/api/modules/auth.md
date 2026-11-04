@@ -56,11 +56,13 @@ Headers requeridos
   "strictCapabilityPrefixes": ["flow.recepcion.", "flow.somatometria.", "flow.visits."],
   "authRevision": "2026-03-26T10:15:30-06:00",
   "mustChangePassword": false,
-  "requiresOnboarding": false
+  "requiresOnboarding": false,
+  "alcanceCentros": { "todos": false, "centros": [{ "id": 3, "nombre": "TICOMAN" }] }
 }
 ```
 
 **Notas de contrato**
+- `alcanceCentros`: centros sobre los que opera el usuario (ver `alcance-centro.md`). `centros` vacío y `todos = false` = sin centro asignado (no ve visitas ni citas). Es lista para soportar varios centros por usuario.
 - `landingRoute` puede ser `null`.
 - `avatarUrl` es opcional (`string | null`) y el runtime actual puede omitirlo.
 - `roles` y `permissions` deben ser arrays (no `null`).
@@ -85,6 +87,7 @@ Headers requeridos
 | `permissions` | `cat_permisos.codigo[]` | roles + overrides, admin => `*` |
 | `mustChangePassword` | `sy_usuarios.cambiar_clave` | booleano |
 | `requiresOnboarding` | derivado | `cambiar_clave` o `terminos_acept = false` |
+| `alcanceCentros` | `det_usuarios.id_centro_atencion` + permiso `alcance:centros:todos` | `centro_scope.alcance_contrato` |
 
 ### Ownership y boundary de datos (auth-access)
 

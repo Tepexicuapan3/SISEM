@@ -135,6 +135,10 @@ export function RolePermissionMatrixTab({
     () => new Set(workingPermissions.map((permission) => permission.code)),
     [workingPermissions],
   );
+  const descriptionByCode = useMemo(
+    () => new Map(permissionCatalog.map((permission) => [permission.code, permission.description])),
+    [permissionCatalog],
+  );
   const actorPermissionSet = useMemo(
     () => new Set(actorPermissions),
     [actorPermissions],
@@ -466,8 +470,13 @@ export function RolePermissionMatrixTab({
                               ) : (
                                 checkbox
                               )}
-                              <span className="font-mono text-xs text-txt-body">
-                                {cell.code}
+                              <span className="min-w-0">
+                                <span className="block text-sm text-txt-body">
+                                  {descriptionByCode.get(cell.code) || cell.code}
+                                </span>
+                                <span className="block font-mono text-[11px] text-txt-muted">
+                                  {cell.code}
+                                </span>
                               </span>
                             </div>
                           </TableCell>

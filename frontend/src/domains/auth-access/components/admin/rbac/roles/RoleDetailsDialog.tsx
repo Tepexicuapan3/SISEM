@@ -29,10 +29,8 @@ import { useUpdateRole } from "@/domains/auth-access/hooks/rbac/roles/useUpdateR
 import { useRoleDetail } from "@/domains/auth-access/hooks/rbac/roles/useRoleDetail";
 import {
   addPermissionsToDraft,
-  addPermissionToDraft,
   arePermissionSetsDifferent,
   mapRoleDetailToFormValues,
-  removePermissionFromDraft,
   removePermissionsFromDraft,
 } from "@/domains/auth-access/adapters/rbac/roles/roles.details-draft";
 import {
@@ -186,34 +184,6 @@ export function RoleDetailsDialog({
 
   const isSaving =
     isSavingAll || updateRole.isPending || assignPermissions.isPending;
-
-  const handleAddPermissionDraft = (permissionId: number) => {
-    if (!isPermissionsModulesEditable || !roleDetail) return;
-
-    setDraftRoleId(roleDetail.id);
-    setDraftPermissions((previousPermissions) => {
-      const basePermissions = hasDraftForCurrentRole
-        ? previousPermissions
-        : assignedPermissions;
-      return addPermissionToDraft(
-        basePermissions,
-        permissionCatalog,
-        permissionId,
-      );
-    });
-  };
-
-  const handleRemovePermissionDraft = (permissionId: number) => {
-    if (!isPermissionsModulesEditable || !roleDetail) return;
-
-    setDraftRoleId(roleDetail.id);
-    setDraftPermissions((previousPermissions) => {
-      const basePermissions = hasDraftForCurrentRole
-        ? previousPermissions
-        : assignedPermissions;
-      return removePermissionFromDraft(basePermissions, permissionId);
-    });
-  };
 
   const handleToggleModuleDraft = (
     permissionIds: number[],
@@ -453,8 +423,8 @@ export function RoleDetailsDialog({
                     }
                   : undefined
               }
-              onAddPermission={handleAddPermissionDraft}
-              onRemovePermission={handleRemovePermissionDraft}
+              actorPermissions={actorPermissions}
+              onTogglePermissions={handleToggleModuleDraft}
             />
           ),
         },

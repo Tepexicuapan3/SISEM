@@ -20,6 +20,7 @@ import {
   type CaptureVitalsFormValues,
 } from "@features/somatometria/modules/captura/domain/capture-vitals.schemas";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { SinCentroAviso } from "@/domains/auth-access/contracts/navigation-auth";
 import { useCaptureVitals } from "@features/somatometria/modules/captura/mutations/useCaptureVitals";
 import { useLatestVitals } from "@features/somatometria/modules/captura/queries/useLatestVitals";
 import { useSomatometriaQueue } from "@features/somatometria/modules/captura/queries/useSomatometriaQueue";
@@ -608,6 +609,7 @@ export const SomatometriaCapturePage = () => {
 
   return (
     <section className="space-y-6 p-6">
+      <SinCentroAviso />
       <header className="flex flex-col gap-3 rounded-xl border border-line-struct bg-paper p-5 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-txt-body">

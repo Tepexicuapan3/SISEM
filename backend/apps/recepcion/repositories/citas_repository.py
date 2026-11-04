@@ -181,6 +181,7 @@ class CitasRepository:
         estatus: str | None = None,
         fecha_desde: date | None = None,
         fecha_hasta: date | None = None,
+        alcance=None,
     ) -> tuple[list[dict], int, int]:
         qs = (
             CitaMedica.objects
@@ -193,7 +194,9 @@ class CitasRepository:
         if consultorio_id:
             qs = qs.filter(consultorio_id=consultorio_id)
         if centro_id:
-            qs = qs.filter(consultorio__id_center_id=centro_id)
+            qs = qs.filter(centro_id=centro_id)
+        if alcance is not None:
+            qs = qs.filter(alcance.q("centro_id"))
         if no_exp:
             from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
 
@@ -309,11 +312,15 @@ class CitasRepository:
             except TopeCitaExcedido as exc:
                 raise ValueError(exc.message) from exc
 
+            from apps.recepcion.services.alcance_centro import centro_de_registro
+
             cita = CitaMedica.objects.create(
                 folio=CitaMedica.generar_folio(),
                 patient=paciente,
                 medico_id=medico_id,
                 consultorio_id=consultorio_id,
+                # Sin consultorio elegido, el centro es el del horario.
+                centro_id=centro_de_registro(consultorio_id or slot.consultorio_id, created_by_id),
                 fecha_hora=fecha_hora,
                 duracion_min=duracion_min,
                 servicio_tipo=servicio_tipo,
@@ -506,9 +513,20 @@ class CitasRepository:
         return creados
 
     @staticmethod
+    def consultorio_del_horario(medico_id: int, fecha_hora) -> int | None:
+        """Consultorio del horario que ocuparía una cita (mismo criterio que ``create``)."""
+        return (
+            HorarioDisponible.objects
+            .filter(medico_id=medico_id, fecha=fecha_hora.date(), hora=fecha_hora.time())
+            .values_list("consultorio_id", flat=True)
+            .first()
+        )
+
+    @staticmethod
     def get_slots_disponibles(
         medico_id: int,
         fecha: date,
+        alcance=None,
     ) -> list[dict]:
         slots = (
             HorarioDisponible.objects
@@ -516,6 +534,8 @@ class CitasRepository:
             .filter(q_slots_futuros(), medico__estatus_medico="ACTIVO")
             .order_by("hora")
         )
+        if alcance is not None:
+            slots = slots.filter(alcance.q("consultorio__id_center_id"))
         return [
             {
                 "fecha":        str(s.fecha),

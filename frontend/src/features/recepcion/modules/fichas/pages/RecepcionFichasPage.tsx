@@ -10,6 +10,7 @@ import { Input } from "@shared/ui/input";
 import { FichaModal } from "@features/recepcion/shared/components/FichaModal";
 import { RecepcionStatusBadge } from "@features/recepcion/shared/components/RecepcionStatusBadge";
 import { visitsAPI } from "@api/resources/visits.api";
+import { SinCentroAviso } from "@/domains/auth-access/contracts/navigation-auth";
 import {
   VISIT_STATUS,
   type VisitQueueItem,
@@ -248,6 +249,7 @@ export function RecepcionFichasPage() {
 
   return (
     <section className="space-y-5 p-6">
+      <SinCentroAviso />
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="flex flex-col gap-3 rounded-xl border border-line-struct bg-paper p-5 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1.5">

@@ -58,6 +58,14 @@ export interface AuthUser {
   authRevision: string;
   mustChangePassword: boolean;
   requiresOnboarding: boolean;
+  /** Centros de atención sobre los que opera (alcance por centro). */
+  alcanceCentros?: AlcanceCentros;
+}
+
+export interface AlcanceCentros {
+  /** Ve todos los centros (permiso alcance:centros:todos o administrador). */
+  todos: boolean;
+  centros: { id: number; nombre: string }[];
 }
 
 export interface AuthCapabilityState {

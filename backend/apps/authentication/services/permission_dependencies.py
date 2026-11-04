@@ -54,6 +54,8 @@ EXPLICIT_PERMISSION_DEPENDENCIES: Dict[str, List[str]] = {
         "admin:catalogos:centros_atencion:read",
         "admin:catalogos:consultorios:read",
     ],
+    # Alcance por centro: agendar en otros centros no amplia lo que se ve.
+    "recepcion:citas:agendar_otros_centros": ["recepcion:citas:write"],
 }
 
 
@@ -382,6 +384,9 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "recepcion:consultorio_familiar:excepcion": {"allOf": ["recepcion:consultorio_familiar:excepcion"]},
     "recepcion:consultorio_familiar:todos_centros": {"allOf": ["recepcion:consultorio_familiar:todos_centros"]},
     "admin:catalogos:consultorio_familiar:config": {"allOf": ["admin:catalogos:consultorio_familiar:config"]},
+    # ── Alcance por centro de atención ────────────────────────────────────────
+    "alcance:centros:todos": {"allOf": ["alcance:centros:todos"]},
+    "recepcion:citas:agendar_otros_centros": {"allOf": ["recepcion:citas:agendar_otros_centros"]},
     # Documentos imprimibles (change `documentos-imprimibles`): mapean a permisos
     # EXISTENTES (sin seeds nuevos) para no dejar fuera a usuarios actuales.
     "documentos.ficha.imprimir": {

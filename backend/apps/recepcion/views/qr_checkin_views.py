@@ -35,6 +35,7 @@ from rest_framework.views import APIView
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.audit_service import log_event
 from apps.authentication.services.authorization_service import has_capability
+from apps.authentication.services.centro_scope import alcance_de
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
@@ -56,6 +57,7 @@ from apps.recepcion.uses_case.qr_checkin_usecase import (
     buscar_candidatos_checkin,
     checkin_por_folio,
     confirmar_checkin,
+    exigir_cita_en_alcance,
     verificar_qr,
 )
 
@@ -137,7 +139,7 @@ class VerificarQRView(APIView):
         payload = validated_data["payload"]
 
         try:
-            ficha = verificar_qr(payload)
+            ficha = verificar_qr(payload, alcance=alcance_de(user))
         except VisitDomainError as exc:
             return _domain_error(request, exc)
 
@@ -203,9 +205,11 @@ class ConfirmarQRCheckinView(APIView):
         payload = validated_data["payload"]
 
         # P-03 (A2/A3): si el QR no es válido, confirmar_checkin responde como siempre.
+        alcance = alcance_de(user)
         folio = verificar_payload_qr(payload)
         if folio:
             try:
+                exigir_cita_en_alcance(folio, alcance)
                 validar_cita_en_checkin(
                     folio=folio,
                     excepcion_motivo=validated_data.get("excepcionConsultorioFamiliar"),
@@ -220,6 +224,7 @@ class ConfirmarQRCheckinView(APIView):
                 payload,
                 verificado_por_id=getattr(user, "id_usuario", None),
                 autorizacion_capital_humano=validated_data.get("autorizacionCapitalHumano"),
+                alcance=alcance,
             )
         except VisitDomainError as exc:
             return _domain_error(request, exc)
@@ -260,6 +265,7 @@ class CheckinCandidatosView(APIView):
         candidatos = buscar_candidatos_checkin(
             nombre=validated_data["nombre"],
             folio=validated_data["folio"],
+            alcance=alcance_de(user),
         )
         return Response({"candidatos": candidatos}, status=status.HTTP_200_OK)
 
@@ -292,7 +298,9 @@ class ConfirmarCheckinPorFolioView(APIView):
             return err
 
         # P-03 (A2/A3): medicina general en el consultorio familiar, salvo excepción.
+        alcance = alcance_de(user)
         try:
+            exigir_cita_en_alcance(validated_data["folio"], alcance)
             validar_cita_en_checkin(
                 folio=validated_data["folio"],
                 excepcion_motivo=validated_data.get("excepcionConsultorioFamiliar"),
@@ -307,6 +315,7 @@ class ConfirmarCheckinPorFolioView(APIView):
                 validated_data["folio"],
                 verificado_por_id=getattr(user, "id_usuario", None),
                 autorizacion_capital_humano=validated_data.get("autorizacionCapitalHumano"),
+                alcance=alcance,
             )
         except VisitDomainError as exc:
             return _domain_error(request, exc)

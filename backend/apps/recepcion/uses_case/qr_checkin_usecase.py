@@ -197,7 +197,23 @@ def _serializar_candidato(cita: CitaMedica, nombre_paciente: str, vigente: bool 
     }
 
 
-def _citas_candidatas_checkin_hoy() -> list[CitaMedica]:
+def _cita_por_folio(folio: str, alcance=None) -> CitaMedica | None:
+    """La cita del folio; una de otro centro no existe para quien hace el check-in."""
+    cita = CitasRepository.get_by_folio(folio)
+    if cita is not None and alcance is not None and not alcance.permite(cita.centro_id):
+        return None
+    return cita
+
+
+def exigir_cita_en_alcance(folio: str, alcance) -> None:
+    """Corta antes de cualquier otra validación si la cita es de otro centro."""
+    if CitasRepository.get_by_folio(folio) is not None and _cita_por_folio(folio, alcance) is None:
+        raise VisitDomainError(
+            "CITA_NO_ENCONTRADA", "No se encontró ninguna cita con este código.", 404
+        )
+
+
+def _citas_candidatas_checkin_hoy(alcance=None) -> list[CitaMedica]:
     """
     Citas del día de HOY (hora local — ``TIME_ZONE = "America/Mexico_City"``)
     elegibles para check-in manual (búsqueda por nombre): mismo criterio de
@@ -209,16 +225,19 @@ def _citas_candidatas_checkin_hoy() -> list[CitaMedica]:
     confirmación puntual).
     """
     hoy = timezone.localdate()
-    return list(
+    qs = (
         CitaMedica.objects
         .select_related("medico__id_usuario__detalle", "consultorio")
         .filter(fecha_hora__date=hoy, verificado_en__isnull=True)
         .exclude(estatus__in=_ESTATUS_NO_CHECKIN)
         .order_by("fecha_hora")
     )
+    if alcance is not None:
+        qs = qs.filter(alcance.q("centro_id"))
+    return list(qs)
 
 
-def buscar_candidatos_checkin(nombre: str | None, folio: str | None) -> list[dict]:
+def buscar_candidatos_checkin(nombre: str | None, folio: str | None, alcance=None) -> list[dict]:
     """
     Busca citas de HOY elegibles para check-in manual (sin QR), por nombre
     del paciente (substring, case-insensitive) o por folio exacto.
@@ -228,10 +247,10 @@ def buscar_candidatos_checkin(nombre: str | None, folio: str | None) -> list[dic
     si por algún motivo llegaran ambos.
     """
     if folio:
-        cita = CitasRepository.get_by_folio(folio)
+        cita = _cita_por_folio(folio, alcance)
         candidatas = [cita] if cita else []
     else:
-        candidatas = _citas_candidatas_checkin_hoy()
+        candidatas = _citas_candidatas_checkin_hoy(alcance)
 
     nombre_buscado = (nombre or "").strip().lower()
 
@@ -254,7 +273,7 @@ def buscar_candidatos_checkin(nombre: str | None, folio: str | None) -> list[dic
     return resultado
 
 
-def verificar_qr(payload: str) -> dict:
+def verificar_qr(payload: str, alcance=None) -> dict:
     """
     Valida el payload del QR y retorna los datos de la ficha para que
     recepción confirme visualmente al paciente antes del check-in.
@@ -264,7 +283,7 @@ def verificar_qr(payload: str) -> dict:
     if folio is None:
         raise VisitDomainError("QR_INVALIDO", "Código QR inválido o alterado.", 400)
 
-    cita = CitasRepository.get_by_folio(folio)
+    cita = _cita_por_folio(folio, alcance)
     if not cita:
         raise VisitDomainError(
             "CITA_NO_ENCONTRADA", "No se encontró ninguna cita con este código.", 404
@@ -281,6 +300,7 @@ def confirmar_checkin(
     payload: str,
     verificado_por_id: int | None,
     autorizacion_capital_humano: str | None = None,
+    alcance=None,
 ) -> dict:
     """
     Wrapper delgado para el check-in vía QR: re-valida la firma HMAC del
@@ -293,7 +313,7 @@ def confirmar_checkin(
     if folio is None:
         raise VisitDomainError("QR_INVALIDO", "Código QR inválido o alterado.", 400)
 
-    return checkin_por_folio(folio, verificado_por_id, autorizacion_capital_humano)
+    return checkin_por_folio(folio, verificado_por_id, autorizacion_capital_humano, alcance=alcance)
 
 
 def _validar_vigencia_checkin(vigente: bool, autorizacion: str | None) -> None:
@@ -316,6 +336,7 @@ def checkin_por_folio(
     folio: str,
     verificado_por_id: int | None,
     autorizacion_capital_humano: str | None = None,
+    alcance=None,
 ) -> dict:
     """
     Confirma el check-in de una cita a partir de un folio YA RESUELTO (por
@@ -354,7 +375,7 @@ def checkin_por_folio(
     folio espera a que el primero termine (commit o rollback) antes de
     poder leer el estado real y decidir.
     """
-    cita = CitasRepository.get_by_folio(folio)
+    cita = _cita_por_folio(folio, alcance)
     if not cita:
         raise VisitDomainError(
             "CITA_NO_ENCONTRADA", "No se encontró ninguna cita con este código.", 404

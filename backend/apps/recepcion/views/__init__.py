@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.audit_service import log_event
+from apps.authentication.services.centro_scope import alcance_de
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
@@ -19,6 +20,7 @@ from apps.realtime.events import (
     publish_visit_status_changed,
 )
 from apps.recepcion.repositories.visit_repository import VisitRepository
+from apps.recepcion.services.alcance_centro import exigir_centro_para_registrar
 from apps.recepcion.serializers import (
     CreateVisitSerializer,
     ListVisitsQuerySerializer,
@@ -156,6 +158,12 @@ class VisitsView(APIView):
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=serializer.errors, request_id=get_request_id(request))
 
+        # Alcance por centro: el check-in se registra en un centro propio.
+        try:
+            exigir_centro_para_registrar(alcance_de(user), serializer.validated_data.get("consultorioId"))
+        except VisitDomainError as exc:
+            return _visit_error_response(request, exc)
+
         # P-03 (A1): medicina general en el consultorio familiar, salvo excepción.
         from apps.recepcion.uses_case.adscripcion_usecase import paciente_por_llave, validar_consultorio_familiar
         from apps.recepcion.views.adscripcion_views import operador_de_usuario
@@ -230,7 +238,8 @@ class VisitsView(APIView):
         # NO recibe valores numericos de vitals en el LIST, solo estado.
         # Rollback de emergencia (1 linea): reemplazar por `True` fijo.
         auth_user = UserRepository.build_auth_user(user)
-        include_vitals_values = resolve_vitals_visibility(auth_user.get("permissions", []))
+        permisos = auth_user.get("permissions", [])
+        include_vitals_values = resolve_vitals_visibility(permisos)
 
         payload = list_visits(
             page=serializer.validated_data["page"],
@@ -247,6 +256,7 @@ class VisitsView(APIView):
             q=serializer.validated_data.get("q"),
             pk_num=serializer.validated_data.get("pkNum"),
             include_vitals_values=include_vitals_values,
+            alcance=alcance_de(user, permisos),
         )
         return Response(payload, status=status.HTTP_200_OK)
 
@@ -286,6 +296,7 @@ class VisitStatusView(APIView):
                 changed_by_id=getattr(user, "id_usuario", None),
                 motivo_cancelacion=serializer.validated_data.get("motivoCancelacionId"),
                 motivo_detalle=serializer.validated_data.get("motivoDetalle") or None,
+                alcance=alcance_de(user),
             )
         except VisitDomainError as exc:
             return _visit_error_response(request, exc)
@@ -442,7 +453,7 @@ class VisitStatusLogView(APIView):
             return _visit_error_response(request, exc)
 
         try:
-            logs = get_visit_status_log(visit_id)
+            logs = get_visit_status_log(visit_id, alcance=alcance_de(user))
         except VisitDomainError as exc:
             return _visit_error_response(request, exc)
 

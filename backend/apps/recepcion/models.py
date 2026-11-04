@@ -125,6 +125,13 @@ class CitaMedica(models.Model):
     updated_at      = models.DateTimeField(auto_now=True)
     created_by_id   = models.BigIntegerField(null=True, blank=True)
 
+    # Centro donde se registró (alcance por centro). Se fija al crear y no
+    # cambia: ver services/alcance_centro.centro_de_registro.
+    centro = models.ForeignKey(
+        "catalogos.CatCentroAtencion", db_column="id_centro_atencion",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+
     class Meta:
         db_table = "citas_medicas"
         indexes  = [
@@ -132,10 +139,18 @@ class CitaMedica(models.Model):
             models.Index(fields=["estatus", "fecha_hora"],           name="citas_estatus_fechahora_idx"),
             models.Index(fields=["consultorio"],                     name="citas_consultorio_idx"),
             models.Index(fields=["medico", "estatus", "fecha_hora"], name="citas_medico_estatus_fecha_idx"),
+            models.Index(fields=["centro", "fecha_hora"],            name="citas_centro_fechahora_idx"),
         ]
 
     def __str__(self):
         return f"Cita {self.folio} — paciente {self.patient_id} ({self.estatus})"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.centro_id is None:
+            from apps.recepcion.services.alcance_centro import centro_de_registro
+
+            self.centro_id = centro_de_registro(self.consultorio_id, self.created_by_id)
+        super().save(*args, **kwargs)
 
     @staticmethod
     def generar_folio() -> str:
@@ -340,12 +355,26 @@ class Visit(models.Model):
     autorizacion_vigencia = models.TextField(
         db_column="autorizacion_vigencia", null=True, blank=True,
     )
+    # Centro donde se registró (alcance por centro). Se fija al crear y no
+    # cambia: ver services/alcance_centro.centro_de_registro.
+    centro = models.ForeignKey(
+        "catalogos.CatCentroAtencion", db_column="id_centro_atencion",
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+",
+    )
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.centro_id is None:
+            from apps.recepcion.services.alcance_centro import centro_de_registro
+
+            self.centro_id = centro_de_registro(self.consultorio_id, self.created_by_id)
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = "rcp_visits"
         indexes = [
             models.Index(fields=["doctor", "status"], name="rcp_visits_doc_status_idx"),
             models.Index(fields=["fch_alta"], name="rcp_visits_fch_alta_idx"),
+            models.Index(fields=["centro", "fch_alta"], name="rcp_visits_centro_alta_idx"),
             # Soporta el lookup de "signos vitales de hoy" por integrante
             # familiar (join VisitVitalSigns -> Visit filtrando por
             # no_exp+pk_num) usado por el reuso mismo dia (Fase 2).

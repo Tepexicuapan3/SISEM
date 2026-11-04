@@ -1,255 +1,191 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { fireEvent, render, screen } from "@/test/utils";
+import { render, screen, within } from "@/test/utils";
 import { RoleDetailsPermissionsTab } from "@/domains/auth-access/components/admin/rbac/roles/RoleDetailsPermissionsTab";
 import type { Permission, RolePermission } from "@api/types";
 
-const createPermission = (overrides: Partial<Permission> = {}): Permission => ({
-  id: 1,
-  code: "admin:gestion:roles:update",
-  description: "Gestionar roles",
-  isSystem: true,
-  ...overrides,
+const permiso = (id: number, code: string, description: string, dependsOn: string[] = []): Permission => ({
+  id,
+  code,
+  description,
+  isSystem: false,
+  dependsOn,
 });
 
-const createRolePermission = (
-  overrides: Partial<RolePermission> = {},
-): RolePermission => ({
-  id: 1,
-  code: "admin:gestion:roles:update",
-  description: "Gestionar roles",
-  assignedAt: "2024-01-01T00:00:00Z",
+const CATALOGO: Permission[] = [
+  permiso(1, "recepcion:citas:read", "Ver citas"),
+  permiso(2, "recepcion:citas:write", "Agendar citas", ["recepcion:citas:read"]),
+  permiso(3, "alcance:centros:todos", "Ver y trabajar la información de todos los centros de atención"),
+  permiso(4, "clinico:consultas:read", "Ver consultas médicas"),
+];
+
+const asignado = (permission: Permission): RolePermission => ({
+  id: permission.id,
+  code: permission.code,
+  description: permission.description,
+  assignedAt: "2026-10-30T00:00:00Z",
   assignedBy: { id: 1, name: "Admin" },
-  ...overrides,
 });
+
+type Props = Partial<Parameters<typeof RoleDetailsPermissionsTab>[0]>;
 
 describe("RoleDetailsPermissionsTab", () => {
-  const onAddPermission = vi.fn();
-  const onRemovePermission = vi.fn();
+  const onTogglePermissions = vi.fn();
 
-  const catalog = [
-    createPermission({ id: 1, code: "admin:gestion:roles:update" }),
-    createPermission({ id: 2, code: "admin:gestion:roles:read" }),
-  ];
+  const renderTab = (props: Props = {}) =>
+    render(
+      <RoleDetailsPermissionsTab
+        permissions={[asignado(CATALOGO[0])]}
+        permissionCatalog={CATALOGO}
+        isLoadingPermissions={false}
+        actorPermissions={["*"]}
+        onTogglePermissions={onTogglePermissions}
+        {...props}
+      />,
+    );
 
   beforeEach(() => {
-    onAddPermission.mockClear();
-    onRemovePermission.mockClear();
+    onTogglePermissions.mockClear();
   });
 
-  it("calls add callback when adding a permission", async () => {
+  it("agrupa por área con nombres legibles y muestra la descripción como texto principal", () => {
+    renderTab();
+
+    expect(screen.getByRole("button", { name: /recepción/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /clínico/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /alcance por centro/i })).toBeVisible();
+    expect(screen.getByText("Ver citas")).toBeVisible();
+    expect(screen.getByText("recepcion:citas:read")).toBeVisible();
+  });
+
+  it("cuenta cuántos permisos tiene el rol", () => {
+    renderTab();
+
+    expect(screen.getByText("1 de 4 asignados")).toBeVisible();
+  });
+
+  it("al prender un permiso agrega también lo que necesita", async () => {
     const user = userEvent.setup();
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[createRolePermission({ id: 1 })]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
+    renderTab({ permissions: [] });
 
-    await user.click(
-      screen.getByRole("button", {
-        name: "Agregar permiso admin:gestion:roles:read",
-      }),
-    );
+    await user.click(screen.getByRole("switch", { name: "Agendar citas" }));
 
-    expect(onAddPermission).toHaveBeenCalledWith(2);
+    expect(onTogglePermissions).toHaveBeenCalledTimes(1);
+    const [ids, nextChecked] = onTogglePermissions.mock.calls[0];
+    expect(nextChecked).toBe(true);
+    expect([...ids].sort()).toEqual([1, 2]);
   });
 
-  it("shows catalog error and disables add action", () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        catalogErrorMessage="No se pudo cargar el catalogo"
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
+  it("al apagar un permiso lo quita junto con los que dependen de él", async () => {
+    const user = userEvent.setup();
+    renderTab({ permissions: [asignado(CATALOGO[0]), asignado(CATALOGO[1])] });
+
+    await user.click(screen.getByRole("switch", { name: "Ver citas" }));
+
+    const [ids, nextChecked] = onTogglePermissions.mock.calls[0];
+    expect(nextChecked).toBe(false);
+    expect([...ids].sort()).toEqual([1, 2]);
+  });
+
+  it("prende de una vez todos los permisos de un área", async () => {
+    const user = userEvent.setup();
+    renderTab({ permissions: [] });
+
+    await user.click(screen.getByRole("checkbox", { name: "Todos los permisos de Recepción" }));
+
+    const [ids, nextChecked] = onTogglePermissions.mock.calls[0];
+    expect(nextChecked).toBe(true);
+    expect([...ids].sort()).toEqual([1, 2]);
+  });
+
+  it("busca por descripción sin importar acentos ni mayúsculas", async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.type(screen.getByRole("searchbox", { name: "Buscar permiso" }), "MEDICAS");
+
+    expect(screen.getByText("Ver consultas médicas")).toBeVisible();
+    expect(screen.queryByText("Ver citas")).toBeNull();
+  });
+
+  it("avisa cuando la búsqueda no encuentra nada", async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.type(screen.getByRole("searchbox", { name: "Buscar permiso" }), "inexistente");
+
+    expect(screen.getByText(/no hay permisos que coincidan/i)).toBeVisible();
+  });
+
+  it("filtra los que faltan asignar", async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(screen.getByRole("button", { name: "Sin asignar" }));
+
+    expect(screen.queryByText("Ver citas")).toBeNull();
+    expect(screen.getByText("Agendar citas")).toBeVisible();
+  });
+
+  it("marca como sensibles los permisos que amplían el alcance", () => {
+    renderTab();
+
+    const fila = screen.getByText("Ver y trabajar la información de todos los centros de atención").closest("li");
+    expect(fila).not.toBeNull();
+    expect(within(fila as HTMLElement).getByText("Sensible")).toBeVisible();
+  });
+
+  it("bloquea los permisos que quien edita no tiene", () => {
+    renderTab({ actorPermissions: ["recepcion:citas:read"] });
+
+    expect(screen.getByRole("switch", { name: "Ver citas" })).toBeEnabled();
+    expect(screen.getByRole("switch", { name: "Agendar citas" })).toBeDisabled();
+  });
+
+  it("rol administrador: todo prendido, bloqueado y con su leyenda", () => {
+    renderTab({ permissions: [], isAdmin: true, isEditable: false });
+
+    expect(screen.getByText(/acceso total automatico/i)).toBeVisible();
+    expect(screen.queryByText(/solo lectura/i)).toBeNull();
+    for (const sw of screen.getAllByRole("switch")) {
+      expect(sw).toBeChecked();
+      expect(sw).toBeDisabled();
+    }
+  });
+
+  it("solo lectura: avisa y bloquea los switches", () => {
+    renderTab({ isEditable: false });
+
+    expect(screen.getByText("Solo lectura: no puedes actualizar este rol porque no tienes permisos.")).toBeVisible();
+    for (const sw of screen.getAllByRole("switch")) expect(sw).toBeDisabled();
+  });
+
+  it("error del catálogo: lo muestra y bloquea los cambios", () => {
+    renderTab({ catalogErrorMessage: "No se pudo cargar el catalogo" });
 
     expect(screen.getByText("No se pudo cargar el catalogo")).toBeVisible();
-    expect(
-      screen.getByRole("button", {
-        name: "Agregar permiso admin:gestion:roles:update",
-      }),
-    ).toBeDisabled();
+    for (const sw of screen.getAllByRole("switch")) expect(sw).toBeDisabled();
   });
 
-  it("shows catalog access context and hides error banner", () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        catalogAccessMessage="No tienes acceso al catalogo de permisos."
-        catalogErrorMessage="No se pudo cargar el catalogo"
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
-
-    expect(
-      screen.getByText("No tienes acceso al catalogo de permisos."),
-    ).toBeVisible();
-    expect(screen.queryByText("No se pudo cargar el catalogo")).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Reintentar catalogo" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("button", {
-        name: "Agregar permiso admin:gestion:roles:update",
-      }),
-    ).toBeDisabled();
-  });
-
-  it("calls remove callback when removing a permission", async () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[createRolePermission()]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
-
-    const removeButton = screen.getByRole("button", {
-      name: "Remover permiso admin:gestion:roles:update",
+  it("sin acceso al catálogo: muestra ese contexto en vez del error y deja quitar lo asignado", async () => {
+    const user = userEvent.setup();
+    renderTab({
+      permissionCatalog: [],
+      catalogAccessMessage: "No tienes acceso al catalogo de permisos.",
+      catalogErrorMessage: "No se pudo cargar el catalogo",
     });
 
-    fireEvent.click(removeButton);
-
-    expect(onRemovePermission).toHaveBeenCalledWith(1);
-  });
-
-  it("shows empty state when no permissions assigned", () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
-
-    expect(
-      screen.getByText("Este rol no tiene permisos asignados."),
-    ).toBeVisible();
-  });
-
-  it("shows skeletons while loading", () => {
-    const { container } = render(
-      <RoleDetailsPermissionsTab
-        permissions={[]}
-        permissionCatalog={catalog}
-        isLoadingPermissions
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
-
-    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(
-      0,
-    );
-  });
-
-  it("renders permissions as read-only when editing is disabled", () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[createRolePermission()]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        isEditable={false}
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
-
-    expect(
-      screen.getByText(
-        "Solo lectura: no puedes actualizar este rol porque no tienes permisos.",
-      ),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("button", {
-        name: "Agregar permiso admin:gestion:roles:read",
-      }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", {
-        name: "Remover permiso admin:gestion:roles:update",
-      }),
-    ).toBeDisabled();
-  });
-
-  it("hides catalog error banner when tab is read-only", () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[createRolePermission()]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        isEditable={false}
-        catalogErrorMessage="No se pudo cargar el catalogo"
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
-
+    expect(screen.getByText("No tienes acceso al catalogo de permisos.")).toBeVisible();
     expect(screen.queryByText("No se pudo cargar el catalogo")).toBeNull();
-    expect(
-      screen.getByText(
-        "Solo lectura: no puedes actualizar este rol porque no tienes permisos.",
-      ),
-    ).toBeVisible();
+
+    await user.click(screen.getByRole("switch", { name: "Ver citas" }));
+
+    expect(onTogglePermissions).toHaveBeenCalledWith([1], false);
   });
 
-  it("admin role: shows the full catalog as assigned with the admin legend, regardless of the real RelRolPermiso list", () => {
-    render(
-      <RoleDetailsPermissionsTab
-        permissions={[]}
-        permissionCatalog={catalog}
-        isLoadingPermissions={false}
-        isEditable={false}
-        isAdmin
-        onAddPermission={onAddPermission}
-        onRemovePermission={onRemovePermission}
-      />,
-    );
+  it("muestra skeletons mientras carga", () => {
+    const { container } = renderTab({ isLoadingPermissions: true });
 
-    expect(
-      screen.getByText(
-        "Este rol tiene acceso total automatico a todos los permisos y modulos -- no depende de asignaciones individuales.",
-      ),
-    ).toBeVisible();
-    // El mensaje generico de solo-lectura NO se muestra: la leyenda admin lo reemplaza.
-    expect(
-      screen.queryByText(
-        "Solo lectura: no puedes actualizar este rol porque no tienes permisos.",
-      ),
-    ).toBeNull();
-
-    // Todo el catalogo aparece como "asignado" (con boton de quitar, aunque
-    // deshabilitado), aunque `permissions` (RelRolPermiso) este vacio.
-    expect(
-      screen.getByRole("button", {
-        name: "Remover permiso admin:gestion:roles:update",
-      }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", {
-        name: "Remover permiso admin:gestion:roles:read",
-      }),
-    ).toBeDisabled();
-
-    // Nada queda en "disponibles para agregar": el rol admin ya tiene todo.
-    expect(
-      screen.getByText(
-        "Este rol ya tiene acceso a todos los permisos automaticamente.",
-      ),
-    ).toBeVisible();
+    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
   });
 });

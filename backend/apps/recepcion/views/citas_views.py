@@ -17,10 +17,16 @@ from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.authentication.services.authorization_service import has_capability
+from apps.authentication.services.centro_scope import alcance_de
 from apps.catalogos.models import MotivoCita
 from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.models import CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
+from apps.recepcion.services.alcance_centro import (
+    alcance_para_agendar,
+    exigir_centro_para_agendar,
+    exigir_en_alcance,
+)
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 from apps.recepcion.services.vigencia_service import tiene_vigencia
@@ -90,6 +96,15 @@ def _check_cap(user, capability):
 def _domain_error(request, exc):
     return error_response(exc.code, exc.message, exc.status_code,
                           request_id=get_request_id(request))
+
+
+def _cita_en_alcance(user, cita_id):
+    """La cita, o VisitDomainError 404 si no existe o es de otro centro."""
+    cita = CitasRepository.get_by_id(cita_id)
+    if not cita:
+        raise VisitDomainError("CITA_NOT_FOUND", "Cita no encontrada.", 404)
+    exigir_en_alcance(alcance_de(user), cita.centro_id, code="CITA_NOT_FOUND", message="Cita no encontrada.")
+    return cita
 
 
 def _resolve_medico_or_404(medico_id_raw, request):
@@ -235,6 +250,7 @@ class CitasListCreateView(APIView):
             estatus=s.validated_data.get("estatus"),
             fecha_desde=s.validated_data.get("fechaDesde"),
             fecha_hasta=s.validated_data.get("fechaHasta"),
+            alcance=alcance_de(user),
         )
 
         return Response({
@@ -262,6 +278,17 @@ class CitasListCreateView(APIView):
             return error_response("VALIDATION_ERROR", "Datos inválidos.",
                                   status.HTTP_422_UNPROCESSABLE_ENTITY,
                                   details=s.errors, request_id=get_request_id(request))
+
+        # ── Alcance por centro: agendar en otro centro exige permiso ─────────
+        #    Sin consultorio elegido, vale el del horario que ocuparía.
+        consultorio_destino = s.validated_data.get("consultorioId") or CitasRepository.consultorio_del_horario(
+            s.validated_data["medicoId"], s.validated_data["fechaHora"],
+        )
+        permisos = UserRepository.build_auth_user(user).get("permissions", [])
+        try:
+            exigir_centro_para_agendar(alcance_de(user, permisos), permisos, consultorio_destino)
+        except VisitDomainError as exc:
+            return _domain_error(request, exc)
 
         # ── Sin vigencia no se agenda (la orden de Capital Humano se acepta
         #    en el check-in, no acá) ──────────────────────────────────────────
@@ -373,14 +400,9 @@ class CitaDetailView(APIView):
             return err
         try:
             _check_cap(user, CITAS_READ_CAPABILITY)
+            cita = _cita_en_alcance(user, cita_id)
         except VisitDomainError as exc:
             return _domain_error(request, exc)
-
-        cita = CitasRepository.get_by_id(cita_id)
-        if not cita:
-            return error_response("CITA_NOT_FOUND", "Cita no encontrada.",
-                                  status.HTTP_404_NOT_FOUND,
-                                  request_id=get_request_id(request))
 
         return Response(_serialize_cita(cita))
 
@@ -400,14 +422,9 @@ class CitaEstatusView(APIView):
             return csrf_err
         try:
             _check_cap(user, CITAS_WRITE_CAPABILITY)
+            cita = _cita_en_alcance(user, cita_id)
         except VisitDomainError as exc:
             return _domain_error(request, exc)
-
-        cita = CitasRepository.get_by_id(cita_id)
-        if not cita:
-            return error_response("CITA_NOT_FOUND", "Cita no encontrada.",
-                                  status.HTTP_404_NOT_FOUND,
-                                  request_id=get_request_id(request))
 
         s = UpdateEstatusSerializer(data=request.data)
         if not s.is_valid():
@@ -491,11 +508,14 @@ class SlotsDisponiblesView(APIView):
         medico_id = medico.id
         fecha     = s.validated_data["fecha"]
 
-        slots = CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha)
+        permisos = UserRepository.build_auth_user(user).get("permissions", [])
+        alcance = alcance_para_agendar(alcance_de(user, permisos), permisos)
+        slots = CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha, alcance=alcance)
 
-        if not slots and fecha >= date.today():
+        # Se regenera solo si el médico no tiene horarios, no si el alcance los oculta.
+        if not slots and fecha >= date.today() and not CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha):
             dias = (fecha - date.today()).days + 1
             CitasRepository.generar_slots_medico(medico_id=medico_id, dias_adelante=dias)
-            slots = CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha)
+            slots = CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha, alcance=alcance)
 
         return Response({"slots": slots})

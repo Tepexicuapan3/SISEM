@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, Stethoscope } from "lucide-react";
+import { Ban, CheckCircle2, Clock, Stethoscope } from "lucide-react";
 import { Button } from "@shared/ui/button";
 import { Badge }  from "@shared/ui/badge";
 import {
@@ -30,7 +30,7 @@ import type { MedicoDisponible } from "@api/types/medicos.types";
 import { isOpenVisitStatus } from "@features/recepcion/shared/utils/recepcion-format";
 import { ApiError }        from "@api/utils/errors";
 import { visitsAPI }       from "@api/resources/visits.api";
-import { PatientMemberCard } from "@features/recepcion/shared/components/PatientMemberCard";
+import { PatientMemberCard, resolveParentesco } from "@features/recepcion/shared/components/PatientMemberCard";
 import { useCreateVisit }   from "@features/recepcion/modules/checkin/mutations/useCreateVisit";
 import { useTiposCitasList } from "@features/admin/modules/catalogos/tipos-citas/queries/useTiposCitasList";
 import { usePatientLookup } from "@features/recepcion/modules/checkin/queries/usePatientLookup";
@@ -49,6 +49,7 @@ import {
 import { useMedicosDisponibles } from "@features/admin/modules/medicos/hooks/useMedicos";
 import { useAgendaSemanal }       from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
+import { useAlcanceCentros } from "@/domains/auth-access/contracts/navigation-auth";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { AdscripcionAviso, AdscripcionBadge } from "@features/recepcion/modules/adscripcion/components/AdscripcionAviso";
 import { ConflictoConsultorioAviso } from "@features/recepcion/modules/adscripcion/components/ConflictoConsultorioAviso";
@@ -187,6 +188,9 @@ export const RecepcionQuickCheckinDialog = ({
   const [panelAdscripcion, setPanelAdscripcion] = useState(false);
   const [conflicto,        setConflicto]        = useState<ConflictoConsultorioFamiliar | null>(null);
   const [ultimosValores,   setUltimosValores]   = useState<CheckinFormValues | null>(null);
+  // pkNum 0 es el default del form Y el titular: sin esto el titular quedaría
+  // elegido sin que recepción lo seleccione.
+  const [miembroElegido,   setMiembroElegido]   = useState(false);
   const permisosAdscripcion = useAdscripcionPermisos();
 
   const debouncedNoExp = useDebounce(noExpSearch, 400);
@@ -221,24 +225,31 @@ export const RecepcionQuickCheckinDialog = ({
       ]
     : [];
 
-  const selectedMember = allMembers.find((m) => m.pkNum === pkNumWatch);
+  const selectedMember =
+    miembroElegido || allMembers.length === 1
+      ? allMembers.find((m) => m.pkNum === pkNumWatch)
+      : undefined;
 
   // ── Centros disponibles ───────────────────────────────────────────────────
+  // Alcance por centro: el check-in se registra en un centro propio (UX; el
+  // backend responde CENTRO_NO_PERMITIDO si no).
+  const { permite: permiteCentro } = useAlcanceCentros();
   const { data: centrosData } = useCentrosAtencionList({ isActive: true });
-  const centros = centrosData?.items ?? [];
+  const todosLosCentros = centrosData?.items ?? [];
+  const centros = todosLosCentros.filter((c) => permiteCentro(c.id));
 
   // Auto-seleccionar centro según cd_clinica del paciente seleccionado
   useEffect(() => {
-    if (!selectedMember) {
-      // Sin paciente: auto-seleccionar si solo hay un centro
+    const cdClinica = selectedMember?.cdClinica;
+    const centroMatch = cdClinica ? centros.find((c) => String(c.id) === String(cdClinica)) : undefined;
+    if (!centroMatch) {
+      // Sin paciente, o su clínica no es un centro propio: si solo hay un
+      // centro posible, ese.
       if (centros.length === 1 && !centroId) {
         setCentroId(centros[0].id);
       }
       return;
     }
-    const cdClinica = selectedMember.cdClinica;
-    if (!cdClinica) return;
-    const centroMatch = centros.find((c) => String(c.id) === String(cdClinica));
     if (centroMatch) {
       setCentroId(centroMatch.id);
       setSelectedMedico(null);
@@ -253,6 +264,7 @@ export const RecepcionQuickCheckinDialog = ({
   useEffect(() => {
     setConflicto(null);
     if (!adscripcionVigente || !esMedicinaGeneral) return;
+    if (!permiteCentro(adscripcionVigente.idCentroAdscripcion)) return;
     setCentroId(adscripcionVigente.idCentroAdscripcion);
     setConsultorioFiltro(adscripcionVigente.idConsultorio);
     setSelectedMedico(null);
@@ -334,12 +346,16 @@ export const RecepcionQuickCheckinDialog = ({
     if (!open) return;
     form.reset({ ...DEFAULT_CHECKIN_FORM_VALUES, ...initialValues });
     setNoExpSearch("");
+    setMiembroElegido(false);
     setSelectedMedico(null);
     setConsultorioFiltro(null);
   }, [form, initialValues, open]);
 
   // Limpiar selección de miembro cuando cambia el expediente
-  useEffect(() => { form.setValue("pkNum", 0); }, [debouncedNoExp, form]);
+  useEffect(() => {
+    form.setValue("pkNum", 0);
+    setMiembroElegido(false);
+  }, [debouncedNoExp, form]);
 
   // Sincronizar médico con el form y pre-llenar hora con el PRIMER slot libre
   useEffect(() => {
@@ -363,10 +379,14 @@ export const RecepcionQuickCheckinDialog = ({
 
   // Verificar que el paciente pertenece a un centro registrado
   const cdClinicaPaciente = selectedMember?.cdClinica ?? null;
+  // Contra TODOS los centros: "sin centro" es una clínica que no existe en el
+  // sistema, no una de otro centro.
   const centroDelPaciente = cdClinicaPaciente
-    ? centros.find((c) => String(c.id) === String(cdClinicaPaciente))
+    ? todosLosCentros.find((c) => String(c.id) === String(cdClinicaPaciente))
     : null;
   const pacienteSinCentro = !!selectedMember && !!cdClinicaPaciente && !centroDelPaciente;
+  // La ficha se genera en el centro del paciente, y ese centro no es de quien registra.
+  const pacienteDeOtroCentro = !!centroDelPaciente && !permiteCentro(centroDelPaciente.id);
 
   // P-03: al adscribir, la ficha sigue con el consultorio nuevo.
   const handleAdscrito = (adscripcion: Adscripcion) => {
@@ -382,6 +402,12 @@ export const RecepcionQuickCheckinDialog = ({
     if (pacienteSinCentro) {
       toast.error("No se puede generar la ficha", {
         description: `El paciente pertenece a la clínica ${cdClinicaPaciente} que no está registrada en el sistema.`,
+      });
+      return;
+    }
+    if (pacienteDeOtroCentro) {
+      toast.error("No se puede generar la ficha", {
+        description: `El paciente pertenece a ${centroDelPaciente?.name}, que no es tu centro de atención.`,
       });
       return;
     }
@@ -463,39 +489,94 @@ export const RecepcionQuickCheckinDialog = ({
                 </p>
               ) : (
                 <>
-                  {allMembers.map((member) => (
-                    <PatientMemberCard
-                      key={`${member.noExp}-${member.pkNum}`}
-                      member={member}
-                      selected={pkNumWatch === member.pkNum}
-                      onSelect={() =>
-                        form.setValue("pkNum", member.pkNum, { shouldValidate: true })
-                      }
-                      aside={<AdscripcionBadge resumen={member.adscripcion} />}
-                    />
-                  ))}
-
+                  {/* Con alguien elegido, la familia se colapsa a una sola tarjeta:
+                      así no se ve el mismo paciente dos veces. */}
                   {selectedMember ? (
-                    <div className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-                      <CheckCircle2 className="size-4 shrink-0 text-primary" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-primary">
-                          {selectedMember.nombre}
-                        </p>
-                        <p className="truncate text-xs text-txt-muted">
-                          {selectedMember.pkNum === 0 ? "Titular" : selectedMember.parentesco ?? "Familiar"}
-                          {" · Exp. "}{selectedMember.noExp}
-                        </p>
+                    <div className="rounded-xl border-2 border-primary bg-primary/5 px-4 py-3">
+                      <p className="text-[11px] font-semibold tracking-wide text-primary uppercase">
+                        La ficha es para
+                      </p>
+                      <div className="mt-1 flex items-start gap-3">
+                        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-base font-bold text-txt-body">
+                            {selectedMember.nombre}
+                          </p>
+                          <p className="text-xs text-txt-muted">
+                            {resolveParentesco(selectedMember.parentesco)}
+                            {selectedMember.edad != null ? ` · ${selectedMember.edad} años` : ""}
+                            {" · Exp. "}{selectedMember.noExp}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            <Badge
+                              variant={selectedMember.pkNum === 0 ? "stable" : "outline"}
+                              className="text-xs"
+                            >
+                              {selectedMember.pkNum === 0 ? "Titular" : "Derechohabiente"}
+                            </Badge>
+                            <AdscripcionBadge resumen={selectedMember.adscripcion} />
+                          </div>
+                        </div>
+                        {allMembers.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            disabled={createVisit.isPending}
+                            onClick={() => setMiembroElegido(false)}
+                          >
+                            Cambiar
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-txt-muted italic">
-                      ↑ Selecciona a quien se le generará la ficha.
-                    </p>
+                    <>
+                      <p className="text-xs text-txt-muted">
+                        Este expediente es de la familia. Elige a quién se le generará la ficha:
+                      </p>
+                      {allMembers.map((member) => (
+                        <PatientMemberCard
+                          key={`${member.noExp}-${member.pkNum}`}
+                          member={member}
+                          selected={false}
+                          onSelect={() => {
+                            form.setValue("pkNum", member.pkNum, { shouldValidate: true });
+                            setMiembroElegido(true);
+                          }}
+                          aside={<AdscripcionBadge resumen={member.adscripcion} />}
+                        />
+                      ))}
+                    </>
                   )}
 
+                  {/* Bloqueo por centro: va pegado al paciente para que se vea al elegirlo */}
+                  {pacienteSinCentro || pacienteDeOtroCentro ? (
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2.5 rounded-xl border-2 border-status-critical/50 bg-status-critical/10 px-3 py-3 text-status-critical"
+                    >
+                      <Ban className="mt-0.5 size-5 shrink-0" />
+                      <div className="min-w-0 space-y-0.5 text-sm">
+                        <p className="font-semibold">No se puede generar la ficha desde aquí</p>
+                        {pacienteSinCentro ? (
+                          <p>
+                            El paciente pertenece a la clínica <strong>{cdClinicaPaciente}</strong>, que no
+                            está registrada en el sistema.
+                          </p>
+                        ) : (
+                          <p>
+                            El paciente pertenece a <strong>{centroDelPaciente?.name}</strong>, que no es tu
+                            centro de atención.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
                   {/* P-03: aviso del consultorio familiar (solo medicina general) */}
-                  {selectedMember && esMedicinaGeneral ? (
+                  {selectedMember && esMedicinaGeneral && !pacienteSinCentro && !pacienteDeOtroCentro ? (
                     <AdscripcionAviso
                       resumen={selectedMember.adscripcion}
                       puedeAsignar={permisosAdscripcion.puedeAsignar}
@@ -816,13 +897,6 @@ export const RecepcionQuickCheckinDialog = ({
             />
           ) : null}
 
-          {pacienteSinCentro ? (
-            <p className="text-sm text-status-critical" role="alert">
-              El paciente pertenece a la clínica <strong>{cdClinicaPaciente}</strong> que no está
-              registrada en el sistema. No se puede generar la ficha.
-            </p>
-          ) : null}
-
           {!canWrite ? (
             <p className="text-sm text-txt-muted" role="status">
               No tienes permisos completos para registrar llegadas desde agenda.
@@ -839,7 +913,7 @@ export const RecepcionQuickCheckinDialog = ({
             </Button>
             <Button
               type="submit"
-              disabled={!canWrite || createVisit.isPending || !selectedMember || pacienteSinCentro}
+              disabled={!canWrite || createVisit.isPending || !selectedMember || pacienteSinCentro || pacienteDeOtroCentro}
             >
               Generar ficha de consulta
             </Button>

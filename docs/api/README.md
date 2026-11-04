@@ -21,6 +21,7 @@ docs/api/
     ├── rbac.md
     ├── catalogos.md
     ├── adscripcion.md      # P-03 consultorio familiar
+    ├── alcance-centro.md   # alcance por centro de atención
     └── doc_front.md
 ```
 

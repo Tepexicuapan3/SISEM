@@ -8,6 +8,7 @@ from apps.medicos.identity import medico_id_for_usuario
 from apps.recepcion.models import HorarioDisponible, Visit
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services import asistencia_cita_service
+from apps.recepcion.services.alcance_centro import exigir_en_alcance
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
     ROLE_RECEPCION,
@@ -394,6 +395,7 @@ def list_visits(
     pk_num: int | None = None,
     *,
     include_vitals_values: bool = True,
+    alcance=None,
 ) -> dict:
     visits, total, total_pages, doctor_nombres, cita_fechas = VisitRepository.list_paginated(
         page=page,
@@ -410,6 +412,7 @@ def list_visits(
         folio=folio,
         q=q,
         pk_num=pk_num,
+        alcance=alcance,
     )
     return {
         "items":      [
@@ -432,12 +435,14 @@ def change_visit_status(
     changed_by_id: int | None = None,
     motivo_cancelacion=None,
     motivo_detalle: str | None = None,
+    alcance=None,
 ) -> dict:
     """
     ``motivo_cancelacion``: instancia (o PK) de ``catalogos.MotivoCita`` --
     catálogo tipificado exigido por la máquina de estados para cancelar
     (ver visit_state_machine_usecase). ``motivo_detalle`` es el texto libre
-    complementario opcional.
+    complementario opcional. ``alcance``: una visita de otro centro responde
+    como no encontrada.
 
     Todo el flujo lectura→validación→escritura corre DENTRO de un único
     ``transaction.atomic()`` con el lock (``select_for_update``) tomado
@@ -450,6 +455,8 @@ def change_visit_status(
         visit = VisitRepository.get_for_update(visit_id)
         if not visit:
             raise VisitDomainError("VISIT_NOT_FOUND", "Visita no encontrada.", 404)
+        if alcance is not None:
+            exigir_en_alcance(alcance, visit.centro_id, code="VISIT_NOT_FOUND", message="Visita no encontrada.")
 
         previous_status = visit.status
         next_state      = transition_visit_state(
@@ -514,8 +521,12 @@ def change_visit_status(
     return VisitRepository.to_contract(visit)
 
 
-def get_visit_status_log(visit_id: int) -> list[dict]:
+def get_visit_status_log(visit_id: int, alcance=None) -> list[dict]:
     """Retorna el historial de estados de una visita con nombres de usuario resueltos."""
+    if alcance is not None:
+        centros = list(Visit.objects.filter(pk=visit_id).values_list("centro_id", flat=True))
+        if centros:
+            exigir_en_alcance(alcance, centros[0], code="VISIT_NOT_FOUND", message="Visita no encontrada.")
     logs = VisitRepository.get_status_log(visit_id)
     if not logs:
         return []

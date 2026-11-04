@@ -17,7 +17,7 @@ from rest_framework.test import APITestCase
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import Permisos, Roles
+from apps.catalogos.models import CatCentroAtencion, Permisos, Roles
 from apps.medicos.models import CatMedico
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
 from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
@@ -52,6 +52,11 @@ class CheckinManualApiTests(APITestCase):
 
         self.request_id = "22222222-2222-2222-2222-222222222222"
         self.recepcion_password = "Recep_123456"
+        # Alcance por centro: recepción solo ve las citas de su centro.
+        self.centro = CatCentroAtencion.objects.create(
+            name="Centro Checkin", code="CT-CHK",
+            center_type=CatCentroAtencion.TipoCentro.CLINICA, is_active=True,
+        )
 
         self._create_user_with_role(
             username="recepcion_checkin_user",
@@ -86,6 +91,7 @@ class CheckinManualApiTests(APITestCase):
         )
         DetUsuario.objects.create(
             id_usuario=user, nombre=username, paterno="Test", materno="User",
+            id_centro_atencion=self.centro,
         )
         role = Roles.objects.create(
             rol=role_code, desc_rol=f"Rol {role_code}",
@@ -141,7 +147,7 @@ class CheckinManualApiTests(APITestCase):
             medico_id=self.medico.id,
             fecha_hora=fecha_hora, duracion_min=20,
             servicio_tipo="medicina_general", estatus=EstatusCita.AGENDADA,
-            motivo="Test check-in manual",
+            motivo="Test check-in manual", centro=self.centro,
         )
         defaults.update(overrides)
         return CitaMedica.objects.create(**defaults)

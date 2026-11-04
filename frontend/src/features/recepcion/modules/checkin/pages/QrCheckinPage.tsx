@@ -20,6 +20,7 @@ import { useConfirmarQRCheckin } from "@features/recepcion/modules/checkin/mutat
 import { resolveQrCheckinErrorMessage } from "@features/recepcion/modules/checkin/domain/qrCheckin.errors";
 import { RECEPCION_WRITE_PERMISSION_REQUIREMENT } from "@features/recepcion/shared/domain/recepcion.permissions";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { SinCentroAviso } from "@/domains/auth-access/contracts/navigation-auth";
 import { FichaCheckinCard } from "@features/recepcion/modules/checkin/components/FichaCheckinCard";
 import { BusquedaCheckinPanel } from "@features/recepcion/modules/checkin/components/BusquedaCheckinPanel";
 import { AutorizacionVigenciaField } from "@features/recepcion/modules/checkin/components/AutorizacionVigenciaField";
@@ -165,6 +166,7 @@ export const QrCheckinPage = () => {
 
   return (
     <section className="space-y-5 p-6">
+      <SinCentroAviso />
       <header className="space-y-2 rounded-xl border border-line-struct bg-paper p-5">
         <div className="inline-flex items-center gap-2 rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted">
           <QrCode className="size-3.5" />

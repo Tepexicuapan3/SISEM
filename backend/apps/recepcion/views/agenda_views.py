@@ -17,9 +17,11 @@ from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.services.response_service import error_response, get_request_id
 from apps.authentication.services.session_service import authenticate_request
 from apps.authentication.services.authorization_service import has_capability
+from apps.authentication.services.centro_scope import alcance_de
 from apps.authentication.repositories.user_repository import UserRepository
 from apps.medicos.repositories.medico_repository import MedicoRepository
 from apps.recepcion.models import HorarioDisponible
+from apps.recepcion.services.alcance_centro import alcance_para_agendar
 from apps.recepcion.services.errors import VisitDomainError
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 
@@ -91,22 +93,21 @@ class AgendaSemanalView(APIView):
         )
         _slot_select = ("consultorio", "cita")
 
+        if not HorarioDisponible.objects.filter(**_slot_qs_kwargs).exists() and fecha_hasta >= date.today():
+            dias = max((fecha_hasta - date.today()).days + 1, 30)
+            CitasRepository.generar_slots_medico(medico_id=medico_id, dias_adelante=dias)
+
+        # Alcance por centro: solo horarios de consultorios de su centro, salvo
+        # que pueda agendar en otros centros.
+        permisos = auth_user.get("permissions", [])
+        alcance = alcance_para_agendar(alcance_de(user, permisos), permisos)
         slots = (
             HorarioDisponible.objects
             .select_related(*_slot_select)
             .filter(**_slot_qs_kwargs)
+            .filter(alcance.q("consultorio__id_center_id"))
             .order_by("fecha", "hora")
         )
-
-        if not slots.exists() and fecha_hasta >= date.today():
-            dias = max((fecha_hasta - date.today()).days + 1, 30)
-            CitasRepository.generar_slots_medico(medico_id=medico_id, dias_adelante=dias)
-            slots = (
-                HorarioDisponible.objects
-                .select_related(*_slot_select)
-                .filter(**_slot_qs_kwargs)
-                .order_by("fecha", "hora")
-            )
 
         # Agrupar por fecha
         agenda: dict[str, list] = {}

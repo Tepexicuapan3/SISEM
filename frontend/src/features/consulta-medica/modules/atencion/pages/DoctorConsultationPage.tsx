@@ -10,7 +10,7 @@ import {
   type CieSearchItem,
 } from "@api/types";
 import { useDebounce } from "@shared/hooks/useDebounce";
-import { usePermissionDependencies } from "@/domains/auth-access/contracts/navigation-auth";
+import { SinCentroAviso, usePermissionDependencies } from "@/domains/auth-access/contracts/navigation-auth";
 import {
   canCloseConsultation,
   canStartConsultation,
@@ -539,6 +539,7 @@ export const DoctorConsultationPage = () => {
 
   return (
     <section className="space-y-6 p-6">
+      <SinCentroAviso />
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight text-brand">

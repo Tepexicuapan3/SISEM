@@ -165,6 +165,7 @@ class VisitRepository:
         folio: str | None = None,
         q: str | None = None,
         pk_num: int | None = None,
+        alcance=None,
     ) -> tuple[list[Visit], int, int]:
         queryset = (
             Visit.objects
@@ -195,7 +196,9 @@ class VisitRepository:
         if consultorio_id:
             queryset = queryset.filter(consultorio_id=consultorio_id)
         if centro_id:
-            queryset = queryset.filter(consultorio__id_center_id=centro_id)
+            queryset = queryset.filter(centro_id=centro_id)
+        if alcance is not None:
+            queryset = queryset.filter(alcance.q("centro_id"))
         if service_type:
             queryset = queryset.filter(service_type=service_type)
         # Plan contraer la llave vieja: el expediente se busca en cns_paciente.

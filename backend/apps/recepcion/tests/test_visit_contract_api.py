@@ -8,7 +8,7 @@ from rest_framework.test import APITestCase
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import MotivoCita, Permisos, Roles, TipoDeCitas
+from apps.catalogos.models import CatCentroAtencion, MotivoCita, Permisos, Roles, TipoDeCitas
 from apps.somatometria.repositories.vitals_repository import VitalsRepository
 
 
@@ -24,6 +24,11 @@ class VisitContractsApiTests(APITestCase):
         self.motivo_cancelacion_id = MotivoCita.objects.get(
             name="Cancelada por el paciente"
         ).id
+        # Alcance por centro: todo el personal de prueba trabaja en el mismo centro.
+        self.centro = CatCentroAtencion.objects.create(
+            name="Centro Visitas", code="CT-VIS",
+            center_type=CatCentroAtencion.TipoCentro.CLINICA, is_active=True,
+        )
 
         self._create_user_with_role(
             username="recepcion_user",
@@ -83,6 +88,7 @@ class VisitContractsApiTests(APITestCase):
             nombre=username,
             paterno="Test",
             materno="User",
+            id_centro_atencion=self.centro,
         )
         resolved_landing_route = landing_route or (
             "/recepcion" if role_code == "RECEPCION" else "/consultas"

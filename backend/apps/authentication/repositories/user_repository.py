@@ -5,6 +5,7 @@ from django.utils import timezone
 from apps.administracion.services.rbac_resolver import RBACResolver
 from apps.authentication.models import SyUsuario
 from apps.authentication.services.auth_revision import serialize_auth_revision
+from apps.authentication.services.centro_scope import alcance_contrato
 from apps.authentication.services.authorization_service import (
     get_permission_context,
 )
@@ -131,6 +132,7 @@ class UserRepository:
             "authRevision": serialize_auth_revision(user),
             "mustChangePassword": user.cambiar_clave,
             "requiresOnboarding": user.cambiar_clave or not user.terminos_acept,
+            "alcanceCentros": alcance_contrato(user, permissions),
         }
 
 

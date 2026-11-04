@@ -26,6 +26,7 @@ import {
   type VisitStatus,
 } from "@api/types";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
+import { SinCentroAviso, useAlcanceCentros } from "@/domains/auth-access/contracts/navigation-auth";
 import { MotivoCancelacionFields } from "@features/recepcion/shared/components/MotivoCancelacionFields";
 import { useVisitStatusAction } from "@features/recepcion/modules/checkin/mutations/useVisitStatusAction";
 import { useRecepcionAgendaQueue } from "@features/recepcion/modules/agenda/queries/useRecepcionAgendaQueue";
@@ -250,15 +251,22 @@ export const RecepcionAgendaPage = () => {
   // Sin llamadas extra al cambiar filtros → O(1) por interacción.
 
   const { data: centrosData } = useCentrosAtencionList({ isActive: true });
-  const centroOptions = (centrosData?.items ?? []).map((c) => ({ id: c.id, nombre: c.name }));
+  // Alcance por centro: solo centros, consultorios y médicos donde puede
+  // agendar (UX; el backend vuelve a validar).
+  const { puedeAgendarEn } = useAlcanceCentros();
+  const centroOptions = (centrosData?.items ?? [])
+    .filter((c) => puedeAgendarEn(c.id))
+    .map((c) => ({ id: c.id, nombre: c.name }));
 
   const { data: consultoriosData } = useConsultoriosList(
     { isActive: true, pageSize: 500 },
   );
-  const allConsultorios = consultoriosData?.items ?? [];
+  const allConsultorios = (consultoriosData?.items ?? []).filter((c) => puedeAgendarEn(c.centerId));
 
   const { data: medicosData } = useMedicosList({ estatusMedico: "ACTIVO" });
-  const allMedicos = medicosData?.items ?? [];
+  const allMedicos = (medicosData?.items ?? []).filter((m) =>
+    m.centros.some((c) => puedeAgendarEn(c.centroId)),
+  );
 
   // Filtrado client-side: si hay centro seleccionado → solo los de ese centro
   const selectedCentroId = centroFilter !== "all" ? centroFilter : null;
@@ -409,6 +417,7 @@ export const RecepcionAgendaPage = () => {
 
   return (
     <section className="space-y-5 p-6">
+      <SinCentroAviso />
       <header className="flex flex-col gap-3 rounded-xl border border-line-struct bg-paper p-5 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted">
