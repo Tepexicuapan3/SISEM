@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Globe, Loader2, Plus, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { DoorClosed, DoorOpen, Globe, Loader2, Plus, Stethoscope, X } from "lucide-react";
 import type { AgendaSlot } from "@api/types/agenda.types";
 import { useAgendaSemanal } from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
 import { addDays } from "@features/recepcion/modules/citas/utils/dates";
@@ -13,6 +13,7 @@ import { CITA_ESTATUS_CANCELABLE } from "@features/recepcion/modules/citas/domai
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const GRID_COLS  = "56px repeat(7, minmax(0, 1fr))";
 
 function formatDayDate(dateStr: string): string {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("es-MX", {
@@ -38,10 +39,47 @@ function isPastSlot(dateStr: string, hora: string, today: string, now: Date): bo
   return false;
 }
 
-function consultorioLabel(slot: AgendaSlot): string {
-  if (slot.consultorioNombre) return slot.consultorioNombre;
-  if (slot.consultorioNumero != null) return `Consultorio #${slot.consultorioNumero}`;
-  return "";
+// "Libre" para recepción: disponible, vigente y no exclusivo del portal (canal="LINEA").
+function esLibreRecepcion(fecha: string, slot: AgendaSlot, today: string, now: Date): boolean {
+  return slot.disponible && slot.canal !== "LINEA" && !isPastSlot(fecha, slot.hora, today, now);
+}
+
+// ─── Agrupación visual por consultorio (carriles) ─────────────────────────────
+
+interface Carril {
+  key:     string;
+  numero:  number | null;
+  nombre:  string | null;
+  horas:   string[];
+  // Slot por "fecha|hora" dentro de este consultorio.
+  slots:   Map<string, AgendaSlot>;
+}
+
+function agruparPorConsultorio(
+  agenda: Record<string, AgendaSlot[]> | undefined,
+  days: string[],
+): Carril[] {
+  const carriles = new Map<string, Carril>();
+  for (const fecha of days) {
+    for (const slot of agenda?.[fecha] ?? []) {
+      const key = slot.consultorioId != null ? String(slot.consultorioId) : "sin-consultorio";
+      let carril = carriles.get(key);
+      if (!carril) {
+        carril = { key, numero: slot.consultorioNumero, nombre: slot.consultorioNombre, horas: [], slots: new Map() };
+        carriles.set(key, carril);
+      }
+      carril.slots.set(`${fecha}|${slot.hora}`, slot);
+      if (!carril.horas.includes(slot.hora)) carril.horas.push(slot.hora);
+    }
+  }
+  return Array.from(carriles.values())
+    .map((c) => ({ ...c, horas: c.horas.sort() }))
+    .sort((a, b) => (a.numero ?? Number.MAX_SAFE_INTEGER) - (b.numero ?? Number.MAX_SAFE_INTEGER));
+}
+
+function tituloCarril(carril: Carril): string {
+  if (carril.numero != null) return `Consultorio ${carril.numero}`;
+  return carril.nombre ?? "Sin consultorio asignado";
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -59,6 +97,7 @@ interface SlotCellProps {
   dateStr:         string;
   hora:            string;
   slot:            AgendaSlot | undefined;
+  consultorio:     string;
   today:           string;
   now:             Date;
   isToday:         boolean;
@@ -66,13 +105,15 @@ interface SlotCellProps {
   onCancelarCita:  (cita: CitaACancelar) => void;
 }
 
-function SlotCell({ dateStr, hora, slot, today, now, isToday, onClick, onCancelarCita }: SlotCellProps) {
+const CELL_BASE = "relative h-[68px] w-full overflow-hidden rounded-lg border border-l-4 px-2 py-1.5 flex flex-col justify-between text-left";
+
+function SlotCell({ dateStr, hora, slot, consultorio, today, now, isToday, onClick, onCancelarCita }: SlotCellProps) {
   if (!slot) {
     return (
       <div
         className={cn(
-          "h-16 rounded-lg border border-dashed border-line-struct/30",
-          isToday && "border-primary/10 bg-primary/[0.02]",
+          "h-[68px] rounded-lg border border-dashed border-line-hairline bg-subtle/10",
+          isToday && "border-brand/20 bg-brand/[0.03]",
         )}
       />
     );
@@ -83,17 +124,15 @@ function SlotCell({ dateStr, hora, slot, today, now, isToday, onClick, onCancela
   // Slot disponible pero reservado exclusivamente para el portal de citas en
   // línea — no se puede agendar desde recepción.
   const esSoloPortal = slot.disponible && !esPasado && slot.canal === "LINEA";
-  const label        = consultorioLabel(slot);
 
   if (esPasado) {
     return (
-      <div className="h-16 rounded-lg border border-line-struct/20 bg-subtle/20 px-2 py-2 flex flex-col justify-center">
-        <p className="font-mono text-xs font-medium text-txt-muted/30 line-through text-center">
-          {hora}
-        </p>
-        {label && (
-          <p className="text-[10px] text-txt-muted/20 text-center truncate mt-0.5">{label}</p>
-        )}
+      <div
+        className={cn(CELL_BASE, "border-line-hairline border-l-line-struct bg-subtle/20 opacity-60")}
+        title={`${hora} — Horario pasado · ${consultorio}`}
+      >
+        <p className="font-mono text-sm font-bold text-txt-hint line-through tabular-nums">{hora}</p>
+        <p className="text-[10px] text-txt-hint">Pasado</p>
       </div>
     );
   }
@@ -101,18 +140,19 @@ function SlotCell({ dateStr, hora, slot, today, now, isToday, onClick, onCancela
   if (esOcupado) {
     // La cita ya reservada puede venir del portal de citas en línea
     // ("origenCanal" = "PORTAL") o haberse agendado directo en recepción —
-    // se distingue con el mismo ícono/color que usa "Solo portal" arriba
-    // para el slot todavía libre, así el vocabulario visual es consistente
-    // antes y después de reservarse.
+    // se distingue con el mismo ícono que usa "Solo portal" para el slot
+    // todavía libre, así el vocabulario visual es consistente antes y
+    // después de reservarse.
     const esPortal = slot.cita?.origenCanal === "PORTAL";
     const esCancelable = !!slot.cita && CITA_ESTATUS_CANCELABLE.has(slot.cita.estatus);
     return (
       <div
         className={cn(
-          "group/cell relative h-16 rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-2 flex flex-col justify-center gap-0.5",
-          isToday && "border-amber-300 bg-amber-50",
+          CELL_BASE,
+          "group/cell border-status-alert/40 border-l-status-alert bg-gradient-to-br from-status-alert/25 to-status-alert/10",
+          isToday && "border-status-alert/60",
         )}
-        title={`${hora} — Ocupado${slot.cita ? ` · Exp. ${slot.cita.noExp}` : ""}${esPortal ? " · Reservada en línea" : ""}`}
+        title={`${hora} — Ocupado${slot.cita ? ` · Exp. ${slot.cita.noExp}` : ""}${esPortal ? " · Reservada en línea" : ""} · ${consultorio}`}
       >
         {esCancelable && slot.cita && (
           <button
@@ -128,24 +168,22 @@ function SlotCell({ dateStr, hora, slot, today, now, isToday, onClick, onCancela
               });
             }}
             title="Cancelar cita"
-            className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-amber-200/80 text-amber-700 opacity-0 transition-opacity hover:bg-status-critical hover:text-white group-hover/cell:opacity-100"
+            aria-label="Cancelar cita"
+            className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-paper text-status-alert shadow-sm opacity-0 transition-opacity hover:bg-status-critical hover:text-txt-inverse focus-visible:opacity-100 group-hover/cell:opacity-100"
           >
-            <X className="size-2.5" />
+            <X className="size-3" />
           </button>
         )}
-        <div className="flex items-center justify-center gap-1">
-          <span className="size-1.5 rounded-full bg-amber-400 shrink-0" />
-          <p className="text-[11px] font-semibold text-amber-700">Agendado</p>
-          {esPortal && <Globe className="size-3 text-sky-500 shrink-0" />}
+        <div className="flex items-center gap-1 pr-5">
+          <span className="font-mono text-sm font-bold text-txt-body tabular-nums">{hora}</span>
+          {esPortal && <Globe className="size-3 shrink-0 text-status-info" />}
         </div>
-        {slot.cita?.noExp && (
-          <p className="font-mono text-[10px] text-amber-600/80 text-center truncate">
-            Exp. {slot.cita.noExp}
-          </p>
-        )}
-        {label && (
-          <p className="text-[10px] text-amber-500/70 text-center truncate">{label}</p>
-        )}
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-status-alert">Agendado</p>
+          {slot.cita?.noExp && (
+            <p className="truncate font-mono text-[10px] text-txt-muted">Exp. {slot.cita.noExp}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -154,18 +192,17 @@ function SlotCell({ dateStr, hora, slot, today, now, isToday, onClick, onCancela
     return (
       <div
         className={cn(
-          "h-16 rounded-lg border border-sky-200 bg-sky-50/60 px-2 py-2 flex flex-col justify-center gap-0.5",
-          isToday && "border-sky-300 bg-sky-50",
+          CELL_BASE,
+          "border-status-info/40 border-l-status-info bg-gradient-to-br from-status-info/20 to-status-info/5",
+          isToday && "border-status-info/60",
         )}
-        title={`${hora} — Reservado para citas en línea, no agendable desde recepción`}
+        title={`${hora} — Reservado para citas en línea, no agendable desde recepción · ${consultorio}`}
       >
-        <div className="flex items-center justify-center gap-1">
-          <Globe className="size-3 text-sky-500 shrink-0" />
-          <p className="text-[11px] font-semibold text-sky-700">Solo portal</p>
+        <span className="font-mono text-sm font-bold text-txt-body tabular-nums">{hora}</span>
+        <div className="flex items-center gap-1 text-status-info">
+          <Globe className="size-3 shrink-0" />
+          <p className="text-[10px] font-bold uppercase leading-tight tracking-wide">Solo portal</p>
         </div>
-        {label && (
-          <p className="text-[10px] text-sky-500/70 text-center truncate">{label}</p>
-        )}
       </div>
     );
   }
@@ -175,25 +212,69 @@ function SlotCell({ dateStr, hora, slot, today, now, isToday, onClick, onCancela
     <button
       type="button"
       onClick={() => onClick(dateStr, slot)}
-      title={`${hora} — Disponible · ${slot.duracionMin} min${label ? ` · ${label}` : ""}`}
+      title={`${hora} — Disponible · ${slot.duracionMin} min · ${consultorio}`}
       className={cn(
-        "group h-16 w-full rounded-lg border px-2 py-2 flex flex-col items-center justify-center gap-0.5",
-        "transition-all duration-150",
-        "border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 hover:shadow-sm active:scale-[0.97]",
-        isToday && "border-emerald-400 bg-emerald-50/80 ring-1 ring-emerald-200/60",
+        CELL_BASE,
+        "group cursor-pointer border-status-stable/40 border-l-status-stable",
+        "bg-gradient-to-br from-status-stable/20 to-status-stable/5",
+        "transition-all duration-150 hover:-translate-y-0.5 hover:from-status-stable hover:to-status-stable hover:shadow-lg hover:shadow-status-stable/25",
+        "active:translate-y-0 active:scale-[0.98]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-stable/50",
+        isToday && "ring-1 ring-status-stable/40",
       )}
     >
-      <div className="flex items-center gap-1">
-        <Plus className="size-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-        <span className="text-[11px] font-bold text-emerald-700">{slot.duracionMin} min</span>
+      <span className="font-mono text-sm font-bold text-status-stable tabular-nums transition-colors group-hover:text-txt-inverse">
+        {hora}
+      </span>
+      <div className="flex w-full items-end justify-between gap-1">
+        <span className="text-[10px] font-medium text-txt-muted transition-colors group-hover:text-txt-inverse">
+          {slot.duracionMin} min
+        </span>
+        <span className="flex items-center gap-0.5 rounded-full bg-txt-inverse px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-status-stable opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          <Plus className="size-2.5" /> Ficha
+        </span>
       </div>
-      {label && (
-        <p className="text-[10px] text-emerald-600/80 text-center truncate max-w-full px-1">{label}</p>
-      )}
-      <p className="text-[9px] font-medium text-emerald-500/60 uppercase tracking-wide opacity-0 group-hover:opacity-100 transition-opacity">
-        Generar ficha
-      </p>
     </button>
+  );
+}
+
+// ─── Subcomponentes del resumen ───────────────────────────────────────────────
+
+// Va sobre la placa naranja del médico: fondo claro + punto de color del estado.
+function StatTile({ value, label, tone }: { value: number; label: string; tone: "stable" | "alert" | "info" }) {
+  return (
+    <div className="flex min-w-[96px] flex-col rounded-xl bg-paper/95 px-3 py-1.5 shadow-sm">
+      <span className="flex items-center gap-1.5">
+        <span
+          className={cn(
+            "size-2 rounded-full",
+            tone === "stable" && "bg-status-stable",
+            tone === "alert"  && "bg-status-alert",
+            tone === "info"   && "bg-status-info",
+          )}
+        />
+        <span
+          className={cn(
+            "text-xl font-extrabold leading-tight tabular-nums",
+            tone === "stable" && "text-status-stable",
+            tone === "alert"  && "text-status-alert",
+            tone === "info"   && "text-status-info",
+          )}
+        >
+          {value}
+        </span>
+      </span>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-txt-muted">{label}</span>
+    </div>
+  );
+}
+
+function LegendItem({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={cn("inline-block h-3 w-4 rounded-sm border border-l-[3px]", className)} />
+      {children}
+    </span>
   );
 }
 
@@ -214,23 +295,22 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
 
   const { data, isFetching, isError } = useAgendaSemanal(medicoId, weekStart, weekEnd);
 
-  const allHoras = Array.from(
-    new Set(days.flatMap((d) => (data?.agenda[d] ?? []).map((s) => s.hora)))
-  ).sort();
+  const carriles = agruparPorConsultorio(data?.agenda, days);
+
+  const libresPorDia = (d: string) =>
+    (data?.agenda[d] ?? []).filter((s) => esLibreRecepcion(d, s, today, now)).length;
 
   // Conteos para el resumen
-  // "Libres" excluye los slots exclusivos de portal (canal="LINEA"): están
-  // disponibles pero no son agendables desde recepción.
-  const totalLibres  = days.reduce((acc, d) =>
-    acc + (data?.agenda[d] ?? []).filter((s) =>
-      s.disponible && s.canal !== "LINEA" && !isPastSlot(d, s.hora, today, now)
-    ).length, 0);
+  const totalLibres  = days.reduce((acc, d) => acc + libresPorDia(d), 0);
   const totalOcupados = days.reduce((acc, d) =>
     acc + (data?.agenda[d] ?? []).filter((s) => !s.disponible && !isPastSlot(d, s.hora, today, now)).length, 0);
   const totalSoloPortal = days.reduce((acc, d) =>
     acc + (data?.agenda[d] ?? []).filter((s) =>
       s.disponible && s.canal === "LINEA" && !isPastSlot(d, s.hora, today, now)
     ).length, 0);
+
+  const totalVigentes = totalLibres + totalOcupados + totalSoloPortal;
+  const ocupacionPct  = totalVigentes > 0 ? Math.round((totalOcupados / totalVigentes) * 100) : 0;
 
   if (isError) {
     return (
@@ -241,58 +321,57 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
   }
 
   return (
-    <div className="relative">
+    <div className="relative space-y-4">
 
-      {/* ── Header: médico + resumen + leyenda ──────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {medicoNombre && (
-            <div className="flex items-center gap-2 rounded-xl border border-line-struct/60 bg-subtle/20 px-3 py-1.5">
-              <span className="text-xs font-semibold text-txt-muted uppercase tracking-wide">Médico</span>
-              <span className="text-sm font-semibold text-txt-body">{medicoNombre}</span>
-            </div>
-          )}
-          {data && !isFetching && (
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                {totalLibres} disponibles
-              </span>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-                {totalOcupados} ocupados
-              </span>
-              {totalSoloPortal > 0 && (
-                <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
-                  {totalSoloPortal} solo portal
-                </span>
-              )}
-            </div>
-          )}
+      {/* ── Header: placa del médico + resumen ──────────────────────── */}
+      <div className="flex flex-wrap items-stretch justify-between gap-3 rounded-2xl bg-gradient-to-r from-brand to-brand-hover p-4 text-txt-inverse shadow-md shadow-brand/20">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-txt-inverse/20 ring-1 ring-txt-inverse/30">
+            <Stethoscope className="size-6" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider opacity-80">Agenda semanal</p>
+            <p className="truncate text-lg font-bold">{medicoNombre ?? "Médico"}</p>
+            {data && !isFetching && totalVigentes > 0 && (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-2 w-36 overflow-hidden rounded-full bg-txt-inverse/25">
+                  <div className="h-full rounded-full bg-txt-inverse" style={{ width: `${ocupacionPct}%` }} />
+                </div>
+                <span className="text-[11px] font-semibold tabular-nums">{ocupacionPct}% ocupado</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-txt-muted">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block size-3 rounded border border-emerald-300 bg-emerald-50" />
-            <span className="font-medium text-emerald-700">Disponible — click para generar ficha</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block size-3 rounded border border-amber-200 bg-amber-50" />
-            <span className="font-medium text-amber-600">Agendado</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block size-3 rounded border border-sky-200 bg-sky-50" />
-            <span className="font-medium text-sky-600">Solo portal — no agendable aquí</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block size-3 rounded border border-dashed border-line-struct/30 bg-subtle/20" />
-            <span className="text-txt-muted/60">Pasado / sin horario</span>
-          </span>
-        </div>
+        {data && !isFetching && (
+          <div className="flex flex-wrap items-center gap-2">
+            <StatTile value={totalLibres}   label="Disponibles" tone="stable" />
+            <StatTile value={totalOcupados} label="Agendados"   tone="alert" />
+            {totalSoloPortal > 0 && <StatTile value={totalSoloPortal} label="Solo portal" tone="info" />}
+          </div>
+        )}
+      </div>
+
+      {/* ── Leyenda ─────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-txt-muted">
+        <LegendItem className="border-status-stable/40 border-l-status-stable bg-status-stable/20">
+          <span className="font-medium text-txt-body">Disponible</span> — clic para generar ficha
+        </LegendItem>
+        <LegendItem className="border-status-alert/40 border-l-status-alert bg-status-alert/25">
+          <span className="font-medium text-txt-body">Agendado</span>
+        </LegendItem>
+        <LegendItem className="border-status-info/40 border-l-status-info bg-status-info/20">
+          <span className="font-medium text-txt-body">Solo portal</span> — no agendable aquí
+        </LegendItem>
+        <LegendItem className="border-line-hairline border-l-line-struct bg-subtle/20">
+          Pasado / sin horario
+        </LegendItem>
       </div>
 
       {/* Overlay de carga */}
       {isFetching && data ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-paper/70 backdrop-blur-[1px]">
-          <div className="flex items-center gap-2 text-sm text-txt-muted">
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-paper/70 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-full border border-line-struct bg-paper px-3 py-1.5 text-sm text-txt-muted shadow-sm">
             <Loader2 className="size-4 animate-spin" /> Actualizando...
           </div>
         </div>
@@ -300,41 +379,51 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
 
       {/* ── Grilla ──────────────────────────────────────────────────── */}
       <div className="overflow-x-auto">
-        <div className="min-w-[640px]">
+        <div className="min-w-[680px] space-y-3">
 
-          {/* Cabecera de días */}
-          <div className="mb-2 grid gap-1" style={{ gridTemplateColumns: "48px repeat(7, 1fr)" }}>
-            <div /> {/* vacío para el eje de horas */}
+          {/* Cabecera de días (una sola vez, compartida por todos los carriles) */}
+          <div className="sticky top-0 z-10 grid gap-1.5 bg-paper/90 py-1 backdrop-blur-sm" style={{ gridTemplateColumns: GRID_COLS }}>
+            <div />
             {days.map((dateStr, i) => {
               const isToday   = dateStr === today;
               const isPastDay = dateStr < today;
+              const libres    = libresPorDia(dateStr);
               return (
                 <div
                   key={dateStr}
                   className={cn(
-                    "rounded-xl py-2.5 text-center",
+                    "rounded-lg border border-t-4 px-1 py-2 text-center",
                     isToday
-                      ? "bg-primary/10 ring-1 ring-primary/20"
+                      ? "border-brand bg-gradient-to-b from-brand to-brand-hover text-txt-inverse shadow-md shadow-brand/25"
                       : isPastDay
-                      ? "bg-subtle/20"
-                      : "bg-subtle/10",
+                      ? "border-line-hairline bg-subtle/30"
+                      : libres > 0
+                      ? "border-line-struct border-t-status-stable bg-paper"
+                      : "border-line-struct border-t-line-struct bg-paper",
                   )}
                 >
                   <p className={cn(
-                    "text-xs font-bold uppercase tracking-wide",
-                    isToday ? "text-primary" : isPastDay ? "text-txt-muted/40" : "text-txt-muted",
+                    "text-[11px] font-bold uppercase tracking-wider",
+                    isToday ? "text-txt-inverse" : isPastDay ? "text-txt-hint" : "text-txt-muted",
                   )}>
-                    {DAY_LABELS[i]}
+                    {DAY_LABELS[i]}{isToday ? " · hoy" : ""}
                   </p>
                   <p className={cn(
-                    "mt-0.5 font-mono text-[11px]",
-                    isToday ? "font-bold text-primary" : isPastDay ? "text-txt-muted/30" : "text-txt-muted/70",
+                    "font-mono text-sm font-semibold",
+                    isToday ? "text-txt-inverse" : isPastDay ? "text-txt-hint" : "text-txt-body",
                   )}>
                     {formatDayDate(dateStr)}
                   </p>
-                  {isToday && (
-                    <span className="mt-1 inline-block rounded-full bg-primary px-2 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider">
-                      hoy
+                  {data && !isPastDay && (
+                    <span className={cn(
+                      "mt-1 inline-block rounded-full px-1.5 py-px text-[9px] font-semibold tabular-nums",
+                      isToday
+                        ? "bg-txt-inverse/20 text-txt-inverse"
+                        : libres > 0
+                        ? "bg-status-stable/15 text-status-stable"
+                        : "bg-subtle text-txt-hint",
+                    )}>
+                      {libres > 0 ? `${libres} libres` : "Sin cupo"}
                     </span>
                   )}
                 </div>
@@ -344,51 +433,91 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
 
           {/* Skeleton primera carga */}
           {!data && isFetching ? (
-            <div className="space-y-1.5">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="grid gap-1" style={{ gridTemplateColumns: "48px repeat(7, 1fr)" }}>
-                  <div className="h-16 flex items-center justify-end pr-2">
-                    <div className="h-3 w-8 animate-pulse rounded bg-subtle/60" />
-                  </div>
+            <div className="space-y-1.5 rounded-xl border border-line-struct p-2">
+              <div className="h-10 animate-pulse rounded-lg bg-subtle/60" />
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="grid gap-1.5" style={{ gridTemplateColumns: GRID_COLS }}>
+                  <div />
                   {Array.from({ length: 7 }).map((_, j) => (
-                    <div key={j} className="h-16 animate-pulse rounded-lg bg-subtle/40" />
+                    <div key={j} className="h-[68px] animate-pulse rounded-lg bg-subtle/40" />
                   ))}
                 </div>
               ))}
             </div>
 
-          ) : allHoras.length === 0 ? (
-            <div className="py-16 text-center">
+          ) : carriles.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-16 text-center">
+              <DoorClosed className="size-10 text-txt-hint" />
               <p className="text-sm font-medium text-txt-muted">Sin horarios configurados para esta semana.</p>
-              <p className="mt-1 text-xs text-txt-muted/60">Verificá la agenda del médico en configuración.</p>
+              <p className="text-xs text-txt-hint">Verificá la agenda del médico en configuración.</p>
             </div>
 
           ) : (
-            <div className="space-y-1.5">
-              {allHoras.map((hora) => (
-                <div key={hora} className="grid items-center gap-1" style={{ gridTemplateColumns: "48px repeat(7, 1fr)" }}>
-                  {/* Etiqueta de hora */}
-                  <div className="flex items-center justify-end pr-2">
-                    <span className="font-mono text-xs font-semibold text-txt-muted/50">{hora}</span>
+            carriles.map((carril) => {
+              const titulo = tituloCarril(carril);
+              const libresCarril = Array.from(carril.slots.entries()).filter(([k, s]) =>
+                esLibreRecepcion(k.split("|")[0], s, today, now)
+              ).length;
+              return (
+                <section
+                  key={carril.key}
+                  aria-label={titulo}
+                  className="overflow-hidden rounded-xl border border-line-struct bg-subtle/10"
+                >
+                  {/* Cabecera del carril: la "puerta" del consultorio */}
+                  <div className="flex items-center justify-between gap-3 border-b border-line-struct bg-paper px-3 py-2">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+                        <DoorOpen className="size-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-txt-body">{titulo}</p>
+                        {carril.numero != null && carril.nombre && (
+                          <p className="truncate text-[11px] text-txt-muted">{carril.nombre}</p>
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums",
+                        libresCarril > 0
+                          ? "bg-status-stable text-txt-inverse"
+                          : "bg-subtle text-txt-muted",
+                      )}
+                    >
+                      {libresCarril > 0 ? `${libresCarril} libres` : "Sin cupo"}
+                    </span>
                   </div>
 
-                  {/* Celdas de cada día */}
-                  {days.map((dateStr) => (
-                    <SlotCell
-                      key={dateStr}
-                      dateStr={dateStr}
-                      hora={hora}
-                      slot={(data?.agenda[dateStr] ?? []).find((s) => s.hora === hora)}
-                      today={today}
-                      now={now}
-                      isToday={dateStr === today}
-                      onClick={onSlotClick}
-                      onCancelarCita={setCitaACancelar}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+                  <div className="space-y-1.5 p-2">
+                    {carril.horas.map((hora) => (
+                      <div key={hora} className="grid gap-1.5" style={{ gridTemplateColumns: GRID_COLS }}>
+                        {/* Eje de horas tipo línea de tiempo */}
+                        <div className="relative flex items-start justify-end pr-3 pt-2">
+                          <span className="font-mono text-[11px] font-semibold text-txt-hint tabular-nums">{hora}</span>
+                          <span className="absolute right-0 top-[13px] size-1.5 rounded-full bg-line-struct" />
+                        </div>
+
+                        {days.map((dateStr) => (
+                          <SlotCell
+                            key={dateStr}
+                            dateStr={dateStr}
+                            hora={hora}
+                            slot={carril.slots.get(`${dateStr}|${hora}`)}
+                            consultorio={titulo}
+                            today={today}
+                            now={now}
+                            isToday={dateStr === today}
+                            onClick={onSlotClick}
+                            onCancelarCita={setCitaACancelar}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })
           )}
 
         </div>

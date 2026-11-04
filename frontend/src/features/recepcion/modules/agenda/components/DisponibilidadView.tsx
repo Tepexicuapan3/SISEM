@@ -116,7 +116,7 @@ export function DisponibilidadView({
               Sin médicos para los filtros aplicados.
             </p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {disponibilidadMedicos.map((m) => (
                 <DisponibilidadMedicoCard
                   key={m.id}
