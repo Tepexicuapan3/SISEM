@@ -54,6 +54,10 @@ _TEMPLATE_BY_TYPE = {
     VisitPrescription.PrescriptionType.TRANSCRIPTION: SHEET_TEMPLATE_NORMAL,
 }
 
+# Renglones de medicamentos que caben en la zona de alto fijo de una hoja A5
+# (receta-a5-cumplimiento, A2). Si hay mas, siguen en hojas de continuacion.
+ROWS_PER_SHEET = 5
+
 # Microtexto de seguridad entre renglones del formulario (solo decorativo).
 _MICROTEXT = "SISTEMADETRANSPORTECOLECTIVOMETRO" * 30
 
@@ -120,20 +124,28 @@ def _drug_label(row):
     return {"primary": primary, "secondary": secondary}
 
 
+def _paged(label, template, rows, stamp):
+    """Una hoja por cada ROWS_PER_SHEET renglones: lo que no cabe sigue en
+    hojas de continuacion ("Hoja i de n") con la numeracion corrida."""
+    chunks = [rows[i:i + ROWS_PER_SHEET] for i in range(0, len(rows), ROWS_PER_SHEET)] or [[]]
+    return [
+        {
+            "label": label, "template": template, "items": chunk, "stamp": stamp,
+            "page": page, "pages": len(chunks), "last": page == len(chunks),
+            "first_number": (page - 1) * ROWS_PER_SHEET + 1,
+        }
+        for page, chunk in enumerate(chunks, start=1)
+    ]
+
+
 def build_sheets(rows, prescription_type):
     """Hojas a imprimir y el diseno de cada una. Funcion pura para poder
     probar la seleccion."""
     template = _TEMPLATE_BY_TYPE.get(prescription_type, SHEET_TEMPLATE_NORMAL)
-    sheets = [
-        {"label": SHEET_ORIGINAL, "template": template, "items": rows, "stamp": None},
-        {"label": SHEET_COPIA, "template": template, "items": rows, "stamp": SHEET_COPIA},
-    ]
+    sheets = _paged(SHEET_ORIGINAL, template, rows, None) + _paged(SHEET_COPIA, template, rows, SHEET_COPIA)
     controlled = [r for r in rows if r["is_controlled"]]
     if controlled:
-        sheets.append(
-            {"label": SHEET_CONTROLADO, "template": SHEET_TEMPLATE_CONTROLADO,
-             "items": controlled, "stamp": None}
-        )
+        sheets += _paged(SHEET_CONTROLADO, SHEET_TEMPLATE_CONTROLADO, controlled, None)
     return sheets
 
 

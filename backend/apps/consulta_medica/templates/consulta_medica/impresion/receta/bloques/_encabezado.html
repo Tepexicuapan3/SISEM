@@ -2,7 +2,7 @@
   <col style="width:26%"><col style="width:46%"><col style="width:28%">
   <tr>
     <td>
-      <div class="sheet-label">{{ sheet.label }}</div>
+      <div class="sheet-label">{{ sheet.label }}{% if sheet.pages > 1 %} &middot; Hoja {{ sheet.page }} de {{ sheet.pages }}{% endif %}</div>
       {% if barcode_uri %}<img class="barcode" src="{{ barcode_uri }}" alt="">{% endif %}
     </td>
     <td class="center">

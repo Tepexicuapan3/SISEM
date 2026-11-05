@@ -8,6 +8,7 @@ from apps.authentication.models import SyUsuario
 from apps.catalogos.models import CatCies, Medicamentos
 from apps.consulta_medica.impresion.nota import build_nota_context
 from apps.consulta_medica.impresion.receta import (
+    ROWS_PER_SHEET,
     SHEET_TEMPLATE_CONTROLADO,
     SHEET_TEMPLATE_NORMAL,
     _center_address,
@@ -111,6 +112,39 @@ class RecetaSheetsTests(TestCase):
         sheets = build_sheets([{"is_controlled": True}], NORMAL)
         self.assertEqual([s["stamp"] for s in sheets], [None, "COPIA", None])
 
+    # A2 (receta-a5-cumplimiento): lo que no cabe en una hoja sigue en otra.
+    def test_rows_that_fit_use_one_sheet_per_label(self):
+        rows = [{"is_controlled": False, "name": str(i)} for i in range(ROWS_PER_SHEET)]
+        sheets = build_sheets(rows, NORMAL)
+        self.assertEqual([(s["label"], s["page"], s["pages"]) for s in sheets], [("ORIGINAL", 1, 1), ("COPIA", 1, 1)])
+
+    def test_overflow_adds_continuation_sheets(self):
+        rows = [{"is_controlled": False, "name": str(i)} for i in range(2 * ROWS_PER_SHEET + 1)]
+        sheets = build_sheets(rows, NORMAL)
+        self.assertEqual(
+            [(s["label"], s["page"], s["pages"]) for s in sheets],
+            [("ORIGINAL", 1, 3), ("ORIGINAL", 2, 3), ("ORIGINAL", 3, 3),
+             ("COPIA", 1, 3), ("COPIA", 2, 3), ("COPIA", 3, 3)],
+        )
+        self.assertEqual([r["name"] for s in sheets[:3] for r in s["items"]], [r["name"] for r in rows])
+        self.assertEqual({s["stamp"] for s in sheets[3:]}, {"COPIA"})
+
+    def test_numbering_continues_across_sheets(self):
+        rows = [{"is_controlled": False, "name": str(i)} for i in range(ROWS_PER_SHEET + 1)]
+        second = build_sheets(rows, NORMAL)[1]
+        self.assertEqual(second["first_number"], ROWS_PER_SHEET + 1)
+
+    def test_only_last_sheet_of_each_label_is_last(self):
+        rows = [{"is_controlled": False, "name": str(i)} for i in range(ROWS_PER_SHEET + 1)]
+        self.assertEqual([s["last"] for s in build_sheets(rows, NORMAL)], [False, True, False, True])
+
+    def test_controlled_sheet_splits_only_controlled_rows(self):
+        rows = [{"is_controlled": True, "name": str(i)} for i in range(ROWS_PER_SHEET + 1)]
+        rows.append({"is_controlled": False, "name": "x"})
+        controlled = [s for s in build_sheets(rows, NORMAL) if s["label"] == "CONTROLADO"]
+        self.assertEqual([(s["page"], s["pages"]) for s in controlled], [(1, 2), (2, 2)])
+        self.assertNotIn("x", [r["name"] for s in controlled for r in s["items"]])
+
     def test_every_sheet_template_exists(self):
         for template in (SHEET_TEMPLATE_NORMAL, SHEET_TEMPLATE_CONTROLADO):
             get_template(template)
@@ -184,9 +218,28 @@ class RecetaBlocksTests(TestCase):
         html = render_to_string(f"{_BLOCKS}/_datos.html", {"clues": "", "issued": {}, "birth": {}})
         self.assertNotIn("CLUES", html)
 
+    def test_header_shows_sheet_number_only_with_continuation(self):
+        render = lambda sheet: render_to_string(f"{_BLOCKS}/_encabezado.html", {"sheet": sheet})
+        self.assertIn("Hoja 2 de 3", render({"label": "ORIGINAL", "page": 2, "pages": 3}))
+        self.assertNotIn("Hoja", render({"label": "ORIGINAL", "page": 1, "pages": 1}))
+
+    def test_medication_numbering_continues_on_next_sheet(self):
+        item = {"label": {"primary": "X", "secondary": ""}, "quantity": 1}
+        html = render_to_string(
+            f"{_BLOCKS}/_medicamentos.html", {"sheet": {"items": [item, item], "first_number": 6}},
+        )
+        self.assertIn('<td class="num">6</td>', html)
+        self.assertIn('<td class="num">7</td>', html)
+
+    def test_general_indications_only_on_last_sheet(self):
+        ctx = {"general_indications": ["Tomar liquidos"], "issued": {}, "birth": {}}
+        sheet = "consulta_medica/impresion/receta/hojas/normal.html"
+        self.assertNotIn("Tomar liquidos", render_to_string(sheet, dict(ctx, sheet={"last": False, "items": []})))
+        self.assertIn("Tomar liquidos", render_to_string(sheet, dict(ctx, sheet={"last": True, "items": []})))
+
     def test_medication_block_shows_generic_before_name(self):
         item = {"label": {"primary": "Clonazepam", "secondary": "Clonazepam 2mg. Tableta"}, "quantity": 1}
-        html = render_to_string(f"{_BLOCKS}/_medicamentos.html", {"sheet": {"items": [item]}})
+        html = render_to_string(f"{_BLOCKS}/_medicamentos.html", {"sheet": {"items": [item], "first_number": 1}})
         self.assertLess(html.index("Clonazepam<"), html.index("Clonazepam 2mg. Tableta"))
 
 
