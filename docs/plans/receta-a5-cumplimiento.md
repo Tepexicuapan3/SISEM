@@ -1,6 +1,6 @@
 # Receta — tamaño A5 y cumplimiento normativo pendiente
 
-Estado: **plan** (2026-11-05). Rama `SISEM-15-07-2026`, commits locales sin
+Estado: **A1–A4 implementadas** (2026-11-05); A5 (datos de operación) pendiente del usuario. Rama `SISEM-15-07-2026`, commits locales sin
 push hasta el visto bueno. Continúa [receta-diseno-stc.md](receta-diseno-stc.md)
 y [receta-flujo-impresion.md](receta-flujo-impresion.md).
 
@@ -21,9 +21,9 @@ y [receta-flujo-impresion.md](receta-flujo-impresion.md).
 | Controlados: autorización antes de imprimir | LGS 240, 251-252 + política interna | ✅ |
 | Folio único, bitácora, reimpresión marcada | NOM-024 (integridad, auditoría) | ✅ |
 | Sin diagnóstico impreso | LGPDPPSO (minimización) | ✅ |
-| **Tamaño A5** | decisión institucional | ❌ hoy 720 × 490 pt (formato del legado) |
-| **Medicamentos que no caben en la hoja** | legibilidad | ❌ alto fijo: más de ~6 renglones se desbordan sobre la firma |
-| Edad y sexo del paciente | práctica de prescripción (dosificación) | ⚠️ el dato existe (`patient_header`), no se imprime |
+| **Tamaño A5** | decisión institucional | ✅ A5 horizontal (A1) |
+| **Medicamentos que no caben en la hoja** | legibilidad | ✅ 5 por hoja + hojas de continuación "Hoja i de n" (A2) |
+| Edad y sexo del paciente | práctica de prescripción (dosificación) | ✅ (A3) |
 | Clave del medicamento (Compendio Nacional de Insumos) | sector público | ⚠️ D2: `Medicamentos` no tiene la columna |
 | Grupo del controlado y veces que se surte | LGS 251-252 | ⏸️ D9: espera a farmacia y jurídico |
 | Antibióticos (retención o sello) | Acuerdo DOF 2010 | ⏸️ D7: espera a farmacia |
@@ -108,3 +108,24 @@ real antes del visto bueno.
 | Letra demasiado chica en A5 | Mínimos de 6 pt en etiquetas y 7 pt en valores; prueba impresa en papel real |
 | Impresoras configuradas en carta escalan el PDF | El PDF declara A5; en la impresora: bandeja A5 o "tamaño real" (sin "ajustar a página") |
 | El fondo del Metro pierde nitidez | Se recompone a 150 dpi a la medida A5 desde el original |
+
+## 6. Decisiones y evidencia (2026-11-05)
+
+Decisiones del usuario: **E1 horizontal**, **E2 sí** (edad y sexo), **E3 hojas
+de continuación**.
+
+| Fase | Rojo | Verde | Commit |
+|---|---|---|---|
+| A2 | `ImportError ROWS_PER_SHEET`; 3 de plantilla | 54 OK (receta + flujo) | `c2e858f0` |
+| A1 | 3 (A5 en la plantilla, fondo A5, proporción) | 53 OK; vista previa en Windows: 6 medicamentos → ORIGINAL 1-2, COPIA 1-2, CONTROLADO | `5481d11a` |
+| A3 | `Edad` ausente | 56 OK; vista previa con nombre largo sin cortes | `b563989f` |
+| A4 | 1 (motivo del backend) | 85 OK frontend; `tsc` sin errores | `55f52ade` |
+
+Cierre: 144 tests backend OK (`apps.impresion`, receta, flujo, D8, historial).
+
+- `ROWS_PER_SHEET = 5`: en la vista previa sobran ~40 pt al pie; se deja ese
+  margen para la impresión en papel real antes de subirlo a 6.
+- El fondo de 720 × 490 (`fondos/receta-fondo.jpg`) queda sin uso; se borra
+  con el visto bueno del A5 impreso.
+- Pendiente: prueba en **papel A5 real** con la impresora en "tamaño real" y
+  la imagen del servidor (Liberation Sans).
