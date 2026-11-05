@@ -3,7 +3,7 @@
   margin: 12mm 10mm 14mm 10mm;
   @bottom-center { content: element(print-footer); width: 100%; }
 }
-html { font-family: "Liberation Sans", "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
+html { font-family: "Liberation Sans", Arial, "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
 body { margin: 0; }
 .print-header { display: flex; align-items: center; border-bottom: 1.5pt solid #1f4e79; padding-bottom: 4pt; margin-bottom: 8pt; }
 .print-header img.logo { height: 38pt; width: auto; margin-right: 10pt; }

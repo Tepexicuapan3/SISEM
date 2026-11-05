@@ -87,3 +87,12 @@ class BaseTemplateTests(SimpleTestCase):
     def test_user_data_is_escaped(self):
         html = self.render(printed_by="<script>x</script>")
         self.assertNotIn("<script>x</script>", html)
+
+
+class FontStackTests(SimpleTestCase):
+    """Liberation Sans (servidor) y Arial (Windows de desarrollo) miden igual;
+    sin Arial en la lista, Windows cae en DejaVu Sans, mas ancha."""
+
+    def test_arial_follows_liberation_before_dejavu(self):
+        css = (Path(__file__).resolve().parents[1] / "static/impresion/css/base.css").read_text(encoding="utf-8")
+        self.assertIn('font-family: "Liberation Sans", Arial, "DejaVu Sans", sans-serif;', css)
