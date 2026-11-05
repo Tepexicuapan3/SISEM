@@ -37,7 +37,8 @@ import { medicamentosAPI } from "@api/resources/catalogos/medicamentos.api";
 import { usePrescriptionItems } from "@features/consulta-medica/modules/atencion/queries/usePrescriptionItems";
 import { useAddPrescriptionItem } from "@features/consulta-medica/modules/atencion/mutations/useAddPrescriptionItem";
 import { useCancelPrescriptionItem } from "@features/consulta-medica/modules/atencion/mutations/useCancelPrescriptionItem";
-import type { AllergyWarning } from "@api/types";
+import type { AllergyWarning, PrescriptionItem } from "@api/types";
+import { ADMINISTRATION_ROUTES } from "@features/consulta-medica/modules/atencion/domain/administration-routes";
 
 const SEVERITY_LABEL: Record<NonNullable<AllergyWarning["severity"]>, string> = {
   L: "Leve",
@@ -73,6 +74,10 @@ const addItemSchema = z.object({
   dose: z.string().optional(),
   indications: z.string().trim().min(1, { error: "Ingresa las indicaciones" }),
   quantity: z.number().int().min(1, { error: "Minimo 1" }),
+  // Via, frecuencia y duracion (RIS art. 30); el backend tambien las exige.
+  route: z.string().min(1, { error: "Selecciona la vía de administración" }),
+  frequency: z.string().trim().min(1, { error: "Ingresa la frecuencia" }).max(60),
+  duration: z.string().trim().min(1, { error: "Ingresa la duración" }).max(60),
 });
 
 type AddItemFormValues = z.infer<typeof addItemSchema>;
@@ -82,7 +87,14 @@ const buildDefaultValues = (): AddItemFormValues => ({
   dose: "",
   indications: "",
   quantity: 1,
+  route: "",
+  frequency: "",
+  duration: "",
 });
+
+/** Dosis, via, frecuencia y duracion de un renglon; los previos solo traen dosis. */
+const administrationText = (item: PrescriptionItem): string =>
+  [item.dose, item.routeLabel, item.frequency, item.duration].filter(Boolean).join(" · ");
 
 interface PrescriptionItemsButtonProps {
   visitId: number;
@@ -141,6 +153,9 @@ export function PrescriptionItemsButton({
         quantity: values.quantity,
         indications: values.indications.trim(),
         dose: values.dose?.trim() || undefined,
+        route: values.route,
+        frequency: values.frequency.trim(),
+        duration: values.duration.trim(),
         acknowledgeAllergyWarning,
       },
     });
@@ -248,7 +263,7 @@ export function PrescriptionItemsButton({
                   >
                     <span className="text-sm">
                       <strong>{item.medicationName}</strong>
-                      {item.dose ? ` — ${item.dose}` : ""} — {item.indications} (
+                      {administrationText(item) ? ` — ${administrationText(item)}` : ""} — {item.indications} (
                       {item.quantity})
                       {item.dispensedQuantity > 0 ? (
                         <Badge variant="info" className="ml-2">
@@ -383,6 +398,60 @@ export function PrescriptionItemsButton({
                             field.onChange(event.target.valueAsNumber)
                           }
                         />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="route"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vía de administración</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona la vía" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {ADMINISTRATION_ROUTES.map((route) => (
+                          <SelectItem key={route.value} value={route.value}>
+                            {route.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="frequency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Frecuencia</FormLabel>
+                      <FormControl>
+                        <Input {...field} maxLength={60} placeholder="Cada 8 horas" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="duration"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Duración</FormLabel>
+                      <FormControl>
+                        <Input {...field} maxLength={60} placeholder="5 días" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

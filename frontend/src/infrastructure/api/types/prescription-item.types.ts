@@ -11,6 +11,11 @@ export interface PrescriptionItem {
   presentation: string | null;
   dose: string | null;
   indications: string;
+  /** Via, frecuencia y duracion (RIS art. 30). null en medicamentos guardados antes de exigirlas. */
+  route: string | null;
+  routeLabel: string | null;
+  frequency: string | null;
+  duration: string | null;
   quantity: number;
   status: PrescriptionItemStatus;
   /** Candado de receta (5.3): lo que farmacia ya surtio no se quita. */
@@ -30,6 +35,10 @@ export interface AddPrescriptionItemRequest {
   quantity: number;
   indications: string;
   dose?: string;
+  /** Obligatorias en cada medicamento nuevo (el backend responde 422 sin ellas). */
+  route: string;
+  frequency: string;
+  duration: string;
   // Cruce receta<->alergia: se manda en `true` cuando el medico ya vio la
   // advertencia (AllergyWarning) y decide continuar de todas formas.
   acknowledgeAllergyWarning?: boolean;
