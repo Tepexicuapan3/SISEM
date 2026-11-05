@@ -13,7 +13,7 @@
 <div class="micro">{{ microtext }}</div>
 
 <table class="form">
-  <col style="width:28%"><col style="width:30%"><col style="width:27%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
+  <col style="width:25%"><col style="width:26%"><col style="width:24%"><col style="width:5%"><col style="width:5%"><col style="width:5%"><col style="width:6%"><col style="width:4%">
   <tr>
     <td><small>Nombre del Paciente</small><span class="val bold">{{ patient.paternal_surname }}</span></td>
     <td><small>&nbsp;</small><span class="val bold">{{ patient.maternal_surname }}</span></td>
@@ -21,10 +21,14 @@
     <td class="box"><small>Día</small><span class="val">{{ birth.d }}</span></td>
     <td class="box"><small>Mes</small><span class="val">{{ birth.m }}</span></td>
     <td class="box"><small>Año</small><span class="val">{{ birth.y }}</span></td>
+    {# Edad y sexo: datos de dosificacion (receta-a5-cumplimiento, A3) #}
+    <td class="box"><small>Edad</small><span class="val">{{ patient.age }}</span></td>
+    <td class="box"><small>Sexo</small><span class="val">{{ patient.sex }}</span></td>
   </tr>
   <tr class="labels">
     <td>Apellido Paterno</td><td>Apellido Materno</td><td>Nombre</td>
     <td colspan="3" style="text-align:center">Fec. Nacimiento</td>
+    <td colspan="2"></td>
   </tr>
 </table>
 <div class="micro">{{ microtext }}</div>

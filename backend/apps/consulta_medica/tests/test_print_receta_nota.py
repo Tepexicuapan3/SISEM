@@ -214,6 +214,13 @@ class RecetaBlocksTests(TestCase):
         html = render_to_string(f"{_BLOCKS}/_datos.html", {"clues": "DFSTC000123", "issued": {}, "birth": {}})
         self.assertIn("DFSTC000123", html)
 
+    def test_data_block_prints_age_and_sex(self):
+        html = render_to_string(
+            f"{_BLOCKS}/_datos.html", {"patient": {"age": "67", "sex": "F"}, "issued": {}, "birth": {}},
+        )
+        for text in ("Edad", "Sexo", '<span class="val">67</span>', '<span class="val">F</span>'):
+            self.assertIn(text, html)
+
     def test_data_block_hides_clues_label_without_value(self):
         html = render_to_string(f"{_BLOCKS}/_datos.html", {"clues": "", "issued": {}, "birth": {}})
         self.assertNotIn("CLUES", html)
