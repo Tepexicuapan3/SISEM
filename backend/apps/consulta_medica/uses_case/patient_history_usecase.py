@@ -2,6 +2,7 @@ from apps.consulta_medica.repositories.consultation_repository import Consultati
 from apps.consulta_medica.repositories.legacy_consultation_repository import (
     LegacyConsultationRepository,
 )
+from apps.consulta_medica.repositories.prescription_item_repository import PrescriptionItemRepository
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.services import legado_archivo, legado_historial
 from apps.consulta_medica.services.diagnosis_redaction_service import REDACTED_TEXT, redact_cie_if_restricted
@@ -16,7 +17,7 @@ def _doctor_name(doctor):
     return detalle.nombre_completo if detalle else None
 
 
-def _consultation_to_history_item(consultation, permissions, roles=None):
+def _consultation_to_history_item(consultation, permissions, roles=None, medications=()):
     visit = consultation.id_visit
     prescription = PrescriptionRepository.get_by_visit(visit)
 
@@ -48,6 +49,8 @@ def _consultation_to_history_item(consultation, permissions, roles=None):
         "cieDescription": cie_description,
         "finalNote": consultation.final_note,
         "prescriptionItems": list(prescription.items or []) if prescription else [],
+        # Medicamentos activos: lo que imprime la receta (el boton depende de esto).
+        "prescriptionMedications": list(medications),
         "restricted": restricted,
     }
 
@@ -55,8 +58,12 @@ def _consultation_to_history_item(consultation, permissions, roles=None):
 def get_patient_consultations_history(no_exp, pk_num, roles, permissions=None):
     ensure_doctor_role(roles, permissions)
 
-    consultations = ConsultationRepository.list_for_patient(no_exp, pk_num)
-    items = [_consultation_to_history_item(c, permissions, roles) for c in consultations]
+    consultations = list(ConsultationRepository.list_for_patient(no_exp, pk_num))
+    medications = PrescriptionItemRepository.active_names_by_visit(c.id_visit_id for c in consultations)
+    items = [
+        _consultation_to_history_item(c, permissions, roles, medications.get(c.id_visit_id, ()))
+        for c in consultations
+    ]
     redacted_visit_ids = [item["visitId"] for item in items if item["restricted"]]
 
     return {

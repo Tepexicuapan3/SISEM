@@ -3,6 +3,24 @@ from apps.consulta_medica.models import VisitPrescriptionItem
 
 class PrescriptionItemRepository:
     @staticmethod
+    def active_names_by_visit(visit_ids):
+        """{visit_id: [nombre, ...]} de los medicamentos activos de la receta
+        activa, en una sola consulta. Mismo filtro que imprime la receta."""
+        rows = (
+            VisitPrescriptionItem.objects.filter(
+                prescription__id_visit_id__in=list(visit_ids),
+                prescription__is_active=True,
+                status=VisitPrescriptionItem.Status.ACTIVO,
+            )
+            .order_by("pk")
+            .values_list("prescription__id_visit_id", "medication__name")
+        )
+        names = {}
+        for visit_id, name in rows:
+            names.setdefault(visit_id, []).append(name)
+        return names
+
+    @staticmethod
     def get_by_id(item_id):
         return VisitPrescriptionItem.objects.filter(pk=item_id, is_active=True).first()
 

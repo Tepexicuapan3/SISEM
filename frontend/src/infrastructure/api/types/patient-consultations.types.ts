@@ -11,7 +11,10 @@ export interface PatientConsultationHistoryItem {
   cieCode: string | null;
   cieDescription: string | null;
   finalNote: string;
+  // Indicaciones de texto libre de la receta.
   prescriptionItems: string[];
+  // Medicamentos activos: lo que imprime la receta (decide el boton de imprimir).
+  prescriptionMedications: string[];
   // Diagnosticos sensibles (change `diagnosticos-sensibles`): true cuando
   // el CIE-10 de esta consulta cae en un rango sensible (VIH/salud
   // mental/sustancias) y el usuario actual no tiene el permiso requerido

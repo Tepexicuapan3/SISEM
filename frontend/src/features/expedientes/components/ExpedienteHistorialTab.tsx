@@ -87,8 +87,8 @@ export function ExpedienteHistorialTab({
                   size="sm"
                   variant="outline"
                 />
-                {/* Receta cancelada no se imprime (409): solo notas cerradas con receta. */}
-                {consulta.visitStatus === "cerrada" && consulta.prescriptionItems.length > 0 ? (
+                {/* La receta imprime los medicamentos activos: sin ellos daria 409. */}
+                {consulta.visitStatus === "cerrada" && consulta.prescriptionMedications.length > 0 ? (
                   <PrintButton
                     documento="receta"
                     resourceId={consulta.visitId}
@@ -134,9 +134,14 @@ export function ExpedienteHistorialTab({
                   </>
                 )}
               </p>
+              {consulta.prescriptionMedications.length > 0 ? (
+                <p className="text-txt-muted">
+                  <strong>Receta:</strong> {consulta.prescriptionMedications.join(", ")}
+                </p>
+              ) : null}
               {consulta.prescriptionItems.length > 0 ? (
                 <p className="text-txt-muted">
-                  <strong>Receta:</strong> {consulta.prescriptionItems.join(", ")}
+                  <strong>Indicaciones:</strong> {consulta.prescriptionItems.join(", ")}
                 </p>
               ) : null}
               {consulta.finalNote ? (

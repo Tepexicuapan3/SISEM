@@ -26,6 +26,7 @@ vi.mock("@features/expedientes/components/CancelarNotaDialog", () => ({
 const buildItem = (
   visitId: number,
   visitStatus: string,
+  overrides: Partial<PatientConsultationHistoryItem> = {},
 ): PatientConsultationHistoryItem => ({
   visitId,
   visitStatus,
@@ -38,7 +39,9 @@ const buildItem = (
   cieDescription: "Faringitis aguda",
   finalNote: "ok",
   prescriptionItems: [],
+  prescriptionMedications: [],
   restricted: false,
+  ...overrides,
 });
 
 function setup({
@@ -107,5 +110,55 @@ describe("ExpedienteHistorialTab - cancelar nota (S40/S41)", () => {
     expect(screen.queryByTestId("cancelar-dialog")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Cancelar nota" }));
     expect(screen.getByTestId("cancelar-dialog")).toHaveTextContent("visit 7");
+  });
+});
+
+describe("ExpedienteHistorialTab - imprimir receta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const printButton = () => screen.queryByRole("button", { name: "Imprimir receta" });
+
+  it("muestra el boton con medicamentos aunque no haya indicaciones libres", () => {
+    setup({
+      capability: true,
+      items: [buildItem(1, "cerrada", { prescriptionMedications: ["Paracetamol 500mg"] })],
+    });
+    render(<ExpedienteHistorialTab noExp="100" />);
+    expect(printButton()).toBeInTheDocument();
+  });
+
+  it("no muestra el boton si solo hay indicaciones libres (la receta daria 409)", () => {
+    setup({
+      capability: true,
+      items: [buildItem(1, "cerrada", { prescriptionItems: ["Tomar liquidos"] })],
+    });
+    render(<ExpedienteHistorialTab noExp="100" />);
+    expect(printButton()).toBeNull();
+  });
+
+  it("no muestra el boton si la nota esta cancelada", () => {
+    setup({
+      capability: true,
+      items: [buildItem(1, "cancelada", { prescriptionMedications: ["Paracetamol 500mg"] })],
+    });
+    render(<ExpedienteHistorialTab noExp="100" />);
+    expect(printButton()).toBeNull();
+  });
+
+  it("lista los medicamentos y aparte las indicaciones", () => {
+    setup({
+      capability: true,
+      items: [
+        buildItem(1, "cerrada", {
+          prescriptionMedications: ["Paracetamol 500mg", "Ibuprofeno 400mg"],
+          prescriptionItems: ["Tomar liquidos"],
+        }),
+      ],
+    });
+    render(<ExpedienteHistorialTab noExp="100" />);
+    expect(screen.getByText(/Paracetamol 500mg, Ibuprofeno 400mg/)).toBeInTheDocument();
+    expect(screen.getByText(/Tomar liquidos/)).toBeInTheDocument();
   });
 });
