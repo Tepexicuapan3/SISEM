@@ -13,6 +13,7 @@ from apps.consulta_medica.impresion.receta import (
     _center_address,
     _date_boxes,
     _drug_label,
+    _general_indications,
     build_receta_context,
     build_sheets,
 )
@@ -136,6 +137,14 @@ class RecetaContextHelpersTests(TestCase):
 
     def test_center_address_without_center(self):
         self.assertEqual(_center_address(None), {"line1": "", "line2": ""})
+
+    def test_general_indications_cleans_texts(self):
+        self.assertEqual(_general_indications(["  Tomar liquidos ", "", "  ", "Reposo"]), ["Tomar liquidos", "Reposo"])
+
+    def test_general_indications_not_a_list(self):
+        for value in (None, {}, "texto"):
+            with self.subTest(value=value):
+                self.assertEqual(_general_indications(value), [])
 
     # RIS art. 31: en el sector publico se prescribe por denominacion generica.
     def test_drug_label_puts_generic_first(self):

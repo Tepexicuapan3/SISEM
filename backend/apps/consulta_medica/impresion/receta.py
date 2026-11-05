@@ -13,11 +13,7 @@ autorizacion pendiente o rechazada. No replica efectos del legado
 (ope_autorizacion, det_impresionrecetas).
 """
 
-import json
 from zoneinfo import ZoneInfo
-
-from django.db.models import TextField
-from django.db.models.functions import Cast
 
 from apps.catalogos.services.parametro_service import get_param
 from apps.consulta_medica.impresion.common import (
@@ -67,20 +63,11 @@ _BLOCKING_AUTH = {
 }
 
 
-def _general_indications(prescription_id):
-    """Indicaciones de texto libre (``items``). Se leen casteadas a texto:
-    la columna es ``json`` (no jsonb) y leerla por el ORM falla en Postgres."""
-    raw = (
-        VisitPrescription.objects.filter(pk=prescription_id)
-        .annotate(items_txt=Cast("items", TextField()))
-        .values_list("items_txt", flat=True)
-        .first()
-    )
-    try:
-        items = json.loads(raw) if raw else []
-    except (TypeError, ValueError):
+def _general_indications(items):
+    """Indicaciones de texto libre (``VisitPrescription.items``) sin vacios."""
+    if not isinstance(items, list):
         return []
-    return [str(i).strip() for i in items if str(i).strip()] if isinstance(items, list) else []
+    return [str(i).strip() for i in items if str(i).strip()]
 
 
 def _ensure_authorized(prescription):
@@ -159,11 +146,7 @@ def _center_address(center):
 
 def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
     visit = get_visit_or_404(visit_id)
-    prescription = (
-        VisitPrescription.objects.defer("items")
-        .filter(id_visit=visit, is_active=True)
-        .first()
-    )
+    prescription = VisitPrescription.objects.filter(id_visit=visit, is_active=True).first()
     if prescription is None:
         raise PrintError(
             code="PRESCRIPTION_NOT_FOUND", message="La visita no tiene receta.", status_code=404
@@ -206,7 +189,7 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
         "center_address": _center_address(center),
         "clues": getattr(center, "code", "") or "",
         "consultorio": getattr(visit.consultorio, "name", "") if visit.consultorio else "",
-        "general_indications": _general_indications(prescription.pk),
+        "general_indications": _general_indications(prescription.items),
         # ope_param.ds_mreceta del legado, ahora parametro por centro.
         "legend": get_param("receta.leyenda", center_id=getattr(center, "pk", None), default=""),
         "health_message": get_param(

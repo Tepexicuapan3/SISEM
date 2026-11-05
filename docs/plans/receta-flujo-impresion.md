@@ -2,7 +2,7 @@
 
 Estado: **F1 y F2 implementadas** (2026-11-05) en `SISEM-15-07-2026`, commits
 locales **sin push** hasta el visto bueno, igual que
-[receta-diseno-stc.md](receta-diseno-stc.md). F3 pendiente de aprobación.
+[receta-diseno-stc.md](receta-diseno-stc.md). F3 implementada (P3).
 
 ## 1. Objetivo y alcance
 
@@ -171,3 +171,19 @@ para la simulación manual):
 - El médico tiene que **guardar el diagnóstico antes de agregar
   medicamentos**; si no, `CONSULTATION_NOT_FOUND` (409).
 - El cambio de estado de la visita es `PATCH /visits/<id>/status`.
+
+## 8. Pasos para concluir (2026-11-05)
+
+Quién: **C** = Claude (código y verificación), **U** = usuario.
+
+| # | Paso | Quién | Estado |
+|---|---|---|---|
+| P1 | Entorno de desarrollo Windows: Pango (MSYS2) instalado; `WEASYPRINT_DLL_DIRECTORIES` fija en el usuario | U / C | ✅ Pango 1.58; variable fija en el usuario |
+| P2 | `base.css`: `Arial` después de `Liberation Sans` para que el PDF en Windows mida igual que en el servidor | C | ✅ el PDF en Windows usa Arial |
+| P3 | F3: quitar el rodeo `Cast`/`json.loads`/`defer` de `receta.py` (base de desarrollo con `0054` aplicada, sin migraciones pendientes) | C | ✅ `items` es `jsonb` en la base de desarrollo y se lee por el ORM |
+| P4 | Verificación: tests de impresión, receta, historial y flujo en Docker; render de la receta en Windows | C | ✅ 125 tests OK; PDF en Windows OK |
+| P5 | Prueba manual en el navegador (sección 5), con usuarios con centro asignado y permiso `clinico:recetas:imprimir` | U | pendiente |
+| P6 | Descartar `backend/requirements.txt` del `pip freeze` (`git checkout -- backend/requirements.txt`) | U | pendiente |
+| P7 | Visto bueno → push de `SISEM-15-07-2026` | U → C | pendiente |
+| P8 | Servidor: `docker compose build backend` y levantar (este cambio no trae migraciones) | U | pendiente |
+| P9 | Decisiones abiertas de la receta (D1–D11 de `receta-diseno-stc.md`); no bloquean | áreas | abierto |
