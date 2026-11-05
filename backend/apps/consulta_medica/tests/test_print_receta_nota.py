@@ -339,7 +339,7 @@ class RecetaBuilderTests(_Base):
         self._prescription(visit, [self.med_ctrl], folio="RX-2026-8")
         pctx = self._build(visit)
         html = render_to_string(REGISTRY["receta"].template, dict(pctx.context, watermarks=[], copy_number=1))
-        for text in ("RX-2026-8", "ORIGINAL", "COPIA", "CONTROLADO", "Clonazepam 2mg", "720pt 490pt"):
+        for text in ("RX-2026-8", "ORIGINAL", "COPIA", "CONTROLADO", "Clonazepam 2mg", "size: A5 landscape"):
             self.assertIn(text, html)
 
     def _render(self, meds, folio):
@@ -364,7 +364,20 @@ class RecetaBuilderTests(_Base):
         self.assertNotIn("Tomar liquidos", controlado)
 
     def test_background_uses_local_asset(self):
-        self.assertIn('url("fondos/receta-fondo.jpg")', self._render([self.med], "RX-2026-12"))
+        self.assertIn('url("fondos/receta-fondo-a5.jpg")', self._render([self.med], "RX-2026-12"))
+
+    def test_a5_background_exists_and_has_a5_proportion(self):
+        from pathlib import Path
+
+        from PIL import Image
+
+        from apps.impresion import engine
+
+        path = Path(engine.__file__).resolve().parent / "static/impresion/fondos/receta-fondo-a5.jpg"
+        with Image.open(path) as image:
+            width, height = image.size
+        # A5 horizontal: 210 x 148 mm.
+        self.assertAlmostEqual(width / height, 210 / 148, places=2)
 
 
 class NotaBuilderTests(_Base):
