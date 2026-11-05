@@ -299,8 +299,28 @@ class VisitPrescriptionItem(models.Model):
         on_delete=models.PROTECT,
         related_name="+",
     )
+    # Via, frecuencia y duracion (RIS art. 30): obligatorias para cada renglon
+    # nuevo (add_prescription_item); nulas en los renglones previos.
+    class Route(models.TextChoices):
+        ORAL = "oral", "Oral"
+        SUBLINGUAL = "sublingual", "Sublingual"
+        TOPICA = "topica", "Tópica"
+        OFTALMICA = "oftalmica", "Oftálmica"
+        OTICA = "otica", "Ótica"
+        NASAL = "nasal", "Nasal"
+        INHALADA = "inhalada", "Inhalada"
+        RECTAL = "rectal", "Rectal"
+        VAGINAL = "vaginal", "Vaginal"
+        INTRAMUSCULAR = "intramuscular", "Intramuscular"
+        INTRAVENOSA = "intravenosa", "Intravenosa"
+        SUBCUTANEA = "subcutanea", "Subcutánea"
+        TRANSDERMICA = "transdermica", "Transdérmica"
+
     dose = models.CharField(max_length=100, db_column="dosis", null=True, blank=True)
     indications = models.CharField(max_length=140, db_column="indicaciones")
+    route = models.CharField(max_length=20, db_column="via", choices=Route.choices, null=True, blank=True)
+    frequency = models.CharField(max_length=60, db_column="frecuencia", null=True, blank=True)
+    duration = models.CharField(max_length=60, db_column="duracion", null=True, blank=True)
     quantity = models.PositiveIntegerField(db_column="cantidad")
     status = models.CharField(
         max_length=20, db_column="estatus", choices=Status.choices,

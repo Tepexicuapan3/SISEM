@@ -137,7 +137,8 @@ class FlujoCitaARecetaTests(APITestCase):
         # Sin diagnostico guardado no se pueden agregar medicamentos (CONSULTATION_NOT_FOUND).
         self._ok(self._post(f"/api/v1/visits/{visit_id}/diagnosis", diagnosis))
         self._ok(self._post(f"/api/v1/visits/{visit_id}/prescription-items", {
-            "medicationId": medication.id, "quantity": 1, "dose": "1 tab", "indications": "Cada 8 horas",
+            "medicationId": medication.id, "quantity": 1, "dose": "1 tab", "indications": "Despues de comer",
+            "route": "oral", "frequency": "Cada 8 horas", "duration": "5 dias",
         }), status.HTTP_201_CREATED)
         closed = self._ok(self._post(f"/api/v1/visits/{visit_id}/consultation/close", diagnosis))
         self.assertEqual(closed.data["visit"]["status"], "cerrada")

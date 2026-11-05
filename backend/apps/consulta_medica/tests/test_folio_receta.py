@@ -10,6 +10,7 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.authentication.models import SyUsuario
 from apps.catalogos.models import Medicamentos
 from apps.consulta_medica.models import PrescriptionFolioCounter, VisitPrescription
@@ -101,7 +102,7 @@ class PrescriptionFolioFlowTests(TestCase):
 
         item = add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.medication.id, quantity=1,
-            indications="Cada 8 horas", actor_id=self.doctor_id,
+            indications="Cada 8 horas", actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         self.assertEqual(item["prescriptionFolio"], f"RX-{self.year}-000001")
@@ -112,7 +113,7 @@ class PrescriptionFolioFlowTests(TestCase):
         visit = self._visit_with_diagnosis()
         item = add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.medication.id, quantity=1,
-            indications="Cada 8 horas", actor_id=self.doctor_id,
+            indications="Cada 8 horas", actor_id=self.doctor_id, **ADMINISTRATION,
         )
         prescription = VisitPrescription.objects.get()
 

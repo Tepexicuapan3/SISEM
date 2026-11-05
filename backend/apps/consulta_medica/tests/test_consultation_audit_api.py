@@ -26,6 +26,7 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.administracion.models import AuditoriaEvento, RelRolPermiso, RelUsuarioRol
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
@@ -405,6 +406,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         response = self.client.post(
             f"/api/v1/visits/{visit.id_visit}/prescription-items",
             {
+                **ADMINISTRATION,
                 "medicationId": self.med_basico.id, "quantity": 2,
                 "indications": "Cada 8 horas", "dose": "500mg",
             },
@@ -424,7 +426,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
         self._login_authorizer()
@@ -453,7 +455,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
         self._login_authorizer()
@@ -480,7 +482,7 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         item_payload = add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.id, quantity=2,
-            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario,
+            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         self._login_doctor()
 
@@ -621,7 +623,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
         self._login_authorizer()
@@ -641,7 +643,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
         self._login_authorizer()
@@ -661,7 +663,7 @@ class ConsultationAuditRollbackTests(_ConsultationAuditApiTestBase):
         visit = self._visit_with_consultation()
         item_payload = add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.id, quantity=2,
-            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario,
+            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         self._login_doctor()
 
@@ -789,7 +791,7 @@ class ConsultationAuditSimpleTests(_ConsultationAuditApiTestBase):
 
         response = self._call_with_audit_down(lambda: self.client.post(
             f"/api/v1/visits/{visit.id_visit}/prescription-items",
-            {"medicationId": self.med_basico.id, "quantity": 1, "indications": "Cada 8h"},
+            {**ADMINISTRATION, "medicationId": self.med_basico.id, "quantity": 1, "indications": "Cada 8h"},
             format="json", **self._csrf_headers(),
         ))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -856,7 +858,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         )
         item_response = self.client.post(
             f"/api/v1/visits/{visit.id_visit}/prescription-items",
-            {"medicationId": self.med_basico.id, "quantity": 1, "indications": "Cada 8h"},
+            {**ADMINISTRATION, "medicationId": self.med_basico.id, "quantity": 1, "indications": "Cada 8h"},
             format="json", **self._csrf_headers(),
         )
         self.client.patch(
@@ -881,14 +883,14 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         )
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth_reject = PrescriptionAuthorization.objects.get(prescription__id_visit=visit)
 
         visit2 = self._visit_with_consultation()
         add_prescription_item(
             visit2.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth_approve = PrescriptionAuthorization.objects.get(prescription__id_visit=visit2)
 
@@ -1031,7 +1033,7 @@ class ConsultationAuditPayloadTests(_ConsultationAuditApiTestBase):
         # Guarda: autorizacion ya resuelta.
         add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario,
+            indications="Una vez al dia", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
         self._login_authorizer()

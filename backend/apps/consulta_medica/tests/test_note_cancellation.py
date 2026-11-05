@@ -12,6 +12,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from rest_framework import status
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.administracion.models import AuditoriaEvento
 from apps.authentication.application.auth_policy_service import AuthPolicyService
 from apps.authentication.services.errors import AuthServiceError
@@ -94,11 +95,11 @@ class _CancellationBase(_ConsultationAuditApiTestBase):
         )
         self.item_basico = add_prescription_item(
             self.visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.id,
-            quantity=2, indications="Cada 8h", actor_id=self.doctor_user.id_usuario,
+            quantity=2, indications="Cada 8h", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         self.item_especial = add_prescription_item(
             self.visit.id_visit, ["DOCTOR"], medication_id=self.med_especial.id,
-            quantity=1, indications="Cada 12h", actor_id=self.doctor_user.id_usuario,
+            quantity=1, indications="Cada 12h", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         self.referral = ReferralRepository.create(
             consultation=self.consultation, patient=self.visit.patient,

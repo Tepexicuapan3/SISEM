@@ -88,12 +88,24 @@ def _item_row(item):
         "generic_name": med.generic_name or "",
         "presentation": med.presentation or "",
         "dose": item.dose or "",
+        "route_label": item.get_route_display() if item.route else "",
+        "frequency": item.frequency or "",
+        "duration": item.duration or "",
         "quantity": item.quantity,
         "indications": item.indications,
         "is_controlled": med.is_controlled,
     }
     row["label"] = _drug_label(row)
+    row["administration"] = _administration_text(row)
     return row
+
+
+def _administration_text(row):
+    """Dosis, via, frecuencia, duracion (RIS art. 30) e indicaciones en un
+    renglon. Los renglones previos a D8 no tienen via/frecuencia/duracion y
+    se imprimen como antes."""
+    parts = (row["dose"], row["route_label"], row["frequency"], row["duration"], row["indications"])
+    return " · ".join(p for p in parts if p)
 
 
 def _drug_label(row):

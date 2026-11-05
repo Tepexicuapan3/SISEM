@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.consulta_medica.models import MedicalLeave, VisitConsultation
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
 from apps.consulta_medica.tests.test_consultation_audit_api import (
@@ -61,7 +62,7 @@ class VisitCancelledGuardTests(_ConsultationAuditApiTestBase):
     def test_add_prescription_item(self):
         self._assert_cancelled(lambda: add_prescription_item(
             self.visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.pk, quantity=1,
-            indications="x", actor_id=self.doctor_id,
+            indications="x", actor_id=self.doctor_id, **ADMINISTRATION,
         ))
 
     def test_save_prescriptions(self):

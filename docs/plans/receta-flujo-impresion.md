@@ -185,5 +185,33 @@ Quién: **C** = Claude (código y verificación), **U** = usuario.
 | P5 | Prueba manual en el navegador (sección 5), con usuarios con centro asignado y permiso `clinico:recetas:imprimir` | U | pendiente |
 | P6 | Descartar `backend/requirements.txt` del `pip freeze` (`git checkout -- backend/requirements.txt`) | U | pendiente |
 | P7 | Visto bueno → push de `SISEM-15-07-2026` | U → C | pendiente |
-| P8 | Servidor: `docker compose build backend` y levantar (este cambio no trae migraciones) | U | pendiente |
-| P9 | Decisiones abiertas de la receta (D1–D11 de `receta-diseno-stc.md`); no bloquean | áreas | abierto |
+| P8 | Servidor: `docker compose build backend`, `python manage.py migrate` (trae la `0068`, solo agrega columnas) y levantar | U | pendiente |
+| P9 | Decisiones abiertas de la receta (D1–D11 de `receta-diseno-stc.md`); no bloquean | áreas | D8 ✅ (§9); D9 espera a farmacia; resto abierto |
+
+## 9. D8: vía, frecuencia y duración (2026-11-05)
+
+Decisión del usuario: columnas nuevas, **obligatorias para cada medicamento
+nuevo**. D9 (grupo del controlado) espera a farmacia y jurídico.
+
+| Capa | Cambio |
+|---|---|
+| Modelo | `VisitPrescriptionItem.route` (`via`, choices `Route`: oral, sublingual, tópica, oftálmica, ótica, nasal, inhalada, rectal, vaginal, IM, IV, subcutánea, transdérmica), `frequency` (`frecuencia`, 60), `duration` (`duracion`, 60). Nulas |
+| Migración | `0068_receta_via_frecuencia_duracion`: 3 `AddField` nulos; no toca datos |
+| Aplicación | `add_prescription_item` → `_validate_administration`: 422 `VALIDATION_ERROR` con `details` por campo si falta alguno o la vía no existe |
+| Presentación | `AddPrescriptionItemSerializer` acepta `route`, `frequency`, `duration` (solo forma); el contrato del renglón agrega `route`, `routeLabel`, `frequency`, `duration` |
+| Receta | `_administration_text`: `dosis · vía · frecuencia · duración · indicaciones`; los renglones previos se imprimen como antes |
+| Frontend | `PrescriptionItemsButton`: vía (lista), frecuencia y duración obligatorias; el listado las muestra. Lista de vías en `domain/administration-routes.ts` (espejo del backend) |
+
+Evidencia: backend en rojo (`ImportError`) → 943 tests OK en `consulta_medica`,
+`farmacia`, `autorizaciones` e `impresion` (41 llamadas y 4 payloads de tests
+existentes reciben los campos vía `tests/receta_fixtures.ADMINISTRATION`).
+Frontend: 3 de 4 tests nuevos en rojo → 4 OK; `tsc` sin errores; 95 de 96 en
+`flujo-clinico`, `farmacia`, `expedientes` y `print` (el que falla,
+`LegacyConsultationHistorySection`, pasa corrido solo: tiempo bajo carga, y
+tiene cambios sin commitear de otra sesión).
+
+Gap documental: no existe documentación de API de
+`/visits/<id>/prescription-items` en `docs/api/`.
+
+**Base de desarrollo:** hay que aplicar la `0068` (`python manage.py migrate`);
+sin ella, agregar o listar medicamentos falla porque las columnas no existen.

@@ -1,5 +1,6 @@
 from django.test import TestCase
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.authentication.models import SyUsuario
 from apps.catalogos.models import CatCies, Medicamentos
 from apps.consulta_medica.uses_case.allergy_usecase import create_allergy
@@ -58,7 +59,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
         payload = add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.paracetamol.id, quantity=10, indications="Cada 8 horas",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         self.assertNotIn("requiresAcknowledgment", payload)
@@ -75,7 +76,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
         payload = add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.penicilina.id, quantity=1, indications="Una vez",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         self.assertTrue(payload.get("requiresAcknowledgment"))
@@ -98,7 +99,7 @@ class PrescriptionItemAllergyCheckTests(TestCase):
             visit.id_visit, ["DOCTOR"],
             medication_id=self.penicilina.id, quantity=1, indications="Una vez",
             actor_id=self.doctor_id,
-            acknowledge_allergy_warning=True,
+            acknowledge_allergy_warning=True, **ADMINISTRATION,
         )
 
         self.assertNotIn("requiresAcknowledgment", payload)
@@ -126,7 +127,7 @@ class LegacyAllergyWarningTests(PrescriptionItemAllergyCheckTests):
         with self._con_legado():
             payload = add_prescription_item(
                 visit.id_visit, ["DOCTOR"], medication_id=self.penicilina.id, quantity=1,
-                indications="Una vez", actor_id=self.doctor_id,
+                indications="Una vez", actor_id=self.doctor_id, **ADMINISTRATION,
             )
         warning = payload["allergyWarning"]
         self.assertTrue(payload["requiresAcknowledgment"])
@@ -138,7 +139,7 @@ class LegacyAllergyWarningTests(PrescriptionItemAllergyCheckTests):
         with self._con_legado():
             payload = add_prescription_item(
                 visit.id_visit, ["DOCTOR"], medication_id=self.penicilina.id, quantity=1,
-                indications="Una vez", actor_id=self.doctor_id, acknowledge_allergy_warning=True,
+                indications="Una vez", actor_id=self.doctor_id, acknowledge_allergy_warning=True, **ADMINISTRATION,
             )
         self.assertEqual(payload["allergyWarningAcknowledged"],
                          {"allergyId": None, "substance": "PENICILINA", "fromLegacy": True})
@@ -148,7 +149,7 @@ class LegacyAllergyWarningTests(PrescriptionItemAllergyCheckTests):
         with self._con_legado():
             payload = add_prescription_item(
                 visit.id_visit, ["DOCTOR"], medication_id=self.paracetamol.id, quantity=10,
-                indications="Cada 8 horas", actor_id=self.doctor_id,
+                indications="Cada 8 horas", actor_id=self.doctor_id, **ADMINISTRATION,
             )
         self.assertNotIn("requiresAcknowledgment", payload)
 
@@ -162,7 +163,7 @@ class LegacyAllergyWarningTests(PrescriptionItemAllergyCheckTests):
         with self._con_legado() as legado:
             payload = add_prescription_item(
                 visit.id_visit, ["DOCTOR"], medication_id=self.penicilina.id, quantity=1,
-                indications="Una vez", actor_id=self.doctor_id,
+                indications="Una vez", actor_id=self.doctor_id, **ADMINISTRATION,
             )
         self.assertEqual(payload["allergyWarning"]["severity"], "G")
         self.assertNotIn("fromLegacy", payload["allergyWarning"])

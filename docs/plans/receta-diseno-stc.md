@@ -154,7 +154,7 @@ recurso local de `static/impresion/`; no se agrega ningún origen externo.
 | D5 | Mensaje de salud ("CUIDA TU PESO…"): ¿parámetro `receta.mensaje_salud` por centro? | Vacío |
 | D6 | "Servicio": ¿nombre del consultorio o especialidad? | Nombre del consultorio |
 | D7 | Hoja de antibiótico | Fuera, como hoy (decisión 2026-10-16) |
-| D8 | Vía, frecuencia y duración estructuradas (RIS art. 30). Hoy van en `dose` + `indications` como texto libre. Toca captura, modelo y migración: **ticket propio**, no es diseño | Texto libre tal como lo escribe el médico |
+| D8 | Vía, frecuencia y duración estructuradas (RIS art. 30) | **Resuelta 2026-11-05**: columnas `via`, `frecuencia`, `duracion` en `cns_visit_prescription_item` (migración aditiva `0068`), obligatorias para cada medicamento nuevo en `add_prescription_item`; los renglones previos quedan nulos y se imprimen como antes. Ver `receta-flujo-impresion.md` §9 |
 | D9 | Grupo del controlado (estupefaciente / psicotrópico II, III, IV; LGS arts. 240, 251, 252). `Medicamentos` solo tiene `is_controlled`. Con farmacia y jurídico: veces que se surte y **bloqueo** de los que van en recetario especial COFEPRIS | Hoja CONTROLADO genérica |
 | D10 | ¿CURP del paciente impresa? Identifica sin ambigüedad pero expone más datos personales (LGPDPPSO) | No se imprime |
 | D11 | Firma electrónica (NOM-024 / reforma LGS de receta electrónica): solo si la receta deja de ser papel | Firma autógrafa |

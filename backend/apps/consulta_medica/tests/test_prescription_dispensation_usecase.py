@@ -15,6 +15,7 @@ from decimal import Decimal
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.almacen_insumos.models.catalogos import (
     Almacen,
     CatCategoriaInsumo,
@@ -139,7 +140,7 @@ class PrescriptionDispensationUseCaseTests(TestCase):
         payload = add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=medication.id, quantity=quantity, indications="Cada 8 horas",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         return payload["id"]
 

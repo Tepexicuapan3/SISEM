@@ -377,6 +377,11 @@ class AddPrescriptionItemSerializer(serializers.Serializer):
     dose = serializers.CharField(
         max_length=100, required=False, allow_blank=True, allow_null=True,
     )
+    # Via, frecuencia y duracion: forma aqui; la obligatoriedad la decide
+    # add_prescription_item (regla de negocio, capa de aplicacion).
+    route = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    frequency = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
+    duration = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
     # Cruce receta<->alergia (change `alergias-unificadas`): si el
     # medicamento choca con una alergia activa del paciente, el backend
     # responde con `allergyWarning` SIN bloquear (decision del usuario:

@@ -198,6 +198,30 @@ def _allergy_warning(allergy_match, legacy_match):
     }
 
 
+def _validate_administration(route, frequency, duration):
+    """Via, frecuencia y duracion obligatorias en cada renglon nuevo
+    (Reglamento de Insumos para la Salud, art. 30)."""
+    values = {
+        "route": (route or "").strip(),
+        "frequency": (frequency or "").strip(),
+        "duration": (duration or "").strip(),
+    }
+    errors = {
+        field: [message]
+        for field, message in (
+            ("route", "La via de administracion es obligatoria."),
+            ("frequency", "La frecuencia es obligatoria."),
+            ("duration", "La duracion del tratamiento es obligatoria."),
+        )
+        if not values[field]
+    }
+    if values["route"] and values["route"] not in VisitPrescriptionItem.Route.values:
+        errors["route"] = ["Via de administracion no valida."]
+    if errors:
+        raise VisitDomainError("VALIDATION_ERROR", "Hay errores en el formulario", 422, details=errors)
+    return values
+
+
 def add_prescription_item(
     visit_id,
     roles,
@@ -206,6 +230,9 @@ def add_prescription_item(
     quantity,
     indications,
     dose=None,
+    route=None,
+    frequency=None,
+    duration=None,
     actor_id,
     permissions=None,
     acknowledge_allergy_warning=False,
@@ -228,6 +255,7 @@ def add_prescription_item(
     visit = _get_visit_or_error(visit_id)
     ensure_visit_not_cancelled(visit)
     _get_consultation_or_error(visit)
+    administration = _validate_administration(route, frequency, duration)
 
     medication = Medicamentos.objects.filter(pk=medication_id, is_active=True).first()
     if medication is None:
@@ -291,6 +319,7 @@ def add_prescription_item(
             indications=normalized_indications,
             quantity=quantity,
             dose=(dose or "").strip() or None,
+            **administration,
             created_by_id=actor_id,
             updated_by_id=actor_id,
         )

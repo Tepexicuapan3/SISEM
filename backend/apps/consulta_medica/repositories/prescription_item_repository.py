@@ -41,6 +41,9 @@ class PrescriptionItemRepository:
         indications,
         quantity,
         dose=None,
+        route=None,
+        frequency=None,
+        duration=None,
         created_by_id=None,
         updated_by_id=None,
     ):
@@ -50,6 +53,9 @@ class PrescriptionItemRepository:
             indications=indications,
             quantity=quantity,
             dose=dose,
+            route=route,
+            frequency=frequency,
+            duration=duration,
             created_by_id=created_by_id,
             updated_by_id=updated_by_id,
         )
@@ -85,6 +91,11 @@ class PrescriptionItemRepository:
             "presentation": item.medication.presentation,
             "dose": item.dose,
             "indications": item.indications,
+            # Via, frecuencia y duracion (RIS art. 30); nulas en renglones previos.
+            "route": item.route,
+            "routeLabel": item.get_route_display() if item.route else None,
+            "frequency": item.frequency,
+            "duration": item.duration,
             "quantity": item.quantity,
             "status": item.status,
             # Candado de receta (5.3): lo surtido ya no se quita.

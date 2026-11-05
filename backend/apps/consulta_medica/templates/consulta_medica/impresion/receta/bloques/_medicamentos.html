@@ -10,7 +10,8 @@
       {# Generico primero (RIS art. 31) #}
       <td><span class="generic">{{ item.label.primary }}</span>{% if item.label.secondary %}<br><small>{{ item.label.secondary }}</small>{% endif %}</td>
       <td class="qty">{{ item.quantity }}</td>
-      <td>{% if item.dose %}{{ item.dose }} &middot; {% endif %}{{ item.indications }}</td>
+      {# Dosis, via, frecuencia y duracion (RIS art. 30) + indicaciones #}
+      <td>{{ item.administration }}</td>
     </tr>
     {% endfor %}
   </table>

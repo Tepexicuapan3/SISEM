@@ -1,5 +1,6 @@
 from django.test import TestCase
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.authentication.models import SyUsuario
 from apps.catalogos.models import CatCies, Medicamentos
 from apps.consulta_medica.models import PrescriptionAuthorization
@@ -74,7 +75,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_basico.id, quantity=10, indications="Cada 8 horas",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         self.assertEqual(PrescriptionAuthorization.objects.count(), 0)
@@ -85,7 +86,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         auth = PrescriptionAuthorization.objects.get()
@@ -100,7 +101,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_controlado.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         auth = PrescriptionAuthorization.objects.get()
@@ -113,12 +114,12 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_controlado.id, quantity=1, indications="Cada 12 horas",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         self.assertEqual(PrescriptionAuthorization.objects.count(), 1)
@@ -134,7 +135,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
 
@@ -155,7 +156,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
 
@@ -180,7 +181,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
         authorize_prescription(
@@ -203,7 +204,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
 
@@ -221,13 +222,13 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit_a.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         visit_b = self._visit_in_consultation()
         add_prescription_item(
             visit_b.id_visit, ["DOCTOR"],
             medication_id=self.med_controlado.id, quantity=1, indications="Cada 12 horas",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth_b = PrescriptionAuthorization.objects.get(prescription__id_visit=visit_b)
         authorize_prescription(
@@ -253,7 +254,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         item_payload = add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         cancel_prescription_item(
@@ -269,7 +270,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
         auth = PrescriptionAuthorization.objects.get()
@@ -286,7 +287,7 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth = PrescriptionAuthorization.objects.get()
 
@@ -315,13 +316,13 @@ class PrescriptionAuthorizationUseCaseTests(TestCase):
         add_prescription_item(
             visit_a.id_visit, ["DOCTOR"],
             medication_id=self.med_especial.id, quantity=1, indications="Una vez al dia",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         visit_b = self._visit_in_consultation()
         add_prescription_item(
             visit_b.id_visit, ["DOCTOR"],
             medication_id=self.med_controlado.id, quantity=1, indications="Cada 12 horas",
-            actor_id=self.doctor_id,
+            actor_id=self.doctor_id, **ADMINISTRATION,
         )
         auth_a = PrescriptionAuthorization.objects.get(prescription__id_visit=visit_a)
         auth_b = PrescriptionAuthorization.objects.get(prescription__id_visit=visit_b)

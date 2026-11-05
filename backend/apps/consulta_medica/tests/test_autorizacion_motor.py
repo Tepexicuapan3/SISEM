@@ -11,6 +11,7 @@ from unittest import mock
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.authentication.models import SyUsuario
 from apps.autorizaciones.models import Solicitud, SolicitudTransicion
 from apps.autorizaciones.tests.fabricas import (
@@ -82,7 +83,7 @@ class _Base(TestCase):
     def _agregar(self, visit, medicamento):
         return add_prescription_item(
             visit.id_visit, ["DOCTOR"], medication_id=medicamento.id, quantity=1,
-            indications="Una vez al dia", actor_id=self.doctor_id,
+            indications="Una vez al dia", actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
 

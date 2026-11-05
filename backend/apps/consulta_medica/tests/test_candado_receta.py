@@ -5,6 +5,7 @@ ya surtio no se quita de la receta; el candado se calcula del propio renglon
 """
 from rest_framework import status
 
+from apps.consulta_medica.tests.receta_fixtures import ADMINISTRATION
 from apps.administracion.models import AuditoriaEvento
 from apps.consulta_medica.models import VisitPrescriptionItem
 from apps.consulta_medica.tests.test_consultation_audit_api import _ConsultationAuditApiTestBase
@@ -17,7 +18,7 @@ class PrescriptionLockTests(_ConsultationAuditApiTestBase):
         self.visit = self._visit_with_consultation()
         self.item = add_prescription_item(
             self.visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.id, quantity=2,
-            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario,
+            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
         )
         self._login_doctor()
 
