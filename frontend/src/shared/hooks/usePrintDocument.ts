@@ -40,6 +40,9 @@ export async function resolvePrintErrorMessage(
   error: unknown,
 ): Promise<string> {
   const body = await readErrorBody(error);
+  // "No imprimible" trae el motivo concreto (autorizacion pendiente, consulta
+  // abierta...): se muestra ese y no el generico, que no dice que hacer.
+  if (body?.code === "DOCUMENT_NOT_PRINTABLE" && body.message) return body.message;
   if (body?.code && ERROR_MESSAGES[body.code]) return ERROR_MESSAGES[body.code];
   return body?.message || FALLBACK_MESSAGE;
 }

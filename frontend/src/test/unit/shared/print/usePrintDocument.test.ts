@@ -87,21 +87,34 @@ describe("usePrintDocument", () => {
     expect(click).toHaveBeenCalled();
   });
 
-  it("parsea el Blob JSON de error, cierra la pestania y muestra toast", async () => {
+  it("parsea el Blob JSON de error, cierra la pestania y muestra el motivo del backend", async () => {
+    // DOCUMENT_NOT_PRINTABLE trae el motivo concreto (autorizacion pendiente,
+    // consulta abierta...): el generico no le dice al usuario que hacer.
     vi.mocked(impresionAPI.print).mockRejectedValue(
-      blobError({ code: "DOCUMENT_NOT_PRINTABLE", message: "x", status: 409 }),
+      blobError({
+        code: "DOCUMENT_NOT_PRINTABLE",
+        message: "La receta tiene una autorizacion pendiente.",
+        status: 409,
+      }),
     );
-    const { result } = renderHook(() => usePrintDocument("ficha"));
+    const { result } = renderHook(() => usePrintDocument("receta"));
 
     let ok = true;
     await act(async () => { ok = await result.current.print(5); });
 
     expect(ok).toBe(false);
     expect(fakeTab.close).toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith(
-      "Este documento todavía no se puede imprimir.",
-    );
+    expect(toast.error).toHaveBeenCalledWith("La receta tiene una autorizacion pendiente.");
     expect(result.current.isPrinting).toBe(false);
+  });
+
+  it("sin motivo del backend, DOCUMENT_NOT_PRINTABLE muestra el texto generico", async () => {
+    vi.mocked(impresionAPI.print).mockRejectedValue(
+      blobError({ code: "DOCUMENT_NOT_PRINTABLE", status: 409 }),
+    );
+    const { result } = renderHook(() => usePrintDocument("receta"));
+    await act(async () => { await result.current.print(5); });
+    expect(toast.error).toHaveBeenCalledWith("Este documento todavía no se puede imprimir.");
   });
 
   it("usa el message del backend para codigos desconocidos y fallback si no es JSON", async () => {
