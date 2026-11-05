@@ -7,7 +7,8 @@
       <td class="num">{{ forloop.counter }}</td>
       {# Clave del medicamento: el catalogo aun no la tiene (D2) #}
       <td class="num"></td>
-      <td>{{ item.name }}{% if item.presentation %}. {{ item.presentation }}{% endif %}{% if item.generic_name %}<br><small>{{ item.generic_name }}</small>{% endif %}</td>
+      {# Generico primero (RIS art. 31) #}
+      <td><span class="generic">{{ item.label.primary }}</span>{% if item.label.secondary %}<br><small>{{ item.label.secondary }}</small>{% endif %}</td>
       <td class="qty">{{ item.quantity }}</td>
       <td>{% if item.dose %}{{ item.dose }} &middot; {% endif %}{{ item.indications }}</td>
     </tr>

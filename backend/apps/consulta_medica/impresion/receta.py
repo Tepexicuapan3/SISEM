@@ -96,7 +96,7 @@ def _ensure_authorized(prescription):
 
 def _item_row(item):
     med = item.medication
-    return {
+    row = {
         "name": med.name,
         "generic_name": med.generic_name or "",
         "presentation": med.presentation or "",
@@ -105,6 +105,20 @@ def _item_row(item):
         "indications": item.indications,
         "is_controlled": med.is_controlled,
     }
+    row["label"] = _drug_label(row)
+    return row
+
+
+def _drug_label(row):
+    """Denominacion generica primero (RIS art. 31); el nombre del catalogo,
+    que trae la concentracion, y la presentacion van debajo."""
+    name, generic = row["name"] or "", row["generic_name"] or ""
+    if not generic or generic.casefold() == name.casefold():
+        primary, rest = generic or name, ()
+    else:
+        primary, rest = generic, (name,)
+    secondary = ". ".join(p for p in (*rest, row["presentation"]) if p)
+    return {"primary": primary, "secondary": secondary}
 
 
 def build_sheets(rows, prescription_type):
@@ -181,6 +195,8 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
         "prescription_type": prescription.get_prescription_type_display(),
         "issued_date": fmt_date(issued),
         "issued": _date_boxes(fmt_date(issued)),
+        # Hora de emision (RIS art. 29); la del pie es la de impresion.
+        "issued_time": issued.strftime("%H:%M") if issued else "",
         "barcode_uri": code128_data_uri(folio, bar_height=18) if folio else "",
         "patient": header,
         "birth": _date_boxes(header.get("birth_date")),
@@ -188,6 +204,7 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
         "doctor": doctor_info(consultation.doctor),
         "center_name": getattr(center, "name", "") or "",
         "center_address": _center_address(center),
+        "clues": getattr(center, "code", "") or "",
         "consultorio": getattr(visit.consultorio, "name", "") if visit.consultorio else "",
         "general_indications": _general_indications(prescription.pk),
         # ope_param.ds_mreceta del legado, ahora parametro por centro.

@@ -12,6 +12,7 @@ from apps.consulta_medica.impresion.receta import (
     SHEET_TEMPLATE_NORMAL,
     _center_address,
     _date_boxes,
+    _drug_label,
     build_receta_context,
     build_sheets,
 )
@@ -136,6 +137,49 @@ class RecetaContextHelpersTests(TestCase):
     def test_center_address_without_center(self):
         self.assertEqual(_center_address(None), {"line1": "", "line2": ""})
 
+    # RIS art. 31: en el sector publico se prescribe por denominacion generica.
+    def test_drug_label_puts_generic_first(self):
+        row = {"name": "Clonazepam 2mg", "generic_name": "Clonazepam", "presentation": "Tableta"}
+        self.assertEqual(_drug_label(row), {"primary": "Clonazepam", "secondary": "Clonazepam 2mg. Tableta"})
+
+    def test_drug_label_without_generic_uses_name(self):
+        row = {"name": "Vitamina D 800 UI", "generic_name": "", "presentation": "Tableta"}
+        self.assertEqual(_drug_label(row), {"primary": "Vitamina D 800 UI", "secondary": "Tableta"})
+
+    def test_drug_label_generic_equal_to_name_is_not_repeated(self):
+        row = {"name": "PARACETAMOL", "generic_name": "Paracetamol", "presentation": ""}
+        self.assertEqual(_drug_label(row), {"primary": "Paracetamol", "secondary": ""})
+
+
+_BLOCKS = "consulta_medica/impresion/receta/bloques"
+
+
+class RecetaBlocksTests(TestCase):
+    def test_signature_box_is_left_blank_for_the_autograph(self):
+        # RIS art. 29: firma autografa; la casilla no se llena con el nombre impreso.
+        html = render_to_string(f"{_BLOCKS}/_firma.html", {"doctor": {"name": "DRA. ROSA RUIZ", "cedula": "123"}})
+        self.assertEqual(html.count("DRA. ROSA RUIZ"), 1)
+
+    def test_header_prints_issue_time(self):
+        html = render_to_string(
+            f"{_BLOCKS}/_encabezado.html",
+            {"sheet": {"label": "ORIGINAL"}, "issued_date": "26/03/2024", "issued_time": "11:31"},
+        )
+        self.assertIn("26/03/2024 11:31", html)
+
+    def test_data_block_prints_clues(self):
+        html = render_to_string(f"{_BLOCKS}/_datos.html", {"clues": "DFSTC000123", "issued": {}, "birth": {}})
+        self.assertIn("DFSTC000123", html)
+
+    def test_data_block_hides_clues_label_without_value(self):
+        html = render_to_string(f"{_BLOCKS}/_datos.html", {"clues": "", "issued": {}, "birth": {}})
+        self.assertNotIn("CLUES", html)
+
+    def test_medication_block_shows_generic_before_name(self):
+        item = {"label": {"primary": "Clonazepam", "secondary": "Clonazepam 2mg. Tableta"}, "quantity": 1}
+        html = render_to_string(f"{_BLOCKS}/_medicamentos.html", {"sheet": {"items": [item]}})
+        self.assertLess(html.index("Clonazepam<"), html.index("Clonazepam 2mg. Tableta"))
+
 
 class RecetaBuilderTests(_Base):
     def _build(self, visit):
@@ -163,6 +207,15 @@ class RecetaBuilderTests(_Base):
         self.assertTrue(ctx["issued"]["y"])
         self.assertEqual(ctx["center_address"], {"line1": "", "line2": ""})
         self.assertTrue(ctx["barcode_uri"].startswith("data:image/svg+xml;base64,"))
+        self.assertRegex(ctx["issued_time"], r"^\d{2}:\d{2}$")
+        self.assertEqual(ctx["clues"], "")
+
+    def test_rows_carry_generic_first_label(self):
+        visit = self._visit("V-R13")
+        self._consultation(visit)
+        self._prescription(visit, [self.med], folio="RX-2026-13")
+        row = self._build(visit).context["sheets"][0]["items"][0]
+        self.assertEqual(row["label"]["primary"], "Paracetamol")
 
     def test_visit_not_found_404(self):
         with self.assertRaises(PrintError) as ctx:

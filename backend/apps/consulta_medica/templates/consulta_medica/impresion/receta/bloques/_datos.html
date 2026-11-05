@@ -2,7 +2,8 @@
   <col style="width:40%"><col style="width:45%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
   <tr>
     <td><small class="inline">Unidad Médica</small> <span class="val">{{ center_name }}</span><br>
-        <small class="inline">Servicio</small> <span class="val">{{ consultorio }}</span></td>
+        <small class="inline">Servicio</small> <span class="val">{{ consultorio }}</span>
+        {% if clues %}<br><small class="inline">CLUES</small> <span class="val">{{ clues }}</span>{% endif %}</td>
     <td class="addr">{{ center_address.line1 }}<br>{{ center_address.line2 }}</td>
     <td class="box"><small>Día</small><span class="val">{{ issued.d }}</span></td>
     <td class="box"><small>Mes</small><span class="val">{{ issued.m }}</span></td>

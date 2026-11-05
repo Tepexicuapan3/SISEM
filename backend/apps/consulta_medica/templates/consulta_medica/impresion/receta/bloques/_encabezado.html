@@ -11,7 +11,7 @@
     </td>
     <td class="folio-col">
       <div class="folio">NO.<span class="right">{{ folio }}</span></div>
-      <div class="fn">FN: {{ issued_date }}<em class="right">{{ prescription_type|upper }}</em></div>
+      <div class="fn">FN: {{ issued_date }}{% if issued_time %} {{ issued_time }}{% endif %}<em class="right">{{ prescription_type|upper }}</em></div>
     </td>
   </tr>
 </table>

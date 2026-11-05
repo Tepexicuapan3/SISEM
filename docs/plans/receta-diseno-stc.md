@@ -154,3 +154,19 @@ recurso local de `static/impresion/`; no se agrega ningún origen externo.
 | D5 | Mensaje de salud ("CUIDA TU PESO…"): ¿parámetro `receta.mensaje_salud` por centro? | Vacío |
 | D6 | "Servicio": ¿nombre del consultorio o especialidad? | Nombre del consultorio |
 | D7 | Hoja de antibiótico | Fuera, como hoy (decisión 2026-10-16) |
+| D8 | Vía, frecuencia y duración estructuradas (RIS art. 30). Hoy van en `dose` + `indications` como texto libre. Toca captura, modelo y migración: **ticket propio**, no es diseño | Texto libre tal como lo escribe el médico |
+| D9 | Grupo del controlado (estupefaciente / psicotrópico II, III, IV; LGS arts. 240, 251, 252). `Medicamentos` solo tiene `is_controlled`. Con farmacia y jurídico: veces que se surte y **bloqueo** de los que van en recetario especial COFEPRIS | Hoja CONTROLADO genérica |
+| D10 | ¿CURP del paciente impresa? Identifica sin ambigüedad pero expone más datos personales (LGPDPPSO) | No se imprime |
+| D11 | Firma electrónica (NOM-024 / reforma LGS de receta electrónica): solo si la receta deja de ser papel | Firma autógrafa |
+
+## 9. Ajustes normativos aplicados (2026-11-05)
+
+Con datos que ya existen, sin migraciones ni cambios de endpoint. **A validar
+por el responsable sanitario / jurídico contra el texto vigente del DOF.**
+
+| Requisito | Norma | Cambio |
+|---|---|---|
+| Hora de emisión | RIS art. 29 | `issued_time` (de `created_at`) junto a la fecha en el encabezado; la hora del pie es la de impresión |
+| Firma autógrafa | RIS art. 29 | Casilla "Nombre y Firma del Médico" queda en blanco |
+| Denominación genérica | RIS art. 31 | `_drug_label`: genérico en negrita arriba; nombre de catálogo (con concentración) y presentación abajo. Sin genérico, va el nombre |
+| Identificación del establecimiento | NOM-024 (catálogo CLUES) | `clues` = `CatCentroAtencion.code`; se oculta si está vacío |

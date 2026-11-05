@@ -6,7 +6,8 @@
   </tr>
   <tr>
     <td>{{ doctor.name }}{% if doctor.cedula %}<br><span class="strong">D.G.P. - {{ doctor.cedula }}</span>{% endif %}</td>
-    <td>{{ doctor.name }}</td>
+    {# En blanco: la firma es autografa (RIS art. 29) #}
+    <td></td>
     <td class="strong">{{ doctor.cedula }}</td>
     {# Clave del medico: pendiente de origen (D4) #}
     <td class="strong"></td>
