@@ -148,3 +148,26 @@ test apps.consulta_medica apps.impresion`); frontend con
 Frontend corrido en un contenedor `node:22.18-alpine` con el volumen de
 `node_modules`: el contenedor `sisem-frontend` no arranca (su imagen no trae
 `pnpm`).
+
+### Prueba de punta a punta (`test_flujo_cita_a_receta.py`)
+
+Por la API, con login real (cookie JWT + CSRF) y un usuario por rol:
+recepción registra la llegada (`walk_in`) y la pasa a somatometría →
+somatometría captura signos (`lista_para_doctor`) → el médico inicia, guarda
+diagnóstico, agrega el medicamento y cierra → historial →
+`GET /impresion/receta/<visita>` devuelve un PDF real. Solo se simula el padrón
+del paciente (`get_patient_header`, en operación viene del legado).
+
+| Caso | Resultado |
+|---|---|
+| Medicamento básico, sin indicaciones libres | historial con `prescriptionMedications`, PDF copia 1 y reimpresión copia 2, 2 `PrintLog` |
+| Controlado | 409 `DOCUMENT_NOT_PRINTABLE` → el autorizador aprueba → PDF |
+
+Reglas del flujo que aparecieron al recorrerlo (no son bugs, son requisitos
+para la simulación manual):
+
+- Todo usuario necesita **centro de atención asignado**; sin él, recepción
+  recibe `CENTRO_NO_ASIGNADO` (403).
+- El médico tiene que **guardar el diagnóstico antes de agregar
+  medicamentos**; si no, `CONSULTATION_NOT_FOUND` (409).
+- El cambio de estado de la visita es `PATCH /visits/<id>/status`.
