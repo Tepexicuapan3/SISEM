@@ -21,6 +21,8 @@ import {
 } from "@features/consulta-medica/modules/atencion/pages/DoctorConsultationPage.helpers";
 import type { VisitQueueItem } from "@api/types";
 import { visitsAPI } from "@api/resources/visits.api";
+import { usePrintDocument } from "@shared/hooks/usePrintDocument";
+import type { PrescriptionItem } from "@api/types";
 
 vi.mock(
   "@features/consulta-medica/modules/atencion/queries/useDoctorQueue",
@@ -74,8 +76,15 @@ vi.mock(
 // 5.3: la sugerencia de "primera vez / subsecuente" llama a la API real.
 vi.mock("@api/resources/visits.api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@api/resources/visits.api")>();
-  return { ...actual, visitsAPI: { ...actual.visitsAPI, getMorbiditySuggestion: vi.fn() } };
+  return {
+    ...actual,
+    visitsAPI: { ...actual.visitsAPI, getMorbiditySuggestion: vi.fn(), getPrescriptionItems: vi.fn() },
+  };
 });
+
+vi.mock("@shared/hooks/usePrintDocument", () => ({
+  usePrintDocument: vi.fn(),
+}));
 
 vi.mock("@/domains/auth-access/hooks/usePermissionDependencies", () => ({
   usePermissionDependencies: vi.fn(),
@@ -152,9 +161,12 @@ describe("DoctorConsultationPage UI", () => {
   const saveDiagnosisMutateAsync = vi.fn();
   const savePrescriptionsMutateAsync = vi.fn();
   const closeMutateAsync = vi.fn();
+  const printReceta = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(visitsAPI.getPrescriptionItems).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(usePrintDocument).mockReturnValue({ print: printReceta, isPrinting: false });
     vi.mocked(visitsAPI.getMorbiditySuggestion).mockResolvedValue({
       cieCode: "A090",
       suggestion: "2",
@@ -776,6 +788,68 @@ describe("DoctorConsultationPage UI", () => {
     expect(toast.success).toHaveBeenCalledWith("Consulta cerrada", {
       description: undefined,
     });
+  });
+
+  const closeConsultationWithCie = async () => {
+    vi.mocked(useCieSearch).mockReturnValue({
+      data: {
+        items: [{ code: "A090", description: "GASTROENTERITIS", version: "CIE-10" }],
+        total: 1,
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof useCieSearch>);
+
+    const user = userEvent.setup();
+    renderDoctorPage("/clinico/consultas/doctor/1");
+    await user.click(screen.getByRole("button", { name: "Iniciar consulta" }));
+    await user.type(screen.getByLabelText("Diagnostico principal"), "Dx final");
+    await user.type(screen.getByLabelText("Nota final"), "Nota final de egreso");
+    await user.type(screen.getByLabelText(/Buscar CIE/i), "A0");
+    await user.click(await screen.findByRole("button", { name: /A090/i }));
+    await user.click(screen.getByLabelText("Subsecuente de la enfermedad"));
+    await waitFor(() => expect(visitsAPI.getPrescriptionItems).toHaveBeenCalledWith(1));
+    await user.click(screen.getByRole("button", { name: "Finalizar consulta" }));
+    await waitFor(() => expect(closeMutateAsync).toHaveBeenCalled());
+  };
+
+  it("al cerrar con medicamentos activos el aviso ofrece imprimir la receta", async () => {
+    vi.mocked(visitsAPI.getPrescriptionItems).mockResolvedValue({
+      items: [{ id: 5, visitId: 1, status: "activo" } as PrescriptionItem],
+      total: 1,
+    });
+
+    await closeConsultationWithCie();
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        "Consulta cerrada",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Imprimir receta" }),
+        }),
+      );
+    });
+    const options = vi.mocked(toast.success).mock.calls.at(-1)?.[1] as {
+      action: { onClick: () => void };
+    };
+    options.action.onClick();
+    expect(printReceta).toHaveBeenCalledWith(1);
+  });
+
+  it("al cerrar sin medicamentos activos el aviso no ofrece imprimir", async () => {
+    vi.mocked(visitsAPI.getPrescriptionItems).mockResolvedValue({
+      items: [{ id: 5, visitId: 1, status: "cancelado" } as PrescriptionItem],
+      total: 1,
+    });
+
+    await closeConsultationWithCie();
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Consulta cerrada", { description: undefined });
+    });
+    expect(vi.mocked(toast.success).mock.calls.at(-1)?.[1]).not.toHaveProperty("action");
   });
 
   it("mapea errores de dominio en cierre de consulta", async () => {

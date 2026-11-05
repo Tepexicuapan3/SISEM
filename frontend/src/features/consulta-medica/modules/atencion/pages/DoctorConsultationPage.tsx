@@ -29,6 +29,9 @@ import { useSavePrescriptions } from "@features/consulta-medica/modules/atencion
 import { useStartConsultation } from "@features/consulta-medica/modules/atencion/mutations/useStartConsultation";
 import { useCieSearch } from "@features/consulta-medica/modules/atencion/queries/useCieSearch";
 import { useDoctorQueue } from "@features/consulta-medica/modules/atencion/queries/useDoctorQueue";
+import { usePrescriptionItems } from "@features/consulta-medica/modules/atencion/queries/usePrescriptionItems";
+import { usePrintDocument } from "@shared/hooks/usePrintDocument";
+import { PRINT_CAPABILITIES } from "@shared/components/print/printCapabilities";
 
 import {
   buildDiagnosisFingerprint,
@@ -198,6 +201,20 @@ export const DoctorConsultationPage = () => {
   const selectedVisitStatus = selectedVisit
     ? (selectedVisitStatusOverrideValue ?? selectedVisit.status)
     : VISIT_STATUS.LISTA_PARA_DOCTOR;
+
+  // Al cerrar se ofrece imprimir la receta si tiene medicamentos activos
+  // (lo que imprime el backend; sin ellos daria 409).
+  const canPrintReceta = hasCapability(
+    PRINT_CAPABILITIES.receta.key,
+    PRINT_CAPABILITIES.receta.fallback,
+  );
+  const prescriptionItemsQuery = usePrescriptionItems(selectedVisit?.id, {
+    enabled: canPrintReceta && selectedVisitStatus === VISIT_STATUS.EN_CONSULTA,
+  });
+  const hasActiveMedications = (prescriptionItemsQuery.data?.items ?? []).some(
+    (item) => item.status === "activo",
+  );
+  const { print: printReceta } = usePrintDocument("receta");
 
   const canStartSelectedVisit =
     Boolean(selectedVisit) &&
@@ -476,7 +493,16 @@ export const DoctorConsultationPage = () => {
         return next;
       });
       const seguimiento = closeResult.followUpAppointment;
+      const closedVisitId = selectedVisit.id;
       toast.success("Consulta cerrada", {
+        ...(hasActiveMedications
+          ? {
+              action: {
+                label: "Imprimir receta",
+                onClick: () => void printReceta(closedVisitId),
+              },
+            }
+          : {}),
         description: seguimiento
           ? `Cita de seguimiento ${seguimiento.folio}, ${new Date(seguimiento.fechaHora).toLocaleString("es-MX", {
               dateStyle: "medium",

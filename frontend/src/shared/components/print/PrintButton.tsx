@@ -3,39 +3,7 @@ import { Button } from "@shared/ui/button";
 import type { PrintableDocument } from "@api/resources/impresion.api";
 import { usePrintDocument } from "@shared/hooks/usePrintDocument";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
-import type { PermissionRequirement } from "@/domains/auth-access/types/permission-dependencies";
-
-/**
- * Capability del backend por documento + fallback local (espejo de
- * CAPABILITY_REQUIREMENTS en permission_dependencies.py) para cuando la
- * proyeccion de capabilities aun no esta cargada.
- */
-const PRINT_CAPABILITIES: Record<
-  PrintableDocument,
-  { key: string; fallback: PermissionRequirement }
-> = {
-  ficha: {
-    key: "documentos.ficha.imprimir",
-    fallback: {
-      anyOf: [
-        "recepcion:fichas:medicina_general:create",
-        "recepcion:fichas:especialidad:create",
-        "recepcion:fichas:urgencias:create",
-        "clinico:consultas:read",
-      ],
-    },
-  },
-  receta: {
-    key: "documentos.receta.imprimir",
-    fallback: {
-      anyOf: ["clinico:recetas:imprimir", "farmacia:recetas:dispensar"],
-    },
-  },
-  nota: {
-    key: "documentos.nota.imprimir",
-    fallback: { allOf: ["clinico:consultas:read"] },
-  },
-};
+import { PRINT_CAPABILITIES } from "./printCapabilities";
 
 interface PrintButtonProps {
   documento: PrintableDocument;
