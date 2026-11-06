@@ -13,6 +13,7 @@ from apps.administracion.use_cases.expedientes.buscar_expediente import (
     ExpedientesNoDisponible,
     buscar_expediente,
     buscar_por_nombre,
+    existe_clinica,
 )
 from apps.administracion.views import expediente_view
 from apps.recepcion.services import vigencia_service
@@ -31,6 +32,22 @@ class BuscarExpedienteFallaTests(SimpleTestCase):
     def test_sin_dato_no_consulta_y_devuelve_vacio(self):
         self.assertEqual(buscar_expediente(""), {"empleados": [], "familiares": []})
         self.assertEqual(buscar_por_nombre("ab"), [])
+
+    def test_existe_clinica_avisa_la_falla_de_la_replica(self):
+        # P-03: una equivalencia no se valida contra "no encontrada" si la replica esta caida.
+        with self.assertRaises(ExpedientesNoDisponible):
+            existe_clinica("1")
+        self.assertFalse(existe_clinica("  "))
+
+    def test_existe_clinica_consulta_la_clave_exacta(self):
+        cursor = mock.MagicMock()
+        cursor.fetchone.return_value = (1,)
+        conexion = mock.MagicMock()
+        conexion.cursor.return_value.__enter__.return_value = cursor
+        with mock.patch("apps.administracion.use_cases.expedientes.buscar_expediente.connections",
+                        {"expedientes": conexion}):
+            self.assertTrue(existe_clinica(" 1 "))
+        cursor.execute.assert_called_once_with(mock.ANY, ["1"])
 
 
 class LlamadoresTests(SimpleTestCase):

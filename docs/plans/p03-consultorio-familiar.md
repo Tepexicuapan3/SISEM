@@ -488,11 +488,12 @@ Tests de UI: abrir el panel no llama a nada que escriba; un clic asigna a la fam
 
 Estimación de captura, familia de 4 sin consultorio: hoy son 4 diálogos y unos 12 clics; después, **1 panel y 1 o 2 clics**.
 
-#### Etapa 4 — Select de clínicas SERMED (B) · S
+#### Etapa 4 — Select de clínicas SERMED (B) · S · ✅ hecha 2026-11-06
 
-- `GET /config/clinicas-sermed` lee `cat_clinicas` de la réplica por contrato.
-- Al crear una equivalencia con una clave que no existe en SERMED, responde `422 CLAVE_NO_EXISTE_SERMED`.
-- En la pantalla de admin, "Clave de clínica SERMED" pasa a ser un select con el formato `1 · CUAUHTÉMOC`. Las clínicas que ya tienen centro aparecen marcadas.
+- No se creó `GET /config/clinicas-sermed`: se reutiliza `GET /clinicas`, que ya lista `cat_clinicas` como `{id, name}` para otros selects.
+- El backend valida contra la réplica con el contrato `existe_clinica` (administración, dueña de la réplica). Una clave que no existe responde `422 CLAVE_NO_EXISTE_SERMED`. Si la réplica no responde: `503 CATALOGO_SERMED_NO_DISPONIBLE` y no se guarda nada.
+- En la pantalla de admin, "Clínica de SERMED" es un select con el formato `1 · CUAUHTÉMOC`. Las que ya tienen centro aparecen deshabilitadas con "(ya asignada a …)".
+- La tabla muestra `clave · nombre`. Una equivalencia vieja con una clave que no existe en SERMED se marca "no existe en SERMED". No se corrige ningún dato: solo se ve.
 
 #### Etapa 5 — Cierre · S
 

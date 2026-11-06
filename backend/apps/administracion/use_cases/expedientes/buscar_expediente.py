@@ -137,6 +137,23 @@ class ExpedientesNoDisponible(Exception):
     """
 
 
+def existe_clinica(cd_clinica: str) -> bool:
+    """
+    Contrato para P-03: si la clave existe en ``cat_clinicas`` de la replica.
+    Una falla de la replica no es "no existe": se avisa con ExpedientesNoDisponible.
+    """
+    clave = (cd_clinica or "").strip()
+    if not clave:
+        return False
+    try:
+        with connections['expedientes'].cursor() as cursor:
+            cursor.execute("SELECT 1 FROM cat_clinicas WHERE cd_clinica = %s", [clave])
+            return cursor.fetchone() is not None
+    except Exception as exc:
+        logger.error("Error consultando la clinica %s: %s", clave, exc)
+        raise ExpedientesNoDisponible(str(exc)) from exc
+
+
 # ──────────────────────────────────────────────────────────────
 # Caso de uso principal
 # ──────────────────────────────────────────────────────────────

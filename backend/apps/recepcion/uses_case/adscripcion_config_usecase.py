@@ -7,6 +7,7 @@ administrador; cada cambio queda auditado con antes y después.
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.administracion.use_cases.expedientes.buscar_expediente import ExpedientesNoDisponible, existe_clinica
 from apps.catalogos.models import CatCentroAtencion, Consultorios
 from apps.recepcion.models import AdscripcionClinicaCentro, AdscripcionConsultorio
 from apps.recepcion.uses_case.adscripcion_usecase import AdscripcionError, Operador, _auditar
@@ -25,6 +26,21 @@ def _exigir_centro(id_centro):
         raise AdscripcionError("CENTRO_NO_ENCONTRADO", "Centro de atención no encontrado.", 404)
 
 
+def _exigir_clinica_sermed(clave):
+    # Antes se aceptaba cualquier texto y se cargaron expedientes como clave.
+    try:
+        existe = existe_clinica(clave)
+    except ExpedientesNoDisponible as exc:
+        raise AdscripcionError(
+            "CATALOGO_SERMED_NO_DISPONIBLE",
+            "No se pudo consultar el catálogo de clínicas de SERMED. Intente más tarde.", 503,
+        ) from exc
+    if not existe:
+        raise AdscripcionError(
+            "CLAVE_NO_EXISTE_SERMED", f"La clave {clave} no es una clínica de SERMED.", 422,
+        )
+
+
 def _exigir_capacidad(capacidad):
     if capacidad is not None and capacidad <= 0:
         raise AdscripcionError("CAPACIDAD_INVALIDA", "La capacidad tiene que ser mayor a cero o quedar vacía.", 422)
@@ -35,8 +51,9 @@ def _exigir_capacidad(capacidad):
 def crear_equivalencia(*, clave_clinica_sermed, id_centro_atencion, operador: Operador, request):
     clave = (clave_clinica_sermed or "").strip()
     if not clave:
-        raise AdscripcionError("CLAVE_REQUERIDA", "Escriba la clave de la clínica en SERMED.", 422)
+        raise AdscripcionError("CLAVE_REQUERIDA", "Elija la clínica de SERMED.", 422)
     _exigir_centro(id_centro_atencion)
+    _exigir_clinica_sermed(clave)
     with transaction.atomic():
         try:
             with transaction.atomic():

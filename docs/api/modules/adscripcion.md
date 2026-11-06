@@ -127,7 +127,7 @@ Regla de clínica (`WRONG_CLINIC` en `POST /api/v1/citas`, `CLINICA_NO_CORRESPON
 | Método | Ruta | Request | Response | Status |
 | --- | --- | --- | --- | --- |
 | GET | `/config/clinicas` | — | `{ items: EquivalenciaClinica[] }` | 200 |
-| POST | `/config/clinicas` | `{ claveClinicaSermed, idCentroAtencion }` | `EquivalenciaClinica` | 201 |
+| POST | `/config/clinicas` | `{ claveClinicaSermed, idCentroAtencion }` (la clave debe existir en `cat_clinicas` de SERMED; el front la elige de `GET /clinicas`) | `EquivalenciaClinica` | 201 |
 | PATCH | `/config/clinicas/:id` | `{ idCentroAtencion?, estaActivo? }` | `EquivalenciaClinica` | 200 |
 | GET | `/config/consultorios` | `?centroId?` | `{ items: ConsultorioFamiliar[] }` (con `carga`) | 200 |
 | POST | `/config/consultorios` | `{ consultorioId, capacidadMaxima? }` | `ConsultorioFamiliar` | 201 |
@@ -173,6 +173,8 @@ Pantalla: `/admin/reportes/adscripcion` (Reportes y Analítica Operativa → Pad
 | `CITA_DE_OTRO_PACIENTE` | 422 | La cita nueva no es del paciente |
 | `CITA_YA_USADA` | 409 | La cita nueva ya reagenda otra |
 | `CLAVE_REQUERIDA` / `CAPACIDAD_INVALIDA` | 422 | Configuración |
+| `CLAVE_NO_EXISTE_SERMED` | 422 | La clave no está en `cat_clinicas` de SERMED |
+| `CATALOGO_SERMED_NO_DISPONIBLE` | 503 | La réplica de SERMED no respondió; no se guarda la equivalencia |
 | `CLAVE_DUPLICADA` / `CONSULTORIO_YA_CONFIGURADO` | 409 | Configuración |
 | `CENTRO_NO_ENCONTRADO` / `EQUIVALENCIA_NO_ENCONTRADA` / `CONSULTORIO_NO_ENCONTRADO` / `CONFIGURACION_NO_ENCONTRADA` | 404 | Configuración |
 

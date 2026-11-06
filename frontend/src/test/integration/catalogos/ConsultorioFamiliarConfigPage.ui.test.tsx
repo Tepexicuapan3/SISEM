@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor, within } from "@/test/utils";
 import { ConsultorioFamiliarConfigPage } from "@features/admin/modules/catalogos/consultorio-familiar/pages/ConsultorioFamiliarConfigPage";
 import { adscripcionAPI } from "@api/resources/adscripcion.api";
+import { clinicasAPI } from "@api/resources/clinicas.api";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
 import { consultoriosAPI } from "@api/resources/catalogos/consultorios.api";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
@@ -46,6 +47,16 @@ const equivalencias: EquivalenciaClinica[] = [
   { idClinicaCentro: 1, claveClinicaSermed: "5", idCentroAtencion: 5, centro: "Clínica Norte", estaActivo: true },
 ];
 
+// cat_clinicas de SERMED (GET /clinicas).
+const clinicasSermed = {
+  items: [
+    { id: "1", name: "CUAUHTEMOC" },
+    { id: "5", name: "NORTE" },
+    { id: "9", name: "SUR" },
+  ],
+  total: 3,
+};
+
 const familiares: ConsultorioFamiliar[] = [
   {
     idAdscripcionConsultorio: 11,
@@ -82,6 +93,7 @@ describe("ConsultorioFamiliarConfigPage (P-03)", () => {
     vi.mocked(useCentrosAtencionList).mockReturnValue({ data: centros } as ReturnType<typeof useCentrosAtencionList>);
     vi.spyOn(consultoriosAPI, "getAll").mockResolvedValue(consultoriosCentro);
     vi.spyOn(adscripcionAPI, "getEquivalencias").mockResolvedValue({ items: equivalencias });
+    vi.spyOn(clinicasAPI, "getAll").mockResolvedValue(clinicasSermed);
     vi.spyOn(adscripcionAPI, "getConsultoriosFamiliares").mockResolvedValue({ items: familiares });
   });
 
@@ -102,13 +114,34 @@ describe("ConsultorioFamiliarConfigPage (P-03)", () => {
 
     const tabla = await screen.findByRole("table", { name: /equivalencias/i });
     expect(within(tabla).getByText("Clínica Norte")).toBeInTheDocument();
+    expect(await within(tabla).findByText("5 · NORTE")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/clave de clínica sermed/i), " 9 ");
+    const clinica = screen.getByLabelText(/clínica de sermed/i);
+    await waitFor(() => expect(within(clinica).getByRole("option", { name: "9 · SUR" })).toBeInTheDocument());
+    await user.selectOptions(clinica, "9");
     await esperarCentros();
     await user.selectOptions(screen.getByLabelText(/centro de la clave/i), "7");
     await user.click(screen.getByRole("button", { name: /agregar equivalencia/i }));
 
     await waitFor(() => expect(crear).toHaveBeenCalledWith({ claveClinicaSermed: "9", idCentroAtencion: 7 }));
+  });
+
+  it("la clínica que ya tiene equivalencia no se puede volver a elegir", async () => {
+    render(<ConsultorioFamiliarConfigPage />);
+
+    const clinica = screen.getByLabelText(/clínica de sermed/i);
+    const ocupada = await within(clinica).findByRole("option", { name: /5 · NORTE \(ya asignada a Clínica Norte\)/ });
+    expect(ocupada).toBeDisabled();
+    expect(within(clinica).getByRole("option", { name: "1 · CUAUHTEMOC" })).toBeEnabled();
+  });
+
+  it("sin el catálogo de SERMED avisa y no deja agregar", async () => {
+    vi.spyOn(clinicasAPI, "getAll").mockRejectedValue(new Error("caída"));
+    render(<ConsultorioFamiliarConfigPage />);
+
+    expect(await screen.findByText(/no se pudo cargar el catálogo de clínicas de sermed/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/clínica de sermed/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /agregar equivalencia/i })).toBeDisabled();
   });
 
   it("desactiva una equivalencia", async () => {

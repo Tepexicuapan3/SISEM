@@ -3,9 +3,9 @@ import { toast } from "sonner";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@shared/ui/card";
-import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
 import type { CentroAtencionListItem } from "@api/types";
+import { useClinicasList } from "@features/admin/shared/queries/useClinicasList";
 import { useEquivalenciasClinica } from "@features/admin/modules/catalogos/consultorio-familiar/queries/useConsultorioFamiliarConfig";
 import {
   useActualizarEquivalencia,
@@ -22,20 +22,26 @@ interface EquivalenciasSectionProps {
 /**
  * P-03 · Qué centro de SIRES corresponde a cada `cd_clinica` de SERMED.
  * Sin equivalencia activa, la búsqueda del expediente marca CLINICA_SIN_CENTRO.
+ * La clave se elige del catálogo de SERMED: escrita a mano se colaron expedientes.
  */
 export const EquivalenciasSection = ({ centros }: EquivalenciasSectionProps) => {
   const { data, isLoading, isError } = useEquivalenciasClinica(true);
+  const clinicasSermed = useClinicasList();
   const crear = useCrearEquivalencia();
   const actualizar = useActualizarEquivalencia();
   const [clave, setClave] = useState("");
   const [centroId, setCentroId] = useState("");
 
   const items = data?.items ?? [];
+  const sermed = clinicasSermed.data?.items ?? [];
+  const nombreSermed = new Map(sermed.map((c) => [String(c.id).trim(), c.name]));
+  const asignadas = new Map(items.map((e) => [e.claveClinicaSermed, e.centro]));
+  const sinCatalogo = clinicasSermed.isError;
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      await crear.mutateAsync({ claveClinicaSermed: clave.trim(), idCentroAtencion: Number(centroId) });
+      await crear.mutateAsync({ claveClinicaSermed: clave, idCentroAtencion: Number(centroId) });
       toast.success("Equivalencia agregada");
       setClave("");
       setCentroId("");
@@ -63,8 +69,25 @@ export const EquivalenciasSection = ({ centros }: EquivalenciasSectionProps) => 
       <CardContent className="space-y-4">
         <form onSubmit={(e) => void onSubmit(e)} className="grid gap-3 sm:grid-cols-[1fr_2fr_auto] sm:items-end">
           <div className="space-y-1">
-            <Label htmlFor="equivalencia-clave" className="text-xs">Clave de clínica SERMED</Label>
-            <Input id="equivalencia-clave" value={clave} maxLength={10} onChange={(e) => setClave(e.target.value)} />
+            <Label htmlFor="equivalencia-clave" className="text-xs">Clínica de SERMED</Label>
+            <select
+              id="equivalencia-clave"
+              className={SELECT_CLASS}
+              value={clave}
+              disabled={sinCatalogo}
+              onChange={(e) => setClave(e.target.value)}
+            >
+              <option value="">{clinicasSermed.isLoading ? "Cargando clínicas..." : "Selecciona una clínica"}</option>
+              {sermed.map((clinica) => {
+                const id = String(clinica.id).trim();
+                const centro = asignadas.get(id);
+                return (
+                  <option key={id} value={id} disabled={centro !== undefined}>
+                    {`${id} · ${clinica.name}`}{centro !== undefined ? ` (ya asignada a ${centro})` : ""}
+                  </option>
+                );
+              })}
+            </select>
           </div>
           <div className="space-y-1">
             <Label htmlFor="equivalencia-centro" className="text-xs">Centro de la clave</Label>
@@ -80,10 +103,15 @@ export const EquivalenciasSection = ({ centros }: EquivalenciasSectionProps) => 
               ))}
             </select>
           </div>
-          <Button type="submit" disabled={crear.isPending || clave.trim() === "" || centroId === ""}>
+          <Button type="submit" disabled={crear.isPending || sinCatalogo || clave === "" || centroId === ""}>
             Agregar equivalencia
           </Button>
         </form>
+        {sinCatalogo && (
+          <p role="alert" className="text-sm text-status-critical">
+            No se pudo cargar el catálogo de clínicas de SERMED. Las equivalencias actuales siguen funcionando.
+          </p>
+        )}
 
         {isLoading ? (
           <p className="text-sm text-txt-muted">Cargando equivalencias...</p>
@@ -104,7 +132,18 @@ export const EquivalenciasSection = ({ centros }: EquivalenciasSectionProps) => 
             <tbody className="divide-y divide-line-hairline">
               {items.map((item) => (
                 <tr key={item.idClinicaCentro}>
-                  <td className="py-2 font-mono">{item.claveClinicaSermed}</td>
+                  <td className="py-2">
+                    {nombreSermed.has(item.claveClinicaSermed) ? (
+                      `${item.claveClinicaSermed} · ${nombreSermed.get(item.claveClinicaSermed)}`
+                    ) : (
+                      <>
+                        <span className="font-mono">{item.claveClinicaSermed}</span>
+                        {sermed.length > 0 && (
+                          <span className="ml-2 text-xs text-status-critical">no existe en SERMED</span>
+                        )}
+                      </>
+                    )}
+                  </td>
                   <td className="py-2">{item.centro}</td>
                   <td className="py-2">
                     <Badge variant="outline">{item.estaActivo ? "Activa" : "Inactiva"}</Badge>

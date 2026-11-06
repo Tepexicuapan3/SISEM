@@ -4,11 +4,14 @@ Sesión por cookie, CSRF en escrituras y permisos atómicos, como el resto de
 recepción.
 """
 
+from unittest import mock
+
 from django.contrib.auth.hashers import make_password
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
+from apps.administracion.use_cases.expedientes.buscar_expediente import ExpedientesNoDisponible
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import MotivoCita, Permisos, Roles
@@ -19,6 +22,7 @@ from apps.recepcion.models import (
     AdscripcionPaciente,
 )
 from apps.recepcion.tests._adscripcion_base import AdscripcionTestBase, fila_sermed
+from apps.recepcion.uses_case import adscripcion_config_usecase as config_usecase
 
 BASE = "/api/v1/adscripcion"
 LEER = "recepcion:consultorio_familiar:read"
@@ -292,7 +296,25 @@ class ConfiguracionApiTests(AdscripcionApiBase):
         response = self.client.get(f"{BASE}/config/consultorios")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_equivalencias(self):
+    def test_clave_que_no_existe_en_sermed_responde_422_y_no_guarda(self):
+        self._login("admin_p03", [CONFIG, LEER_CENTROS, LEER_CONSULTORIOS])
+        with mock.patch.object(config_usecase, "existe_clinica", return_value=False) as existe:
+            response = self._post(f"{BASE}/config/clinicas", {"claveClinicaSermed": "40488", "idCentroAtencion": self.clinica5.id})
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data["code"], "CLAVE_NO_EXISTE_SERMED")
+        existe.assert_called_once_with("40488")
+        self.assertFalse(AdscripcionClinicaCentro.objects.filter(clave_clinica_sermed="40488").exists())
+
+    def test_sin_replica_de_sermed_responde_503_y_no_guarda(self):
+        self._login("admin_p03", [CONFIG, LEER_CENTROS, LEER_CONSULTORIOS])
+        with mock.patch.object(config_usecase, "existe_clinica", side_effect=ExpedientesNoDisponible("x")):
+            response = self._post(f"{BASE}/config/clinicas", {"claveClinicaSermed": "9", "idCentroAtencion": self.clinica5.id})
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "CATALOGO_SERMED_NO_DISPONIBLE")
+        self.assertFalse(AdscripcionClinicaCentro.objects.filter(clave_clinica_sermed="9").exists())
+
+    @mock.patch.object(config_usecase, "existe_clinica", return_value=True)
+    def test_equivalencias(self, _existe):
         self._login("admin_p03", [CONFIG, LEER_CENTROS, LEER_CONSULTORIOS])
         response = self._post(f"{BASE}/config/clinicas", {"claveClinicaSermed": " 9 ", "idCentroAtencion": self.clinica5.id})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
