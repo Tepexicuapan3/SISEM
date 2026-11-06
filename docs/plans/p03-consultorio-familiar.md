@@ -352,4 +352,171 @@ Auditoría: cada operación deja su evento con antes/después; los rechazos, com
 | 4 | Quién reasigna | permiso `write` + mismo centro del operador; `todos_centros` para perfil central | solo permiso |
 | 5 | Regla de sugerencia | menor carga del centro (y turno, si se indica) | sin sugerencia |
 | 6 | Dónde opera | **definido:** búsqueda de expediente en Recepción > Agenda > Generar ficha de consulta | pantalla aparte |
-| 7 | Recién nacidos provisionales | **definido (reemplaza "heredar la clínica del titular"):** fuera de P-03. Si `cns_paciente.cd_provisional` no es nulo, el estado es `RECIEN_NACIDO_PROVISIONAL`: no se asigna, no se avisa, no se bloquea y no se lee SERMED. No se toca `newborn_service` ni su vinculación. Entran a P-03 cuando la vinculación actual los registra con `pk_num` y `cd_clinica` | heredar la clínica del titular (descartado: obligaría a tocar la vinculación para cerrar la asignación provisional) |
+| 7 | Recién nacidos provisionales | **definido por la usuaria (2026-11-06): heredan la clínica del titular**, leída en vivo de SERMED (V0). La vigencia es la del provisional, no la del titular. Van al consultorio de su familia (S0). No se toca `newborn_service` ni su vinculación: después de vincular, el provisional (`LINKED`) deja de contar en la carga del consultorio. Tests: `test_recien_nacido_*` en `test_adscripcion_evaluacion` y `test_adscripcion_sugerencia` | fuera de P-03 con estado `RECIEN_NACIDO_PROVISIONAL` (descartado) |
+
+## 13. Plan de cierre (revisado 2026-11-06)
+
+Sale de la prueba sobre la base de desarrollo limpia y de revisar la pantalla
+actual. El objetivo es cerrar P-03 con un proceso **por familia**, con **menos
+pasos de captura** y sin registrar pacientes que no se atienden.
+
+### 13.1 Decisiones tomadas
+
+| # | Decisión |
+|---|---|
+| D1 | Los recién nacidos provisionales heredan la clínica del titular (decisión 7). |
+| D2 | El paciente se registra **al confirmar** la asignación, nunca al buscar ni al abrir el panel. |
+| D3 | La familia va **junta por defecto**: un consultorio para todos. Cada miembro se puede cambiar a otro (turno, saturación, motivo personal). Quien no va al sugerido queda como `fueSugerida = false`. |
+| D4 | Un familiar que **ya tiene otro consultorio** aparece **desmarcado** con "Mover". Mover es una decisión explícita y cancela sus citas. |
+| D5 | Un familiar **no vigente** o con **otra clínica** en SERMED aparece en gris, sin casilla, con la razón. |
+| D6 | Se trabaja en la rama `SISEM-15-07-2026`, por decisión de la usuaria. Hay un commit por etapa, siempre con la lista de archivos mostrada y OK previo. |
+
+### 13.2 Problemas que resuelve
+
+| Hoy | Después |
+|---|---|
+| Una familia de 4 son 4 diálogos | **Un solo panel** para todo el núcleo |
+| Abrir el diálogo ya registra al paciente | Se registra solo al confirmar |
+| El diálogo de consultorio es un modal encima del modal de "generar ficha" | Panel **dentro** del flujo de la ficha |
+| Cada clic en un consultorio llama a `/previsualizar` | Las citas a cancelar llegan **calculadas por opción** en una sola consulta |
+| "No hay consultorios… avise al administrador" | Dice **por qué** (sin médico, lleno o sin consultorios) y qué hacer |
+| Clave de clínica en texto libre (se cargó `40488`) | Select con las clínicas de SERMED, y el backend valida la clave |
+| `WRONG_CLINIC` compara `CD_CLINICA` contra el id del centro | Resuelve por la equivalencia de P-03 |
+| Si el consultorio de la familia está lleno, se la separa en silencio | Avisa "la familia quedará separada" |
+
+### 13.3 Etapas
+
+Cada etapa sigue TDD: primero los tests en rojo, después el código mínimo y por último el refactor. Al final de cada etapa, tests en verde y commit con OK.
+
+#### Etapa 1 — `WRONG_CLINIC` por equivalencia (P5) · S · ✅ hecha 2026-11-06
+
+Hecha:
+- `regla_de_clinica(clave)` resuelve la equivalencia una sola vez.
+- `centro_permitido` la usa.
+- El portal filtra con una consulta en vez de una por centro.
+- Tests: `test_clinica_paciente_service` (6) y el portal (+1).
+- Rojo comprobado: el portal mostraba el consultorio de la otra clínica. Verde: 395 tests de recepción, portal y recién nacidos.
+
+- Tests:
+  - con la clave `7` y la equivalencia `7 → centro 2`, deja agendar en el centro 2 y bloquea el centro 1;
+  - una clave sin equivalencia no bloquea (igual que hoy, que sin dato no se bloquea);
+  - el portal aplica la misma regla.
+- Código:
+  - `clinica_paciente_service.centro_permitido` traduce la clave con `adscripcion_clinica_centro`;
+  - un solo lugar para la regla, que usan citas y el portal.
+
+#### Etapa 2 — Backend "asignación por familia" (A) · M
+
+Endpoints nuevos (`/api/v1/adscripcion/familia`). Los actuales se mantienen por compatibilidad.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/familia?noExp&turnoId?` | **Solo lectura, no registra a nadie.** Por cada miembro trae: vigencia, clínica SERMED, estado P-03, adscripción actual y si se puede asignar (con la razón si no se puede). También trae las opciones de consultorio del centro, con carga, capacidad, `esDeLaFamilia`, `sugerida` y **las citas que se cancelarían por miembro y opción**; además `motivoSinOpciones` y `familiaSeparada` |
+| POST | `/familia` | `{ noExp, asignaciones: [{ pkNum, consultorioId, idAdscripcionEsperada, citasACancelar, fueSugerida }], motivoCancelacionId, origen }`. Corre en **una transacción, de todo o nada**, y devuelve un resultado por miembro |
+
+Lo que hace el `POST /familia`, dentro de esa transacción:
+
+1. Registra a los miembros que no son pacientes con el **mismo servicio que `patient-open`**, por contrato y sin escribir directo en la tabla de otro dominio. No duplica.
+2. Bloquea las adscripciones y las citas (`FOR UPDATE`).
+3. Revisa la capacidad **contando todo el lote**, por consultorio.
+4. Asigna o reasigna, cancela las citas y las deja como `PENDIENTE`.
+5. Audita un evento por miembro.
+
+Errores nuevos: `CAPACIDAD_INSUFICIENTE` (409, con `details` por consultorio), `MIEMBRO_NO_ELEGIBLE` (422) y `CENTRO_NO_PERMITIDO` si el operador no tiene `todos_centros`.
+
+Tests (escribir primero):
+- el `GET` no crea pacientes;
+- confirmar crea solo a los marcados;
+- si un miembro falla, se revierte todo;
+- hay lugar para 1 pero se piden 3;
+- un miembro con otra clínica es rechazado;
+- un miembro ya asignado solo se mueve si viene en el lote;
+- un recién nacido toma la clínica del titular;
+- dos recepciones confirman al mismo tiempo (`ADSCRIPCION_MODIFICADA` y `CITAS_MODIFICADAS`);
+- la auditoría registra un evento por miembro.
+
+#### Etapa 3 — Captura eficiente en la ficha (A + C + F) · M
+
+Pantalla "Generar ficha de consulta", al elegir un miembro:
+
+```
+Expediente 3498 · Núcleo: 3 de 4 sin consultorio     [Asignar a la familia]
+
+┌ Consultorio familiar ───────────────────────────────────────────────┐
+│ Clínica SERMED: CUAUHTÉMOC                                          │
+│ Para todos: [ Consultorio 2 · Matutino · 12/37 · Sugerido ▾ ]       │
+│ ☑ JUAN PÉREZ (titular)  Sin consultorio  → Consultorio 2            │
+│ ☑ ANA LÓPEZ             Sin consultorio  → Consultorio 2  [cambiar] │
+│ ☐ SOFÍA PÉREZ           En Consultorio 8              [Mover]       │
+│ ─ PEDRO PÉREZ           No vigente en SERMED                        │
+│ ⚠ Se cancela 1 cita: ANA · 12/11 10:00 · Consultorio 5              │
+│                          [Asignar y continuar con la ficha (2)]     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+- **Panel dentro del flujo**, no un modal encima de otro.
+- **Sugerido preseleccionado** para todos. En el caso normal es **un clic**: "Asignar y continuar".
+- **"Asignar y continuar"** guarda y **completa centro y consultorio de la ficha** con el consultorio asignado, para seguir capturando sin volver a elegir.
+- **"Cambiar" por miembro** para turno o saturación. **"Mover"** para quien ya tiene otro consultorio (D4).
+- La **vista previa** se ve en el mismo panel, sin llamadas extra, porque viene en el `GET /familia`. El motivo "Cambio de consultorio familiar" ya viene elegido.
+- **Turno (F):** si la ficha o la cita es vespertina, se sugieren primero los consultorios vespertinos.
+- **Sin opciones (C):** "Los consultorios de TAXQUEÑA no tienen médico activo" o "Todos están llenos", con un enlace a Admin si el usuario tiene permiso.
+- **Teclado:** el foco empieza en el botón principal, `Enter` confirma y `Esc` cierra el panel.
+- Al terminar se refresca la búsqueda y los badges cambian a 🟢.
+- Si el miembro elegido ya está 🟢 Vigente, el panel no aparece y la ficha se completa sola, como hoy.
+
+Tests de UI: abrir el panel no llama a nada que escriba; un clic asigna a la familia y completa la ficha; cambiar a un miembro; "Mover"; los miembros en gris no se pueden marcar; el aviso de capacidad; el mensaje cuando no hay opciones.
+
+Estimación de captura, familia de 4 sin consultorio: hoy son 4 diálogos y unos 12 clics; después, **1 panel y 1 o 2 clics**.
+
+#### Etapa 4 — Select de clínicas SERMED (B) · S
+
+- `GET /config/clinicas-sermed` lee `cat_clinicas` de la réplica por contrato.
+- Al crear una equivalencia con una clave que no existe en SERMED, responde `422 CLAVE_NO_EXISTE_SERMED`.
+- En la pantalla de admin, "Clave de clínica SERMED" pasa a ser un select con el formato `1 · CUAUHTÉMOC`. Las clínicas que ya tienen centro aparecen marcadas.
+
+#### Etapa 5 — Cierre · S
+
+- Actualizar `docs/api/modules/adscripcion.md` (familia, errores nuevos, `motivoSinOpciones`, clínicas SERMED).
+- Prueba manual (§13.4) en la base de desarrollo.
+- PR a `main` con evidencia TDD, la excepción documentada de los bloques 1 a 3 y "Evidencia documental".
+
+### 13.4 Prueba manual de cierre
+
+| # | Escenario | Resultado esperado |
+|---|---|---|
+| M1 | Familia nueva (3498), "Asignar y continuar" | Todos en el sugerido, ficha completada y badges 🟢 |
+| M2 | Abrir el panel y cerrarlo sin confirmar | No se registra ningún paciente nuevo |
+| M3 | Un hijo a otro consultorio (vespertino) | Queda separado y figura como `fueSugerida = false` |
+| M4 | Mover a un familiar que ya tenía consultorio y tiene una cita | Se cancela la cita y queda "por reagendar" |
+| M5 | Consultorio con tope 1 y una familia de 3 | Aviso de capacidad; no se graba nada |
+| M6 | Clínica sin médico (sacar el médico de prueba) | "No tienen médico activo" con el enlace |
+| M7 | Ficha en otro consultorio con la familia ya asignada | 409; la excepción exige motivo, también para el admin |
+| M8 | Recién nacido provisional | Toma la clínica del titular y va con su familia |
+| M9 | Cita en otra clínica (`WRONG_CLINIC`) | Bloqueada según la equivalencia |
+| M10 | Cargar la equivalencia con la clave `40488` | Rechazada (no existe en SERMED) |
+
+### 13.5 Siguiente PR
+
+- D: semáforo de **salud de la configuración** por centro (sin equivalencia, consultorios sin médico, carga ≥ 90%).
+- H: cuando un médico deja el consultorio, sus adscritos van a una lista "sin médico" para reasignar.
+- Redistribución por saturación: proponer mover familias completas del consultorio lleno al de menor carga, con vista previa.
+- E: asignación inicial masiva por centro. **Es una decisión de negocio** y choca con D2.
+
+### 13.6 Fase 2
+
+- Revisión nocturna de cambios de clínica en SERMED que **avisa** y no cancela.
+- Indicadores (porcentaje de adscritos, carga por consultorio, familias separadas, excepciones por mes).
+- Reporte de la bitácora `adscripcion_paciente_cambios`.
+
+### 13.7 Pendientes aparte
+
+- P4: `catalogos.0013` saltea `cat_calidadlab` si existe en `public`. `docker-compose.local.yml` rotula como producción a 50.192.41.223, que es desarrollo. Va en otro ticket.
+
+### 13.8 Hecho cuando
+
+- Tests de backend y frontend de P-03 en verde. Los errores que ya existían se documentan aparte.
+- Contrato `docs/api/modules/adscripcion.md` actualizado.
+- Auditoría verificada en la asignación por familia, las excepciones y las equivalencias.
+- Prueba manual M1 a M10 aprobada en desarrollo.
+- PR revisado con el checklist de arquitectura y la evidencia documental.

@@ -73,6 +73,8 @@ Ejemplo `POST /api/v1/adscripcion`:
 | `POST /api/v1/citas` | `idPaciente?`, `idCitaAfectada?`, `excepcionConsultorioFamiliar?` | Misma validación; con `idCitaAfectada` la cita nueva queda ligada y la afectada pasa a `REAGENDADA` (misma transacción; tiene que ser en el consultorio de la adscripción activa) |
 | Confirmar check-in por folio y por QR | `excepcionConsultorioFamiliar?` | Misma validación sobre la cita; las respuestas agregan `idPaciente` |
 
+Regla de clínica (`WRONG_CLINIC` en `POST /api/v1/citas`, `CLINICA_NO_CORRESPONDE` y filtros del portal de citas): `CD_CLINICA` de SERMED se traduce al centro de SIRES con la equivalencia activa de `adscripcion_clinica_centro`. Sin equivalencia se compara con el id del centro (comportamiento anterior a P-03). Sin dato de clínica no se bloquea. Aplica a todos los usuarios, admin incluido, sin excepción. Fuente única: `apps/recepcion/services/clinica_paciente_service.py`.
+
 `details` de `CONSULTORIO_FAMILIAR_DIFERENTE`: `estado`, `idAdscripcion`, `idConsultorioFamiliar`, `idConsultorioSolicitado`, `idCentroSermed`.
 
 ## Configuración (admin)

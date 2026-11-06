@@ -1,6 +1,7 @@
 """
 El paciente solo agenda en consultorios de su clínica (``CD_CLINICA`` de
-SERMED = id del centro del consultorio), igual que en recepción. Los
+SERMED traducido con la equivalencia de P-03; sin equivalencia, igual al id
+del centro del consultorio), igual que en recepción. Los
 listados se filtran por la clínica del paciente elegido y la reserva lo
 vuelve a validar. Sin dato de clínica no se filtra ni se bloquea.
 """
@@ -18,7 +19,7 @@ from apps.catalogos.models import CatCentroAtencion, Consultorios, Turnos
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
 from apps.portal_citas.models import PortalMiembro, PortalSesion
 from apps.portal_citas.services.token_service import issue_portal_access_token
-from apps.recepcion.models import CitaMedica, HorarioDisponible
+from apps.recepcion.models import AdscripcionClinicaCentro, CitaMedica, HorarioDisponible
 
 BUSCAR_EXPEDIENTE = "apps.recepcion.services.vigencia_service.buscar_expediente"
 
@@ -118,6 +119,24 @@ class ClinicaPacientePortalTests(APITestCase):
             [c["consultorioId"] for c in consultorios.data["consultorios"]],
             [self.mi_consultorio.id],
         )
+
+    def test_con_equivalencia_de_p03_usa_el_centro_equivalente(self):
+        # La clave de SERMED es el id de la otra clínica, pero la equivalencia
+        # la manda a la propia: manda la equivalencia.
+        AdscripcionClinicaCentro.objects.create(
+            clave_clinica_sermed=str(self.otro_centro.id), centro=self.mi_centro,
+        )
+        params = {"miembroId": str(self.miembro.id)}
+        with self._expediente(str(self.otro_centro.id)):
+            consultorios = self.client.get("/api/v1/portal/consultorios", params, **self._auth())
+            rechazo = self._reservar_en(self.otro_consultorio)
+
+        self.assertEqual(
+            [c["consultorioId"] for c in consultorios.data["consultorios"]],
+            [self.mi_consultorio.id],
+        )
+        self.assertEqual(rechazo.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(rechazo.json()["code"], "CLINICA_NO_CORRESPONDE")
 
     def test_sin_dato_de_clinica_no_se_filtra(self):
         params = {"miembroId": str(self.miembro.id)}

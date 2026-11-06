@@ -28,7 +28,7 @@ from apps.medicos.models import RelMedicoConsultorioHorario
 from apps.portal_citas.errors import PortalReservaError
 from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
-from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
+from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, regla_de_clinica
 
 CACHE_KEY = "portal:consultorios:linea"
 CACHE_TTL = 300
@@ -96,7 +96,8 @@ def listar_consultorios_en_linea(
     """
     datos = cache.get_or_set(CACHE_KEY, _consultar, CACHE_TTL)
     if centro_paciente is not None:
-        datos = [c for c in datos if centro_permitido(centro_paciente, c["centroId"])]
+        permite = regla_de_clinica(centro_paciente)
+        datos = [c for c in datos if permite(c["centroId"])]
     if centro_id is None:
         return datos
     return [c for c in datos if c["centroId"] == centro_id]
