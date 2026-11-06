@@ -2,7 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adscripcionAPI } from "@api/resources/adscripcion.api";
 import { visitsAPI } from "@api/resources/visits.api";
 import { citasAPI } from "@api/resources/citas.api";
-import type { AdscribirRequest, CreateCitaRequest, PrevisualizarAdscripcionRequest } from "@api/types";
+import type {
+  AdscribirFamiliaRequest,
+  AdscribirRequest,
+  CreateCitaRequest,
+  PrevisualizarAdscripcionRequest,
+} from "@api/types";
 import { ADSCRIPCION_KEYS } from "@features/recepcion/modules/adscripcion/queries/useAdscripcionQueries";
 
 const PATIENT_LOOKUP_KEY = "patient-lookup";
@@ -24,6 +29,18 @@ export const useAdscribir = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: AdscribirRequest) => adscripcionAPI.adscribir(data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [PATIENT_LOOKUP_KEY] });
+      void queryClient.invalidateQueries({ queryKey: ADSCRIPCION_KEYS.all });
+    },
+  });
+};
+
+/** Registra y asigna a los miembros marcados del núcleo (todo o nada). */
+export const useAdscribirFamilia = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: AdscribirFamiliaRequest) => adscripcionAPI.adscribirFamilia(data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [PATIENT_LOOKUP_KEY] });
       void queryClient.invalidateQueries({ queryKey: ADSCRIPCION_KEYS.all });

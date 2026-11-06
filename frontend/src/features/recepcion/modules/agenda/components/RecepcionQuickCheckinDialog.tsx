@@ -53,13 +53,14 @@ import { useAlcanceCentros } from "@/domains/auth-access/contracts/navigation-au
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { AdscripcionAviso, AdscripcionBadge } from "@features/recepcion/modules/adscripcion/components/AdscripcionAviso";
 import { ConflictoConsultorioAviso } from "@features/recepcion/modules/adscripcion/components/ConflictoConsultorioAviso";
-import { ReasignarAdscripcionDialog } from "@features/recepcion/modules/adscripcion/components/ReasignarAdscripcionDialog";
+import { ConsultorioFamiliarPanel } from "@features/recepcion/modules/adscripcion/components/ConsultorioFamiliarPanel";
 import { useAdscripcionPermisos } from "@features/recepcion/modules/adscripcion/queries/useAdscripcionPermisos";
 import {
   conflictoConsultorioFamiliar,
   type ConflictoConsultorioFamiliar,
 } from "@features/recepcion/modules/adscripcion/domain/adscripcionEstado";
-import type { Adscripcion } from "@api/types";
+import { centroDeLaClinica } from "@features/recepcion/modules/adscripcion/domain/familiaAdscripcion";
+import type { Adscripcion, ResultadoAsignacionFamilia } from "@api/types";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -238,10 +239,10 @@ export const RecepcionQuickCheckinDialog = ({
   const todosLosCentros = centrosData?.items ?? [];
   const centros = todosLosCentros.filter((c) => permiteCentro(c.id));
 
-  // Auto-seleccionar centro según cd_clinica del paciente seleccionado
+  // Auto-seleccionar el centro de la clínica de SERMED del paciente (por la
+  // equivalencia de P-03; sin ella, la clave contra el id del centro).
   useEffect(() => {
-    const cdClinica = selectedMember?.cdClinica;
-    const centroMatch = cdClinica ? centros.find((c) => String(c.id) === String(cdClinica)) : undefined;
+    const centroMatch = selectedMember ? centroDeLaClinica(selectedMember, centros) : undefined;
     if (!centroMatch) {
       // Sin paciente, o su clínica no es un centro propio: si solo hay un
       // centro posible, ese.
@@ -349,12 +350,14 @@ export const RecepcionQuickCheckinDialog = ({
     setMiembroElegido(false);
     setSelectedMedico(null);
     setConsultorioFiltro(null);
+    setPanelAdscripcion(false);
   }, [form, initialValues, open]);
 
   // Limpiar selección de miembro cuando cambia el expediente
   useEffect(() => {
     form.setValue("pkNum", 0);
     setMiembroElegido(false);
+    setPanelAdscripcion(false);
   }, [debouncedNoExp, form]);
 
   // Sincronizar médico con el form y pre-llenar hora con el PRIMER slot libre
@@ -381,9 +384,7 @@ export const RecepcionQuickCheckinDialog = ({
   const cdClinicaPaciente = selectedMember?.cdClinica ?? null;
   // Contra TODOS los centros: "sin centro" es una clínica que no existe en el
   // sistema, no una de otro centro.
-  const centroDelPaciente = cdClinicaPaciente
-    ? todosLosCentros.find((c) => String(c.id) === String(cdClinicaPaciente))
-    : null;
+  const centroDelPaciente = selectedMember ? centroDeLaClinica(selectedMember, todosLosCentros) ?? null : null;
   const pacienteSinCentro = !!selectedMember && !!cdClinicaPaciente && !centroDelPaciente;
   // La ficha se genera en el centro del paciente, y ese centro no es de quien registra.
   const pacienteDeOtroCentro = !!centroDelPaciente && !permiteCentro(centroDelPaciente.id);
@@ -394,6 +395,13 @@ export const RecepcionQuickCheckinDialog = ({
     setCentroId(adscripcion.idCentroAtencion);
     setConsultorioFiltro(adscripcion.idConsultorio);
     setSelectedMedico(null);
+  };
+
+  // P-03 por familia: la ficha sigue con el consultorio de la persona elegida.
+  const handleAsignadoFamilia = (resultados: ResultadoAsignacionFamilia[]) => {
+    setPanelAdscripcion(false);
+    const propio = resultados.find((r) => r.pkNum === selectedMember?.pkNum);
+    if (propio) handleAdscrito(propio.adscripcion);
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -577,11 +585,19 @@ export const RecepcionQuickCheckinDialog = ({
 
                   {/* P-03: aviso del consultorio familiar (solo medicina general) */}
                   {selectedMember && esMedicinaGeneral && !pacienteSinCentro && !pacienteDeOtroCentro ? (
-                    <AdscripcionAviso
-                      resumen={selectedMember.adscripcion}
-                      puedeAsignar={permisosAdscripcion.puedeAsignar}
-                      onAccion={() => setPanelAdscripcion(true)}
-                    />
+                    panelAdscripcion ? (
+                      <ConsultorioFamiliarPanel
+                        noExp={selectedMember.noExp}
+                        onAsignado={handleAsignadoFamilia}
+                        onCerrar={() => setPanelAdscripcion(false)}
+                      />
+                    ) : (
+                      <AdscripcionAviso
+                        resumen={selectedMember.adscripcion}
+                        puedeAsignar={permisosAdscripcion.puedeAsignar}
+                        onAccion={() => setPanelAdscripcion(true)}
+                      />
+                    )
                   ) : null}
                 </>
               )}
@@ -921,14 +937,6 @@ export const RecepcionQuickCheckinDialog = ({
         </form>
       </DialogContent>
     </Dialog>
-
-    {/* P-03: panel "Revisar y reasignar" */}
-    <ReasignarAdscripcionDialog
-      open={panelAdscripcion}
-      onOpenChange={setPanelAdscripcion}
-      member={selectedMember ?? null}
-      onAdscrito={handleAdscrito}
-    />
     </>
   );
 };

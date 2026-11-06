@@ -136,6 +136,78 @@ export interface AdscribirResponse {
   citasPorReagendar: CitaAfectada[];
 }
 
+// ── Asignación por familia (/adscripcion/familia) ───────────────────────────
+
+/** Por qué no hay consultorio que ofrecer. */
+export type MotivoSinOpciones = "SIN_CONSULTORIOS" | "SIN_MEDICO" | "TODOS_LLENOS";
+
+/** Por qué un miembro no se puede asignar con su familia. */
+export type RazonNoElegible =
+  | "NO_VIGENTE"
+  | "SIN_DATO_EXPEDIENTE"
+  | "CLINICA_SIN_CENTRO"
+  | "P03_INACTIVO"
+  | "OTRA_CLINICA";
+
+export interface MiembroFamiliaAdscripcion {
+  noExp: string;
+  /** PK_NUM de SERMED (0 = titular) o cd_provisional del recién nacido. */
+  pkNum: number;
+  idPaciente: number | null;
+  nombre: string;
+  parentesco: string | null;
+  provisional: boolean;
+  estado: EstadoAdscripcion | null;
+  elegible: boolean;
+  razon: RazonNoElegible | null;
+  /** false si ya está en su consultorio: se mueve solo si recepción lo marca. */
+  preseleccionado: boolean;
+  idAdscripcionActual: number | null;
+  idConsultorioActual: number | null;
+  adscripcionActual: Adscripcion | null;
+  /** Citas que se cancelarían con cada opción, por consultorioId. */
+  citasACancelarPorConsultorio: Record<string, CitaAdscripcion[]>;
+}
+
+/** GET /adscripcion/familia: el núcleo listo para asignar (no escribe). */
+export interface FamiliaAdscripcionResponse {
+  noExp: string;
+  idCentroAtencion: number | null;
+  miembros: MiembroFamiliaAdscripcion[];
+  opciones: OpcionConsultorio[];
+  motivoSinOpciones: MotivoSinOpciones | null;
+  /** El consultorio donde ya está la familia no se puede ofrecer. */
+  familiaSeparada: boolean;
+}
+
+export interface AsignacionFamilia {
+  pkNum: number;
+  consultorioId: number;
+  idAdscripcionEsperada: number | null;
+  citasACancelar: number[];
+  fueSugerida: boolean;
+}
+
+export interface AdscribirFamiliaRequest {
+  noExp: string;
+  asignaciones: AsignacionFamilia[];
+  motivoCancelacionId: number | null;
+  origen: OrigenAdscripcion;
+}
+
+export interface ResultadoAsignacionFamilia {
+  pkNum: number;
+  idPaciente: number;
+  sinCambios: boolean;
+  adscripcion: Adscripcion;
+  citasCanceladas: CitaAdscripcion[];
+}
+
+/** POST /adscripcion/familia: todo o nada. */
+export interface AdscribirFamiliaResponse {
+  resultados: ResultadoAsignacionFamilia[];
+}
+
 export interface HistorialAdscripcionResponse {
   items: Adscripcion[];
 }

@@ -7,6 +7,7 @@ export const ADSCRIPCION_KEYS = {
   all: ["adscripcion"] as const,
   opciones: (idPaciente: number | null, turnoId?: number) =>
     ["adscripcion", "opciones", idPaciente, turnoId ?? null] as const,
+  familia: (noExp: string, turnoId?: number) => ["adscripcion", "familia", noExp, turnoId ?? null] as const,
   citasPorReagendar: (params: CitasPorReagendarParams) =>
     ["adscripcion", "citas-por-reagendar", params.idPaciente ?? null, params.centroId ?? null] as const,
   equivalencias: ["adscripcion", "config", "clinicas"] as const,
@@ -19,6 +20,15 @@ export const useOpcionesAdscripcion = (idPaciente: number | null, turnoId?: numb
     queryKey: ADSCRIPCION_KEYS.opciones(idPaciente, turnoId),
     queryFn: () => adscripcionAPI.getOpciones(idPaciente as number, turnoId),
     enabled: idPaciente != null,
+    staleTime: 0,
+  });
+
+/** El núcleo del expediente listo para asignar en un paso; no registra a nadie. */
+export const useFamiliaAdscripcion = (noExp: string | null, turnoId?: number) =>
+  useQuery({
+    queryKey: ADSCRIPCION_KEYS.familia(noExp ?? "", turnoId),
+    queryFn: () => adscripcionAPI.getFamilia(noExp as string, turnoId),
+    enabled: !!noExp,
     staleTime: 0,
   });
 

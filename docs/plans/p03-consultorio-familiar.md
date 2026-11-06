@@ -445,7 +445,16 @@ Tests (escribir primero):
 - dos recepciones confirman al mismo tiempo (`ADSCRIPCION_MODIFICADA` y `CITAS_MODIFICADAS`);
 - la auditoría registra un evento por miembro.
 
-#### Etapa 3 — Captura eficiente en la ficha (A + C + F) · M
+#### Etapa 3 — Captura eficiente en la ficha (A + C + F) · M · ✅ hecha 2026-11-06 (F pendiente)
+
+Hecha:
+- `ConsultorioFamiliarPanel`, **dentro** de "Generar ficha" (ya no es un modal sobre modal): una sola consulta (`GET /familia`), el sugerido preseleccionado, "Cambiar" por miembro, "Mover" para quien ya tiene consultorio, miembros en gris con su razón, el aviso de familia separada, las citas con el motivo precargado y "Asignar y continuar (n)" con `autoFocus`. Al asignar, la ficha queda con el centro y el consultorio de la persona elegida.
+- El dominio puro está en `domain/familiaAdscripcion.ts`, con 10 tests unitarios. El panel tiene 8 tests de UI.
+- El diálogo de la ficha ya no compara `cdClinica` con el id del centro: usa `centroDeLaClinica` (la equivalencia de P-03; sin ella, la comparación anterior). Es el mismo error que en la Etapa 1, pero en el front.
+- `ReasignarAdscripcionDialog` sigue en el check-in por QR (`ConflictoCheckin`), donde el paciente ya existe porque tiene cita.
+
+Pendiente:
+- F (turno): el formulario de la ficha no tiene un turno del cual tomarlo. Queda para cuando la ficha o la cita lo tengan; el endpoint ya acepta `turnoId`.
 
 Pantalla "Generar ficha de consulta", al elegir un miembro:
 

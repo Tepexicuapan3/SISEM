@@ -1,6 +1,9 @@
 import apiClient from "@api/client";
 import type {
+  AdscribirFamiliaRequest,
+  AdscribirFamiliaResponse,
   AdscribirRequest,
+  FamiliaAdscripcionResponse,
   AdscribirResponse,
   AdscripcionPacienteResponse,
   AdscritosParams,
@@ -43,6 +46,20 @@ export const adscripcionAPI = {
 
   adscribir: async (data: AdscribirRequest): Promise<AdscribirResponse> => {
     const r = await apiClient.post<AdscribirResponse>("/adscripcion", data);
+    return r.data;
+  },
+
+  /** El núcleo del expediente listo para asignar; no registra a nadie. */
+  getFamilia: async (noExp: string, turnoId?: number): Promise<FamiliaAdscripcionResponse> => {
+    const r = await apiClient.get<FamiliaAdscripcionResponse>("/adscripcion/familia", {
+      params: { noExp, ...(turnoId ? { turnoId } : {}) },
+    });
+    return r.data;
+  },
+
+  /** Registra y asigna a los miembros marcados; todo o nada. */
+  adscribirFamilia: async (data: AdscribirFamiliaRequest): Promise<AdscribirFamiliaResponse> => {
+    const r = await apiClient.post<AdscribirFamiliaResponse>("/adscripcion/familia", data);
     return r.data;
   },
 
