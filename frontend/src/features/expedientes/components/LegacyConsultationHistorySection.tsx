@@ -2,7 +2,10 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, History } from "lucide-react";
 import { useLegacyConsultationsHistory } from "@features/expedientes/queries/useLegacyConsultationsHistory";
 import { MORBIDITY_LABELS } from "@features/consulta-medica/modules/atencion/domain/consultation-morbidity";
-import type { LegacyBase, LegacyConsultationItem } from "@api/types/legacy-consultation.types";
+import type {
+  LegacyBase,
+  LegacyConsultationItem,
+} from "@api/types/legacy-consultation.types";
 
 interface Props {
   noExp: string;
@@ -13,7 +16,9 @@ interface Props {
 const nombreBase = (sourceDb?: string | null) => {
   if (!sourceDb) return null;
   const resto = sourceDb.replace(/^legado_/, "");
-  return resto === "actual" ? "Base actual" : `Base ${resto.replace(/_/g, " ")}`;
+  return resto === "actual"
+    ? "Base actual"
+    : `Base ${resto.replace(/_/g, " ")}`;
 };
 
 /**
@@ -35,19 +40,27 @@ const formatFecha = (fecha: string | null) => {
 const etiquetaBase = (base: LegacyBase) => {
   const desde = base.from?.slice(0, 4);
   const hasta = base.to?.slice(0, 4);
-  const rango = desde && hasta && desde !== hasta ? `${desde}–${hasta}` : (hasta ?? desde);
+  const rango =
+    desde && hasta && desde !== hasta ? `${desde}–${hasta}` : (hasta ?? desde);
   const notas = `${base.total} ${base.total === 1 ? "nota" : "notas"}`;
   return [nombreBase(base.sourceDb), rango, notas].filter(Boolean).join(" · ");
 };
 
-const TITULO_PASE = {
-  GABINETE: "Pases de gabinete:",
-  LABORATORIO: "Pases de laboratorio:",
-  ESPECIALIDAD: "Pases a especialidad:",
-  HOSPITAL: "Pases a hospital:",
-} as const;
+/** Orden y titulo de cada tipo de pase dentro de "Pases". */
+const TIPOS_PASE = [
+  ["LABORATORIO", "Laboratorio:"],
+  ["GABINETE", "Gabinete:"],
+  ["ESPECIALIDAD", "Especialidad:"],
+  ["HOSPITAL", "Hospital:"],
+] as const;
 
-const Campo = ({ titulo, texto }: { titulo: string; texto: string | null | undefined }) =>
+const Campo = ({
+  titulo,
+  texto,
+}: {
+  titulo: string;
+  texto: string | null | undefined;
+}) =>
   texto ? (
     <p>
       <strong>{titulo}:</strong> {texto}
@@ -56,9 +69,19 @@ const Campo = ({ titulo, texto }: { titulo: string; texto: string | null | undef
 
 const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
   const [detalle, setDetalle] = useState(false);
-  const servicio = [nota.serviceName, nota.consultationType, nota.specialtyName].filter(Boolean);
-  const medicamentos = nota.medications ?? [];
-  const incapacidades = nota.sickLeaves ?? [];
+  const servicio = [
+    nota.serviceName,
+    nota.consultationType,
+    nota.specialtyName,
+  ].filter(Boolean);
+  // Lo cancelado en el legado no se muestra.
+  const medicamentos = (nota.medications ?? []).filter(
+    (medicamento) => !medicamento.cancelled,
+  );
+  const incapacidades = (nota.sickLeaves ?? []).filter(
+    (incapacidad) => !incapacidad.cancelled,
+  );
+  const pases = (nota.referralStudies ?? []).filter((pase) => !pase.cancelled);
   const conUnidad = (valor: string | null | undefined, unidad: string) =>
     valor ? `${valor} ${unidad}` : "";
   // Mismo acomodo que la pantalla de SISEM: dos columnas de etiqueta y valor.
@@ -89,7 +112,9 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
         <ul className="text-txt-body list-disc pl-5">
           {nota.diagnoses.map((cie, indice) => (
             <li key={`${nota.id}-cie-${indice}`}>
-              {cie.codigo ? <span className="font-mono">{cie.codigo}</span> : null}
+              {cie.codigo ? (
+                <span className="font-mono">{cie.codigo}</span>
+              ) : null}
               {cie.codigo && cie.descripcion ? " — " : ""}
               {cie.descripcion}
             </li>
@@ -124,7 +149,9 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
         </p>
       )}
       {nota.statusLegacy && nota.statusLegacy !== "A" && (
-        <p className="text-xs font-semibold text-txt-muted uppercase">Nota cancelada en el legado</p>
+        <p className="text-xs font-semibold text-txt-muted uppercase">
+          Nota cancelada en el legado
+        </p>
       )}
       {!detalle && (
         <>
@@ -137,8 +164,8 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
         </>
       )}
       {/* Detalle, en el orden que pidió el médico: signos vitales, SOAP,
-          diagnóstico, próxima cita y complemento; los medicamentos con sus
-          indicaciones; al final incapacidad y pases. */}
+          diagnóstico y próxima cita; el complemento (siempre visible); los
+          medicamentos con sus indicaciones; al final incapacidad y pases. */}
       {detalle && (
         <div className="space-y-1 border-t border-line-struct pt-2 text-txt-body">
           {/* Siempre, aunque vengan vacios: asi se ve que no se tomaron. */}
@@ -156,8 +183,15 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
           <Campo titulo="Plan" texto={nota.plan} />
           {diagnostico}
           {nota.nextAppointment && (
-            <Campo titulo="Próxima cita" texto={formatFecha(nota.nextAppointment)} />
+            <Campo
+              titulo="Próxima cita"
+              texto={formatFecha(nota.nextAppointment)}
+            />
           )}
+        </div>
+      )}
+      {nota.addendumLegacy && (
+        <div className="text-txt-body">
           <Campo titulo="Complemento" texto={nota.addendumLegacy} />
         </div>
       )}
@@ -166,18 +200,24 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
           <strong>Medicamentos:</strong>
           <ul className="list-disc pl-5">
             {medicamentos.map((medicamento, indice) => (
-              <li
-                key={`${nota.id}-med-${indice}`}
-                className={medicamento.cancelled ? "text-txt-muted line-through" : undefined}
-              >
+              <li key={`${nota.id}-med-${indice}`}>
                 {/* Sin principio activo en el catálogo, el nombre del medicamento. */}
                 {medicamento.activeIngredient ?? medicamento.name}
-                {medicamento.cancelled ? " — cancelado" : ""}
-                {detalle && medicamento.instructions && (
-                  <span className="block text-txt-muted">
-                    Indicaciones: {medicamento.instructions}
-                  </span>
-                )}
+                {detalle &&
+                  (medicamento.instructions ||
+                    (medicamento.quantity ?? 0) > 1) && (
+                    <span className="block text-txt-muted">
+                      {[
+                        // La cantidad solo cuando es más de una unidad.
+                        (medicamento.quantity ?? 0) > 1 &&
+                          `Cantidad: ${medicamento.quantity}`,
+                        medicamento.instructions &&
+                          `Indicaciones: ${medicamento.instructions}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  )}
               </li>
             ))}
           </ul>
@@ -185,40 +225,40 @@ const NotaLegado = ({ nota }: { nota: LegacyConsultationItem }) => {
       )}
       {detalle && incapacidades.length > 0 && (
         <p className="text-txt-body">
-          <strong>Días de incapacidad:</strong>{" "}
+          <strong>Incapacidad:</strong>{" "}
           {incapacidades.map((incapacidad, indice) => (
-            <span
-              key={`${nota.id}-inc-${indice}`}
-              className={incapacidad.cancelled ? "text-txt-muted line-through" : undefined}
-            >
+            <span key={`${nota.id}-inc-${indice}`}>
               {indice > 0 ? " · " : ""}
-              {incapacidad.days ?? "sin dato"}
-              {incapacidad.cancelled ? " (cancelada)" : ""}
+              {incapacidad.days != null
+                ? `${incapacidad.days} DÍA(S)`
+                : "sin dato"}
             </span>
           ))}
         </p>
       )}
-      {detalle &&
-        (["GABINETE", "LABORATORIO", "ESPECIALIDAD", "HOSPITAL"] as const).map((tipo) => {
-          const estudios = (nota.referralStudies ?? []).filter((estudio) => estudio.type === tipo);
-          return estudios.length > 0 ? (
-            <div key={`${nota.id}-pase-${tipo}`} className="text-txt-body">
-              <strong>{TITULO_PASE[tipo]}</strong>
-              <ul className="list-disc pl-5">
-                {estudios.map((estudio, indice) => (
-                  <li
-                    key={`${nota.id}-${tipo}-${indice}`}
-                    className={estudio.cancelled ? "text-txt-muted line-through" : undefined}
-                  >
-                    {estudio.name}
-                    {estudio.note ? ` — ${estudio.note}` : ""}
-                    {estudio.cancelled ? " — cancelado" : ""}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null;
-        })}
+      {detalle && pases.length > 0 && (
+        <div className="text-txt-body">
+          <strong>Pases:</strong>
+          <div className="space-y-1 pl-3">
+            {TIPOS_PASE.map(([tipo, titulo]) => {
+              const delTipo = pases.filter((pase) => pase.type === tipo);
+              return delTipo.length > 0 ? (
+                <div key={`${nota.id}-pase-${tipo}`}>
+                  <strong>{titulo}</strong>
+                  <ul className="list-disc pl-5">
+                    {delTipo.map((pase, indice) => (
+                      <li key={`${nota.id}-${tipo}-${indice}`}>
+                        {pase.name}
+                        {pase.note ? ` — ${pase.note}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null;
+            })}
+          </div>
+        </div>
+      )}
       <button
         type="button"
         onClick={() => setDetalle((v) => !v)}
@@ -244,8 +284,14 @@ export const LegacyConsultationHistorySection = ({ noExp, pkNum }: Props) => {
 
   const inicial = useLegacyConsultationsHistory(noExp, pkNum, abierto);
   const baseInicial = inicial.data?.base ?? null;
-  const otraBase = baseElegida && baseElegida !== baseInicial ? baseElegida : undefined;
-  const elegida = useLegacyConsultationsHistory(noExp, pkNum, abierto && Boolean(otraBase), otraBase);
+  const otraBase =
+    baseElegida && baseElegida !== baseInicial ? baseElegida : undefined;
+  const elegida = useLegacyConsultationsHistory(
+    noExp,
+    pkNum,
+    abierto && Boolean(otraBase),
+    otraBase,
+  );
 
   const data = otraBase ? elegida.data : inicial.data;
   const isLoading = inicial.isLoading || (otraBase ? elegida.isLoading : false);
@@ -297,7 +343,9 @@ export const LegacyConsultationHistorySection = ({ noExp, pkNum }: Props) => {
           )}
 
           {data?.disponible === false && (
-            <p className="text-txt-muted text-sm text-center py-6">{data.mensaje}</p>
+            <p className="text-txt-muted text-sm text-center py-6">
+              {data.mensaje}
+            </p>
           )}
 
           {data && data.disponible !== false && data.items.length === 0 && (
@@ -310,7 +358,8 @@ export const LegacyConsultationHistorySection = ({ noExp, pkNum }: Props) => {
             <>
               {data.totalCount > data.items.length && (
                 <p className="text-xs text-txt-muted italic">
-                  Mostrando las {data.items.length} más recientes de {data.totalCount} en esta base.
+                  Mostrando las {data.items.length} más recientes de{" "}
+                  {data.totalCount} en esta base.
                 </p>
               )}
               {data.items.map((nota) => (

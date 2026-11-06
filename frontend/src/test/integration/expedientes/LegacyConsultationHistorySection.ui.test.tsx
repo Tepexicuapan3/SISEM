@@ -39,9 +39,20 @@ const nota = (folio: string, date: string, sourceDb: string): LegacyConsultation
       dispensedOn: "2025-03-01",
       cancelled: false,
     },
+    {
+      name: "IBUPROFENO 400 MG",
+      activeIngredient: "IBUPROFENO",
+      quantity: 1,
+      instructions: null,
+      dispensedOn: null,
+      cancelled: true,
+    },
   ],
   addendumLegacy: "SE AGREGA INCAPACIDAD",
-  sickLeaves: [{ days: 7, cancelled: false }],
+  sickLeaves: [
+    { days: 7, cancelled: false },
+    { days: 3, cancelled: true },
+  ],
   nextAppointment: "2025-06-04",
   morbidityLegacy: "2",
   referralStudies: [
@@ -52,6 +63,7 @@ const nota = (folio: string, date: string, sourceDb: string): LegacyConsultation
       cancelled: false,
     },
     { type: "HOSPITAL", name: "SANATORIO DURANGO — ATENCIÓN EN URGENCIAS", note: null, cancelled: false },
+    { type: "LABORATORIO", name: "BIOMETRIA HEMATICA", note: null, cancelled: true },
   ],
   statusLegacy: "A",
   weightLegacy: "70",
@@ -106,9 +118,15 @@ describe("LegacyConsultationHistorySection", () => {
     expect(screen.getByText("FARINGE HIPEREMICA")).toBeInTheDocument();
     expect(screen.queryByText("TOS DE 3 DIAS")).not.toBeInTheDocument();
     expect(screen.queryByText(/RX ARTICULACION RODILLA/)).not.toBeInTheDocument();
-    expect(screen.queryByText("SE AGREGA INCAPACIDAD")).not.toBeInTheDocument();
+    // El complemento se ve aunque el detalle esté oculto.
+    expect(screen.getByText("SE AGREGA INCAPACIDAD")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Ver detalle" }));
-    expect(screen.getByText(/1 CADA 8 HORAS/)).toBeInTheDocument();
+    // Más de una unidad: la cantidad junto a las indicaciones.
+    expect(screen.getByText("Cantidad: 2 · Indicaciones: 1 CADA 8 HORAS")).toBeInTheDocument();
+    // Lo cancelado en el legado no se muestra.
+    expect(screen.queryByText(/IBUPROFENO/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/BIOMETRIA/)).not.toBeInTheDocument();
+    expect(screen.queryByText("3 DÍA(S)")).not.toBeInTheDocument();
     expect(screen.queryByText(/Surtido|Sin surtir/)).not.toBeInTheDocument();
     expect(screen.getByText("TOS DE 3 DIAS")).toBeInTheDocument();
     expect(screen.getByText("CUADRO VIRAL")).toBeInTheDocument();
@@ -116,8 +134,11 @@ describe("LegacyConsultationHistorySection", () => {
     expect(screen.getByText("Complemento:")).toBeInTheDocument();
     expect(screen.getByText(/4 de junio de 2025/)).toBeInTheDocument();
     expect(screen.getByText("FARINGE HIPEREMICA")).toBeInTheDocument();
-    expect(screen.getByText("Pases de gabinete:")).toBeInTheDocument();
-    expect(screen.getByText("Pases a hospital:")).toBeInTheDocument();
+    expect(screen.getByText("Pases:")).toBeInTheDocument();
+    expect(screen.getByText("Gabinete:")).toBeInTheDocument();
+    expect(screen.getByText("Hospital:")).toBeInTheDocument();
+    expect(screen.queryByText("Laboratorio:")).not.toBeInTheDocument();
+    expect(screen.getByText("7 DÍA(S)")).toBeInTheDocument();
     // Signos vitales sin dato: la etiqueta se ve igual.
     expect(screen.getByText("Glucosa capilar:")).toBeInTheDocument();
     expect(
@@ -126,11 +147,10 @@ describe("LegacyConsultationHistorySection", () => {
     // Orden del detalle: signos vitales primero y los pases al final.
     const texto = document.body.textContent ?? "";
     const orden = ["Estatura", "Subjetivo", "Objetivo", "Análisis", "Plan", "Diagnóstico", "Próxima cita",
-      "Complemento", "Medicamentos", "Días de incapacidad", "Pases de gabinete"];
+      "Complemento", "Medicamentos", "Incapacidad", "Pases", "Gabinete", "Hospital"];
     const posiciones = orden.map((titulo) => texto.indexOf(`${titulo}:`));
     expect(posiciones.every((posicion) => posicion >= 0)).toBe(true);
     expect([...posiciones].sort((a, b) => a - b)).toEqual(posiciones);
-    expect(screen.getByText("Días de incapacidad:")).toBeInTheDocument();
     expect(screen.getByText("70 Kg")).toBeInTheDocument();
     expect(screen.getByText("120/80 mmHg")).toBeInTheDocument();
   });
