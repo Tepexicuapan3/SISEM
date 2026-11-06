@@ -44,6 +44,11 @@ REQUIEREN_REASIGNAR = frozenset({EstadoAdscripcion.NO_COINCIDE, EstadoAdscripcio
 
 ESTATUS_CITA_ACTIVA = (EstatusCita.AGENDADA, EstatusCita.CONFIRMADA)
 
+# Por qué no hay consultorio que ofrecer (motivo_sin_opciones).
+SIN_CONSULTORIOS = "SIN_CONSULTORIOS"
+SIN_MEDICO = "SIN_MEDICO"
+TODOS_LLENOS = "TODOS_LLENOS"
+
 
 @dataclass(frozen=True)
 class EvaluacionAdscripcion:
@@ -246,6 +251,37 @@ def sugerir_consultorios(paciente, centro_id, *, turno_id=None) -> list[OpcionCo
     Consultorios en los que se puede adscribir a la persona, del más
     recomendable al menos; el primero va marcado como sugerido.
     """
+    return _opciones(centro_id, turno_id, no_exp=paciente.no_exp, excluir=paciente)
+
+
+def opciones_de_familia(no_exp, centro_id, *, turno_id=None) -> list[OpcionConsultorio]:
+    """Las mismas opciones para el núcleo entero: S0 es donde ya está alguien del expediente."""
+    from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
+
+    return _opciones(centro_id, turno_id, no_exp=normalizar_no_exp(no_exp), excluir=None)
+
+
+def motivo_sin_opciones(centro_id, *, turno_id=None) -> str:
+    """Por qué no hay consultorio que ofrecer, para decirle a recepción qué falta."""
+    familiares = consultorios_familiares(centro_id, turno_id)
+    if not familiares.exists():
+        return SIN_CONSULTORIOS
+    if not familiares.filter(Exists(medicos_activos().filter(consultorio_id=OuterRef("consultorio_id")))).exists():
+        return SIN_MEDICO
+    return TODOS_LLENOS
+
+
+def consultorios_de_la_familia(no_exp, centro_id, *, excluir=None) -> set:
+    """Consultorios donde ya está adscrito alguien del mismo expediente (S0)."""
+    qs = AdscripcionPaciente.objects.filter(
+        estatus=AdscripcionPaciente.Estatus.ACTIVA, centro_id=centro_id, paciente__no_exp=no_exp,
+    )
+    if excluir is not None:
+        qs = qs.exclude(paciente=excluir)
+    return set(qs.values_list("consultorio_id", flat=True))
+
+
+def _opciones(centro_id, turno_id, *, no_exp, excluir) -> list[OpcionConsultorio]:
     from apps.consulta_medica.models import ProvisionalPatient
 
     # Carga: adscripciones activas, sin contar recién nacidos ya vinculados a
@@ -270,13 +306,7 @@ def sugerir_consultorios(paciente, centro_id, *, turno_id=None) -> list[OpcionCo
         .filter(con_medico=True)  # S3
     )
     # S0: consultorios donde ya está adscrito alguien del mismo expediente.
-    de_la_familia = set(
-        AdscripcionPaciente.objects.filter(
-            estatus=AdscripcionPaciente.Estatus.ACTIVA, centro_id=centro_id, paciente__no_exp=paciente.no_exp,
-        )
-        .exclude(paciente=paciente)
-        .values_list("consultorio_id", flat=True)
-    )
+    de_la_familia = consultorios_de_la_familia(no_exp, centro_id, excluir=excluir)
     opciones = [
         OpcionConsultorio(
             consultorio_id=config.consultorio_id,

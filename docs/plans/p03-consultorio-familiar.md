@@ -405,7 +405,17 @@ Hecha:
   - `clinica_paciente_service.centro_permitido` traduce la clave con `adscripcion_clinica_centro`;
   - un solo lugar para la regla, que usan citas y el portal.
 
-#### Etapa 2 — Backend "asignación por familia" (A) · M
+#### Etapa 2 — Backend "asignación por familia" (A) · M · ✅ hecha 2026-11-06
+
+Hecha:
+- `GET` y `POST /adscripcion/familia` en `uses_case/adscripcion_familia_usecase.py`.
+- `_adscribir` se reutiliza sin cambios dentro de una transacción externa, así la capacidad cuenta el lote sin lógica nueva.
+- Se agregaron `opciones_de_familia`, `motivo_sin_opciones` y `consultorios_de_la_familia` en la evaluación.
+- `lookup_patient(incluir_fotos=False)`.
+- Ajuste respecto del plan: la capacidad responde con el `CONSULTORIO_LLENO` existente (con `details.pkNum`), no con un error nuevo. Un miembro de otra clínica sale como `CONSULTORIO_NO_ELEGIBLE` con `pkNum`.
+- Tests: `test_adscripcion_familia_api` (18). Rojo con 404 y después verde. Regresión: 413 tests de recepción, portal y recién nacidos, más los de administración que usan `lookup_patient`.
+
+Diseño original:
 
 Endpoints nuevos (`/api/v1/adscripcion/familia`). Los actuales se mantienen por compatibilidad.
 

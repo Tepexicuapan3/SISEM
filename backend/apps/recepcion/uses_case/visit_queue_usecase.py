@@ -140,18 +140,19 @@ def _agregar_adscripcion(titular_sermed: dict, miembros: list) -> None:
             miembro["adscripcion"] = None
 
 
-def lookup_patient(no_exp: str, historico: bool = False) -> dict:
+def lookup_patient(no_exp: str, historico: bool = False, *, incluir_fotos: bool = True) -> dict:
     """
     Busca el titular y sus derechohabientes por expediente.
 
     historico=False (default): solo retorna miembros ACTIVOS — usado en check-in.
     historico=True: retorna todos sin filtrar estatus — usado en vista de fichas.
+    incluir_fotos=False: sin fotos (P-03 por familia no las muestra).
     """
     if not no_exp:
         raise VisitDomainError("VALIDATION_ERROR", "El número de expediente es requerido.", 400)
 
     try:
-        resultado = buscar_expediente(no_exp)
+        resultado = buscar_expediente(no_exp, incluir_fotos=incluir_fotos)
     except ExpedientesNoDisponible as exc:
         # Falla tecnica de la replica, NO "expediente inexistente".
         raise VisitDomainError(

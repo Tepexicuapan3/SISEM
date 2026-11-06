@@ -46,6 +46,51 @@ La búsqueda del expediente (`GET /api/v1/visits/patient-lookup`) agrega `adscri
 | GET | `/citas-por-reagendar` | read | `?idPaciente?&centroId?` (sin filtros: las del centro de quien opera) | `{ items: CitaAfectada[] }` | 200 |
 | POST | `/citas-por-reagendar/:id/descartar` | write | `{ motivo }` | `CitaAfectada` | 200 |
 
+### Asignación por familia
+
+Es el flujo recomendado: asigna a todo el núcleo en un solo paso.
+
+| Método | Ruta | Permiso | Request | Response | Status |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/familia` | read | `?noExp&turnoId?` | `FamiliaAdscripcionResponse` (**no escribe**, no registra pacientes) | 200 |
+| POST | `/familia` | write | `AdscribirFamiliaRequest` | `{ resultados: [{ pkNum, idPaciente, sinCambios, adscripcion, citasCanceladas }] }` | 201 |
+
+**`GET /familia`**
+
+- Se busca el expediente con los miembros de baja incluidos, para mostrarlos en gris.
+- `idCentroAtencion` es el centro SERMED de la familia: el del titular o, si no lo trae, el del primer miembro que lo tenga.
+- Cada miembro trae:
+  - `estado`, `elegible` y `razon`, que puede ser `NO_VIGENTE`, `SIN_DATO_EXPEDIENTE`, `CLINICA_SIN_CENTRO`, `P03_INACTIVO` u `OTRA_CLINICA`;
+  - `preseleccionado`: es `false` si ya está en su consultorio, y solo se mueve si recepción lo marca;
+  - `idAdscripcionActual` e `idConsultorioActual`;
+  - `citasACancelarPorConsultorio`, con forma `{ "<consultorioId>": Cita[] }` y una entrada por cada opción.
+- `opciones` sigue las mismas reglas que `/opciones`. S0 es el consultorio donde ya está alguien del expediente.
+- Si no hay opciones, `motivoSinOpciones` dice por qué: `SIN_CONSULTORIOS`, `SIN_MEDICO` o `TODOS_LLENOS`.
+- `familiaSeparada` vale `true` cuando el consultorio donde ya está la familia no se puede ofrecer.
+
+Ejemplo de `POST /api/v1/adscripcion/familia`:
+
+```json
+{
+  "noExp": "3498",
+  "asignaciones": [
+    { "pkNum": 0, "consultorioId": 42, "idAdscripcionEsperada": null, "citasACancelar": [], "fueSugerida": true },
+    { "pkNum": 1, "consultorioId": 42, "idAdscripcionEsperada": 9, "citasACancelar": [501], "fueSugerida": true }
+  ],
+  "motivoCancelacionId": 31,
+  "origen": "CHECKIN"
+}
+```
+
+**`POST /familia`**, en **una sola transacción**, procesa a cada miembro en el orden recibido:
+
+1. Lo registra como paciente si todavía no lo es, por la puerta central (`paciente_de_llave`: verifica en SERMED y no duplica). Un recién nacido provisional ya existe y no se crea.
+2. Lo asigna con las mismas validaciones que `POST /adscripcion`.
+
+Cada asignación ve a las anteriores del lote, así que la **capacidad cuenta a todo el núcleo**. Si un miembro falla, **no queda nada escrito**: ni pacientes, ni adscripciones, ni citas canceladas. El error trae `details.pkNum` del miembro que falló, y el rechazo se audita como `FAIL`.
+
+El `pkNum` es el de SERMED (0 = titular) o el `cd_provisional` del recién nacido. Si un miembro se repite en `asignaciones`, responde `422 VALIDATION_ERROR`.
+
 Sugerencias (`/opciones`): primero el consultorio de la familia (mismo `no_exp`, S0), luego menor carga, luego número. La carga cuenta adscripciones `ACTIVA` y excluye provisionales ya vinculados (`sw_status = B`).
 
 Ejemplo `POST /api/v1/adscripcion`:

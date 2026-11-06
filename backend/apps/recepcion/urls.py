@@ -20,6 +20,7 @@ from apps.recepcion.views.turno_views import (
     TurnoFichaListCreateView, TurnoFichaDetailView, TurnoActualView,
 )
 from apps.recepcion.views.adscripcion_views import (
+    AdscripcionFamiliaView,
     AdscripcionHistorialView,
     AdscripcionOpcionesView,
     AdscripcionPacienteView,
@@ -68,6 +69,7 @@ urlpatterns = [
     # ── P-03 Adscripción a consultorio familiar ──────────────────────────────
     path("adscripcion",                                   AdscripcionView.as_view(),              name="adscripcion"),
     path("adscripcion/opciones",                          AdscripcionOpcionesView.as_view(),      name="adscripcion-opciones"),
+    path("adscripcion/familia",                           AdscripcionFamiliaView.as_view(),       name="adscripcion-familia"),
     path("adscripcion/previsualizar",                     AdscripcionPrevisualizarView.as_view(), name="adscripcion-previsualizar"),
     path("adscripcion/pacientes/<int:id_paciente>",       AdscripcionPacienteView.as_view(),      name="adscripcion-paciente"),
     path("adscripcion/pacientes/<int:id_paciente>/historial", AdscripcionHistorialView.as_view(),  name="adscripcion-historial"),

@@ -32,6 +32,7 @@ from apps.recepcion.services.adscripcion_evaluacion import evaluar_adscripcion, 
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case import adscripcion_config_usecase as config_usecase
 from apps.recepcion.uses_case import adscripcion_reporte_usecase as reporte_usecase
+from apps.recepcion.uses_case.adscripcion_familia_usecase import Asignacion, adscribir_familia, consultar_familia
 from apps.recepcion.uses_case.adscripcion_usecase import (
     AdscripcionError,
     Operador,
@@ -227,6 +228,33 @@ class AdscribirSerializer(serializers.Serializer):
     observaciones = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
 
 
+class FamiliaQuerySerializer(serializers.Serializer):
+    noExp = serializers.CharField(max_length=20)
+    turnoId = serializers.IntegerField(min_value=1, required=False)
+
+
+class AsignacionFamiliaSerializer(serializers.Serializer):
+    pkNum = serializers.IntegerField(min_value=0)
+    consultorioId = serializers.IntegerField(min_value=1)
+    idAdscripcionEsperada = serializers.IntegerField(min_value=1, allow_null=True, required=False, default=None)
+    citasACancelar = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False, default=list)
+    fueSugerida = serializers.BooleanField(required=False, default=False)
+
+
+class AdscribirFamiliaSerializer(serializers.Serializer):
+    noExp = serializers.CharField(max_length=20)
+    asignaciones = AsignacionFamiliaSerializer(many=True, allow_empty=False)
+    motivoCancelacionId = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    origen = serializers.ChoiceField(choices=AdscripcionPaciente.Origen.values)
+    observaciones = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+
+    def validate_asignaciones(self, value):
+        pk_nums = [a["pkNum"] for a in value]
+        if len(pk_nums) != len(set(pk_nums)):
+            raise serializers.ValidationError("Cada miembro va una sola vez.")
+        return value
+
+
 class CitasPorReagendarQuerySerializer(serializers.Serializer):
     """Sin filtros: las del centro de quien opera (bandeja de Agenda)."""
 
@@ -378,6 +406,88 @@ class AdscripcionView(_Base):
                     "citasPorReagendar": [_cita_afectada(a) for a in pendientes],
                 },
                 status=status.HTTP_200_OK if resultado.sin_cambios else status.HTTP_201_CREATED,
+            )
+        return _responder(request, accion)
+
+
+def _miembro_familia(m):
+    datos = m.datos
+    actual = m.adscripcion
+    return {
+        "noExp": datos["noExp"],
+        "pkNum": datos["pkNum"],
+        "idPaciente": datos.get("idPaciente"),
+        "nombre": datos["nombre"],
+        "parentesco": datos.get("parentesco"),
+        "provisional": bool(datos.get("provisional")),
+        "estado": m.estado,
+        "elegible": m.elegible,
+        "razon": m.razon,
+        "preseleccionado": m.preseleccionado,
+        "idAdscripcionActual": actual.id if actual else None,
+        "idConsultorioActual": actual.consultorio_id if actual else None,
+        "adscripcionActual": _adscripcion(actual),
+        "citasACancelarPorConsultorio": {
+            str(consultorio_id): [_cita(c) for c in citas] for consultorio_id, citas in m.citas_por_consultorio.items()
+        },
+    }
+
+
+class AdscripcionFamiliaView(_Base):
+    """
+    GET  /adscripcion/familia?noExp=&turnoId= → el núcleo listo para asignar (no escribe).
+    POST /adscripcion/familia → registra y asigna a los marcados; todo o nada.
+    """
+
+    def get(self, request):
+        def accion():
+            _operador(request, PERMISO_LEER)
+            datos = _validar(request, FamiliaQuerySerializer, request.query_params)
+            familia = consultar_familia(datos["noExp"], turno_id=datos.get("turnoId"))
+            return Response({
+                "noExp": familia.no_exp,
+                "idCentroAtencion": familia.centro_id,
+                "miembros": [_miembro_familia(m) for m in familia.miembros],
+                "opciones": [_opcion(o) for o in familia.opciones],
+                "motivoSinOpciones": familia.motivo_sin_opciones,
+                "familiaSeparada": familia.familia_separada,
+            })
+        return _responder(request, accion)
+
+    def post(self, request):
+        def accion():
+            operador = _operador(request, PERMISO_ESCRIBIR, escritura=True)
+            datos = _validar(request, AdscribirFamiliaSerializer, request.data)
+            resultados = adscribir_familia(
+                no_exp=datos["noExp"],
+                asignaciones=[
+                    Asignacion(
+                        pk_num=a["pkNum"],
+                        consultorio_id=a["consultorioId"],
+                        id_adscripcion_esperada=a["idAdscripcionEsperada"],
+                        citas_a_cancelar=tuple(a["citasACancelar"]),
+                        fue_sugerida=a["fueSugerida"],
+                    )
+                    for a in datos["asignaciones"]
+                ],
+                motivo_cancelacion_id=datos.get("motivoCancelacionId"),
+                origen=datos["origen"],
+                observaciones=datos.get("observaciones"),
+                operador=operador,
+                request=request,
+            )
+            return Response(
+                {"resultados": [
+                    {
+                        "pkNum": pk_num,
+                        "idPaciente": paciente.pk,
+                        "sinCambios": resultado.sin_cambios,
+                        "adscripcion": _adscripcion(resultado.adscripcion),
+                        "citasCanceladas": [_cita(c) for c in resultado.citas_canceladas],
+                    }
+                    for pk_num, paciente, resultado in resultados
+                ]},
+                status=status.HTTP_201_CREATED,
             )
         return _responder(request, accion)
 
