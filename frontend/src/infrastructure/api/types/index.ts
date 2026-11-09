@@ -1326,6 +1326,9 @@ export type {
   FollowUpAppointment,
   FollowUpSlot,
   FollowUpSlotsResponse,
+  FollowUpDay,
+  FollowUpDaysResponse,
+  FollowUpNextDayResponse,
   VisitStatusLogItem,
   VisitStatusLogResponse,
 } from "@api/types/visits.types";

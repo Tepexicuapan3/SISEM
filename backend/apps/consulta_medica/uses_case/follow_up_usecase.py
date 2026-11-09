@@ -14,6 +14,7 @@ La cita pasa por ``CitasRepository.create``: mismas reglas que recepción
 
 from datetime import datetime
 
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.medicos.models import CatMedico
@@ -29,16 +30,75 @@ def _medico_del_usuario(doctor_id):
     return CatMedico.objects.filter(id_usuario_id=doctor_id).first()
 
 
+# Libre = sin cita y sin bloqueo (ausencia, tope, etc.).
+Q_LIBRE = Q(disponible=True, cita__isnull=True)
+
+
+def _slots_agenda(medico):
+    """Horarios futuros del médico que se pueden mostrar (libres u ocupados)."""
+    return (
+        HorarioDisponible.objects
+        .filter(medico=medico)
+        .exclude(canal="LINEA")  # exclusivos del portal
+        .filter(q_slots_futuros())
+    )
+
+
+def _slots_libres(medico):
+    return _slots_agenda(medico).filter(Q_LIBRE)
+
+
+def list_follow_up_days(desde, hasta, doctor_id) -> list[dict]:
+    """Días con agenda del médico que atiende, con cuántos horarios quedan
+    libres de cuántos hay (``libres == 0``: día lleno)."""
+    medico = _medico_del_usuario(doctor_id)
+    if medico is None:
+        return []
+    dias = (
+        _slots_agenda(medico)
+        .filter(fecha__gte=desde, fecha__lte=hasta)
+        .values("fecha")
+        .annotate(libres=Count("id", filter=Q_LIBRE), total=Count("id"))
+        .order_by("fecha")
+    )
+    return [
+        {"fecha": d["fecha"].isoformat(), "libres": d["libres"], "total": d["total"]}
+        for d in dias
+    ]
+
+
+def doctor_has_agenda(doctor_id) -> bool:
+    """Si el usuario es médico con horarios generados de aquí en adelante
+    (libres u ocupados). Sin agenda no hay horarios que ofrecer."""
+    medico = _medico_del_usuario(doctor_id)
+    if medico is None:
+        return False
+    return HorarioDisponible.objects.filter(medico=medico).filter(q_slots_futuros()).exists()
+
+
+def next_follow_up_day(desde, doctor_id):
+    """Primer día desde ``desde`` (incluido) con horarios libres, o None."""
+    medico = _medico_del_usuario(doctor_id)
+    if medico is None:
+        return None
+    return (
+        _slots_libres(medico)
+        .filter(fecha__gte=desde)
+        .order_by("fecha")
+        .values_list("fecha", flat=True)
+        .first()
+    )
+
+
 def list_follow_up_slots(fecha, doctor_id) -> list[dict]:
-    """Horarios libres del médico que atiende para la fecha de seguimiento."""
+    """Horarios del médico que atiende para la fecha de seguimiento, libres y
+    ocupados (``disponible``), para que el médico vea cómo está su día."""
     medico = _medico_del_usuario(doctor_id)
     if medico is None:
         return []
     slots = (
-        HorarioDisponible.objects
-        .filter(medico=medico, fecha=fecha, disponible=True, cita__isnull=True)
-        .exclude(canal="LINEA")  # exclusivos del portal
-        .filter(q_slots_futuros())
+        _slots_agenda(medico)
+        .filter(fecha=fecha)
         .select_related("consultorio")
         .order_by("hora")
     )
@@ -48,6 +108,7 @@ def list_follow_up_slots(fecha, doctor_id) -> list[dict]:
             "hora": s.hora.strftime("%H:%M"),
             "duracionMin": s.duracion_min,
             "consultorioNombre": s.consultorio.name if s.consultorio_id else None,
+            "disponible": s.disponible and s.cita_id is None,
         }
         for s in slots
     ]

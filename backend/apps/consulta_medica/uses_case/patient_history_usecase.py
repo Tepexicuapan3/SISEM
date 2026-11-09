@@ -48,6 +48,10 @@ def _consultation_to_history_item(consultation, permissions, roles=None, medicat
         "cieCode": cie_code,
         "cieDescription": cie_description,
         "finalNote": consultation.final_note,
+        "subjective": consultation.subjective,
+        "objective": consultation.objective,
+        "assessment": consultation.assessment,
+        "plan": consultation.plan,
         "prescriptionItems": list(prescription.items or []) if prescription else [],
         # Medicamentos activos: lo que imprime la receta (el boton depende de esto).
         "prescriptionMedications": list(medications),

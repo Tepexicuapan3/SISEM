@@ -29,26 +29,27 @@ from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 PRINT_TZ = ZoneInfo("America/Mexico_City")
 
-# (etiqueta, atributo de VisitConsultation). Las secciones vacias se omiten.
+# (etiqueta, atributo de VisitConsultation, letra SOAP o None). Las secciones
+# vacias se omiten. La letra marca cada apartado del SOAP en la impresion.
 NOTE_SECTIONS = (
-    ("Padecimiento actual", "current_illness"),
-    ("Interrogatorio por aparatos y sistemas", "systems_review"),
-    ("Subjetivo", "subjective"),
-    ("Objetivo", "objective"),
-    ("Análisis", "assessment"),
-    ("Plan", "plan"),
-    ("Plan diagnóstico", "diagnostic_plan"),
-    ("Plan terapéutico", "therapeutic_plan"),
-    ("Nota final", "final_note"),
+    ("Padecimiento actual", "current_illness", None),
+    ("Interrogatorio por aparatos y sistemas", "systems_review", None),
+    ("Subjetivo", "subjective", "S"),
+    ("Objetivo", "objective", "O"),
+    ("Análisis", "assessment", "A"),
+    ("Plan", "plan", "P"),
+    ("Plan diagnóstico", "diagnostic_plan", None),
+    ("Plan terapéutico", "therapeutic_plan", None),
+    ("Nota final", "final_note", None),
 )
 
 
 def _sections(consultation):
     rows = []
-    for label, attr in NOTE_SECTIONS:
+    for label, attr, letter in NOTE_SECTIONS:
         text = (getattr(consultation, attr, None) or "").strip()
         if text:
-            rows.append({"label": label, "text": text})
+            rows.append({"label": label, "text": text, "letter": letter})
     return rows
 
 

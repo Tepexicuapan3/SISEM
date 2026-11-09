@@ -9,6 +9,7 @@ import { usePatientConsultationsHistory } from "@features/expedientes/queries/us
 import { ConsultationAddendaSection } from "@features/expedientes/components/ConsultationAddendaSection";
 import { LegacyConsultationHistorySection } from "@features/expedientes/components/LegacyConsultationHistorySection";
 import { LegacyReviewSection } from "@features/expedientes/components/LegacyReviewSection";
+import { SoapNoteView } from "@features/expedientes/components/SoapNoteView";
 
 interface ExpedienteHistorialTabProps {
   noExp: string;
@@ -144,6 +145,7 @@ export function ExpedienteHistorialTab({
                   <strong>Indicaciones:</strong> {consulta.prescriptionItems.join(", ")}
                 </p>
               ) : null}
+              <SoapNoteView note={consulta} />
               {consulta.finalNote ? (
                 <p className="text-txt-muted mt-1">
                   <strong>Nota:</strong> {consulta.finalNote}

@@ -62,6 +62,17 @@ class HistoryPrescriptionMedicationsTests(TestCase):
         self.assertEqual(item["prescriptionMedications"], [])
         self.assertEqual(item["prescriptionItems"], ["Tomar liquidos"])
 
+    def test_history_item_carries_each_soap_section(self):
+        visit = self._visit("H-6")
+        VisitConsultation.objects.filter(id_visit=visit).update(
+            subjective="Tos", objective="Faringe hiperemica", assessment="Faringitis", plan="Reposo",
+        )
+        item = self._item()
+        self.assertEqual(
+            (item["subjective"], item["objective"], item["assessment"], item["plan"]),
+            ("Tos", "Faringe hiperemica", "Faringitis", "Reposo"),
+        )
+
     def test_without_prescription(self):
         self._visit("H-4")
         self.assertEqual(self._item()["prescriptionMedications"], [])

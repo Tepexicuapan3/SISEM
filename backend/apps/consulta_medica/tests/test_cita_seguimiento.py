@@ -12,7 +12,13 @@ from django.utils import timezone
 from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import CatCentroAtencion, CatCies, Consultorios, Turnos
 from apps.consulta_medica.uses_case.consultation_usecase import close_consultation
-from apps.consulta_medica.uses_case.follow_up_usecase import MOTIVO_SEGUIMIENTO, list_follow_up_slots
+from apps.consulta_medica.uses_case.follow_up_usecase import (
+    MOTIVO_SEGUIMIENTO,
+    doctor_has_agenda,
+    list_follow_up_days,
+    list_follow_up_slots,
+    next_follow_up_day,
+)
 from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
 from apps.recepcion.models import CitaMedica, HorarioDisponible, Visit
@@ -74,12 +80,63 @@ class CitaSeguimientoTests(TestCase):
             audit_hook=_noop_audit_hook, morbidity="2", follow_up_date=self.seguimiento, **extra,
         )
 
-    def test_lista_solo_los_horarios_libres_del_medico(self):
+    def test_lista_los_horarios_del_dia_con_su_estado(self):
         HorarioDisponible.objects.filter(medico=self.medico, hora="09:40").update(canal="LINEA")
+        HorarioDisponible.objects.filter(medico=self.medico, fecha=self.seguimiento, hora="09:20").update(disponible=False)
 
-        horas = [s["hora"] for s in list_follow_up_slots(self.seguimiento, self.doctor_id)]
+        slots = list_follow_up_slots(self.seguimiento, self.doctor_id)
 
-        self.assertEqual(horas, ["09:00", "09:20"])
+        # Los del portal (LINEA) no se muestran; los ocupados sí, marcados.
+        self.assertEqual([(s["hora"], s["disponible"]) for s in slots], [("09:00", True), ("09:20", False)])
+
+    def test_dias_con_libres_y_total_del_medico(self):
+        HorarioDisponible.objects.filter(medico=self.medico, hora="09:40").update(canal="LINEA")
+        HorarioDisponible.objects.filter(medico=self.medico, hora="09:00").update(disponible=False)
+
+        dias = list_follow_up_days(self.today, self.today + datetime.timedelta(days=20), self.doctor_id)
+
+        # El horario semanal solo cae el día de seguimiento (y una semana antes/después).
+        por_fecha = {d["fecha"]: (d["libres"], d["total"]) for d in dias}
+        self.assertEqual(por_fecha[self.seguimiento.isoformat()], (1, 2))
+
+    def test_dia_lleno_aparece_con_cero_libres(self):
+        HorarioDisponible.objects.filter(medico=self.medico, fecha=self.seguimiento).update(disponible=False)
+
+        dias = list_follow_up_days(self.seguimiento, self.seguimiento, self.doctor_id)
+
+        self.assertEqual(dias, [{"fecha": self.seguimiento.isoformat(), "libres": 0, "total": 3}])
+
+    def test_dias_sin_medico_es_lista_vacia(self):
+        self.assertEqual(list_follow_up_days(self.today, self.seguimiento, doctor_id=999999), [])
+
+    def test_proximo_dia_libre_desde_una_fecha(self):
+        # El horario semanal solo cae el mismo día de la semana que el seguimiento.
+        desde = self.seguimiento - datetime.timedelta(days=2)
+        self.assertEqual(next_follow_up_day(desde, self.doctor_id), self.seguimiento)
+
+    def test_proximo_dia_salta_los_dias_llenos(self):
+        semana_antes = self.seguimiento - datetime.timedelta(days=7)
+        HorarioDisponible.objects.filter(medico=self.medico, fecha=semana_antes).update(disponible=False)
+        self.assertEqual(next_follow_up_day(semana_antes, self.doctor_id), self.seguimiento)
+
+    def test_proximo_dia_sin_agenda_es_none(self):
+        self.assertIsNone(next_follow_up_day(self.today, doctor_id=999999))
+
+    def test_tiene_agenda_solo_si_es_medico_con_horarios(self):
+        self.assertTrue(doctor_has_agenda(self.doctor_id))
+        self.assertFalse(doctor_has_agenda(999999))
+        HorarioDisponible.objects.filter(medico=self.medico).delete()
+        self.assertFalse(doctor_has_agenda(self.doctor_id))
+
+    def test_la_cita_del_medico_aparece_en_la_agenda_de_recepcion(self):
+        self._close(self._visit(), follow_up_slot_id=self._slot(self.medico).id)
+
+        items, total, _ = CitasRepository.list_paginated(
+            page=1, page_size=20, fecha_desde=self.seguimiento, fecha_hasta=self.seguimiento,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(items[0]["motivo"], MOTIVO_SEGUIMIENTO)
 
     def test_cerrar_con_horario_crea_la_cita_de_seguimiento(self):
         visit = self._visit()

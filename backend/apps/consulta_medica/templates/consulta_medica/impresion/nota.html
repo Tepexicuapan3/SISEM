@@ -7,6 +7,14 @@ table.grid th { background: #eef2f7; font-weight: bold; }
 table.data th { width: 14%; }
 h3.sec { font-size: 9pt; margin: 6pt 0 2pt 0; color: #1f4e79; text-transform: uppercase; page-break-after: avoid; }
 .text { font-size: 8.5pt; white-space: pre-wrap; margin: 0 0 4pt 0; }
+.soap { border: .5pt solid #888; border-left-width: 3pt; padding: 2pt 4pt; margin: 0 0 3pt 0; page-break-inside: avoid; }
+.soap .soap-head { font-size: 8.5pt; font-weight: bold; margin: 0 0 1pt 0; }
+.soap .text { margin: 0; }
+.soap-letter { display: inline-block; width: 11pt; height: 11pt; line-height: 11pt; text-align: center; border-radius: 2pt; color: #fff; font-size: 8pt; font-weight: bold; margin-right: 3pt; }
+.soap-s { background: #1f4e79; } .soap-row-s { border-left-color: #1f4e79; }
+.soap-o { background: #2e7d32; } .soap-row-o { border-left-color: #2e7d32; }
+.soap-a { background: #b0306f; } .soap-row-a { border-left-color: #b0306f; }
+.soap-p { background: #c94400; } .soap-row-p { border-left-color: #c94400; }
 .signature { margin-top: 18pt; width: 45%; margin-left: auto; border-top: .75pt solid #111; text-align: center; font-size: 8pt; padding-top: 2pt; page-break-inside: avoid; }
 {% endblock %}
 {% block content %}
@@ -26,8 +34,16 @@ h3.sec { font-size: 9pt; margin: 6pt 0 2pt 0; color: #1f4e79; text-transform: up
 {% endif %}
 
 {% for section in sections %}
+{% if section.letter %}
+{% ifchanged section.letter|yesno:"soap,otro" %}<h3 class="sec">Nota SOAP</h3>{% endifchanged %}
+<div class="soap soap-row-{{ section.letter|lower }}">
+  <p class="soap-head"><span class="soap-letter soap-{{ section.letter|lower }}">{{ section.letter }}</span>{{ section.label }}</p>
+  <p class="text">{{ section.text }}</p>
+</div>
+{% else %}
 <h3 class="sec">{{ section.label }}</h3>
 <p class="text">{{ section.text }}</p>
+{% endif %}
 {% endfor %}
 
 <h3 class="sec">Diagnósticos</h3>

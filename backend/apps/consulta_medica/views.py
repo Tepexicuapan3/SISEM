@@ -82,7 +82,12 @@ from .uses_case.consultation_usecase import (
     start_consultation,
     suggest_morbidity,
 )
-from .uses_case.follow_up_usecase import list_follow_up_slots
+from .uses_case.follow_up_usecase import (
+    doctor_has_agenda,
+    list_follow_up_days,
+    list_follow_up_slots,
+    next_follow_up_day,
+)
 from .uses_case.medical_leave_usecase import (
     create_medical_leave,
     get_patient_medical_leaves,
@@ -2276,6 +2281,78 @@ class VisitFollowUpSlotsView(APIView):
                 request_id=get_request_id(request),
             )
         return Response({"slots": list_follow_up_slots(fecha, actor_id)}, status=status.HTTP_200_OK)
+
+
+# Tope del rango del calendario: un mes visible con sus días de relleno.
+FOLLOW_UP_DAYS_MAX_RANGE = 62
+
+
+class VisitFollowUpDaysView(APIView):
+    """Días con horarios libres en la agenda del médico que atiende, para
+    marcar el calendario de la cita de seguimiento (P-12). Solo lectura."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        actor_id, roles, permissions = _actor_context(user)
+        try:
+            ensure_doctor_role(roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        try:
+            desde = parse_date(request.query_params.get("desde", ""))
+            hasta = parse_date(request.query_params.get("hasta", ""))
+        except ValueError:
+            desde = hasta = None
+        if desde is None or hasta is None or hasta < desde or (hasta - desde).days > FOLLOW_UP_DAYS_MAX_RANGE:
+            return error_response(
+                "VALIDATION_ERROR",
+                f"Indica desde y hasta (AAAA-MM-DD), con un rango de hasta {FOLLOW_UP_DAYS_MAX_RANGE} días.",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                request_id=get_request_id(request),
+            )
+        return Response(
+            {
+                "days": list_follow_up_days(desde, hasta, actor_id),
+                "hasAgenda": doctor_has_agenda(actor_id),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class VisitFollowUpNextDayView(APIView):
+    """Primer día con horarios libres desde una fecha, para los atajos
+    "en 1 semana", "en 1 mes", etc. de la cita de seguimiento (P-12)."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        actor_id, roles, permissions = _actor_context(user)
+        try:
+            ensure_doctor_role(roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        try:
+            desde = parse_date(request.query_params.get("desde", ""))
+        except ValueError:
+            desde = None
+        if desde is None:
+            return error_response(
+                "VALIDATION_ERROR",
+                "La fecha debe tener el formato AAAA-MM-DD.",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                request_id=get_request_id(request),
+            )
+        fecha = next_follow_up_day(desde, actor_id)
+        return Response({"fecha": fecha.isoformat() if fecha else None}, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

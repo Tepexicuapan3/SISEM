@@ -11,6 +11,11 @@ export interface PatientConsultationHistoryItem {
   cieCode: string | null;
   cieDescription: string | null;
   finalNote: string;
+  // Nota SOAP, un campo por apartado (null si no se capturó).
+  subjective: string | null;
+  objective: string | null;
+  assessment: string | null;
+  plan: string | null;
   // Indicaciones de texto libre de la receta.
   prescriptionItems: string[];
   // Medicamentos activos: lo que imprime la receta (decide el boton de imprimir).

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen } from "@/test/utils";
+import { render, screen, within } from "@/test/utils";
 import { ExpedienteHistorialTab } from "@features/expedientes/components/ExpedienteHistorialTab";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 import { usePatientConsultationsHistory } from "@features/expedientes/queries/usePatientConsultationsHistory";
@@ -38,6 +38,10 @@ const buildItem = (
   cieCode: "J02",
   cieDescription: "Faringitis aguda",
   finalNote: "ok",
+  subjective: null,
+  objective: null,
+  assessment: null,
+  plan: null,
   prescriptionItems: [],
   prescriptionMedications: [],
   restricted: false,
@@ -160,5 +164,17 @@ describe("ExpedienteHistorialTab - imprimir receta", () => {
     render(<ExpedienteHistorialTab noExp="100" />);
     expect(screen.getByText(/Paracetamol 500mg, Ibuprofeno 400mg/)).toBeInTheDocument();
     expect(screen.getByText(/Tomar liquidos/)).toBeInTheDocument();
+  });
+
+  it("muestra cada apartado del SOAP con su letra y omite los vacios", () => {
+    setup({
+      capability: true,
+      items: [buildItem(1, "cerrada", { subjective: "Dolor de garganta", plan: "Reposo" })],
+    });
+    render(<ExpedienteHistorialTab noExp="100" />);
+    const subjetivo = screen.getByRole("group", { name: /S\s*Subjetivo/ });
+    expect(within(subjetivo).getByText("Dolor de garganta")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: /P\s*Plan/ })).getByText("Reposo")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /O\s*Objetivo/ })).not.toBeInTheDocument();
   });
 });

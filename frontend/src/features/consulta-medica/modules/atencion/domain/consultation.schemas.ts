@@ -11,11 +11,13 @@ const diagnosisFieldsSchema = z.object({
     .string()
     .trim()
     .max(8, { error: "La clave CIE debe tener maximo 8 caracteres." }),
-  // his_notas ampliada (documento "Historia Clinica Unificada", 5.2): opcionales.
-  currentIllness: z.string().trim(),
-  systemsReview: z.string().trim(),
-  diagnosticPlan: z.string().trim(),
-  therapeuticPlan: z.string().trim(),
+  // Nota SOAP (his_notas: subjetivo/objetivo/analisis/plan): opcionales.
+  subjective: z.string().trim(),
+  objective: z.string().trim(),
+  assessment: z.string().trim(),
+  // Padecimiento actual e interrogatorio (his_notas ampliada, 5.2) se capturan
+  // en S; plan diagnóstico y terapéutico, en P. Ya no tienen campo propio.
+  plan: z.string().trim(),
   // Documento 5.3 (sw_morbi y fe_cita). Morbilidad obligatoria solo para
   // cerrar: la exige canCloseSelectedVisit y el backend, no el guardado de avance.
   morbidity: z.enum(["", "1", "2"]),

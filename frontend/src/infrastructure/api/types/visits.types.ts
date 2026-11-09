@@ -313,6 +313,11 @@ export type ConsultationMorbidity = "1" | "2";
 
 // his_notas ampliada (documento "Historia Clinica Unificada", 5.2) y 5.3.
 export interface ConsultationNoteFields {
+  // Nota SOAP, un campo por apartado.
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
   currentIllness?: string | null;
   systemsReview?: string | null;
   diagnosticPlan?: string | null;
@@ -388,10 +393,31 @@ export interface FollowUpSlot {
   hora: string; // HH:MM
   duracionMin: number;
   consultorioNombre: string | null;
+  /** false = ocupado (con cita o bloqueado); se muestra pero no se elige. */
+  disponible: boolean;
 }
 
 export interface FollowUpSlotsResponse {
   slots: FollowUpSlot[];
+}
+
+/** Día con horarios libres del médico (para marcar el calendario). */
+export interface FollowUpDay {
+  fecha: string; // aaaa-mm-dd
+  libres: number;
+  /** Horarios del día (libres + ocupados); libres === 0 es día lleno. */
+  total: number;
+}
+
+export interface FollowUpDaysResponse {
+  days: FollowUpDay[];
+  /** false si el usuario no es médico o no tiene horarios generados. */
+  hasAgenda: boolean;
+}
+
+/** Primer día con horarios libres desde una fecha (null si no hay). */
+export interface FollowUpNextDayResponse {
+  fecha: string | null;
 }
 
 /** Cita de seguimiento creada al cerrar la nota. */

@@ -32,6 +32,7 @@ import type {
 } from "@features/consulta-medica/modules/atencion/domain/consultation.schemas";
 import { VitalMetric } from "./VitalMetric";
 import { MorbidityAndFollowUpFields } from "./MorbidityAndFollowUpFields";
+import { SoapNoteFields } from "./SoapNoteFields";
 import { AppointmentAlertBadge, ConsultationElapsedBadge } from "./ConsultationBadges";
 import {
   formatArrivalTypeLabel,
@@ -44,16 +45,6 @@ import {
   formatStatusLabel,
   hasVitalValue,
 } from "../pages/DoctorConsultationPage.helpers";
-
-const CONSULTATION_NOTE_FIELDS = [
-  { name: "currentIllness", label: "Padecimiento actual" },
-  { name: "systemsReview", label: "Interrogatorio por aparatos y sistemas" },
-  { name: "diagnosticPlan", label: "Plan diagnostico" },
-  { name: "therapeuticPlan", label: "Plan terapeutico" },
-] as const satisfies readonly {
-  name: keyof SaveDiagnosisFormInput;
-  label: string;
-}[];
 
 interface Props {
   isDetailRoute:                     boolean;
@@ -547,25 +538,17 @@ export function ConsultationDetailDialog({
               ) : null}
             </div>
 
+            <SoapNoteFields
+              diagnosisForm={diagnosisForm}
+              disabled={!canSaveClinicalData || saveDiagnosis.isPending}
+            />
+
             <MorbidityAndFollowUpFields
               visitId={selectedVisit?.id ?? null}
               cieCode={selectedCieCode}
               diagnosisForm={diagnosisForm}
               disabled={!canSaveClinicalData || saveDiagnosis.isPending}
             />
-
-            {/* his_notas ampliada (documento "Historia Clinica Unificada", 5.2): opcionales. */}
-            {CONSULTATION_NOTE_FIELDS.map(({ name, label }) => (
-              <div key={name} className="space-y-2">
-                <Label htmlFor={name}>{label}</Label>
-                <Textarea
-                  id={name}
-                  rows={3}
-                  disabled={!canSaveClinicalData || saveDiagnosis.isPending}
-                  {...diagnosisForm.register(name)}
-                />
-              </div>
-            ))}
 
             <div className="space-y-2">
               <Label htmlFor="prescriptions">

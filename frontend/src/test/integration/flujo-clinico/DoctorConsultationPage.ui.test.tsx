@@ -145,13 +145,13 @@ const renderDoctorPage = (initialEntry = "/clinico/consultas/doctor") => {
   );
 };
 
-// his_notas ampliada: el formulario siempre envia los 4 campos (vacios si no se
+// El formulario siempre envia los 4 apartados SOAP (vacios si no se
 // capturan), mas morbilidad y seguimiento (5.3; null si no se capturan).
 const EMPTY_NOTE_FIELDS = {
-  currentIllness: "",
-  systemsReview: "",
-  diagnosticPlan: "",
-  therapeuticPlan: "",
+  subjective: "",
+  objective: "",
+  assessment: "",
+  plan: "",
   morbidity: null,
   followUpDate: null,
 };
@@ -497,13 +497,12 @@ describe("DoctorConsultationPage UI", () => {
       "Paciente estable y con manejo ambulatorio.",
     );
     await user.type(
-      screen.getByLabelText("Padecimiento actual"),
+      screen.getByLabelText(/S\s*Subjetivo/),
       "Evacuaciones liquidas de 2 dias.",
     );
-    await user.type(
-      screen.getByLabelText("Plan terapeutico"),
-      "Hidratacion oral.",
-    );
+    await user.type(screen.getByLabelText(/P\s*Plan$/), "Hidratacion oral.");
+    expect(screen.queryByLabelText("Padecimiento actual")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Plan terapeutico")).not.toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Guardar diagnostico" }),
@@ -516,13 +515,55 @@ describe("DoctorConsultationPage UI", () => {
           primaryDiagnosis: "Gastroenteritis aguda",
           finalNote: "Paciente estable y con manejo ambulatorio.",
           ...EMPTY_NOTE_FIELDS,
-          currentIllness: "Evacuaciones liquidas de 2 dias.",
-          therapeuticPlan: "Hidratacion oral.",
+          subjective: "Evacuaciones liquidas de 2 dias.",
+          plan: "Hidratacion oral.",
         },
       });
     });
 
     expect(toast.success).toHaveBeenCalledWith("Diagnostico guardado");
+  });
+
+  it("captura el SOAP en un apartado por letra y lo envia separado", async () => {
+    vi.mocked(useDoctorQueue).mockReturnValue({
+      data: {
+        items: [createVisit({ status: "en_consulta" })],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof useDoctorQueue>);
+
+    const user = userEvent.setup();
+    renderDoctorPage("/clinico/consultas/doctor/1");
+
+    await user.type(screen.getByLabelText("Diagnostico principal"), "Faringitis");
+    await user.type(screen.getByLabelText("Nota final"), "Egreso a domicilio.");
+    await user.type(screen.getByLabelText(/S\s*Subjetivo/), "Dolor de garganta");
+    await user.type(screen.getByLabelText(/O\s*Objetivo/), "Faringe hiperemica");
+    await user.type(screen.getByLabelText(/A\s*Análisis/), "Faringitis viral");
+    await user.type(screen.getByLabelText(/P\s*Plan$/), "Liquidos y reposo");
+
+    await user.click(screen.getByRole("button", { name: "Guardar diagnostico" }));
+
+    await waitFor(() => {
+      expect(saveDiagnosisMutateAsync).toHaveBeenCalledWith({
+        visitId: 1,
+        data: {
+          primaryDiagnosis: "Faringitis",
+          finalNote: "Egreso a domicilio.",
+          ...EMPTY_NOTE_FIELDS,
+          subjective: "Dolor de garganta",
+          objective: "Faringe hiperemica",
+          assessment: "Faringitis viral",
+          plan: "Liquidos y reposo",
+        },
+      });
+    });
   });
 
   it("permite buscar CIE y lo envia al guardar diagnostico", async () => {

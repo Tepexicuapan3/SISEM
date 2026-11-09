@@ -398,6 +398,7 @@ class NotaBuilderTests(_Base):
         pctx = self._build(visit)
         labels = [s["label"] for s in pctx.context["sections"]]
         self.assertEqual(labels, ["Subjetivo", "Nota final"])
+        self.assertEqual([s["letter"] for s in pctx.context["sections"]], ["S", None])
         self.assertFalse(pctx.is_cancelled)
         self.assertEqual(pctx.filename, "nota_V-N1.pdf")
         self.assertEqual(pctx.context["diagnoses"][0]["code"], "A090")
@@ -444,6 +445,16 @@ class NotaBuilderTests(_Base):
         html = render_to_string(REGISTRY["nota"].template, dict(pctx.context, watermarks=[], copy_number=1))
         for text in ("V-N7", "Juan Perez Lopez", "Dolor abdominal", "A090", "8.5in 5.5in"):
             self.assertIn(text, html)
+
+    def test_template_marks_each_soap_section_with_its_letter(self):
+        visit = self._visit("V-N8")
+        self._consultation(visit, objective="Abdomen blando", assessment="Cuadro viral", plan="Hidratacion")
+        pctx = self._build(visit)
+        html = render_to_string(REGISTRY["nota"].template, dict(pctx.context, watermarks=[], copy_number=1))
+        for letter, label in (("S", "Subjetivo"), ("O", "Objetivo"), ("A", "Análisis"), ("P", "Plan")):
+            self.assertIn(f'<span class="soap-letter soap-{letter.lower()}">{letter}</span>', html)
+            self.assertIn(label, html)
+        self.assertEqual(html.count("Nota SOAP"), 1)
 
 
 class PrintUseCaseIntegrationTests(_Base):

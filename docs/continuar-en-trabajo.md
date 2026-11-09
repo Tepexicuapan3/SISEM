@@ -1559,6 +1559,34 @@ médico elige un horario libre de SU agenda (`GET
 sirve, la nota no se cierra (`FOLLOW_UP_SLOT_UNAVAILABLE`, 409). Sin horario la
 fecha queda como indicación para recepción (como antes). Siempre con el médico
 que atiende: SIRES no tiene médico familiar (P-03).
+El calendario marca los días con horarios libres (`GET
+/visits/<id>/consultation/follow-up-days?desde=&hasta=`, rango de hasta 62
+días, responde `{"days": [{"fecha", "libres", "total"}], "hasAgenda"}`). La cita creada es una
+`CitaMedica` normal: aparece en la agenda de recepción con motivo "Cita de
+seguimiento", y la ficha se genera cuando recepción hace el check-in.
+La respuesta de días trae `hasAgenda` (false si el usuario no es médico o no
+tiene horarios generados: la pantalla lo avisa y no ofrece horarios). Los
+atajos "Próximo disponible / 1 semana / 2 semanas / 1 mes / 3 meses" usan
+`GET /visits/<id>/consultation/follow-up-next-day?desde=` (primer día con
+horarios libres desde esa fecha, `{"fecha": "aaaa-mm-dd" | null}`). Con agenda,
+el calendario solo deja elegir días con lugar y los horarios se eligen con un
+clic, agrupados en mañana, tarde y noche (`components/FollowUpScheduler.tsx`).
+`follow-up-slots` devuelve libres y ocupados (`disponible: bool`; ocupado = con
+cita o bloqueado) y `follow-up-days` trae `libres` y `total` por día. En
+pantalla: verde = disponible, rojo tachado = ocupado (no se puede elegir),
+verde sólido = elegido; en el calendario, punto verde = con lugar y rojo =
+lleno. Los horarios exclusivos del portal (`canal=LINEA`) no se muestran.
+
+**8. Nota SOAP separada.** El formulario del médico captura Subjetivo,
+Objetivo, Análisis y Plan en apartados propios (letra y color por apartado,
+`domain/consultation-soap.ts`). El historial del expediente
+(`subjective`/`objective`/`assessment`/`plan` en cada consulta) y la nota
+impresa (bloque "Nota SOAP" en `impresion/nota.html`) usan las mismas
+letras. Son opcionales; la "Nota final" sigue siendo obligatoria. Padecimiento actual e
+interrogatorio por aparatos y sistemas se capturan en S, y el plan
+diagnóstico y terapéutico en P: esos 4 campos salieron del formulario porque
+repetían el SOAP. Las columnas se conservan y la nota impresa los sigue
+mostrando en las notas anteriores que los tengan.
 
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).

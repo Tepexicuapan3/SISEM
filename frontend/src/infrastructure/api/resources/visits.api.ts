@@ -7,6 +7,8 @@ import type {
   CieSearchParams,
   CieSearchResponse,
   MorbiditySuggestionResponse,
+  FollowUpDaysResponse,
+  FollowUpNextDayResponse,
   FollowUpSlotsResponse,
   PrescriptionItem,
   SecondaryDiagnosisItem,
@@ -122,6 +124,28 @@ export const visitsAPI = {
     const response = await apiClient.get<FollowUpSlotsResponse>(
       `/visits/${visitId}/consultation/follow-up-slots`,
       { params: { fecha } },
+    );
+    return response.data;
+  },
+
+  /** P-12: días con horarios libres del médico, para marcar el calendario. */
+  getFollowUpDays: async (
+    visitId: number,
+    desde: string,
+    hasta: string,
+  ): Promise<FollowUpDaysResponse> => {
+    const response = await apiClient.get<FollowUpDaysResponse>(
+      `/visits/${visitId}/consultation/follow-up-days`,
+      { params: { desde, hasta } },
+    );
+    return response.data;
+  },
+
+  /** P-12: primer día con horarios libres desde `desde` (atajos de seguimiento). */
+  getFollowUpNextDay: async (visitId: number, desde: string): Promise<FollowUpNextDayResponse> => {
+    const response = await apiClient.get<FollowUpNextDayResponse>(
+      `/visits/${visitId}/consultation/follow-up-next-day`,
+      { params: { desde } },
     );
     return response.data;
   },
