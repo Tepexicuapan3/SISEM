@@ -248,11 +248,11 @@ function ConsultorioEditor({ rmc, medicoId, isEditable, onRefresh }: Consultorio
                     <div className="flex items-center gap-1.5 text-xs">
                       <Input type="time" value={row.horaInicio} disabled={!isEditable}
                         onChange={(e) => updateRow(i, { horaInicio: e.target.value })}
-                        className="h-8 w-[88px] text-xs" />
+                        className="h-8 w-[136px] text-xs tabular-nums" />
                       <span className="text-txt-muted">→</span>
                       <Input type="time" value={row.horaFin} disabled={!isEditable}
                         onChange={(e) => updateRow(i, { horaFin: e.target.value })}
-                        className="h-8 w-[88px] text-xs" />
+                        className="h-8 w-[136px] text-xs tabular-nums" />
                     </div>
                     <div className="flex items-center gap-1 text-xs">
                       <span className="text-txt-muted">c/</span>

@@ -540,11 +540,11 @@ export function MedicoCreateDialog({ open, onOpenChange, onCreated }: Props) {
                                   <div className="flex items-center gap-1 text-xs">
                                     <Input type="time" value={row.horaInicio}
                                       onChange={(e) => updateHorario(i, { horaInicio: e.target.value })}
-                                      className="h-8 w-[88px] text-xs" />
+                                      className="h-8 w-[136px] text-xs tabular-nums" />
                                     <span className="text-txt-muted">→</span>
                                     <Input type="time" value={row.horaFin}
                                       onChange={(e) => updateHorario(i, { horaFin: e.target.value })}
-                                      className="h-8 w-[88px] text-xs" />
+                                      className="h-8 w-[136px] text-xs tabular-nums" />
                                   </div>
                                   <div className="flex items-center gap-1 text-xs">
                                     <span className="text-txt-muted">c/</span>
