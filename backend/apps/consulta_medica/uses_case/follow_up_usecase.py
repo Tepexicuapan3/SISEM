@@ -23,7 +23,7 @@ from apps.medicos.models import CatMedico
 from apps.recepcion.models import MOTIVO_CITA_SEGUIMIENTO, CanalMovimiento, CitaMedica, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import q_slots_futuros
 from apps.recepcion.services.errors import VisitDomainError
-from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita
+from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita, notas_de_cita_de_seguimiento
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 MOTIVO_SEGUIMIENTO = MOTIVO_CITA_SEGUIMIENTO
@@ -153,7 +153,7 @@ def schedule_follow_up(visit, follow_up_date, slot_id, doctor_id) -> CitaMedica:
             consultorio_id=slot.consultorio_id,
             duracion_min=slot.duracion_min,
             motivo=MOTIVO_SEGUIMIENTO,
-            notas=f"Consulta {visit.folio}",
+            notas=notas_de_cita_de_seguimiento(visit.folio),
             created_by_id=doctor_id,
             canal=CanalMovimiento.MEDICO,
             # Sin excepción de P-03 ni reagendado: el operador no se usa.

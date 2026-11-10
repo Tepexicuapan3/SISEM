@@ -3,6 +3,8 @@ import type {
   CitaHistorialResponse,
   CitaListItem,
   ReprogramarCitaRequest,
+  SeguimientosPendientesParams,
+  SeguimientosPendientesResponse,
   CitasListParams,
   CitasListResponse,
   ConfirmarCheckinOptions,
@@ -32,6 +34,13 @@ export const citasAPI = {
 
   getById: async (id: number): Promise<CitaListItem> => {
     const r = await apiClient.get<CitaListItem>(`/citas/${id}`);
+    return r.data;
+  },
+
+  getSeguimientosPendientes: async (
+    params?: SeguimientosPendientesParams,
+  ): Promise<SeguimientosPendientesResponse> => {
+    const r = await apiClient.get<SeguimientosPendientesResponse>("/citas/seguimientos-pendientes", { params });
     return r.data;
   },
 

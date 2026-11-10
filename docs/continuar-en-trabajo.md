@@ -1714,6 +1714,27 @@ ficha).
   la ✕ (`citas/components/ReprogramarCitaDialog.tsx`: mismo médico, fecha y
   horario libre, motivo opcional).
 
+**16. Seguimientos por agendar.** Decisión 2026-11-10: el médico no tiene
+excepción de P-03 (si el paciente tiene otro consultorio familiar, el
+seguimiento vuelve al médico familiar y la cita la agenda recepción) y la
+tolerancia de no asistió queda en 60 min. Para que esas indicaciones no se
+pierdan: contrato de consulta médica
+`consulta_medica/services/seguimientos_contract.seguimientos_indicados` (notas
+cerradas, no borradas, con `fe_seguimiento` en el rango, por alcance del centro
+de la visita); recepción no lee `cns_visit_consultation`. Caso de uso
+`recepcion/uses_case/seguimientos_por_agendar_usecase.py` y
+`GET /citas/seguimientos-pendientes?fechaDesde&fechaHasta&page&pageSize`
+(permiso `recepcion:citas:read`; por omisión de hoy-30 a hoy+60, rango de hasta
+92 días; `vencido` si la fecha ya pasó). Una nota sale de la lista cuando tiene
+una cita de seguimiento no cancelada con la convención de la cita del médico:
+motivo "Cita de seguimiento" y notas "Consulta <folio>"
+(`agendar_cita_usecase.notas_de_cita_de_seguimiento`). `POST /citas` acepta
+`seguimientoVisitId`: valida la visita (alcance, mismo paciente;
+`422 SEGUIMIENTO_DE_OTRO_PACIENTE`) y arma el motivo y las notas en el backend.
+En la pestaña Próximas citas, arriba, "Seguimientos por agendar" con
+"Agendar" (`agenda/components/AgendarSeguimientoDialog.tsx`: médico disponible
+del centro, fecha y horario libre).
+
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).
 

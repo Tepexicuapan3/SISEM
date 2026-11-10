@@ -68,7 +68,36 @@ export interface CreateCitaRequest {
   servicioTipo?: VisitService;
   motivo?:       string;
   notas?:        string;
+  /** Seguimiento que indicó el médico: el backend enlaza la cita a esa consulta. */
+  seguimientoVisitId?: number;
 }
+
+/** `GET /citas/seguimientos-pendientes`: nota con fecha de seguimiento y sin cita. */
+export interface SeguimientoPendienteItem {
+  visitId:          number;
+  visitFolio:       string;
+  idPaciente:       number;
+  noExp:            string;
+  pkNum:            number;
+  pacienteNombre:   string;
+  fechaSeguimiento: string;  // YYYY-MM-DD
+  fechaConsulta:    string | null;
+  medicoUsuarioId:  number;
+  medicoNombre:     string;
+  centroId:         number | null;
+  serviceType:      VisitService;
+  /** La fecha indicada ya pasó. */
+  vencido:          boolean;
+}
+
+export interface SeguimientosPendientesParams {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  page?:       number;
+  pageSize?:   number;
+}
+
+export type SeguimientosPendientesResponse = ListResponse<SeguimientoPendienteItem>;
 
 export interface UpdateEstatusCitaRequest {
   estatus: "confirmada" | "atendida" | "cancelada" | "no_asistio";

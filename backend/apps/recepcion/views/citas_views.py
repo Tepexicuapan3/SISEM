@@ -21,7 +21,7 @@ from apps.authentication.services.authorization_service import has_capability
 from apps.authentication.services.centro_scope import alcance_de
 from apps.catalogos.models import MotivoCita
 from apps.medicos.repositories.medico_repository import MedicoRepository
-from apps.recepcion.models import CanalMovimiento, EstatusCita
+from apps.recepcion.models import CanalMovimiento, EstatusCita, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
 from apps.recepcion.services.alcance_centro import (
     alcance_para_agendar,
@@ -34,6 +34,7 @@ from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABIL
 from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita
 from apps.recepcion.uses_case.cita_historial_usecase import get_cita_historial
 from apps.recepcion.uses_case.reprogramar_cita_usecase import reprogramar_cita
+from apps.recepcion.uses_case.seguimientos_por_agendar_usecase import list_seguimientos_por_agendar
 from apps.recepcion.views.adscripcion_views import operador_de_usuario
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,9 @@ class CreateCitaSerializer(serializers.Serializer):
     # y motivo para agendar en un consultorio distinto al familiar.
     idCitaAfectada = serializers.IntegerField(min_value=1, required=False)
     excepcionConsultorioFamiliar = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    # Seguimiento que indicó el médico (Seguimientos por agendar): la cita
+    # queda enlazada a esa consulta y sale de la lista.
+    seguimientoVisitId = serializers.IntegerField(min_value=1, required=False)
 
     def validate(self, attrs):
         from apps.consulta_medica.services.paciente_entrada import resolver_paciente_en_datos
@@ -291,6 +295,16 @@ class CitasListCreateView(APIView):
             return operador_de_usuario(user)
 
         datos = s.validated_data
+        seguimiento = None
+        if datos.get("seguimientoVisitId"):
+            seguimiento = Visit.objects.filter(pk=datos["seguimientoVisitId"]).first()
+            try:
+                if seguimiento is None:
+                    raise VisitDomainError("VISIT_NOT_FOUND", "Visita no encontrada.", 404)
+                exigir_en_alcance(alcance_de(user), seguimiento.centro_id,
+                                  code="VISIT_NOT_FOUND", message="Visita no encontrada.")
+            except VisitDomainError as exc:
+                return _domain_error(request, exc)
         try:
             cita = agendar_cita(
                 no_exp=datos["noExp"],
@@ -308,6 +322,7 @@ class CitasListCreateView(APIView):
                 created_by_id=UserRepository.build_auth_user(user).get("id"),
                 operador=operador,
                 request=request,
+                seguimiento_de_visita=seguimiento,
             )
         except VisitDomainError as exc:
             # Vigencia, clínica, P-03, horario no disponible o una regla al
@@ -626,6 +641,67 @@ class ProximasCitasView(APIView):
             page_size=s.validated_data["pageSize"],
             medico_id=medico_id,
             solo_seguimiento=s.validated_data["soloSeguimiento"],
+        )
+        return Response({
+            "items":      items,
+            "page":       s.validated_data["page"],
+            "pageSize":   s.validated_data["pageSize"],
+            "total":      total,
+            "totalPages": total_pages,
+        })
+
+
+SEGUIMIENTOS_MAX_DIAS = 92
+
+
+class SeguimientosPendientesQuerySerializer(serializers.Serializer):
+    page       = serializers.IntegerField(min_value=1, required=False, default=1)
+    pageSize   = serializers.IntegerField(min_value=1, max_value=50, required=False, default=25)
+    fechaDesde = serializers.DateField(required=False, input_formats=["%Y-%m-%d"])
+    fechaHasta = serializers.DateField(required=False, input_formats=["%Y-%m-%d"])
+
+    def validate(self, attrs):
+        # Por omisión: los atrasados de hasta 30 días y los de los próximos 60.
+        hoy = timezone.localdate()
+        desde = attrs.get("fechaDesde") or hoy - timedelta(days=30)
+        hasta = attrs.get("fechaHasta") or hoy + timedelta(days=60)
+        if desde > hasta:
+            raise serializers.ValidationError({"fechaHasta": "Debe ser igual o posterior a fechaDesde."})
+        if (hasta - desde).days > SEGUIMIENTOS_MAX_DIAS:
+            raise serializers.ValidationError(
+                {"fechaHasta": f"El rango no puede ser mayor a {SEGUIMIENTOS_MAX_DIAS} días."}
+            )
+        attrs["fechaDesde"], attrs["fechaHasta"] = desde, hasta
+        return attrs
+
+
+class SeguimientosPendientesView(APIView):
+    """Seguimientos que indicó el médico y todavía no tienen cita."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, err = _auth(request)
+        if err:
+            return err
+        try:
+            _check_cap(user, CITAS_READ_CAPABILITY)
+        except VisitDomainError as exc:
+            return _domain_error(request, exc)
+
+        s = SeguimientosPendientesQuerySerializer(data=request.query_params)
+        if not s.is_valid():
+            return error_response("VALIDATION_ERROR", "Parámetros inválidos.",
+                                  status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                  details=s.errors, request_id=get_request_id(request))
+
+        items, total, total_pages = list_seguimientos_por_agendar(
+            alcance_de(user),
+            fecha_desde=s.validated_data["fechaDesde"],
+            fecha_hasta=s.validated_data["fechaHasta"],
+            page=s.validated_data["page"],
+            page_size=s.validated_data["pageSize"],
         )
         return Response({
             "items":      items,

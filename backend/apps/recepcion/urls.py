@@ -9,6 +9,7 @@ from apps.recepcion.views.citas_views import (
     CitaReprogramarView,
     MotivosCancelacionView,
     ProximasCitasView,
+    SeguimientosPendientesView,
     SlotsDisponiblesView,
 )
 from apps.recepcion.views.agenda_views import AgendaSemanalView
@@ -59,6 +60,7 @@ urlpatterns = [
     path("citas/slots",                     SlotsDisponiblesView.as_view(),  name="citas-slots"),
     path("citas/agenda",                    AgendaSemanalView.as_view(),     name="citas-agenda"),
     path("citas/proximas",                  ProximasCitasView.as_view(),     name="citas-proximas"),
+    path("citas/seguimientos-pendientes",   SeguimientosPendientesView.as_view(), name="citas-seguimientos-pendientes"),
     path("citas/<int:cita_id>",             CitaDetailView.as_view(),      name="cita-detail"),
     path("citas/<int:cita_id>/estatus",     CitaEstatusView.as_view(),     name="cita-estatus"),
     path("citas/<int:cita_id>/historial",   CitaHistorialView.as_view(),   name="cita-historial"),

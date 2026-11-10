@@ -21,7 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalogos.models.consultorios import Consultorios
-from apps.recepcion.models import CanalMovimiento, CitaMedica
+from apps.recepcion.models import MOTIVO_CITA_SEGUIMIENTO, CanalMovimiento, CitaMedica
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 from apps.recepcion.services.errors import VisitDomainError
@@ -34,6 +34,11 @@ from apps.recepcion.uses_case.adscripcion_usecase import (
 from apps.recepcion.uses_case.materializar_fichas_usecase import genera_ficha_automatica, materializar_ficha
 
 logger = logging.getLogger(__name__)
+
+
+def notas_de_cita_de_seguimiento(visit_folio: str) -> str:
+    """Notas con las que la cita de seguimiento apunta a su consulta."""
+    return f"Consulta {visit_folio}"
 
 
 def _validar_clinica_paciente(no_exp: str, pk_num: int, consultorio_id: int) -> None:
@@ -75,11 +80,23 @@ def agendar_cita(
     excepcion_consultorio_familiar=None,
     canal=CanalMovimiento.RECEPCION,
     reprogramada_de=None,
+    seguimiento_de_visita=None,
 ) -> dict:
     """
     Crea la cita o lanza VisitDomainError. ``operador`` es un Operador o una
     función que lo arma: P-03 solo lo usa para una excepción o un reagendado.
     """
+    paciente = paciente_por_llave(id_paciente=id_paciente, no_exp=no_exp, pk_num=pk_num)
+    if seguimiento_de_visita is not None:
+        # La cita de seguimiento que indicó el médico: mismo paciente, y queda
+        # enlazada a su consulta igual que la que agenda el médico.
+        if paciente is None or paciente.pk != seguimiento_de_visita.patient_id:
+            raise VisitDomainError(
+                "SEGUIMIENTO_DE_OTRO_PACIENTE", "El seguimiento es de otro paciente.", 422,
+            )
+        motivo = MOTIVO_CITA_SEGUIMIENTO
+        notas = notas_de_cita_de_seguimiento(seguimiento_de_visita.folio)
+
     # Sin vigencia no se agenda (la orden de Capital Humano se acepta en el
     # check-in, no acá).
     if not tiene_vigencia(no_exp, pk_num):
@@ -94,7 +111,7 @@ def agendar_cita(
 
     # P-03 (A1): medicina general en el consultorio familiar.
     validar_consultorio_familiar(
-        paciente=paciente_por_llave(id_paciente=id_paciente, no_exp=no_exp, pk_num=pk_num),
+        paciente=paciente,
         consultorio_id=consultorio_id,
         servicio_tipo=servicio_tipo,
         excepcion_motivo=excepcion_consultorio_familiar,

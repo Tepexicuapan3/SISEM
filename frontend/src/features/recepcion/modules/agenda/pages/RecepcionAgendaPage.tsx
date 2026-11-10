@@ -35,6 +35,7 @@ import { DisponibilidadView } from "@features/recepcion/modules/agenda/component
 import { HistorialView } from "@features/recepcion/modules/agenda/components/HistorialView";
 import { BandejaView } from "@features/recepcion/modules/agenda/components/BandejaView";
 import { ProximasCitasView } from "@features/recepcion/modules/agenda/components/ProximasCitasView";
+import { SeguimientosPorAgendar } from "@features/recepcion/modules/agenda/components/SeguimientosPorAgendar";
 import { CitasPorReagendarCard } from "@features/recepcion/modules/adscripcion/components/CitasPorReagendarCard";
 import { useAdscripcionPermisos } from "@features/recepcion/modules/adscripcion/queries/useAdscripcionPermisos";
 import { mapVisitToCheckinDefaults } from "@features/recepcion/modules/checkin/domain/checkin.mappers";
@@ -534,7 +535,10 @@ export const RecepcionAgendaPage = () => {
 
       {/* ── Vista próximas citas (incluye las de seguimiento del médico) ── */}
       {view === "proximas" ? (
-        <ProximasCitasView allMedicos={allMedicos} enabled={canReadCitas} />
+        <div className="space-y-4">
+          <SeguimientosPorAgendar enabled={canReadCitas} />
+          <ProximasCitasView allMedicos={allMedicos} enabled={canReadCitas} />
+        </div>
       ) : null}
 
       {/* ── Vista disponibilidad ────────────────────────────────────── */}
