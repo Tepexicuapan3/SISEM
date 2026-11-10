@@ -8,8 +8,10 @@ transacción. SIRES no tiene "médico familiar" asignado (P-03), así que
 siempre es con el médico que atiende. Sin horario elegido la fecha queda
 como indicación y la cita la agenda recepción (comportamiento anterior).
 
-La cita pasa por ``CitasRepository.create``: mismas reglas que recepción
-(horario futuro, ausencias, topes por día, horario no exclusivo del portal).
+La cita pasa por ``agendar_cita``, el mismo caso de uso de recepción:
+vigencia, clínica del paciente, consultorio familiar (P-03), horario futuro,
+ausencias y topes por día. El médico no tiene excepción de P-03: si el
+paciente tiene otro consultorio familiar, la cita la agenda recepción.
 """
 
 from datetime import datetime
@@ -19,8 +21,9 @@ from django.utils import timezone
 
 from apps.medicos.models import CatMedico
 from apps.recepcion.models import MOTIVO_CITA_SEGUIMIENTO, CitaMedica, HorarioDisponible
-from apps.recepcion.repositories.citas_repository import CitasRepository, q_slots_futuros
+from apps.recepcion.repositories.citas_repository import q_slots_futuros
 from apps.recepcion.services.errors import VisitDomainError
+from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 MOTIVO_SEGUIMIENTO = MOTIVO_CITA_SEGUIMIENTO
@@ -138,10 +141,12 @@ def schedule_follow_up(visit, follow_up_date, slot_id, doctor_id) -> CitaMedica:
         raise _invalido("Solo puedes agendar el seguimiento en tu propia agenda.")
 
     fecha_hora = timezone.make_aware(datetime.combine(slot.fecha, slot.hora))
+    no_exp, pk_num = llave_publica(visit)
     try:
-        cita = CitasRepository.create(
-            no_exp=llave_publica(visit)[0],
-            pk_num=llave_publica(visit)[1],
+        cita = agendar_cita(
+            no_exp=no_exp,
+            pk_num=pk_num,
+            id_paciente=visit.patient_id,
             medico_id=slot.medico_id,
             fecha_hora=fecha_hora,
             servicio_tipo=visit.service_type,
@@ -150,10 +155,20 @@ def schedule_follow_up(visit, follow_up_date, slot_id, doctor_id) -> CitaMedica:
             motivo=MOTIVO_SEGUIMIENTO,
             notas=f"Consulta {visit.folio}",
             created_by_id=doctor_id,
+            # Sin excepción de P-03 ni reagendado: el operador no se usa.
+            operador=None,
+            request=None,
         )
-    except ValueError as exc:
-        # Ocupado, ausencia, tope por día, etc.: el médico elige otro.
-        raise VisitDomainError("FOLLOW_UP_SLOT_UNAVAILABLE", str(exc), 409) from exc
+    except VisitDomainError as exc:
+        if exc.code == "CITA_NOT_AVAILABLE":
+            # Ocupado, ausencia, tope por día, etc.: el médico elige otro.
+            raise VisitDomainError("FOLLOW_UP_SLOT_UNAVAILABLE", exc.message, 409) from exc
+        mensaje = exc.message
+        if exc.code == "CONSULTORIO_FAMILIAR_DIFERENTE":
+            mensaje = f"{mensaje} La cita de seguimiento la agenda recepción."
+        raise VisitDomainError(
+            exc.code, mensaje, exc.status_code, details={"followUpSlotId": [mensaje]},
+        ) from exc
     return CitaMedica.objects.get(pk=cita["id"])
 
 

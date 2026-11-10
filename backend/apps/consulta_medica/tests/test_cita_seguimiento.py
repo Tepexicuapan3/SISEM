@@ -5,6 +5,7 @@ Si el horario ya no se puede usar, la nota no se cierra.
 """
 
 import datetime
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
@@ -24,6 +25,7 @@ from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsul
 from apps.recepcion.models import CitaMedica, HorarioDisponible, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
+from apps.recepcion.uses_case import agendar_cita_usecase
 from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
 
@@ -47,6 +49,11 @@ class CitaSeguimientoTests(TestCase):
         )
         self.doctor_id, self.medico = self._medico("doctor.seguimiento")
         _, self.otro_medico = self._medico("otro.medico")
+        # Mismas reglas que recepción (agendar_cita): vigencia y clínica salen de SERMED.
+        self.vigencia = mock.patch.object(agendar_cita_usecase, "tiene_vigencia", return_value=True)
+        self.vigencia.start()
+        mock.patch.object(agendar_cita_usecase, "centro_del_paciente", return_value=None).start()
+        self.addCleanup(mock.patch.stopall)
 
     def _medico(self, usuario):
         user = SyUsuario.objects.create(usuario=usuario, correo=f"{usuario}@example.com", clave_hash="x")
@@ -193,3 +200,27 @@ class CitaSeguimientoTests(TestCase):
             self._close(self._visit(), follow_up_slot_id=otro_dia.id)
 
         self.assertIn("followUpSlotId", raised.exception.details)
+
+    def test_sin_vigencia_no_se_agenda_y_la_nota_no_se_cierra(self):
+        visit = self._visit()
+        self.vigencia.stop()
+
+        with mock.patch.object(agendar_cita_usecase, "tiene_vigencia", return_value=False):
+            with self.assertRaises(VisitDomainError) as raised:
+                self._close(visit, follow_up_slot_id=self._slot(self.medico).id)
+
+        self.assertEqual(raised.exception.code, "PATIENT_NO_SERVICE")
+        self.assertIn("vigencia", raised.exception.details["followUpSlotId"][0])
+        visit.refresh_from_db()
+        self.assertEqual(visit.status, "en_consulta")
+        self.assertFalse(CitaMedica.objects.exists())
+
+    def test_otro_consultorio_familiar_se_rechaza_con_el_motivo(self):
+        rechazo = VisitDomainError("CONSULTORIO_FAMILIAR_DIFERENTE", "Este paciente tiene otro consultorio familiar.", 409)
+
+        with mock.patch.object(agendar_cita_usecase, "validar_consultorio_familiar", side_effect=rechazo):
+            with self.assertRaises(VisitDomainError) as raised:
+                self._close(self._visit(), follow_up_slot_id=self._slot(self.medico).id)
+
+        self.assertEqual((raised.exception.code, raised.exception.status_code), ("CONSULTORIO_FAMILIAR_DIFERENTE", 409))
+        self.assertIn("recepción", raised.exception.details["followUpSlotId"][0])

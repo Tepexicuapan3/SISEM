@@ -326,7 +326,7 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
              mock.patch.object(vista, "_check_cap"), \
              mock.patch.object(vista, "alcance_de"), \
              mock.patch.object(vista, "exigir_centro_para_agendar"), \
-             mock.patch.object(vista, "tiene_vigencia", return_value=True), \
+             mock.patch("apps.recepcion.uses_case.agendar_cita_usecase.tiene_vigencia", return_value=True), \
              mock.patch.object(vista, "_resolve_medico_or_404", return_value=(self.medico, None)), \
              mock.patch.object(vista.UserRepository, "build_auth_user", return_value={"id": 1}), \
              mock.patch.object(vista.CitasRepository, "create", side_effect=guardia):

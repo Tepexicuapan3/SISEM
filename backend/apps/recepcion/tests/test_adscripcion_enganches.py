@@ -182,7 +182,7 @@ class CitaConConsultorioDistintoTests(AdscripcionApiBase):
     def setUp(self):
         super().setUp()
         self._login("recepcion_citas", ["recepcion:citas:read", "recepcion:citas:write", LEER, ESCRIBIR])
-        clinica = mock.patch("apps.recepcion.views.citas_views.centro_del_paciente", return_value=None)
+        clinica = mock.patch("apps.recepcion.uses_case.agendar_cita_usecase.centro_del_paciente", return_value=None)
         clinica.start()
         self.addCleanup(clinica.stop)
 

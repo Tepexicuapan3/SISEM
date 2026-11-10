@@ -6,7 +6,6 @@ Sigue el mismo patrón de autorización que views.py (visitas).
 import logging
 from datetime import date, timedelta
 
-from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.response import Response
@@ -21,7 +20,7 @@ from apps.authentication.services.authorization_service import has_capability
 from apps.authentication.services.centro_scope import alcance_de
 from apps.catalogos.models import MotivoCita
 from apps.medicos.repositories.medico_repository import MedicoRepository
-from apps.recepcion.models import CitaMedica, EstatusCita
+from apps.recepcion.models import EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
 from apps.recepcion.services.alcance_centro import (
     alcance_para_agendar,
@@ -29,47 +28,15 @@ from apps.recepcion.services.alcance_centro import (
     exigir_en_alcance,
 )
 from apps.recepcion.services.errors import VisitDomainError
-from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
-from apps.recepcion.services.vigencia_service import tiene_vigencia
 from apps.recepcion.uses_case.proximas_citas_usecase import list_proximas_citas
 from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABILITY
-from apps.recepcion.uses_case.adscripcion_usecase import (
-    paciente_por_llave,
-    validar_consultorio_familiar,
-    vincular_reagenda,
-)
+from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita
 from apps.recepcion.views.adscripcion_views import operador_de_usuario
 
 logger = logging.getLogger(__name__)
 
 CITAS_READ_CAPABILITY  = "recepcion:citas:read"
 CITAS_WRITE_CAPABILITY = "recepcion:citas:write"
-
-
-# ── Validación de clínica ─────────────────────────────────────────────────────
-
-def _validar_clinica_paciente(no_exp: str, pk_num: int, consultorio_id: int) -> None:
-    """
-    Verifica que el paciente (empleado o derechohabiente) pertenece al
-    centro de atención del consultorio seleccionado.
-
-    Regla compartida con el portal: ``services/clinica_paciente_service.py``
-    (sin dato de clínica o centro sin asignar no se bloquea).
-    Lanza VisitDomainError si no coinciden.
-    """
-    from apps.catalogos.models.consultorios import Consultorios
-
-    centro_paciente = centro_del_paciente(no_exp, pk_num)
-    centro_consultorio = (
-        Consultorios.objects.filter(id=consultorio_id).values_list("id_center_id", flat=True).first()
-    )
-    if not centro_permitido(centro_paciente, centro_consultorio):
-        raise VisitDomainError(
-            "WRONG_CLINIC",
-            f"El paciente pertenece a la clínica {centro_paciente} y no puede "
-            f"agendar cita en este centro de atención.",
-            400,
-        )
 
 
 # ── Helpers de autorización ───────────────────────────────────────────────────
@@ -292,90 +259,39 @@ class CitasListCreateView(APIView):
         except VisitDomainError as exc:
             return _domain_error(request, exc)
 
-        # ── Sin vigencia no se agenda (la orden de Capital Humano se acepta
-        #    en el check-in, no acá) ──────────────────────────────────────────
-        if not tiene_vigencia(s.validated_data["noExp"], s.validated_data.get("pkNum", 0)):
-            return error_response(
-                "PATIENT_NO_SERVICE",
-                "El paciente no tiene vigencia activa; no se le puede agendar una cita.",
-                status.HTTP_409_CONFLICT,
-                request_id=get_request_id(request),
-            )
-
-        # ── Validar que el paciente pertenece al centro de la cita ───────────
-        consultorio_id = s.validated_data.get("consultorioId")
-        if consultorio_id:
-            try:
-                _validar_clinica_paciente(
-                    no_exp=s.validated_data["noExp"],
-                    pk_num=s.validated_data.get("pkNum", 0),
-                    consultorio_id=consultorio_id,
-                )
-            except VisitDomainError as exc:
-                return _domain_error(request, exc)
-
-        # ── P-03 (A1): medicina general en el consultorio familiar ────────────
-        # El operador se arma solo si hace falta (excepción o reagendado).
-        def operador():
-            return operador_de_usuario(user)
-
-        try:
-            validar_consultorio_familiar(
-                paciente=paciente_por_llave(
-                    id_paciente=s.validated_data.get("idPaciente"),
-                    no_exp=s.validated_data["noExp"],
-                    pk_num=s.validated_data.get("pkNum", 0),
-                ),
-                consultorio_id=consultorio_id,
-                servicio_tipo=s.validated_data.get("servicioTipo", "medicina_general"),
-                excepcion_motivo=s.validated_data.get("excepcionConsultorioFamiliar"),
-                operador=operador,
-                request=request,
-                recurso="cita",
-            )
-        except VisitDomainError as exc:
-            return error_response(exc.code, exc.message, exc.status_code,
-                                  details=exc.details or None, request_id=get_request_id(request))
-
         # `medicoId` es CatMedico.id; se valida su existencia (resolve solo
-        # por pk) ANTES de pasarlo a CitasRepository.create.
+        # por pk) ANTES de agendar.
         medico, err = _resolve_medico_or_404(s.validated_data["medicoId"], request)
         if err:
             return err
 
-        auth_user = UserRepository.build_auth_user(user)
-        id_cita_afectada = s.validated_data.get("idCitaAfectada")
+        # El operador se arma solo si hace falta (excepción o reagendado de P-03).
+        def operador():
+            return operador_de_usuario(user)
+
+        datos = s.validated_data
         try:
-            # P-03: si reagenda una cita afectada, se marca en la misma
-            # transacción; si no se puede, la cita nueva no queda creada.
-            with transaction.atomic():
-                cita = CitasRepository.create(
-                    no_exp=s.validated_data["noExp"],
-                    pk_num=s.validated_data.get("pkNum", 0),
-                    medico_id=medico.id,
-                    consultorio_id=s.validated_data.get("consultorioId"),
-                    fecha_hora=s.validated_data["fechaHora"],
-                    duracion_min=s.validated_data.get("duracionMin", 20),
-                    servicio_tipo=s.validated_data.get("servicioTipo", "medicina_general"),
-                    motivo=s.validated_data.get("motivo") or None,
-                    notas=s.validated_data.get("notas") or None,
-                    created_by_id=auth_user.get("id"),
-                )
-                if id_cita_afectada:
-                    vincular_reagenda(
-                        id_cita_afectada=id_cita_afectada,
-                        cita_nueva=CitaMedica.objects.get(pk=cita["id"]),
-                        operador=operador(),
-                        request=request,
-                    )
-        except ValueError as exc:
-            return error_response("CITA_NOT_AVAILABLE", str(exc),
-                                  status.HTTP_400_BAD_REQUEST,
-                                  request_id=get_request_id(request))
+            cita = agendar_cita(
+                no_exp=datos["noExp"],
+                pk_num=datos.get("pkNum", 0),
+                id_paciente=datos.get("idPaciente"),
+                medico_id=medico.id,
+                consultorio_id=datos.get("consultorioId"),
+                fecha_hora=datos["fechaHora"],
+                duracion_min=datos.get("duracionMin", 20),
+                servicio_tipo=datos.get("servicioTipo", "medicina_general"),
+                motivo=datos.get("motivo") or None,
+                notas=datos.get("notas") or None,
+                id_cita_afectada=datos.get("idCitaAfectada"),
+                excepcion_consultorio_familiar=datos.get("excepcionConsultorioFamiliar"),
+                created_by_id=UserRepository.build_auth_user(user).get("id"),
+                operador=operador,
+                request=request,
+            )
         except VisitDomainError as exc:
-            # Regla de negocio al abrir el paciente (p. ej. recien nacido
-            # pendiente de vincular) o del reagendado de P-03: su mensaje
-            # dice que hacer, no un 500.
+            # Vigencia, clínica, P-03, horario no disponible o una regla al
+            # abrir el paciente (p. ej. recién nacido pendiente de vincular):
+            # su mensaje dice qué hacer, no un 500.
             return error_response(exc.code, exc.message, exc.status_code,
                                   details=exc.details or None, request_id=get_request_id(request))
         except Exception as exc:
