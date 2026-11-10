@@ -203,6 +203,13 @@ class CheckinManualApiTests(APITestCase):
         response = self.client.get("/api/v1/citas/checkin/candidatos")
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
+    def test_candidatos_por_folio_excluye_cita_de_otro_dia(self):
+        manana = self._cita_hoy(fecha_hora=timezone.localtime(timezone.now()) + timedelta(days=1))
+
+        response = self.client.get("/api/v1/citas/checkin/candidatos", {"folio": manana.folio})
+
+        self.assertEqual(response.data["candidatos"], [])
+
     # ── confirmar-folio ──────────────────────────────────────────────────
 
     def test_confirmar_folio_crea_visita_y_marca_verificada(self):
@@ -281,6 +288,17 @@ class CheckinManualApiTests(APITestCase):
         self._a_las(cita.fecha_hora - timedelta(minutes=15))
 
         self.assertEqual(self._confirmar(cita).status_code, status.HTTP_201_CREATED)
+
+    def test_cita_de_otro_dia_no_hace_checkin(self):
+        manana = self._cita_hoy(fecha_hora=timezone.localtime(timezone.now()) + timedelta(days=1))
+
+        response = self._confirmar(manana)
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "CITA_OTRO_DIA")
+        self.assertFalse(Visit.objects.filter(appointment_id=manana.folio).exists())
+        manana.refresh_from_db()
+        self.assertIsNone(manana.verificado_en)
 
     def test_confirmar_folio_duplicado_devuelve_409(self):
         cita = self._cita_hoy()

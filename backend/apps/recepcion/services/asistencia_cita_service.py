@@ -7,6 +7,9 @@ Asistencia a una cita médica.
   le da atención con esa cita y la cita queda en no_asistio.
 - El check-in confirma la cita; al cerrar la consulta pasa a atendida.
 
+- El check-in solo se hace el día de la cita (hora local): con una cita de
+  otro día no se crea ficha.
+
 El límite se compara por minuto: con cita a las 10:00 y 30 min, a las
 9:30 todavía llega; a las 9:31 ya no.
 """
@@ -45,7 +48,18 @@ def limite_vencido(fecha_hora) -> bool:
     return _minuto_actual() > limite_checkin(fecha_hora)
 
 
+def es_cita_de_hoy(cita: CitaMedica) -> bool:
+    return timezone.localtime(cita.fecha_hora).date() == timezone.localtime(_minuto_actual()).date()
+
+
 def exigir_checkin_a_tiempo(cita: CitaMedica) -> None:
+    if not es_cita_de_hoy(cita):
+        raise VisitDomainError(
+            "CITA_OTRO_DIA",
+            f"La cita es para el {timezone.localtime(cita.fecha_hora):%d/%m/%Y a las %H:%M}. "
+            f"El check-in solo se hace el día de la cita.",
+            409,
+        )
     if limite_vencido(cita.fecha_hora):
         minutos = int(anticipacion_checkin().total_seconds() // 60)
         raise VisitDomainError(

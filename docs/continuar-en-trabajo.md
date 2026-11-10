@@ -1606,6 +1606,26 @@ falla) y `esSeguimiento` (`motivo == MOTIVO_CITA_SEGUIMIENTO`, constante en
 `recepcion/models.py`). La ficha se sigue creando el día de la cita, en el
 check-in.
 
+**10. Un solo caso de uso para agendar.** `recepcion/uses_case/agendar_cita_usecase.py`
+(`agendar_cita`) tiene las reglas que antes estaban en la vista de `POST /citas`:
+vigencia (`PATIENT_NO_SERVICE` 409), clínica del paciente (`WRONG_CLINIC` 400),
+consultorio familiar P-03, horario libre (`CITA_NOT_AVAILABLE` 400) y el
+reagendado de una cita afectada, este último en la misma transacción. La vista
+se queda con la autorización (permiso `recepcion:citas:write` y alcance por
+centro) y resuelve el médico. La cita de seguimiento del médico
+(`follow_up_usecase.schedule_follow_up`) usa el mismo caso de uso; su
+autorización es "solo en tu propia agenda". El médico no tiene excepción de
+P-03: si el paciente tiene otro consultorio familiar, la nota no se cierra con
+ese horario y el mensaje indica que la cita la agenda recepción. Los rechazos
+llegan en `details.followUpSlotId`. El contrato de `POST /citas` no cambia.
+
+**11. Check-in solo el día de la cita.** `asistencia_cita_service.exigir_checkin_a_tiempo`
+rechaza con `409 CITA_OTRO_DIA` una cita de otro día (hora local); antes solo
+bloqueaba al que llegaba tarde, y por folio se podía hacer hoy el check-in de
+una cita futura. Aplica al QR, a `confirmar-folio` y a `create_visit` con cita.
+`GET /citas/checkin/candidatos?folio=` también deja fuera las citas de otro
+día, igual que la búsqueda por nombre.
+
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).
 

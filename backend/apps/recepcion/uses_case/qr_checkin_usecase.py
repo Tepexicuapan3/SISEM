@@ -28,7 +28,7 @@ from apps.medicos.identity import display_name, usuario_id_for_medico
 from apps.portal_citas.services.comprobante_service import verificar_payload_qr
 from apps.recepcion.models import CitaMedica, EstatusCita, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
-from apps.recepcion.services.asistencia_cita_service import exigir_checkin_a_tiempo
+from apps.recepcion.services.asistencia_cita_service import es_cita_de_hoy, exigir_checkin_a_tiempo
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.vigencia_service import buscar_fila_paciente, fila_tiene_vigencia
 from apps.recepcion.uses_case.visit_queue_usecase import (
@@ -262,6 +262,9 @@ def buscar_candidatos_checkin(nombre: str | None, folio: str | None, alcance=Non
         # un folio que ya hizo check-in o está cancelado no es un
         # "candidato" válido, sin importar por qué parámetro se buscó.
         if cita.estatus in _ESTATUS_NO_CHECKIN or cita.verificado_en is not None:
+            continue
+        # Por folio también solo las de hoy, igual que la búsqueda por nombre.
+        if not es_cita_de_hoy(cita):
             continue
 
         nombre_paciente, vigente = _resolver_paciente(*llave_publica(cita))
