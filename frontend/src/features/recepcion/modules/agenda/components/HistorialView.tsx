@@ -10,6 +10,7 @@ import {
 } from "@api/types";
 import { formatCitaFechaHora } from "@features/recepcion/shared/utils/recepcion-format";
 import { ESTATUS_LABEL, ESTATUS_VARIANT } from "../pages/RecepcionAgendaPage.helpers";
+import { CitaMovimientos } from "./CitaMovimientos";
 import { HistVisitCard } from "./HistVisitCard";
 
 interface Props {
@@ -231,6 +232,7 @@ export function HistorialView({
                           </p>
                           <p className="text-[10px] font-mono text-txt-muted/70">Folio: {cita.folio}</p>
                         </div>
+                        <CitaMovimientos citaId={cita.id} />
                       </article>
                     </div>
                   );

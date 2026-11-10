@@ -1676,6 +1676,22 @@ otra pasada al cierre del turno. Tarea `recepcion.tasks.marcar_fichas_no_llegaro
 igual para las citas sin ficha (las del portal y las que no pudieron generar
 ficha).
 
+**15. Trazabilidad de las citas (Fase B).**
+- B1: la bitácora `citas_estatus_log` arranca en el alta (`from_status` vacío,
+  `to_status=agendada`, nota "Cita agendada", `changed_by_id` de quien agendó)
+  en `CitasRepository.create` (recepción y médico) y en la reserva del portal
+  (`changed_by_id` vacío). Antes empezaba en el primer cambio de estatus.
+- B2: `GET /citas/{id}/historial` (permiso `recepcion:citas:read`, alcance por
+  centro): `items` con `fromStatus`, `toStatus`, `changedById`,
+  `changedByNombre`, `changedAt` y `notes`. En el Historial de recepción cada
+  cita tiene "Ver movimientos" (`agenda/components/CitaMovimientos.tsx`); sin
+  usuario dice "Portal o automático".
+- B3: `POST /citas` y `PATCH /citas/{id}/estatus` registran en la auditoría
+  central (`AuditoriaEvento`, `recurso_tipo=cita`): `CitaAgendada` y
+  `CitaEstatusCambiado`, con actor, request, IP, navegador, resultado (también
+  los rechazos, con su código) y el antes y después (folio, estatus, fecha,
+  médico, consultorio, canal; sin datos personales del paciente).
+
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).
 

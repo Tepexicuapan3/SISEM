@@ -1351,6 +1351,8 @@ export type {
   ProximaCitaItem,
   ProximasCitasParams,
   ProximasCitasResponse,
+  CitaHistorialItem,
+  CitaHistorialResponse,
   SlotsResponse,
   FichaQRResponse,
   ConfirmarQRCheckinResponse,

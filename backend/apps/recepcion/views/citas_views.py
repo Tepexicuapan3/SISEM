@@ -16,6 +16,7 @@ from apps.authentication.services.session_service import authenticate_request
 from apps.authentication.services.csrf_service import validate_csrf
 from apps.authentication.services.errors import AuthServiceError
 from apps.authentication.repositories.user_repository import UserRepository
+from apps.authentication.services.audit_service import log_event
 from apps.authentication.services.authorization_service import has_capability
 from apps.authentication.services.centro_scope import alcance_de
 from apps.catalogos.models import MotivoCita
@@ -31,6 +32,7 @@ from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.proximas_citas_usecase import list_proximas_citas
 from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABILITY
 from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita
+from apps.recepcion.uses_case.cita_historial_usecase import get_cita_historial
 from apps.recepcion.views.adscripcion_views import operador_de_usuario
 
 logger = logging.getLogger(__name__)
@@ -60,6 +62,24 @@ def _check_cap(user, capability):
     auth = UserRepository.build_auth_user(user)
     if not has_capability(auth.get("permissions", []), capability):
         raise VisitDomainError("ROLE_NOT_ALLOWED", "No tienes permiso.", 403)
+
+
+def _auditar_cita(request, user, action, result, *, cita_id=None, error_code=None, antes=None, despues=None):
+    """Auditoría central (AuditoriaEvento): actor, request, IP, navegador y antes/después."""
+    log_event(
+        request, action, result, actor_user=user, error_code=error_code,
+        meta={"module": "recepcion", "endpoint": request.path},
+        resource_type="cita", resource_id=cita_id, datos_antes=antes, datos_despues=despues,
+    )
+
+
+def _resumen_cita(cita: dict) -> dict:
+    # Sin datos personales del paciente: la cita se identifica por folio e id.
+    return {
+        "folio": cita.get("folio"), "estatus": cita.get("estatus"), "fechaHora": cita.get("fechaHora"),
+        "medicoId": cita.get("medicoId"), "consultorioId": cita.get("consultorioId"),
+        "origenCanal": cita.get("origenCanal"),
+    }
 
 
 def _domain_error(request, exc):
@@ -292,6 +312,7 @@ class CitasListCreateView(APIView):
             # Vigencia, clínica, P-03, horario no disponible o una regla al
             # abrir el paciente (p. ej. recién nacido pendiente de vincular):
             # su mensaje dice qué hacer, no un 500.
+            _auditar_cita(request, user, "CitaAgendada", "FAILED", error_code=exc.code)
             return error_response(exc.code, exc.message, exc.status_code,
                                   details=exc.details or None, request_id=get_request_id(request))
         except Exception as exc:
@@ -300,6 +321,7 @@ class CitasListCreateView(APIView):
                                   status.HTTP_500_INTERNAL_SERVER_ERROR,
                                   request_id=get_request_id(request))
 
+        _auditar_cita(request, user, "CitaAgendada", "SUCCESS", cita_id=cita["id"], despues=_resumen_cita(cita))
         return Response(cita, status=status.HTTP_201_CREATED)
 
 
@@ -323,6 +345,25 @@ class CitaDetailView(APIView):
             return _domain_error(request, exc)
 
         return Response(_serialize_cita(cita))
+
+
+class CitaHistorialView(APIView):
+    """GET /citas/<id>/historial → bitácora NOM-024 de la cita (alta y cambios de estatus)."""
+
+    authentication_classes = []
+    permission_classes     = []
+
+    def get(self, request, cita_id):
+        user, err = _auth(request)
+        if err:
+            return err
+        try:
+            _check_cap(user, CITAS_READ_CAPABILITY)
+            cita = _cita_en_alcance(user, cita_id)
+        except VisitDomainError as exc:
+            return _domain_error(request, exc)
+
+        return Response({"items": get_cita_historial(cita)})
 
 
 class CitaEstatusView(APIView):
@@ -351,6 +392,7 @@ class CitaEstatusView(APIView):
                                   details=s.errors, request_id=get_request_id(request))
 
         auth_user = UserRepository.build_auth_user(user)
+        antes = {"estatus": cita.estatus}
         try:
             result = CitasRepository.update_estatus(
                 cita,
@@ -360,8 +402,14 @@ class CitaEstatusView(APIView):
                 changed_by_id=auth_user.get("id"),
             )
         except VisitDomainError as exc:
+            _auditar_cita(request, user, "CitaEstatusCambiado", "FAILED", cita_id=cita.id,
+                          error_code=exc.code, antes=antes)
             return _domain_error(request, exc)
 
+        _auditar_cita(
+            request, user, "CitaEstatusCambiado", "SUCCESS", cita_id=cita.id, antes=antes,
+            despues={**_resumen_cita(result), "motivoDetalle": s.validated_data.get("motivoDetalle") or None},
+        )
         return Response(result)
 
 

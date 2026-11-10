@@ -1,5 +1,6 @@
 import apiClient from "@api/client";
 import type {
+  CitaHistorialResponse,
   CitaListItem,
   CitasListParams,
   CitasListResponse,
@@ -30,6 +31,11 @@ export const citasAPI = {
 
   getById: async (id: number): Promise<CitaListItem> => {
     const r = await apiClient.get<CitaListItem>(`/citas/${id}`);
+    return r.data;
+  },
+
+  getHistorial: async (id: number): Promise<CitaHistorialResponse> => {
+    const r = await apiClient.get<CitaHistorialResponse>(`/citas/${id}/historial`);
     return r.data;
   },
 

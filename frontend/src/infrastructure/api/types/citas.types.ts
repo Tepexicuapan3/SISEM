@@ -136,6 +136,23 @@ export interface ProximasCitasParams {
 
 export type ProximasCitasResponse = ListResponse<ProximaCitaItem>;
 
+/** Movimiento de la bitácora NOM-024 de una cita (`GET /citas/{id}/historial`). */
+export interface CitaHistorialItem {
+  id:              number;
+  /** null en el alta de la cita. */
+  fromStatus:      EstatusCita | null;
+  toStatus:        EstatusCita;
+  /** null: el paciente desde el portal o una tarea automática. */
+  changedById:     number | null;
+  changedByNombre: string | null;
+  changedAt:       string;  // ISO 8601
+  notes:           string | null;
+}
+
+export interface CitaHistorialResponse {
+  items: CitaHistorialItem[];
+}
+
 export interface SlotsResponse {
   slots: SlotDisponible[];
 }

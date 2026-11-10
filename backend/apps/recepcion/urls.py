@@ -5,6 +5,7 @@ from apps.recepcion.views.citas_views import (
     CitasListCreateView,
     CitaDetailView,
     CitaEstatusView,
+    CitaHistorialView,
     MotivosCancelacionView,
     ProximasCitasView,
     SlotsDisponiblesView,
@@ -59,6 +60,7 @@ urlpatterns = [
     path("citas/proximas",                  ProximasCitasView.as_view(),     name="citas-proximas"),
     path("citas/<int:cita_id>",             CitaDetailView.as_view(),      name="cita-detail"),
     path("citas/<int:cita_id>/estatus",     CitaEstatusView.as_view(),     name="cita-estatus"),
+    path("citas/<int:cita_id>/historial",   CitaHistorialView.as_view(),   name="cita-historial"),
 
     # ── Check-in por QR (comprobante del portal) ─────────────────────────────
     path("citas/verificar-qr",              VerificarQRView.as_view(),        name="citas-verificar-qr"),

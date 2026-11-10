@@ -59,6 +59,7 @@ from apps.portal_citas.tasks import enviar_comprobante_portal_task
 from apps.recepcion.models import CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import (
     MENSAJE_HORARIO_PASADO,
+    CitasRepository,
     TopeCitaExcedido,
     es_horario_pasado,
     validar_topes_cita,
@@ -224,6 +225,8 @@ def reservar_cita(
         slot.cita = cita
         slot.disponible = False
         slot.save(update_fields=["cita", "disponible"])
+        # Bitácora NOM-024 desde el alta; sin usuario de staff (la reserva el paciente).
+        CitasRepository.registrar_alta(cita, changed_by_id=None)
 
     # Fase 5: la cita ya quedó confirmada (transacción cerrada arriba) --
     # el envío del comprobante por correo se dispara async y nunca debe

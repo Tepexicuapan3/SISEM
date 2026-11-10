@@ -19,7 +19,7 @@ from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
 from apps.portal_citas.models import PortalMiembro, PortalSesion
 from apps.portal_citas.services.token_service import issue_portal_access_token
-from apps.recepcion.models import CitaMedica, EstatusCita, HorarioDisponible
+from apps.recepcion.models import CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
@@ -157,3 +157,10 @@ class TopesPortalTests(_Base, APITestCase):
         response = self._reservar(DIA, "09:00")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_la_reserva_del_portal_queda_en_la_bitacora(self):
+        response = self._reservar(DIA, "09:00")
+
+        log = CitaEstatusLog.objects.get(cita__folio=response.json()["folio"])
+        # Sin usuario de staff: la reservó el paciente desde el portal.
+        self.assertEqual((log.from_status, log.to_status, log.changed_by_id), (None, EstatusCita.AGENDADA, None))

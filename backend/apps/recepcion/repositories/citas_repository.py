@@ -15,6 +15,9 @@ from django.utils import timezone
 from apps.catalogos.models import MotivoCita
 from apps.medicos.identity import display_name
 from apps.recepcion.models import CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
+
+# Primera entrada de la bitácora de cada cita (NOM-024): quién la agendó y cuándo.
+NOTA_CITA_AGENDADA = "Cita agendada"
 from apps.recepcion.uses_case.cita_state_machine_usecase import transition_cita_state
 
 
@@ -333,12 +336,24 @@ class CitasRepository:
             slot.disponible = False
             slot.cita = cita
             slot.save(update_fields=["disponible", "cita_id"])
+            CitasRepository.registrar_alta(cita, created_by_id)
 
         cita.refresh_from_db()
         cita = CitaMedica.objects.select_related(
             "medico__id_usuario__detalle", "consultorio"
         ).get(id=cita.id)
         return _serialize_cita(cita)
+
+    @staticmethod
+    def registrar_alta(cita: CitaMedica, changed_by_id: int | None) -> None:
+        """Alta en la bitácora NOM-024, en la misma transacción que la cita."""
+        CitaEstatusLog.objects.create(
+            cita=cita,
+            from_status=None,
+            to_status=cita.estatus,
+            changed_by_id=changed_by_id,
+            notes=NOTA_CITA_AGENDADA,
+        )
 
     @staticmethod
     def update_estatus(

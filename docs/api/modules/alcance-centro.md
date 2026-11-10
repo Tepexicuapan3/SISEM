@@ -46,7 +46,7 @@ Las filas anteriores se rellenan con el mismo criterio
 |---|---|
 | `GET /visits`, `GET /citas`, `GET /citas/proximas`, `GET /citas/checkin/candidatos` | No aparecen. `centroId` filtra dentro del alcance, no lo amplía |
 | `GET /visits/{id}/status-log`, `PATCH /visits/{id}/status` | `404 VISIT_NOT_FOUND` |
-| `GET /citas/{id}`, `PATCH /citas/{id}/estatus` | `404 CITA_NOT_FOUND` |
+| `GET /citas/{id}`, `GET /citas/{id}/historial`, `PATCH /citas/{id}/estatus` | `404 CITA_NOT_FOUND` |
 | `POST /citas/verificar-qr`, `/verificar-qr/confirmar`, `/checkin/confirmar-folio` | `404 CITA_NO_ENCONTRADA` |
 | `GET /citas/agenda`, `GET /citas/slots` | Solo horarios de consultorios del alcance (todos con `agendar_otros_centros`) |
 | `POST /visits` en consultorio de otro centro | `403 CENTRO_NO_PERMITIDO` |
