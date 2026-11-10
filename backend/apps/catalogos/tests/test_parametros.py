@@ -23,7 +23,14 @@ SEEDED = {
     "incapacidad.max_dias",
     "incapacidad.max_dias_maternidad",
     "receta.leyenda",
+    "receta.mensaje_salud",
 }
+
+LEYENDA_LEGADO = (
+    "ESTA RECETA SERÁ SURTIDA EL MISMO DÍA DE SU EMISIÓN EN CASO DE MEDICAMENTO FALTANTE "
+    "SE SURTIRAN EN LAS PRÓXIMAS 72 HORAS MEDIANTE RECETA FALTANTE "
+    "ESTE DOCUMENTO NO PIERDE VIGENCIA."
+)
 
 
 class _CacheIsolated:
@@ -46,8 +53,40 @@ class SeedMigrationTests(_CacheIsolated, TestCase):
 
     def test_seeded_values(self):
         self.assertEqual(get_param("incapacidad.max_dias"), 60)
-        self.assertEqual(get_param("receta.leyenda"), "CUIDA TU PESO, ALIMENTATE SANAMENTE")
+        self.assertEqual(get_param("receta.leyenda"), LEYENDA_LEGADO)
+        self.assertEqual(get_param("receta.mensaje_salud"), "CUIDA TU PESO, ALIMENTATE SANAMENTE")
         self.assertEqual(get_param("citas.anticipacion_checkin_min"), 30)
+
+    def test_receta_footer_allows_center_override(self):
+        for key in ("receta.leyenda", "receta.mensaje_salud"):
+            self.assertTrue(ParametroDefinicion.objects.get(key=key).allows_center_override)
+
+
+class RecetaFooterMigrationTests(_CacheIsolated, TestCase):
+    """0046: el mensaje de salud estaba sembrado como leyenda (0043)."""
+
+    def _run(self):
+        from importlib import import_module
+        from django.apps import apps as global_apps
+
+        import_module("apps.catalogos.migrations.0046_receta_leyenda_mensaje_salud").seed(global_apps, None)
+
+    def test_leyenda_editada_por_un_admin_no_se_toca(self):
+        ParametroDefinicion.objects.filter(key="receta.leyenda").update(general_value="TEXTO DEL ADMIN")
+        ParametroDefinicion.objects.filter(key="receta.mensaje_salud").delete()
+        self._run()
+        self.assertEqual(
+            ParametroDefinicion.objects.get(key="receta.leyenda").general_value, "TEXTO DEL ADMIN"
+        )
+        self.assertEqual(
+            ParametroDefinicion.objects.get(key="receta.mensaje_salud").general_value,
+            "CUIDA TU PESO, ALIMENTATE SANAMENTE",
+        )
+
+    def test_es_idempotente(self):
+        self._run()
+        self.assertEqual(ParametroDefinicion.objects.get(key="receta.leyenda").general_value, LEYENDA_LEGADO)
+        self.assertEqual(ParametroDefinicion.objects.filter(key="receta.mensaje_salud").count(), 1)
 
 
 class ParseValueTests(TestCase):

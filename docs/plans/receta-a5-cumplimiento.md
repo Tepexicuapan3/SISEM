@@ -29,7 +29,7 @@ y [receta-flujo-impresion.md](receta-flujo-impresion.md).
 | Antibióticos (retención o sello) | Acuerdo DOF 2010 | ⏸️ D7: espera a farmacia |
 | CURP | — | ⏸️ D10: decisión de privacidad |
 | Firma electrónica | NOM-024 / reforma LGS | ⏸️ D11: solo si la receta deja de ser papel |
-| Mensaje del pie al paciente | aviso del usuario: `receta.mensaje_salud` | ⚠️ D5: el parámetro existe, falta cargarlo |
+| Leyenda y mensaje del pie | aviso del usuario: `receta.leyenda`, `receta.mensaje_salud` | ✅ migración `catalogos/0046` (ver §7) |
 
 ## 2. Cambios
 
@@ -69,8 +69,8 @@ El caso de la visita 7 mostró que el genérico no dice qué hacer.
 
 ### A5 — Datos de operación (sin código)
 
-- Cargar el domicilio del centro que no lo tiene (1 de 5).
-- Cargar `receta.leyenda` y `receta.mensaje_salud` por centro (parámetros).
+- Domicilios: el único centro sin domicilio es "Centro Test" (prueba). Verificar el de TAXQUEÑA (igual a Cuauhtémoc), la CLUES de ZARAGOZA (`DFSSA08895`, 10 caracteres) y "ZACATENNCO" en TICOMAN.
+- ~~Cargar `receta.leyenda` y `receta.mensaje_salud`~~: resuelto por `catalogos/0046` (§7); por centro, solo si alguno difiere.
 - Usuarios: centro asignado; un autorizador distinto del médico que receta.
 
 ### Esperan a las áreas (no se implementan en este plan)
@@ -129,3 +129,20 @@ Cierre: 144 tests backend OK (`apps.impresion`, receta, flujo, D8, historial).
   con el visto bueno del A5 impreso.
 - Pendiente: prueba en **papel A5 real** con la impresora en "tamaño real" y
   la imagen del servidor (Liberation Sans).
+
+## 7. Catálogos y pie de la receta (2026-11-10)
+
+Revisión de solo lectura de la base de desarrollo:
+
+| Catálogo | Hallazgo |
+|---|---|
+| `cat_medicamentos` | 1 registro de prueba; **no hay comando de carga**. La lista oficial la entrega farmacia junto con D2 (clave) y D9 (grupo) |
+| Insumos, almacenes, mapeo medicamento → insumo | Vacíos: no afectan la impresión; sí la dispensación |
+| Vías de administración | 13 opciones fijas en el código: correcto |
+| Parámetros del pie | `receta.leyenda` tenía el mensaje de salud (0043) y `receta.mensaje_salud` no estaba definido |
+
+`catalogos/0046_receta_leyenda_mensaje_salud`: define `receta.mensaje_salud`
+("CUIDA TU PESO, ALIMENTATE SANAMENTE") y pone en `receta.leyenda` la nota de
+surtido de la receta del legado (texto verificado en `Receta.pdf`). La leyenda
+solo se corrige si conserva el valor sembrado; reversible. Rojo: 6 fallas en
+`test_parametros`; verde: 150 OK (parámetros, impresión, receta).
