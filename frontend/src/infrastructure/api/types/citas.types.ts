@@ -117,6 +117,25 @@ export interface SlotsParams {
 
 export type CitasListResponse = ListResponse<CitaListItem>;
 
+/** `GET /citas/proximas`: agendadas/confirmadas de los próximos días. */
+export interface ProximaCitaItem extends CitaListItem {
+  /** Desde SERMED; "" si no se pudo consultar. */
+  pacienteNombre: string;
+  /** La dejó el médico al cerrar la consulta (cita de seguimiento). */
+  esSeguimiento:  boolean;
+}
+
+export interface ProximasCitasParams {
+  fechaDesde?:      string;   // YYYY-MM-DD (default hoy)
+  fechaHasta?:      string;   // YYYY-MM-DD (default +7 días; máx. 31)
+  medicoId?:        number;
+  soloSeguimiento?: boolean;
+  page?:            number;
+  pageSize?:        number;   // máx. 50
+}
+
+export type ProximasCitasResponse = ListResponse<ProximaCitaItem>;
+
 export interface SlotsResponse {
   slots: SlotDisponible[];
 }

@@ -8,6 +8,8 @@ import type {
   CreateCitaRequest,
   FichaQRResponse,
   MotivosCancelacionResponse,
+  ProximasCitasParams,
+  ProximasCitasResponse,
   SlotsParams,
   SlotsResponse,
   UpdateEstatusCitaRequest,
@@ -17,6 +19,12 @@ export const citasAPI = {
 
   getAll: async (params?: CitasListParams): Promise<CitasListResponse> => {
     const r = await apiClient.get<CitasListResponse>("/citas", { params });
+    return r.data;
+  },
+
+  /** Próximas citas de recepción (con nombre del paciente y marca de seguimiento). */
+  getProximas: async (params?: ProximasCitasParams): Promise<ProximasCitasResponse> => {
+    const r = await apiClient.get<ProximasCitasResponse>("/citas/proximas", { params });
     return r.data;
   },
 

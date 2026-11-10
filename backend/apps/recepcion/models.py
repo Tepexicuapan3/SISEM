@@ -30,6 +30,12 @@ class EstatusCita(models.TextChoices):
     NO_ASISTIO = "no_asistio", "No asistió"
 
 
+# Motivo con el que se guarda la cita que deja el médico al cerrar la consulta
+# (consulta_medica/uses_case/follow_up_usecase.py). Recepción la marca como
+# "Seguimiento" en Próximas citas.
+MOTIVO_CITA_SEGUIMIENTO = "Cita de seguimiento"
+
+
 class CitaMedica(models.Model):
     """
     Cita médica agendada.

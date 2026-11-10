@@ -4,9 +4,10 @@ Sigue el mismo patrón de autorización que views.py (visitas).
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -30,6 +31,7 @@ from apps.recepcion.services.alcance_centro import (
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 from apps.recepcion.services.vigencia_service import tiene_vigencia
+from apps.recepcion.uses_case.proximas_citas_usecase import list_proximas_citas
 from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABILITY
 from apps.recepcion.uses_case.adscripcion_usecase import (
     paciente_por_llave,
@@ -519,3 +521,76 @@ class SlotsDisponiblesView(APIView):
             slots = CitasRepository.get_slots_disponibles(medico_id=medico_id, fecha=fecha, alcance=alcance)
 
         return Response({"slots": slots})
+
+
+# ── Próximas citas ───────────────────────────────────────────────────────────
+
+# Tope del rango: un mes. La lista resuelve nombres en SERMED por página.
+PROXIMAS_MAX_DIAS = 31
+
+
+class ProximasCitasQuerySerializer(serializers.Serializer):
+    page             = serializers.IntegerField(min_value=1, required=False, default=1)
+    pageSize         = serializers.IntegerField(min_value=1, max_value=50, required=False, default=25)
+    medicoId         = serializers.IntegerField(min_value=1, required=False)
+    soloSeguimiento  = serializers.BooleanField(required=False, default=False)
+    fechaDesde       = serializers.DateField(required=False, input_formats=["%Y-%m-%d"])
+    fechaHasta       = serializers.DateField(required=False, input_formats=["%Y-%m-%d"])
+
+    def validate(self, attrs):
+        desde = attrs.get("fechaDesde") or timezone.localdate()
+        hasta = attrs.get("fechaHasta") or desde + timedelta(days=7)
+        if desde > hasta:
+            raise serializers.ValidationError({"fechaHasta": "Debe ser igual o posterior a fechaDesde."})
+        if (hasta - desde).days > PROXIMAS_MAX_DIAS:
+            raise serializers.ValidationError(
+                {"fechaHasta": f"El rango no puede ser mayor a {PROXIMAS_MAX_DIAS} días."}
+            )
+        attrs["fechaDesde"], attrs["fechaHasta"] = desde, hasta
+        return attrs
+
+
+class ProximasCitasView(APIView):
+    """Citas agendadas o confirmadas de los próximos días, con el nombre del
+    paciente y la marca de las de seguimiento (las que deja el médico)."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, err = _auth(request)
+        if err:
+            return err
+        try:
+            _check_cap(user, CITAS_READ_CAPABILITY)
+        except VisitDomainError as exc:
+            return _domain_error(request, exc)
+
+        s = ProximasCitasQuerySerializer(data=request.query_params)
+        if not s.is_valid():
+            return error_response("VALIDATION_ERROR", "Parámetros inválidos.",
+                                  status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                  details=s.errors, request_id=get_request_id(request))
+
+        # Mismo criterio que el listado: un medicoId que no existe no devuelve nada.
+        medico_id = None
+        if s.validated_data.get("medicoId") is not None:
+            medico = MedicoRepository.resolve(s.validated_data["medicoId"], request=request)
+            medico_id = medico.id if medico else -1
+
+        items, total, total_pages = list_proximas_citas(
+            alcance_de(user),
+            fecha_desde=s.validated_data["fechaDesde"],
+            fecha_hasta=s.validated_data["fechaHasta"],
+            page=s.validated_data["page"],
+            page_size=s.validated_data["pageSize"],
+            medico_id=medico_id,
+            solo_seguimiento=s.validated_data["soloSeguimiento"],
+        )
+        return Response({
+            "items":      items,
+            "page":       s.validated_data["page"],
+            "pageSize":   s.validated_data["pageSize"],
+            "total":      total,
+            "totalPages": total_pages,
+        })

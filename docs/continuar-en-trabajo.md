@@ -1576,6 +1576,11 @@ cita o bloqueado) y `follow-up-days` trae `libres` y `total` por día. En
 pantalla: verde = disponible, rojo tachado = ocupado (no se puede elegir),
 verde sólido = elegido; en el calendario, punto verde = con lugar y rojo =
 lleno. Los horarios exclusivos del portal (`canal=LINEA`) no se muestran.
+Fecha mínima del seguimiento: el día siguiente a la `fechaConsulta` de la
+visita (y nunca antes de mañana), igual que valida el backend. Recepción puede
+registrar una ficha sin cita para un día posterior a hoy; si el médico la
+atiende antes, el calendario y los atajos arrancan después de esa fecha. Los
+errores 422 muestran el motivo de `details` en lugar del mensaje genérico.
 
 **8. Nota SOAP separada.** El formulario del médico captura Subjetivo,
 Objetivo, Análisis y Plan en apartados propios (letra y color por apartado,
@@ -1587,6 +1592,19 @@ interrogatorio por aparatos y sistemas se capturan en S, y el plan
 diagnóstico y terapéutico en P: esos 4 campos salieron del formulario porque
 repetían el SOAP. Las columnas se conservan y la nota impresa los sigue
 mostrando en las notas anteriores que los tengan.
+
+**9. Próximas citas en recepción.** Pestaña "Próximas citas" de la Agenda
+(`agenda/components/ProximasCitasView.tsx`): citas agendadas o confirmadas
+de hoy en adelante, agrupadas por día, con el nombre del paciente y la marca
+**Seguimiento** para las que dejó el médico al cerrar la consulta. Filtros:
+Hoy / Mañana / 7 días / 30 días, médico y "Solo seguimientos". Endpoint
+`GET /citas/proximas?fechaDesde&fechaHasta&medicoId&soloSeguimiento&page&pageSize`
+(permiso `recepcion:citas:read`, alcance por centro, rango de hasta 31 días,
+`pageSize` de hasta 50). Cada item es el de `GET /citas` más `pacienteNombre`
+(de SERMED, una consulta por paciente distinto de la página; vacío si SERMED
+falla) y `esSeguimiento` (`motivo == MOTIVO_CITA_SEGUIMIENTO`, constante en
+`recepcion/models.py`). La ficha se sigue creando el día de la cita, en el
+check-in.
 
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).

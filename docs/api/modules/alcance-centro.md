@@ -44,7 +44,7 @@ Las filas anteriores se rellenan con el mismo criterio
 
 | Endpoint | Fuera del alcance |
 |---|---|
-| `GET /visits`, `GET /citas`, `GET /citas/checkin/candidatos` | No aparecen. `centroId` filtra dentro del alcance, no lo amplía |
+| `GET /visits`, `GET /citas`, `GET /citas/proximas`, `GET /citas/checkin/candidatos` | No aparecen. `centroId` filtra dentro del alcance, no lo amplía |
 | `GET /visits/{id}/status-log`, `PATCH /visits/{id}/status` | `404 VISIT_NOT_FOUND` |
 | `GET /citas/{id}`, `PATCH /citas/{id}/estatus` | `404 CITA_NOT_FOUND` |
 | `POST /citas/verificar-qr`, `/verificar-qr/confirmar`, `/checkin/confirmar-folio` | `404 CITA_NO_ENCONTRADA` |

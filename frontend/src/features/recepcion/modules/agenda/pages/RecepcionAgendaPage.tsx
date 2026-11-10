@@ -34,6 +34,7 @@ import { RecepcionQuickCheckinDialog } from "@features/recepcion/modules/agenda/
 import { DisponibilidadView } from "@features/recepcion/modules/agenda/components/DisponibilidadView";
 import { HistorialView } from "@features/recepcion/modules/agenda/components/HistorialView";
 import { BandejaView } from "@features/recepcion/modules/agenda/components/BandejaView";
+import { ProximasCitasView } from "@features/recepcion/modules/agenda/components/ProximasCitasView";
 import { CitasPorReagendarCard } from "@features/recepcion/modules/adscripcion/components/CitasPorReagendarCard";
 import { useAdscripcionPermisos } from "@features/recepcion/modules/adscripcion/queries/useAdscripcionPermisos";
 import { mapVisitToCheckinDefaults } from "@features/recepcion/modules/checkin/domain/checkin.mappers";
@@ -89,6 +90,10 @@ export const RecepcionAgendaPage = () => {
     "flow.visits.queue.read",
     RECEPCION_QUEUE_PERMISSION_REQUIREMENT,
   );
+  // Próximas citas: mismo permiso que exige GET /citas/proximas.
+  const canReadCitas = hasCapability("recepcion.citas.read", {
+    allOf: ["recepcion:citas:read"],
+  });
   const canWriteRecepcion = hasCapability(
     "flow.recepcion.queue.write",
     RECEPCION_WRITE_PERMISSION_REQUIREMENT,
@@ -96,7 +101,7 @@ export const RecepcionAgendaPage = () => {
   const queueQuery = useRecepcionAgendaQueue({ enabled: canReadAgenda });
   const visitStatusAction = useVisitStatusAction();
 
-  const [view,         setView]         = useState<"bandeja" | "disponibilidad" | "historial">("bandeja");
+  const [view,         setView]         = useState<"bandeja" | "proximas" | "disponibilidad" | "historial">("bandeja");
   const [calCentroId,  setCalCentroId]  = useState<number | null>(null);
   const [calMedicoId,  setCalMedicoId]  = useState<number | null>(null);
   const [calWeekStart, setCalWeekStart] = useState(() => getMonday(new Date()));
@@ -448,6 +453,20 @@ export const RecepcionAgendaPage = () => {
             >
               <List className="size-3.5" /> Bandeja
             </button>
+            {canReadCitas ? (
+            <button
+              type="button"
+              onClick={() => setView("proximas")}
+              className={[
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                view === "proximas"
+                  ? "bg-paper text-txt-body shadow-sm"
+                  : "text-txt-muted hover:text-txt-body",
+              ].join(" ")}
+            >
+              <CalendarClock className="size-3.5" /> Próximas citas
+            </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setView("disponibilidad")}
@@ -512,6 +531,11 @@ export const RecepcionAgendaPage = () => {
           ) : null}
         </div>
       </header>
+
+      {/* ── Vista próximas citas (incluye las de seguimiento del médico) ── */}
+      {view === "proximas" ? (
+        <ProximasCitasView allMedicos={allMedicos} enabled={canReadCitas} />
+      ) : null}
 
       {/* ── Vista disponibilidad ────────────────────────────────────── */}
       {view === "disponibilidad" ? (

@@ -18,12 +18,12 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.medicos.models import CatMedico
-from apps.recepcion.models import CitaMedica, HorarioDisponible
+from apps.recepcion.models import MOTIVO_CITA_SEGUIMIENTO, CitaMedica, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository, q_slots_futuros
 from apps.recepcion.services.errors import VisitDomainError
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 
-MOTIVO_SEGUIMIENTO = "Cita de seguimiento"
+MOTIVO_SEGUIMIENTO = MOTIVO_CITA_SEGUIMIENTO
 
 
 def _medico_del_usuario(doctor_id):
