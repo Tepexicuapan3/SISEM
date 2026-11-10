@@ -6,7 +6,7 @@
 
 Without mandatory checks and security controls in GitHub, `main` can receive unreviewed changes, tests can be skipped, and vulnerable dependencies/secrets can slip into history.
 
-This baseline aligns SISEM with the expected flow: PR mandatory to `main`, domain-first governance, and guardrails compatible with Jira + SDD + Engram.
+This baseline aligns SISEM with the expected flow: PR mandatory to `main`, domain-first governance, and guardrails compatible with SDD + Engram (Jira is no longer used).
 
 ## Solution / Implementation
 

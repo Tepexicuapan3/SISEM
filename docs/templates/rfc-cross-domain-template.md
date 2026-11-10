@@ -8,7 +8,6 @@
 - Fecha:
 - Autor:
 - Dominios impactados:
-- Ticket Jira / Epic:
 - Cambio SDD-Orchestrator relacionado:
 - Estado: Draft | Review | Approved | Rejected
 

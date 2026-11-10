@@ -1,6 +1,6 @@
 # SISEM Docs
 
-Indice canonico de documentacion para operar SISEM con el modelo actual: monolito modular evolutivo, trabajo por dominios y flujo Jira + SDD-Orchestrator + Engram.
+Indice canonico de documentacion para operar SISEM con el modelo actual: monolito modular evolutivo, trabajo por dominios y flujo SDD-Orchestrator + Engram + PR (Jira ya no se usa).
 
 ## Start Here
 
@@ -17,7 +17,7 @@ Indice canonico de documentacion para operar SISEM con el modelo actual: monolit
 
 - Estrategia de arquitectura: monolito modular evolutivo (sin migracion a microservicios full en esta fase).
 - Estrategia de datos: DB por dominio con PostgreSQL como target estrategico.
-- Flujo de entrega obligatorio: Jira -> SDD-Orchestrator -> planificacion TDD-first -> Engram -> PR/Merge.
+- Flujo de entrega obligatorio: SDD-Orchestrator -> planificacion TDD-first -> Engram -> PR/Merge. Jira ya no se usa (`docs/governance/decision-sin-jira.md`).
 - Entrega por dominios completos con ownership explicito (backend + frontend + DB + docs).
 
 ## Dominios
@@ -42,7 +42,7 @@ Indice canonico de documentacion para operar SISEM con el modelo actual: monolit
 - `docs/domains/auth-access/kan-56-s1-apply-evidence.md` - evidencia de apply KAN-56 (slice S1 read-only), checklist dark launch/canary/rollback y validacion contractual.
 - `docs/domains/auth-access/kan-62-read-source-switch-hardening.md` - hardening operativo del switch read-only RBAC (precedencia `RBAC_READ_SLICE_SOURCE` vs `RBAC_READ_S1_ENABLED` y rollback explícito a legacy).
 - `docs/domains/auth-access/kan-61-rbac-critical-use-cases-apply-evidence.md` - evidencia de apply KAN-61 para extraccion de mutaciones RBAC criticas a use_cases/policies.
-- `docs/domains/auth-access/jira-workflow-operating-model.md` - workflow operativo Jira de Auth-Access (columnas, gates, WIP, due dates, bloqueos, daily/cierre y reglas para agentes IA).
+- `docs/domains/auth-access/jira-workflow-operating-model.md` - (histórico, Jira ya no se usa) workflow operativo Jira de Auth-Access (columnas, gates, WIP, due dates, bloqueos, daily/cierre y reglas para agentes IA).
 - `docs/domains/auth-access/kan-58a-s2-apply-evidence.md` - evidencia de apply KAN-58A (slice S2 mutaciones de roles), TDD Red/Green/Refactor y rollback por flag.
 - `docs/domains/auth-access/kan-59-apply-evidence.md` - evidencia de apply KAN-59 (frontend guards/routing capability-first), trazabilidad PRs #59/#60/#61 y ciclo TDD Red/Green/Refactor.
 - `docs/domains/auth-access/kan-65-admin-capabilities-apply-evidence.md` - evidencia de apply KAN-65 (capabilities admin users/roles, AC traceability y cierre documental).
@@ -177,6 +177,7 @@ Indice canonico de documentacion para operar SISEM con el modelo actual: monolit
 ## Governance
 
 - `docs/governance/repo-hygiene-policy.md` - politica de higiene de repo (trackeado vs efimero vs excepciones condicionadas).
+- `docs/governance/decision-sin-jira.md` - desde 2026-11-10 Jira ya no se usa: qué lo reemplaza (SDD, rama, PR) y qué queda como histórico.
 - `docs/governance/nom024-retention-policy.md` - retencion minima de expediente/auditoria (NOM-024/NOM-004/LGS) y reglas para migracion/decomision del legado.
 
 ## API

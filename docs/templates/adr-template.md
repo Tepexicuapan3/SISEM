@@ -47,7 +47,6 @@ Describir la decision en una frase clara.
 
 ## Referencias
 
-- Jira ticket / Epic.
 - Artefacto SDD asociado.
 - PR relacionada.
 - Documentacion interna relevante (paths reales, no placeholders).

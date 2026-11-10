@@ -83,7 +83,6 @@ Cuando el PR toca contratos/API o auth-access, sumar:
 
 #### A) Governance & Traceability
 
-- [ ] PR referencia ticket Jira
 - [ ] PR referencia cambio SDD (si aplica)
 - [ ] Dominio(s) impactado(s) declarado(s)
 - [ ] Si cruza dominios: RFC/documentación de impacto incluida

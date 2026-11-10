@@ -37,7 +37,7 @@ Incluye, como minimo:
 
 Solo se permite versionar artefactos normalmente ignorados cuando cumplen TODAS estas condiciones:
 
-1. Existe necesidad de auditoria o evidencia tecnica para Jira/PR.
+1. Existe necesidad de auditoria o evidencia tecnica para el PR.
 2. Se documenta en el PR que artefacto se incluye, por que y por cuanto tiempo.
 3. Se acota a una ruta explicitamente acordada (idealmente `docs/` o carpeta de evidencia con contexto).
 4. Se define plan de limpieza (retiro del artefacto en el siguiente ciclo aplicable).

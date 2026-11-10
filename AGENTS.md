@@ -13,9 +13,9 @@ All new backend functionality must be built for Django/DRF.
 ## Operating Baseline (Phase 1)
 
 - Official strategy: evolutionary modular monolith + `DB per domain` with PostgreSQL as target engine.
-- Mandatory delivery flow: Jira ticketing + SDD phases + TDD-first planning/execution + Engram persistence.
+- Mandatory delivery flow: SDD phases + TDD-first planning/execution + Engram persistence + PR review. Jira is no longer used (`docs/governance/decision-sin-jira.md`).
 - Runtime remains on current routes/modules until each domain reaches DoD (no big-bang cutover).
-- Auth functional refactor starts only after planning artifacts and Jira acceptance criteria are ready.
+- Auth functional refactor starts only after planning artifacts and acceptance criteria (SDD/PR) are ready.
 
 ## Scoped Guides (Load Narrow Context First)
 
@@ -140,7 +140,7 @@ These rules convert team standards into mandatory repository behavior for AI age
 
 ### 9.1) Git Workflow Enforcement (mandatory)
 
-- Every implementation task MUST start on a new branch linked to the Jira ticket or approved change identifier.
+- Every implementation task MUST start on a new branch linked to the approved change identifier.
 - Hard ban: no implementation work is allowed directly on `main`.
 - Hard ban: direct pushes to `main` are prohibited.
 - `main` integration is allowed only through Pull Requests with review and required checks.
@@ -159,7 +159,7 @@ These rules convert team standards into mandatory repository behavior for AI age
 - Planning rule: implementation task lists must start with testing tasks (design + creation) before production code tasks.
 - Execution rule: enforce Red -> Green -> Refactor cycle; tests must fail first, then pass with minimal implementation, then refactor with tests still passing.
 - PR evidence rule: include test-first proof (initial failing tests, implementation progression, final passing state).
-- Exception rule: if TDD cannot be applied, document explicit rationale, define compensating controls/tests, and obtain explicit approval in Jira/PR review.
+- Exception rule: if TDD cannot be applied, document explicit rationale, define compensating controls/tests, and obtain explicit approval in PR review.
 
 ### 11) System Evolution Strategy (stage-based)
 
@@ -346,8 +346,6 @@ Si persiste contradicción:
 | `brainstorming` | Plan and scope features before implementation | `.opencode/skill/brainstorming/SKILL.md` |
 | `pytest` | Python tests, fixtures, mocking | `.opencode/skill/pytest/SKILL.md` |
 | `playwright` | E2E with Page Objects + MCP | `.opencode/skill/playwright/SKILL.md` |
-| `jira-epic` | Large epics definition | `.opencode/skill/jira-epic/SKILL.md` |
-| `jira-task` | Tasks/bugs definition | `.opencode/skill/jira-task/SKILL.md` |
 | `pr-create-sisem` | PR creation with SISEM evidence-first structure | `.opencode/skill/pr-create-sisem/SKILL.md` |
 | `pr-review-sisem` | PR review with SISEM governance + approve/squash actions | `.opencode/skill/pr-review-sisem/SKILL.md` |
 | `find-skills` | Discover/install skills when requested | `.opencode/skill/find-skills/SKILL.md` |
@@ -370,8 +368,6 @@ Si persiste contradicción:
 | User asks for planning/discovery before coding | `brainstorming` |
 | Backend Python tests | `pytest` |
 | E2E tests | `playwright` |
-| Create project epics | `jira-epic` |
-| Create tasks/bugs | `jira-task` |
 | Create/open PR with standardized SISEM structure and evidence | `pr-create-sisem` |
 | Review/audit PRs and decide approve/request-changes/squash | `pr-review-sisem` |
 | User asks to discover/install skills | `find-skills` |

@@ -33,7 +33,7 @@ Guia corta para ubicarse en `frontend/src/` y evitar romper estandares de arquit
 
 ## Checklist obligatorio de entrega
 
-1. Jira: ticket con alcance y criterios de aceptacion.
+1. Alcance y criterios de aceptacion (cambio SDD o descripcion del PR).
 2. SDD: artefactos al dia segun fase.
 3. Engram: decisiones y hallazgos relevantes guardados en `SISEM_SHARED`.
 4. Engram: usar `topic_key` obligatorio (`feature/{slug}/decision`, `feature/{slug}/progress`, `bug/{id-or-slug}/fix`, `ops/{area}/config`, `docs/{topic}/note`).

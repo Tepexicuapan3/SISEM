@@ -25,10 +25,8 @@
 - Criteria logical -> physical isolation evaluated?:
   - {yes/no + rationale}
 
-## Jira and SDD Traceability
+## SDD Traceability
 
-- Jira ticket: `{KAN-XXX}`
-- Epic: `{KAN-YYY}` or `N/A`
 - SDD change (if applies): `{change-id}` or `N/A`
 - SDD phase status (`proposal/spec/design/tasks/apply/verify`):
   - {status}
@@ -49,7 +47,7 @@
   - {command + passing output reference}
 - REFACTOR evidence (cleanup with tests still passing):
   - {what changed + proof}
-- Exception (if applicable): rationale + compensating controls/tests + approval (Jira/PR reviewer):
+- Exception (if applicable): rationale + compensating controls/tests + approval (PR reviewer):
   - {details or `N/A`}
 
 ## KAN-55 Risk Gate (required for auth-access slices)
@@ -74,7 +72,7 @@
 ## Checklist
 
 - [ ] Scope is focused and single-purpose
-- [ ] Jira + SDD traceability completed
+- [ ] SDD traceability completed (if applies)
 - [ ] Security guardrails reviewed (JWT HttpOnly + CSRF in mutating flows)
 - [ ] Dependency rules respected (`docs/architecture/dependency-rules.md`)
 - [ ] Data ownership respected (`DB por dominio`) and PostgreSQL target considered

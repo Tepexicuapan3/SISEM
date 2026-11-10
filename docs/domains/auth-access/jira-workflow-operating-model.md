@@ -1,4 +1,6 @@
-# Auth-Access — Jira Workflow Operativo
+# Auth-Access — Jira Workflow Operativo (histórico)
+
+> **Ya no se usa.** Desde el 2026-11-10 SISEM no usa Jira (`docs/governance/decision-sin-jira.md`). Este documento queda como referencia de cómo se trabajó.
 
 > TL;DR: Para Auth-Access usamos un único flujo de columnas en Jira con gates claros por estado, lanes por tipo de trabajo (no por columna), evidencia TDD/integración/PR y reglas explícitas para humanos y agentes IA.
 

@@ -9,6 +9,9 @@ metadata:
   version: "1.0"
 ---
 
+> **DEPRECADO (2026-11-10):** SISEM ya no usa Jira (`docs/governance/decision-sin-jira.md`). No invocar este skill.
+
+
 ## When to Use
 
 Use this skill when creating Jira tasks for:

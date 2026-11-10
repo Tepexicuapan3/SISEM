@@ -52,7 +52,7 @@
 - Test planning and creation tasks must appear before implementation tasks.
 - Enforce Red -> Green -> Refactor: tests fail first, pass with minimal implementation, then refactor while preserving behavior.
 - PR evidence must include failing-first proof, implementation progression, and final passing state.
-- If TDD is not applicable, require explicit rationale plus compensating controls/tests approved in Jira/PR review.
+- If TDD is not applicable, require explicit rationale plus compensating controls/tests approved in PR review.
 
 ## Part 2 Verification Hooks
 

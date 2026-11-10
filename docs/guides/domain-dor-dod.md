@@ -15,7 +15,7 @@ La migracion por dominios falla si no hay criterio comun para empezar y terminar
 - Alcance limitado al slice vertical de negocio.
 - Contratos API o cambios de datos identificados.
 - Riesgos y dependencias externas listadas.
-- Ticket Jira creado y vinculado a Epic del dominio.
+- Alcance y criterios de aceptación definidos (cambio SDD o descripción del PR).
 - Cambio SDD creado (o justificacion explicita de por que no aplica).
 - Para NEW feature/NEW functionality/LARGE refactor: tasking inicial de testing definido (tests-first por riesgo).
 
@@ -32,7 +32,7 @@ La migracion por dominios falla si no hay criterio comun para empezar y terminar
 - Docs actualizadas (mapa, migracion, governance si aplica).
 - Features criticas con cobertura automatizada proporcional al riesgo (unit/service, integration/API, E2E segun impacto).
 - Para NEW feature/NEW functionality/LARGE refactor: evidencia TDD-first (Red -> Green -> Refactor) anexada en tareas/PR.
-- Toda excepcion TDD documentada con racional explicito + controles compensatorios + aprobacion en Jira/PR.
+- Toda excepcion TDD documentada con racional explicito + controles compensatorios + aprobacion en el PR.
 - Engram actualizado con decisiones/fixes relevantes (`SISEM_SHARED`).
 - Hooks Git requeridos activos y sincronizacion de Engram operativa.
 - PR mergeable con checklist completo y reviewers correctos.

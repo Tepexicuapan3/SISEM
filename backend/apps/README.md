@@ -10,7 +10,7 @@ Este README es la entrada rapida para el arbol `backend/apps/` (runtime legado +
 
 ## Checklist operativo obligatorio (antes de tocar codigo)
 
-1. Ticket en Jira con alcance y criterios de aceptacion.
+1. Alcance y criterios de aceptacion (cambio SDD o descripcion del PR).
 2. Artefactos SDD al dia (proposal/spec/design/tasks segun fase).
 3. Contexto y decisiones relevantes persistidas en Engram (`SISEM_SHARED`).
 4. Persistencias de Engram con `topic_key` obligatorio (`feature/{slug}/decision`, `feature/{slug}/progress`, `bug/{id-or-slug}/fix`, `ops/{area}/config`, `docs/{topic}/note`).

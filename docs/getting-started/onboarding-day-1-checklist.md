@@ -1,6 +1,6 @@
 # Onboarding Day-1 Checklist (IA-First)
 
-> TL;DR: Este checklist deja a cualquier developer listo para trabajar en SISEM con flujo Jira + SDD + Engram desde el primer dia.
+> TL;DR: Este checklist deja a cualquier developer listo para trabajar en SISEM con flujo SDD + Engram + PR desde el primer dia.
 
 ## Objetivo
 
@@ -24,10 +24,9 @@ git config --get core.hooksPath
 ls .githooks
 ```
 
-### 3) Jira + SDD
+### 3) SDD
 
-- [ ] Abrir/crear ticket Jira del dominio (Epic -> Task).
-- [ ] Definir `change-name` alineado al ticket Jira.
+- [ ] Definir `change-name` del cambio.
 - [ ] Ejecutar flujo SDD segun alcance:
   - Cambio grande: `/sdd-new <change>` o `/sdd-ff <change>`
   - Implementacion incremental: `/sdd-apply <change>`
@@ -42,7 +41,7 @@ ls .githooks
 ### 5) PR y merge governance
 
 - [ ] Usar `.github/pull_request_template.md` completo.
-- [ ] Incluir ticket Jira + estado SDD + impacto por dominio.
+- [ ] Incluir estado SDD + impacto por dominio.
 - [ ] Si hay impacto cross-domain, adjuntar RFC (`docs/templates/rfc-cross-domain-template.md`).
 - [ ] Validar reglas de dependencia y ownership de datos antes de merge.
 - [ ] Adjuntar evidencia TDD-first (fallo inicial + progresion + verde final) o justificar excepcion con controles compensatorios y aprobacion.
@@ -51,7 +50,7 @@ ls .githooks
 
 - No hacer migraciones big-bang `old -> new`.
 - No hacer acceso SQL cross-domain directo.
-- No arrancar refactor funcional de Auth sin plan Jira + SDD + criterios de aceptacion.
+- No arrancar refactor funcional de Auth sin plan SDD + criterios de aceptacion.
 
 ## Referencias
 

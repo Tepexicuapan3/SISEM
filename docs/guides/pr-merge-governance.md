@@ -11,7 +11,7 @@ Sin governance, el trabajo paralelo genera colisiones, retrabajo y deuda tecnica
 ## Reglas de PR
 
 1. Una intencion principal por PR.
-2. Referencia obligatoria a ticket Jira.
+2. Alcance y criterios de aceptación en la descripción del PR (o el cambio SDD). Jira ya no se usa (`docs/governance/decision-sin-jira.md`).
 3. Referencia obligatoria al cambio SDD.
 4. Indicar dominio(s) impactado(s) y estado (`legacy`, `hybrid`, `domain-first`).
 5. Si cruza dominios, adjuntar RFC corto usando template.
@@ -31,7 +31,7 @@ Sin governance, el trabajo paralelo genera colisiones, retrabajo y deuda tecnica
 
 ### Convencion de nombres de rama
 
-- Formato recomendado: `<tipo>/<dominio>/<jira-key>-<slug>`.
+- Formato recomendado: `<tipo>/<dominio>/<slug>`.
 - Tipos permitidos: `feat`, `fix`, `chore`.
 - Ejemplos:
   - `feat/auth/KAN-142-jwt-refresh-rotation`
@@ -52,7 +52,7 @@ Sin governance, el trabajo paralelo genera colisiones, retrabajo y deuda tecnica
 - Smoke E2E de cierre se valida en Docker con preflight reproducible (`bun run test:e2e:bootstrap`, `bun run test:e2e:smoke` / `test:e2e:kan4`); ejecucion host-only no cuenta como evidencia final.
 - Para hardening de aliases/frontend structure, incluir guard automatizado ejecutable contra reintroduccion de aliases legacy (`bun run test:guard:legacy-alias`).
 - Evidencia test-first cuando aplique TDD estricto: fallo inicial, progresion de implementacion y estado final en verde.
-- Si hubo excepcion TDD, incluir racional explicito, controles/tests compensatorios y aprobacion registrada en Jira/PR.
+- Si hubo excepcion TDD, incluir racional explicito, controles/tests compensatorios y aprobacion registrada en el PR.
 - Confirmacion de actualizacion de docs cuando cambia la operativa.
 - Evidencia de memoria high-signal guardada en Engram (`SISEM_SHARED`) cuando corresponda.
 - Cuando se reporte evidencia Engram, incluir `topic_key` estable segun convencion (`feature/{slug}/decision`, `feature/{slug}/progress`, `bug/{id-or-slug}/fix`, `ops/{area}/config`, `docs/{topic}/note`).

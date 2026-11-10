@@ -30,8 +30,6 @@ La fuente de verdad operativa sigue siendo la jerarquia de `AGENTS.md`.
 | `brainstorming` | Planeacion previa | Discovery, alternativas y alcance antes de codear |
 | `pytest` | Testing backend | Crear/refactor tests backend |
 | `playwright` | E2E | Crear/mantener pruebas E2E |
-| `jira-task` | Tickets de tarea/bug | Crear tarea en formato Jira |
-| `jira-epic` | Epicas | Crear epica/initiative en Jira |
 | `pr-create-sisem` | Creacion estandarizada de PRs SISEM | Crear/abrir PRs con evidencia completa y formato uniforme |
 | `pr-review-sisem` | Review de PRs con governance SISEM | Revisar PRs y decidir approve/request-changes/squash |
 | `find-skills` | Descubrir/instalar skills | Usuario pide buscar o instalar nuevas skills |
@@ -54,8 +52,6 @@ La fuente de verdad operativa sigue siendo la jerarquia de `AGENTS.md`.
 | User asks for planning/discovery before coding | `brainstorming` |
 | Backend Python tests | `pytest` |
 | E2E tests | `playwright` |
-| Create project epics | `jira-epic` |
-| Create tasks/bugs | `jira-task` |
 | Create/open PR with standardized SISEM structure and evidence | `pr-create-sisem` |
 | Review/audit PRs and decide approve/request-changes/squash | `pr-review-sisem` |
 | User asks to discover/install skills | `find-skills` |

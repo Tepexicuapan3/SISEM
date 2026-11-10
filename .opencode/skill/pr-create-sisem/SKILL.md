@@ -2,7 +2,7 @@
 name: pr-create-sisem
 description: >
   Crea Pull Requests estandarizadas para SISEM con estructura obligatoria,
-  trazabilidad Jira/SDD y evidencia completa para reducir rechazos por
+  trazabilidad SDD y evidencia completa para reducir rechazos por
   redacción incompleta. Trigger: cuando el usuario pida crear, abrir o
   preparar una PR para revisión.
 license: Apache-2.0
@@ -34,7 +34,7 @@ Entregar PRs consistentes, completas y verificables para que `pr-review-sisem` p
 ## SISEM Non-Negotiables
 
 1. **Sin PR desde `main`**: trabajar siempre desde rama de ticket.
-2. **Trazabilidad obligatoria**: Jira + SDD (si aplica) + dominios impactados.
+2. **Trazabilidad obligatoria**: SDD (si aplica) + dominios impactados. Jira ya no se usa (`docs/governance/decision-sin-jira.md`).
 3. **Evidencia documental obligatoria**: ruta, decisión, impacto.
 4. **Testing/TDD-first**: incluir evidencia real o excepción aprobada.
 5. **Sin placeholders**: no dejar `TODO`, `N/A` vacío o secciones sin justificar.
@@ -55,7 +55,6 @@ Si el usuario no especifica modo, usar `create-pr`.
 
 Antes de crear la PR, confirmar:
 
-- Jira ticket (ej. `KAN-61`)
 - Resumen de alcance (incluye/no incluye)
 - Tipo de cambio (`feat`, `fix`, `chore`, `docs`, `refactor`, etc.)
 - Dominio principal y estado (`legacy|hybrid|domain-first`)
@@ -70,7 +69,7 @@ Si falta algo, solicitarlo antes de abrir la PR.
 Usar convención SISEM:
 
 ```text
-<tipo>/<dominio>/<jira-key>-<slug>
+<tipo>/<dominio>/<slug>
 ```
 
 Ejemplo:
@@ -84,7 +83,7 @@ fix/auth/KAN-61-contract-alignment
 Formato recomendado:
 
 ```text
-<type>(<domain>): <short summary> [<JIRA>]
+<type>(<domain>): <short summary>
 ```
 
 Ejemplo:
@@ -142,7 +141,7 @@ EOF
 - Verificar PR creada y body renderizado correctamente
 - Confirmar que no quedaron placeholders (`TODO`, `<...>`, `pendiente`)
 - Confirmar que secciones críticas están completas:
-  - Jira/SDD
+  - SDD
   - Dominio y data impact
   - Evidencia TDD/testing
   - Evidencia documental
@@ -152,7 +151,7 @@ EOF
 
 La PR DEBE permitir validar explícitamente:
 
-1. Governance & traceability (Jira/SDD/dominios/RFC)
+1. Governance & traceability (SDD/dominios/RFC)
 2. Architecture boundaries (capas y reglas de dependencia)
 3. Security/AuthZ/Audit impactos
 4. Testing + evidencia TDD-first (si aplica)
@@ -173,7 +172,7 @@ git diff main...HEAD
 
 # Crear PR
 git push -u origin "$(git branch --show-current)"
-gh pr create --title "<type>(<domain>): <summary> [<JIRA>]" --body "$(cat <<'EOF'
+gh pr create --title "<type>(<domain>): <summary>" --body "$(cat <<'EOF'
 <body from assets/pr-body-template.md>
 EOF
 )"

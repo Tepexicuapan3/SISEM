@@ -12,7 +12,7 @@
 
 ## Mandatory Delivery Workflow (Checklist)
 
-- [ ] Jira ticket exists with clear acceptance criteria.
+- [ ] Scope and clear acceptance criteria are defined (SDD change or PR description).
 - [ ] SDD artifacts are current for the change phase (proposal/spec/design/tasks/apply/verify).
 - [ ] Relevant decisions/discoveries are persisted in Engram (`SISEM_SHARED`).
 - [ ] Engram saves use required `topic_key` convention (`feature/{slug}/decision`, `feature/{slug}/progress`, `bug/{id-or-slug}/fix`, `ops/{area}/config`, `docs/{topic}/note`).

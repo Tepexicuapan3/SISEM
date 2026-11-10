@@ -148,4 +148,4 @@ Passwords magicas para simular errores:
 - Regla de tasking: primero tareas de diseno/creacion de tests; despues tareas de implementacion.
 - Ciclo requerido: **Red -> Green -> Refactor** (fallo inicial, implementacion minima en verde, refactor sin romper tests).
 - Evidencia de PR: adjuntar fallo inicial + progresion de implementacion + estado final en verde.
-- Excepciones: solo con racional explicito, controles/tests compensatorios y aprobacion en Jira/PR.
+- Excepciones: solo con racional explicito, controles/tests compensatorios y aprobacion en el PR.

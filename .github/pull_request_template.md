@@ -17,10 +17,8 @@
 - Overload controls reviewed (partitioning, indexes, retention/archive, read-models, observability):
 - Criteria logical -> physical isolation evaluated?:
 
-## Jira and SDD Traceability
+## SDD Traceability
 
-- Jira ticket:
-- Epic:
 - SDD change (if applies):
 - SDD phase status (`proposal/spec/design/tasks/apply/verify`):
 - RFC cross-domain (required if multi-domain):
@@ -33,7 +31,7 @@
 - RED evidence (initial failing test):
 - GREEN evidence (minimal implementation passing):
 - REFACTOR evidence (cleanup with tests still passing):
-- Exception (if applicable): rationale + compensating controls/tests + approval (Jira/PR reviewer):
+- Exception (if applicable): rationale + compensating controls/tests + approval (PR reviewer):
 
 ## KAN-55 Risk Gate (required for auth-access slices)
 
@@ -46,7 +44,7 @@
 ## Checklist
 
 - [ ] Scope is focused and single-purpose
-- [ ] Jira + SDD traceability completed
+- [ ] SDD traceability completed (if applies)
 - [ ] Security guardrails reviewed (JWT HttpOnly + CSRF in mutating flows)
 - [ ] Dependency rules respected (`docs/architecture/dependency-rules.md`)
 - [ ] Data ownership respected (`DB por dominio`) and PostgreSQL target considered

@@ -72,17 +72,16 @@ No recomendada. El contrato operativo de desarrollo en SISEM es docker-first.
 - Activacion one-time con `./.engram/scripts/install-hooks.sh`.
 - Alcance: automatizacion local de sync/memoria; no reemplaza CI/CD ni los checks de PR.
 
-### Jira
+### Jira (ya no se usa)
 
-- Planeacion y trazabilidad con Epics/Tasks por dominio.
-- Cada PR debe referenciar ticket Jira y estado del flujo SDD.
+- Desde el 2026-11-10 la planeación y trazabilidad van en SDD, Engram y el PR (`docs/governance/decision-sin-jira.md`).
 
 ## Baseline operativo Fase 1 (cerrado)
 
 - Modelo operativo oficial: **monolito modular evolutivo** con estrategia de datos **DB por dominio en PostgreSQL**.
-- Flujo de entrega obligatorio: **Jira -> SDD -> planificacion TDD-first -> implementacion por dominio -> Engram -> PR/Merge**.
+- Flujo de entrega obligatorio: **SDD -> planificacion TDD-first -> implementacion por dominio -> Engram -> PR/Merge**.
 - No se ejecutan movimientos big-bang `old -> new`; runtime actual sigue activo mientras avanza la migracion incremental.
-- El refactor funcional de Auth se planifica despues de Fase 1, con tickets Jira y criterios de aceptacion explicitos.
+- El refactor funcional de Auth se planifica despues de Fase 1, con criterios de aceptacion explicitos (SDD/PR).
 
 ## Modelo operativo por dominios
 
@@ -194,7 +193,7 @@ No recomendada. El contrato operativo de desarrollo en SISEM es docker-first.
 - Regla de planificacion: los tasks de implementacion arrancan con tareas de testing (diseno + creacion) antes de escribir codigo productivo.
 - Regla de ejecucion: ciclo obligatorio **Red -> Green -> Refactor** (fallo inicial, implementacion minima que pasa, refactor con tests en verde).
 - Evidencia en PR: prueba de test-first (fallos iniciales + progresion de implementacion + estado final en verde).
-- Excepcion: si TDD no aplica, se exige racional explicito + controles/tests compensatorios + aprobacion en Jira/PR.
+- Excepcion: si TDD no aplica, se exige racional explicito + controles/tests compensatorios + aprobacion en el PR.
 
 ### 11) Estrategia de evolucion del sistema (por etapas)
 

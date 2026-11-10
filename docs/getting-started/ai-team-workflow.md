@@ -1,6 +1,6 @@
-# Flujo IA del Equipo (Jira + SDD-Orchestrator + Engram)
+# Flujo IA del Equipo (SDD-Orchestrator + Engram)
 
-> TL;DR: En SISEM, el flujo oficial de delivery es Jira + SDD-Orchestrator + Engram. El trabajo se planifica y ejecuta por dominio completo, con ownership explicito y gates de calidad antes de merge.
+> TL;DR: En SISEM, el flujo oficial de delivery es SDD-Orchestrator + Engram + PR. Jira ya no se usa (`docs/governance/decision-sin-jira.md`). El trabajo se planifica y ejecuta por dominio completo, con ownership explicito y gates de calidad antes de merge.
 
 ## Problem / Context
 
@@ -12,7 +12,6 @@ Sin un proceso unificado, se pierde trazabilidad, se duplican decisiones y apare
 
 ```text
 Persona
-  -> Jira (epic/task por dominio)
   -> SDD-Orchestrator (explore/propose/spec/design/tasks/apply/verify)
   -> Implementacion por dominio
   -> Engram (memoria compartida high-signal)
@@ -32,7 +31,7 @@ Persona
 
 ### Inicio
 
-1. Validar ticket Jira y dominio owner.
+1. Validar el alcance del cambio y el dominio owner.
 2. Traer contexto en Engram (`SISEM_SHARED`).
 3. Ejecutar fase SDD segun alcance (`/sdd-new`, `/sdd-continue`, `/sdd-apply`).
 
@@ -41,7 +40,7 @@ Persona
 1. Ejecutar trabajo por slices chicos.
 2. Arrancar cada slice aplicable con test fallando (Red), luego implementacion minima (Green) y refactor seguro.
 3. Guardar en Engram solo eventos high-signal (decisiones de arquitectura/tecnicas, bugfix raiz, convenciones, config).
-4. Mantener Jira actualizado con el flujo operativo del dominio (Backlog Sprint -> Ready -> In Dev -> In Test -> In Review -> Blocked -> Done).
+4. Mantener el estado del cambio en SDD/Engram y en el PR.
 
 ### Antes de PR
 
@@ -62,7 +61,7 @@ Importante: los hooks en `.githooks/` automatizan hygiene/sync local de Engram; 
 
 ### Cierre de PR
 
-1. Vincular ticket Jira y cambio SDD.
+1. Vincular el cambio SDD.
 2. Declarar dominios impactados y estado (`legacy`/`hybrid`/`domain-first`).
 3. Adjuntar RFC si hay impacto cross-domain.
 
@@ -115,4 +114,4 @@ ls .githooks
 - `docs/guides/domain-dor-dod.md`
 - `docs/guides/incremental-domain-migration.md`
 - `docs/getting-started/engram-team-sync.md`
-- `docs/domains/auth-access/jira-workflow-operating-model.md`
+- `docs/domains/auth-access/jira-workflow-operating-model.md` (histórico)

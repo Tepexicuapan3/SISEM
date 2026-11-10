@@ -51,7 +51,7 @@
 - Test design/creation tasks must be first in planning before implementation tasks.
 - Execution cycle is mandatory: Red -> Green -> Refactor.
 - PR evidence must show failing-first tests, implementation progression, and final passing state.
-- If TDD cannot be applied, document explicit rationale and compensating controls/tests with Jira/PR approval.
+- If TDD cannot be applied, document explicit rationale and compensating controls/tests with PR approval.
 
 ## Part 2 Verification Hooks
 

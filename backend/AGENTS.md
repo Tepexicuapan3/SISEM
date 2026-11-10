@@ -35,7 +35,7 @@
 
 ## Mandatory Delivery Workflow (Checklist)
 
-- [ ] Jira ticket is defined with scope and acceptance criteria.
+- [ ] Scope and acceptance criteria are defined (SDD change or PR description).
 - [ ] SDD artifacts are up to date for the current phase.
 - [ ] Relevant decisions/discoveries are persisted in Engram (`SISEM_SHARED`).
 - [ ] Engram saves use required `topic_key` convention (`feature/{slug}/decision`, `feature/{slug}/progress`, `bug/{id-or-slug}/fix`, `ops/{area}/config`, `docs/{topic}/note`).
@@ -113,7 +113,7 @@
 - Planning must place testing design/creation tasks before implementation tasks.
 - Execution must follow Red -> Green -> Refactor (fail first, minimal passing implementation, behavior-preserving refactor).
 - PRs must include test-first evidence (initial failing tests, implementation progression, final passing state).
-- If TDD cannot be applied, document explicit rationale, define compensating controls/tests, and require approval in Jira/PR review.
+- If TDD cannot be applied, document explicit rationale, define compensating controls/tests, and require approval in PR review.
 
 ## Backend PR Checklist
 
