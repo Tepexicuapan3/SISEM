@@ -2,6 +2,7 @@ import apiClient from "@api/client";
 import type {
   CitaHistorialResponse,
   CitaListItem,
+  ReprogramarCitaRequest,
   CitasListParams,
   CitasListResponse,
   ConfirmarCheckinOptions,
@@ -31,6 +32,12 @@ export const citasAPI = {
 
   getById: async (id: number): Promise<CitaListItem> => {
     const r = await apiClient.get<CitaListItem>(`/citas/${id}`);
+    return r.data;
+  },
+
+  /** Cancela la cita y agenda la nueva enlazada, en un solo paso. */
+  reprogramar: async (id: number, data: ReprogramarCitaRequest): Promise<CitaListItem> => {
+    const r = await apiClient.post<CitaListItem>(`/citas/${id}/reprogramar`, data);
     return r.data;
   },
 

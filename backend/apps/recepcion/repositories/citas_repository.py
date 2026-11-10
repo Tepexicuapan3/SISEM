@@ -145,6 +145,8 @@ def _serialize_cita(cita: CitaMedica) -> dict:
         # el sistema interno las citas agendadas por el paciente desde el
         # portal de citas en línea de las agendadas directamente en recepción.
         "origenCanal":    cita.origen_canal,
+        # Cita cancelada que esta reprograma (null si no es una reprogramación).
+        "reprogramadaDeId": cita.reprogramada_de_id,
     }
 
 
@@ -233,6 +235,7 @@ class CitasRepository:
         notas: str | None = None,
         created_by_id: int | None = None,
         canal: str = CanalMovimiento.RECEPCION,
+        reprogramada_de: CitaMedica | None = None,
     ) -> dict:
         if es_horario_pasado(fecha_hora):
             raise ValueError(MENSAJE_HORARIO_PASADO)
@@ -331,13 +334,17 @@ class CitasRepository:
                 motivo=motivo,
                 notas=notas,
                 created_by_id=created_by_id,
+                reprogramada_de=reprogramada_de,
             )
 
             # Marcar el slot como ocupado dentro de la misma transacción
             slot.disponible = False
             slot.cita = cita
             slot.save(update_fields=["disponible", "cita_id"])
-            CitasRepository.registrar_alta(cita, created_by_id, canal=canal)
+            CitasRepository.registrar_alta(
+                cita, created_by_id, canal=canal,
+                notes=f"Reprogramada desde {reprogramada_de.folio}" if reprogramada_de else NOTA_CITA_AGENDADA,
+            )
 
         cita.refresh_from_db()
         cita = CitaMedica.objects.select_related(
@@ -346,14 +353,16 @@ class CitasRepository:
         return _serialize_cita(cita)
 
     @staticmethod
-    def registrar_alta(cita: CitaMedica, changed_by_id: int | None, *, canal: str) -> None:
+    def registrar_alta(
+        cita: CitaMedica, changed_by_id: int | None, *, canal: str, notes: str = NOTA_CITA_AGENDADA,
+    ) -> None:
         """Alta en la bitácora NOM-024, en la misma transacción que la cita."""
         CitaEstatusLog.objects.create(
             cita=cita,
             from_status=None,
             to_status=cita.estatus,
             changed_by_id=changed_by_id,
-            notes=NOTA_CITA_AGENDADA,
+            notes=notes,
             canal=canal,
         )
 

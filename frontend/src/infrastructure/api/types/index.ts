@@ -1352,6 +1352,7 @@ export type {
   ProximasCitasParams,
   ProximasCitasResponse,
   CanalMovimiento,
+  ReprogramarCitaRequest,
   CitaHistorialItem,
   CitaHistorialResponse,
   SlotsResponse,

@@ -33,6 +33,7 @@ from apps.recepcion.uses_case.proximas_citas_usecase import list_proximas_citas
 from apps.recepcion.uses_case.visit_queue_usecase import RECEPCION_WRITE_CAPABILITY
 from apps.recepcion.uses_case.agendar_cita_usecase import agendar_cita
 from apps.recepcion.uses_case.cita_historial_usecase import get_cita_historial
+from apps.recepcion.uses_case.reprogramar_cita_usecase import reprogramar_cita
 from apps.recepcion.views.adscripcion_views import operador_de_usuario
 
 logger = logging.getLogger(__name__)
@@ -364,6 +365,80 @@ class CitaHistorialView(APIView):
             return _domain_error(request, exc)
 
         return Response({"items": get_cita_historial(cita)})
+
+
+class ReprogramarCitaSerializer(serializers.Serializer):
+    fechaHora     = serializers.DateTimeField()
+    # Vacío: el mismo médico (y su consultorio).
+    medicoId      = serializers.IntegerField(min_value=1, required=False)
+    consultorioId = serializers.IntegerField(min_value=1, required=False)
+    motivoDetalle = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    excepcionConsultorioFamiliar = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class CitaReprogramarView(APIView):
+    """POST /citas/<id>/reprogramar → cancela la cita y agenda la nueva enlazada, en un solo paso."""
+
+    authentication_classes = []
+    permission_classes     = []
+
+    def post(self, request, cita_id):
+        user, err = _auth(request)
+        if err:
+            return err
+        csrf_err = _csrf(request)
+        if csrf_err:
+            return csrf_err
+        try:
+            _check_cap(user, CITAS_WRITE_CAPABILITY)
+            cita = _cita_en_alcance(user, cita_id)
+        except VisitDomainError as exc:
+            return _domain_error(request, exc)
+
+        s = ReprogramarCitaSerializer(data=request.data)
+        if not s.is_valid():
+            return error_response("VALIDATION_ERROR", "Datos inválidos.",
+                                  status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                  details=s.errors, request_id=get_request_id(request))
+        datos = s.validated_data
+
+        medico_id = cita.medico_id
+        if datos.get("medicoId"):
+            medico, err = _resolve_medico_or_404(datos["medicoId"], request)
+            if err:
+                return err
+            medico_id = medico.id
+
+        # Alcance por centro del destino, igual que al agendar.
+        consultorio_destino = datos.get("consultorioId") or (
+            cita.consultorio_id if medico_id == cita.medico_id
+            else CitasRepository.consultorio_del_horario(medico_id, datos["fechaHora"])
+        )
+        permisos = UserRepository.build_auth_user(user).get("permissions", [])
+        antes = _resumen_cita(_serialize_cita(cita))
+        try:
+            exigir_centro_para_agendar(alcance_de(user, permisos), permisos, consultorio_destino)
+            nueva = reprogramar_cita(
+                cita_id=cita.id,
+                fecha_hora=datos["fechaHora"],
+                medico_id=medico_id,
+                consultorio_id=datos.get("consultorioId"),
+                motivo_detalle=datos.get("motivoDetalle") or None,
+                excepcion_consultorio_familiar=datos.get("excepcionConsultorioFamiliar"),
+                created_by_id=UserRepository.build_auth_user(user).get("id"),
+                operador=lambda: operador_de_usuario(user),
+                request=request,
+                canal=CanalMovimiento.RECEPCION,
+            )
+        except VisitDomainError as exc:
+            _auditar_cita(request, user, "CitaReprogramada", "FAILED", cita_id=cita.id,
+                          error_code=exc.code, antes=antes)
+            return error_response(exc.code, exc.message, exc.status_code,
+                                  details=exc.details or None, request_id=get_request_id(request))
+
+        _auditar_cita(request, user, "CitaReprogramada", "SUCCESS", cita_id=nueva["id"],
+                      antes=antes, despues=_resumen_cita(nueva))
+        return Response(nueva, status=status.HTTP_201_CREATED)
 
 
 class CitaEstatusView(APIView):

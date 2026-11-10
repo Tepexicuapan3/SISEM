@@ -1699,6 +1699,20 @@ ficha).
   `SISTEMA` (ficha automática, no asistió automático). Sale en
   `GET /citas/{id}/historial` y en "Ver movimientos" ("Rosa Mora · Recepción",
   "Portal", "Sistema").
+- B5: reprogramar. `POST /citas/{id}/reprogramar` (`fechaHora`; opcionales
+  `medicoId`, `consultorioId`, `motivoDetalle`, `excepcionConsultorioFamiliar`;
+  permiso `recepcion:citas:write`, alcance por centro de origen y destino,
+  auditoría `CitaReprogramada`). `reprogramar_cita_usecase`: en una transacción
+  cancela la anterior con el motivo "Reagendada" (libera su horario) y agenda
+  la nueva con `agendar_cita` (mismo paciente, servicio, duración, motivo y
+  notas). Si la nueva falla, la anterior queda igual. Solo citas agendadas o
+  confirmadas sin ficha (`409 CITA_NO_REPROGRAMABLE` / `409 CITA_CON_FICHA`).
+  Migración `recepcion/0039_cita_reprogramada_de`: `citas_medicas.reprogramada_de_id`
+  (uno a uno, PROTECT, admite vacío); el contrato suma `reprogramadaDeId`.
+  Bitácora: "Reprogramada" en la anterior y "Reprogramada desde CIT-…" en la
+  nueva. En la agenda semanal, cada cita cancelable tiene "Reprogramar" junto a
+  la ✕ (`citas/components/ReprogramarCitaDialog.tsx`: mismo médico, fecha y
+  horario libre, motivo opcional).
 
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).

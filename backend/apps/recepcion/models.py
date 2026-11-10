@@ -133,6 +133,16 @@ class CitaMedica(models.Model):
     )
     # Texto libre complementario/opcional al motivo tipificado de arriba.
     motivo_detalle      = models.TextField(null=True, blank=True)
+    # Cita cancelada que esta reprograma (reprogramar_cita_usecase). Uno a uno:
+    # una cita cancelada no se reprograma dos veces.
+    reprogramada_de = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reprogramada_a",
+        db_column="reprogramada_de_id",
+    )
 
     # Auditoría
     created_at      = models.DateTimeField(auto_now_add=True)

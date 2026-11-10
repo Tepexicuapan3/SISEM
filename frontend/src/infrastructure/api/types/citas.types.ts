@@ -153,6 +153,14 @@ export interface CitaHistorialItem {
 
 export type CanalMovimiento = "RECEPCION" | "MEDICO" | "PORTAL" | "SISTEMA";
 
+/** `POST /citas/{id}/reprogramar`. Sin `medicoId`: el mismo médico y consultorio. */
+export interface ReprogramarCitaRequest {
+  fechaHora:      string;  // YYYY-MM-DDTHH:mm (hora local)
+  medicoId?:      number;
+  consultorioId?: number;
+  motivoDetalle?: string;
+}
+
 export interface CitaHistorialResponse {
   items: CitaHistorialItem[];
 }

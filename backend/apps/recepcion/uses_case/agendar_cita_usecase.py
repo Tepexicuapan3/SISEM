@@ -74,6 +74,7 @@ def agendar_cita(
     id_cita_afectada=None,
     excepcion_consultorio_familiar=None,
     canal=CanalMovimiento.RECEPCION,
+    reprogramada_de=None,
 ) -> dict:
     """
     Crea la cita o lanza VisitDomainError. ``operador`` es un Operador o una
@@ -118,6 +119,7 @@ def agendar_cita(
                 notas=notas,
                 created_by_id=created_by_id,
                 canal=canal,
+                reprogramada_de=reprogramada_de,
             )
             if id_cita_afectada:
                 vincular_reagenda(

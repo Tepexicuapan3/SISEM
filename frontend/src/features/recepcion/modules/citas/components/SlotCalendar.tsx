@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { DoorClosed, DoorOpen, Globe, Loader2, Plus, Stethoscope, X } from "lucide-react";
+import { CalendarClock, DoorClosed, DoorOpen, Globe, Loader2, Plus, Stethoscope, X } from "lucide-react";
 import type { AgendaSlot } from "@api/types/agenda.types";
 import { useAgendaSemanal } from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
 import { addDays } from "@features/recepcion/modules/citas/utils/dates";
@@ -8,6 +8,10 @@ import {
   CancelarCitaDialog,
   type CitaACancelar,
 } from "@features/recepcion/modules/citas/components/CancelarCitaDialog";
+import {
+  ReprogramarCitaDialog,
+  type CitaAReprogramar,
+} from "@features/recepcion/modules/citas/components/ReprogramarCitaDialog";
 import { CITA_ESTATUS_CANCELABLE } from "@features/recepcion/modules/citas/domain/citaEstatus.errors";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,11 +107,14 @@ interface SlotCellProps {
   isToday:         boolean;
   onClick:         (dateStr: string, slot: AgendaSlot) => void;
   onCancelarCita:  (cita: CitaACancelar) => void;
+  onReprogramarCita: (cita: CitaACancelar) => void;
 }
 
 const CELL_BASE = "relative h-[68px] w-full overflow-hidden rounded-lg border border-l-4 px-2 py-1.5 flex flex-col justify-between text-left";
 
-function SlotCell({ dateStr, hora, slot, consultorio, today, now, isToday, onClick, onCancelarCita }: SlotCellProps) {
+function SlotCell({
+  dateStr, hora, slot, consultorio, today, now, isToday, onClick, onCancelarCita, onReprogramarCita,
+}: SlotCellProps) {
   if (!slot) {
     return (
       <div
@@ -155,26 +162,34 @@ function SlotCell({ dateStr, hora, slot, consultorio, today, now, isToday, onCli
         title={`${hora} — Ocupado${slot.cita ? ` · Exp. ${slot.cita.noExp}` : ""}${esPortal ? " · Reservada en línea" : ""} · ${consultorio}`}
       >
         {esCancelable && slot.cita && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCancelarCita({
-                id:    slot.cita!.id,
-                folio: slot.cita!.folio,
-                noExp: slot.cita!.noExp,
-                fecha: dateStr,
-                hora,
-              });
-            }}
-            title="Cancelar cita"
-            aria-label="Cancelar cita"
-            className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-paper text-status-alert shadow-sm opacity-0 transition-opacity hover:bg-status-critical hover:text-txt-inverse focus-visible:opacity-100 group-hover/cell:opacity-100"
-          >
-            <X className="size-3" />
-          </button>
+          <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/cell:opacity-100">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReprogramarCita({ id: slot.cita!.id, folio: slot.cita!.folio, noExp: slot.cita!.noExp, fecha: dateStr, hora });
+              }}
+              title="Reprogramar cita"
+              aria-label="Reprogramar cita"
+              className="flex size-5 items-center justify-center rounded-full bg-paper text-status-info shadow-sm hover:bg-status-info hover:text-txt-inverse"
+            >
+              <CalendarClock className="size-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelarCita({ id: slot.cita!.id, folio: slot.cita!.folio, noExp: slot.cita!.noExp, fecha: dateStr, hora });
+              }}
+              title="Cancelar cita"
+              aria-label="Cancelar cita"
+              className="flex size-5 items-center justify-center rounded-full bg-paper text-status-alert shadow-sm hover:bg-status-critical hover:text-txt-inverse"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
         )}
-        <div className="flex items-center gap-1 pr-5">
+        <div className="flex items-center gap-1 pr-11">
           <span className="font-mono text-sm font-bold text-txt-body tabular-nums">{hora}</span>
           {esPortal && <Globe className="size-3 shrink-0 text-status-info" />}
         </div>
@@ -288,6 +303,7 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
   }, []);
 
   const [citaACancelar, setCitaACancelar] = useState<CitaACancelar | null>(null);
+  const [citaAReprogramar, setCitaAReprogramar] = useState<CitaAReprogramar | null>(null);
 
   const today   = nowToday();
   const weekEnd = addDays(weekStart, 6);
@@ -510,6 +526,7 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
                             isToday={dateStr === today}
                             onClick={onSlotClick}
                             onCancelarCita={setCitaACancelar}
+                            onReprogramarCita={(cita) => setCitaAReprogramar({ ...cita, medicoId })}
                           />
                         ))}
                       </div>
@@ -527,6 +544,12 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
         cita={citaACancelar}
         onOpenChange={(open) => {
           if (!open) setCitaACancelar(null);
+        }}
+      />
+      <ReprogramarCitaDialog
+        cita={citaAReprogramar}
+        onOpenChange={(open) => {
+          if (!open) setCitaAReprogramar(null);
         }}
       />
     </div>
