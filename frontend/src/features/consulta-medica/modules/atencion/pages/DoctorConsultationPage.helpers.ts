@@ -257,6 +257,15 @@ export const resolveDomainErrorMessage = <TDomainCode extends string>(
     return fallback;
   }
 
+  // El backend manda el motivo por campo (ej. followUpDate): es más útil que
+  // el mensaje genérico del código.
+  const detailMessages = Object.values(error.details ?? {})
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter((message): message is string => typeof message === "string" && message.length > 0);
+  if (detailMessages.length > 0) {
+    return detailMessages.join(" ");
+  }
+
   const domainCode = error.code as TDomainCode;
   if (Object.prototype.hasOwnProperty.call(domainErrors, domainCode)) {
     return domainErrors[domainCode];

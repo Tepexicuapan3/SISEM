@@ -16,6 +16,7 @@ import {
 
 interface Props {
   visitId: number | null;
+  consultationDate: string | null;
   cieCode: string;
   diagnosisForm: UseFormReturn<SaveDiagnosisFormInput, unknown, SaveDiagnosisFormValues>;
   disabled: boolean;
@@ -29,7 +30,7 @@ interface Props {
  * - P-12: el médico saca la cita de SU agenda (ver FollowUpScheduler); se
  *   crea al finalizar la consulta (sin horario la agenda recepción).
  */
-export function MorbidityAndFollowUpFields({ visitId, cieCode, diagnosisForm, disabled }: Props) {
+export function MorbidityAndFollowUpFields({ visitId, consultationDate, cieCode, diagnosisForm, disabled }: Props) {
   const morbidity = useWatch({ control: diagnosisForm.control, name: "morbidity" });
   const followUpEnabled = useWatch({ control: diagnosisForm.control, name: "followUpEnabled" });
   const followUpDate = useWatch({ control: diagnosisForm.control, name: "followUpDate" });
@@ -92,7 +93,12 @@ export function MorbidityAndFollowUpFields({ visitId, cieCode, diagnosisForm, di
           Indicar fecha de seguimiento (cita)
         </label>
         {followUpEnabled ? (
-          <FollowUpScheduler visitId={visitId} diagnosisForm={diagnosisForm} disabled={disabled} />
+          <FollowUpScheduler
+            visitId={visitId}
+            consultationDate={consultationDate}
+            diagnosisForm={diagnosisForm}
+            disabled={disabled}
+          />
         ) : null}
         {followUpError ? (
           <p className="text-sm text-status-critical" role="alert">

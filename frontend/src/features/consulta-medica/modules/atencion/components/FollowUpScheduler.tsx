@@ -32,6 +32,8 @@ const formatLongDate = (iso: string): string =>
 
 interface Props {
   visitId: number | null;
+  /** fechaConsulta de la visita: el seguimiento tiene que ser posterior. */
+  consultationDate: string | null;
   diagnosisForm: UseFormReturn<SaveDiagnosisFormInput, unknown, SaveDiagnosisFormValues>;
   disabled: boolean;
 }
@@ -41,7 +43,7 @@ interface Props {
  * atajo (o día marcado en el calendario) -> horario. La cita se crea al
  * finalizar la consulta. Sin agenda, la fecha queda como indicación.
  */
-export function FollowUpScheduler({ visitId, diagnosisForm, disabled }: Props) {
+export function FollowUpScheduler({ visitId, consultationDate, diagnosisForm, disabled }: Props) {
   const queryClient = useQueryClient();
   const followUpDate = useWatch({ control: diagnosisForm.control, name: "followUpDate" });
   const followUpSlotId = useWatch({ control: diagnosisForm.control, name: "followUpSlotId" });
@@ -49,8 +51,9 @@ export function FollowUpScheduler({ visitId, diagnosisForm, disabled }: Props) {
   const enabled = visitId !== null && !disabled;
 
   // Días con horarios libres del mes visible (y si el usuario tiene agenda).
-  const [visibleMonth, setVisibleMonth] = useState(() => toDateObj(minFollowUpDate()));
-  const monthRange = followUpMonthRange(visibleMonth);
+  const minDate = minFollowUpDate(new Date(), consultationDate);
+  const [visibleMonth, setVisibleMonth] = useState(() => toDateObj(minDate));
+  const monthRange = followUpMonthRange(visibleMonth, new Date(), consultationDate);
   const { data: daysData, isFetching: loadingDays } = useQuery({
     queryKey: ["consulta-medica", "follow-up-days", visitId, monthRange?.desde, monthRange?.hasta],
     queryFn: () =>
@@ -88,7 +91,7 @@ export function FollowUpScheduler({ visitId, diagnosisForm, disabled }: Props) {
 
   const applyShortcut = async (shortcut: FollowUpShortcut) => {
     if (visitId === null) return;
-    const desde = shortcutStartDate(shortcut);
+    const desde = shortcutStartDate(shortcut, new Date(), consultationDate);
     setShortcutPending(shortcut.label);
     setShortcutMessage(null);
     try {
@@ -118,7 +121,7 @@ export function FollowUpScheduler({ visitId, diagnosisForm, disabled }: Props) {
   const disabledDays = disabled
     ? true
     : [
-        { before: toDateObj(minFollowUpDate()) },
+        { before: toDateObj(minDate) },
         ...(hasAgenda && daysData && !loadingDays
           ? [(date: Date) => !availableDays.has(toIso(date))]
           : []),

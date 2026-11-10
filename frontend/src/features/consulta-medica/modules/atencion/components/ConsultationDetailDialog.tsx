@@ -545,6 +545,7 @@ export function ConsultationDetailDialog({
 
             <MorbidityAndFollowUpFields
               visitId={selectedVisit?.id ?? null}
+              consultationDate={selectedVisit?.fechaConsulta ?? null}
               cieCode={selectedCieCode}
               diagnosisForm={diagnosisForm}
               disabled={!canSaveClinicalData || saveDiagnosis.isPending}

@@ -21,7 +21,7 @@ vi.mock("@api/resources/visits.api", () => ({
   },
 }));
 
-function Wrapper() {
+function Wrapper({ consultationDate = null }: { consultationDate?: string | null }) {
   const form = useForm<SaveDiagnosisFormInput, unknown, SaveDiagnosisFormValues>({
     resolver: zodResolver(saveDiagnosisFormSchema),
     mode: "onChange",
@@ -33,7 +33,13 @@ function Wrapper() {
   });
   return (
     <>
-      <MorbidityAndFollowUpFields visitId={1} cieCode="" diagnosisForm={form} disabled={false} />
+      <MorbidityAndFollowUpFields
+        visitId={1}
+        consultationDate={consultationDate}
+        cieCode=""
+        diagnosisForm={form}
+        disabled={false}
+      />
       <output data-testid="follow-up-date">{followUpDate}</output>
       <output data-testid="follow-up-slot">{followUpSlotId}</output>
     </>
@@ -92,6 +98,15 @@ describe("MorbidityAndFollowUpFields - cita de seguimiento", () => {
     const leyenda = screen.getByRole("list", { name: "Leyenda de horarios" });
     expect(leyenda).toHaveTextContent("Disponible");
     expect(leyenda).toHaveTextContent("Ocupado");
+  });
+
+  it("con la ficha registrada para una fecha futura, busca desde el día siguiente a la consulta", async () => {
+    const user = userEvent.setup();
+    render(<Wrapper consultationDate="2099-03-10" />);
+
+    await user.click(await screen.findByRole("button", { name: "Próximo disponible" }));
+
+    await waitFor(() => expect(visitsAPI.getFollowUpNextDay).toHaveBeenCalledWith(1, "2099-03-11"));
   });
 
   it("si el atajo no encuentra lugar lo dice", async () => {

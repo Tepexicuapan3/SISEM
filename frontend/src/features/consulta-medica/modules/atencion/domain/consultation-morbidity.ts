@@ -16,11 +16,16 @@ export function todayIso(now: Date = new Date()): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-/** Primer dia valido para el seguimiento: mañana. */
-export function minFollowUpDate(now: Date = new Date()): string {
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  return todayIso(tomorrow);
+/**
+ * Primer dia valido para el seguimiento: el siguiente a la consulta, y nunca
+ * antes de mañana. Es la misma regla del backend (_validate_clinical_fields):
+ * recepción puede registrar la ficha con una fecha posterior a hoy.
+ */
+export function minFollowUpDate(now: Date = new Date(), consultationDate?: string | null): string {
+  const today = todayIso(now);
+  const base = consultationDate && consultationDate > today ? consultationDate : today;
+  const [y, m, d] = base.split("-").map(Number);
+  return todayIso(new Date(y, m - 1, d + 1));
 }
 
 /**
@@ -38,7 +43,11 @@ export const FOLLOW_UP_SHORTCUTS = [
 export type FollowUpShortcut = (typeof FOLLOW_UP_SHORTCUTS)[number];
 
 /** Fecha desde la que se busca el atajo; nunca antes de mañana. */
-export function shortcutStartDate(shortcut: FollowUpShortcut, now: Date = new Date()): string {
+export function shortcutStartDate(
+  shortcut: FollowUpShortcut,
+  now: Date = new Date(),
+  consultationDate?: string | null,
+): string {
   const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + shortcut.days);
   if (shortcut.months) {
     const day = target.getDate();
@@ -48,7 +57,7 @@ export function shortcutStartDate(shortcut: FollowUpShortcut, now: Date = new Da
     target.setDate(Math.min(day, lastDay));
   }
   const iso = todayIso(target);
-  const min = minFollowUpDate(now);
+  const min = minFollowUpDate(now, consultationDate);
   return iso < min ? min : iso;
 }
 
@@ -72,10 +81,11 @@ export function groupSlotsByShift(
 export function followUpMonthRange(
   month: Date,
   now: Date = new Date(),
+  consultationDate?: string | null,
 ): { desde: string; hasta: string } | null {
   const first = todayIso(new Date(month.getFullYear(), month.getMonth(), 1));
   const last = todayIso(new Date(month.getFullYear(), month.getMonth() + 1, 0));
-  const min = minFollowUpDate(now);
+  const min = minFollowUpDate(now, consultationDate);
   if (last < min) return null;
   return { desde: first < min ? min : first, hasta: last };
 }
@@ -84,10 +94,19 @@ export function followUpMonthRange(
  * Regla del legado: si el medico marca "cita", la fecha es obligatoria.
  * Mejora: tiene que ser posterior a hoy. null si esta bien.
  */
-export function followUpError(enabled: boolean, date: string, now: Date = new Date()): string | null {
+export function followUpError(
+  enabled: boolean,
+  date: string,
+  now: Date = new Date(),
+  consultationDate?: string | null,
+): string | null {
   if (!enabled) return null;
   if (!date) return "Indica la fecha de seguimiento.";
-  if (date <= todayIso(now)) return "La fecha de seguimiento tiene que ser posterior a hoy.";
+  if (date < minFollowUpDate(now, consultationDate)) {
+    return consultationDate && consultationDate > todayIso(now)
+      ? "La fecha de seguimiento tiene que ser posterior a la consulta."
+      : "La fecha de seguimiento tiene que ser posterior a hoy.";
+  }
   return null;
 }
 

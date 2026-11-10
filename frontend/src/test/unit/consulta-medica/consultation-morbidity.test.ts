@@ -19,6 +19,11 @@ describe("atajos de seguimiento", () => {
     expect(shortcutStartDate(byLabel("Próximo disponible"), NOW)).toBe("2026-10-10");
   });
 
+  it("si la consulta es de una fecha posterior a hoy, arranca el día siguiente a la consulta", () => {
+    expect(shortcutStartDate(byLabel("Próximo disponible"), NOW, "2026-10-10")).toBe("2026-10-11");
+    expect(shortcutStartDate(byLabel("2 semanas"), NOW, "2026-10-10")).toBe("2026-10-23");
+  });
+
   it("semanas y meses se cuentan desde hoy", () => {
     expect(shortcutStartDate(byLabel("1 semana"), NOW)).toBe("2026-10-16");
     expect(shortcutStartDate(byLabel("2 semanas"), NOW)).toBe("2026-10-23");
@@ -65,6 +70,18 @@ describe("fechas de seguimiento", () => {
   it("hoy y mañana en formato aaaa-mm-dd", () => {
     expect(todayIso(NOW)).toBe("2026-10-09");
     expect(minFollowUpDate(NOW)).toBe("2026-10-10");
+  });
+
+  it("el mínimo es el día siguiente a la consulta (la regla del backend)", () => {
+    expect(minFollowUpDate(NOW, "2026-10-10")).toBe("2026-10-11");
+    // Una consulta de días anteriores no adelanta el mínimo: sigue siendo mañana.
+    expect(minFollowUpDate(NOW, "2026-10-01")).toBe("2026-10-10");
+    expect(minFollowUpDate(NOW, null)).toBe("2026-10-10");
+  });
+
+  it("la fecha tiene que ser posterior a la consulta", () => {
+    expect(followUpError(true, "2026-10-10", NOW, "2026-10-10")).toContain("posterior");
+    expect(followUpError(true, "2026-10-11", NOW, "2026-10-10")).toBeNull();
   });
 
   it("sin 'cita' marcada no hay nada que validar", () => {
