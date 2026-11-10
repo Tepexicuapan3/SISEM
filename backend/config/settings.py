@@ -319,6 +319,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.recepcion.tasks.materializar_fichas",
         "schedule": crontab(minute="*/5", hour="5-23"),
     },
+    "citas-fichas-no-llegaron": {
+        "task": "apps.recepcion.tasks.marcar_fichas_no_llegaron",
+        "schedule": crontab(minute="*/5"),
+    },
     "citas-marcar-no-asistio": {
         "task": "apps.recepcion.tasks.marcar_no_asistio",
         "schedule": crontab(minute="*/5"),

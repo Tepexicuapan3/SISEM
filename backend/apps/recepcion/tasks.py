@@ -162,6 +162,20 @@ def materializar_fichas():
 
 
 @shared_task
+def marcar_fichas_no_llegaron():
+    """
+    Cada 5 minutos.
+
+    Fichas automáticas que siguen "Por llegar" pasada la hora de la cita más
+    ``citas.tolerancia_no_show_min``: la ficha queda no_show y la cita
+    no_asistio (ver ``materializar_fichas_usecase``).
+    """
+    from .uses_case.materializar_fichas_usecase import marcar_fichas_no_llegaron as marcar
+
+    return marcar()
+
+
+@shared_task
 def marcar_no_asistio():
     """
     Cada 5 minutos.

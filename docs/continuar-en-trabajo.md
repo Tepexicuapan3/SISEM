@@ -1661,8 +1661,20 @@ bitácora (NOM-024). El contrato de la visita suma `llegadaEn` y
 `llegadaPendiente`; la tarjeta muestra **Por llegar** mientras espera. La
 bandeja por `fecha_consulta` no hizo falta: la ficha automática se crea el
 mismo día de la cita.
-Pendiente (paso 5): el "no asistió" de las fichas automáticas. Mientras tanto,
-`marcar_no_asistio` sigue aplicando a las citas que se quedaron sin ficha.
+
+**14. No asistió de las fichas automáticas.** `materializar_fichas_usecase.marcar_fichas_no_llegaron`:
+la ficha automática que sigue "Por llegar" (en espera, sin `llegada_en`)
+pasada la hora de la cita más `citas.tolerancia_no_show_min` (60 min por
+omisión; el parámetro no se sembró, se crea en el catálogo si se quiere otro
+valor) pasa a `no_show` por la máquina de estados (bitácora NOM-024) y su cita
+a `no_asistio`, con el motivo tipificado "Paciente no se presentó" y el detalle
+"Automático: no llegó N min después de la hora de la cita". Avisa a la bandeja
+por tiempo real. Cubre también las de días anteriores, así que no hace falta
+otra pasada al cierre del turno. Tarea `recepcion.tasks.marcar_fichas_no_llegaron`
+(beat `citas-fichas-no-llegaron`, cada 5 min); el comando
+`manage.py materializar_fichas` hace las dos cosas. `marcar_no_asistio` sigue
+igual para las citas sin ficha (las del portal y las que no pudieron generar
+ficha).
 
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).

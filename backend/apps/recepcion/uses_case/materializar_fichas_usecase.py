@@ -18,10 +18,17 @@ y bloquearía otras visitas del paciente hasta la fecha de la cita
 Se puede correr las veces que haga falta: una cita con ficha no se vuelve a
 tomar. Con un paciente sin vigencia o con otra visita abierta la ficha no se
 crea y la cita queda en el resumen con su motivo.
+
+No asistió (``marcar_fichas_no_llegaron``): la ficha que sigue "Por llegar"
+pasada la hora de la cita más ``citas.tolerancia_no_show_min`` (60 min por
+omisión) pasa a no_show y su cita a no_asistio. Si no, se quedaría en la
+bandeja y bloquearía las fichas siguientes del paciente. Cubre también las de
+días anteriores (por ejemplo, si la tarea no corrió).
 """
 
 import logging
 import uuid
+from datetime import datetime, timedelta
 
 from django.db import transaction
 from django.db.models import Exists, OuterRef
@@ -29,15 +36,27 @@ from django.utils import timezone
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 from apps.medicos.identity import usuario_id_for_medico
-from apps.realtime.events import publish_visit_created
+from apps.catalogos.models import MotivoCita
+from apps.realtime.events import publish_visit_created, publish_visit_no_show
+from apps.recepcion.repositories.citas_repository import CitasRepository
+from apps.recepcion.services.asistencia_cita_service import ESTATUS_PENDIENTE, MOTIVO_NO_ASISTIO_AUTOMATICO
 from apps.recepcion.models import CitaMedica, EstatusCita, OrigenCanalCita, Visit
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.qr_checkin_usecase import _resolver_paciente
-from apps.recepcion.uses_case.visit_queue_usecase import NOTA_FICHA_AUTOMATICA, create_visit
+from apps.recepcion.uses_case.visit_queue_usecase import NOTA_FICHA_AUTOMATICA, change_visit_status, create_visit
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["NOTA_FICHA_AUTOMATICA", "genera_ficha_automatica", "materializar_ficha", "materializar_fichas_del_dia"]
+__all__ = [
+    "NOTA_FICHA_AUTOMATICA",
+    "genera_ficha_automatica",
+    "marcar_fichas_no_llegaron",
+    "materializar_ficha",
+    "materializar_fichas_del_dia",
+]
+
+PARAM_TOLERANCIA = "citas.tolerancia_no_show_min"
+TOLERANCIA_DEFAULT = 60
 
 ESTATUS_CON_FICHA = (EstatusCita.AGENDADA, EstatusCita.CONFIRMADA)
 
@@ -119,3 +138,71 @@ def materializar_fichas_del_dia(fecha=None) -> dict:
     if omitidas:
         logger.info("Fichas automáticas %s: creadas=%s omitidas=%s", fecha, creadas, omitidas)
     return {"fecha": fecha.isoformat(), "creadas": creadas, "omitidas": omitidas}
+
+
+def tolerancia_no_show() -> timedelta:
+    from apps.catalogos.services.parametro_service import get_param
+
+    return timedelta(minutes=get_param(PARAM_TOLERANCIA, default=TOLERANCIA_DEFAULT))
+
+
+def _hora_de_la_cita(visit: Visit):
+    return timezone.make_aware(datetime.combine(visit.fecha_consulta, visit.hora_consulta))
+
+
+def _fichas_por_llegar(hasta_fecha):
+    return Visit.objects.filter(
+        origen_ficha=Visit.OrigenFicha.AUTOMATICA,
+        llegada_en__isnull=True,
+        status="en_espera",
+        fecha_consulta__lte=hasta_fecha,
+        hora_consulta__isnull=False,
+    ).order_by("fecha_consulta", "hora_consulta")
+
+
+def _marcar_no_llego(visit: Visit, motivo, minutos: int) -> None:
+    with transaction.atomic():
+        contrato = change_visit_status(visit.id_visit, "no_show", changed_by_id=None)
+        cita = CitaMedica.objects.filter(folio=visit.appointment_id, estatus__in=ESTATUS_PENDIENTE).first()
+        if cita is not None:
+            CitasRepository.update_estatus(
+                cita,
+                EstatusCita.NO_ASISTIO,
+                motivo_cancelacion=motivo,
+                motivo_detalle=f"Automático: no llegó {minutos} min después de la hora de la cita.",
+                changed_by_id=None,
+            )
+        transaction.on_commit(lambda: _avisar_no_show(contrato))
+
+
+def _avisar_no_show(visit: dict) -> None:
+    request_id = str(uuid.uuid4())
+    try:
+        publish_visit_no_show(
+            visit_id=visit["id"], status=visit["status"], previous_status="en_espera",
+            request_id=request_id, correlation_id=request_id,
+        )
+    except Exception:
+        logger.exception("No se pudo publicar el no asistió de la ficha %s en tiempo real", visit["id"])
+
+
+def marcar_fichas_no_llegaron(ahora=None) -> dict:
+    """Fichas automáticas que siguen "Por llegar" pasada la tolerancia: no asistió."""
+    ahora = ahora or timezone.now()
+    tolerancia = tolerancia_no_show()
+    minutos = int(tolerancia.total_seconds() // 60)
+    motivo = MotivoCita.objects.filter(name=MOTIVO_NO_ASISTIO_AUTOMATICO, is_active=True).first()
+    marcadas = 0
+    errores = 0
+    for visit in _fichas_por_llegar(timezone.localtime(ahora).date()):
+        if _hora_de_la_cita(visit) + tolerancia >= ahora:
+            continue
+        try:
+            _marcar_no_llego(visit, motivo, minutos)
+            marcadas += 1
+        except Exception:
+            errores += 1
+            logger.exception("Error marcando no asistió la ficha automática %s", visit.folio)
+    if marcadas or errores:
+        logger.info("Fichas automáticas sin llegada: marcadas=%s errores=%s", marcadas, errores)
+    return {"marcadas": marcadas, "errores": errores}
