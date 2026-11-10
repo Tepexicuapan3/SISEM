@@ -56,7 +56,7 @@ from apps.consulta_medica.services.paciente_entrada import paciente_de_llave, q_
 from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
 from apps.portal_citas.tasks import enviar_comprobante_portal_task
-from apps.recepcion.models import CitaMedica, EstatusCita, HorarioDisponible
+from apps.recepcion.models import CanalMovimiento, CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import (
     MENSAJE_HORARIO_PASADO,
     CitasRepository,
@@ -226,7 +226,7 @@ def reservar_cita(
         slot.disponible = False
         slot.save(update_fields=["cita", "disponible"])
         # Bitácora NOM-024 desde el alta; sin usuario de staff (la reserva el paciente).
-        CitasRepository.registrar_alta(cita, changed_by_id=None)
+        CitasRepository.registrar_alta(cita, changed_by_id=None, canal=CanalMovimiento.PORTAL)
 
     # Fase 5: la cita ya quedó confirmada (transacción cerrada arriba) --
     # el envío del comprobante por correo se dispara async y nunca debe

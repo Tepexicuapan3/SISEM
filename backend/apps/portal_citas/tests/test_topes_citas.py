@@ -19,7 +19,7 @@ from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
 from apps.portal_citas.models import PortalMiembro, PortalSesion
 from apps.portal_citas.services.token_service import issue_portal_access_token
-from apps.recepcion.models import CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
+from apps.recepcion.models import CanalMovimiento, CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.consulta_medica.services.paciente_entrada import paciente_de_llave as _paciente_de_llave
 
@@ -164,3 +164,18 @@ class TopesPortalTests(_Base, APITestCase):
         log = CitaEstatusLog.objects.get(cita__folio=response.json()["folio"])
         # Sin usuario de staff: la reservó el paciente desde el portal.
         self.assertEqual((log.from_status, log.to_status, log.changed_by_id), (None, EstatusCita.AGENDADA, None))
+
+    def test_reserva_y_cancelacion_del_portal_quedan_con_su_canal(self):
+        folio = self._reservar(DIA, "09:00").json()["folio"]
+        self.client.patch(
+            f"/api/v1/portal/citas/{folio}/cancelar", {}, format="json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        canales = list(
+            CitaEstatusLog.objects.filter(cita__folio=folio).order_by("id").values_list("to_status", "canal")
+        )
+        self.assertEqual(
+            canales,
+            [(EstatusCita.AGENDADA, CanalMovimiento.PORTAL), (EstatusCita.CANCELADA, CanalMovimiento.PORTAL)],
+        )

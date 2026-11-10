@@ -21,7 +21,7 @@ from apps.authentication.services.authorization_service import has_capability
 from apps.authentication.services.centro_scope import alcance_de
 from apps.catalogos.models import MotivoCita
 from apps.medicos.repositories.medico_repository import MedicoRepository
-from apps.recepcion.models import EstatusCita
+from apps.recepcion.models import CanalMovimiento, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository, _serialize_cita
 from apps.recepcion.services.alcance_centro import (
     alcance_para_agendar,
@@ -400,6 +400,7 @@ class CitaEstatusView(APIView):
                 motivo_cancelacion=s.validated_data.get("motivoCancelacionId"),
                 motivo_detalle=s.validated_data.get("motivoDetalle") or None,
                 changed_by_id=auth_user.get("id"),
+                canal=CanalMovimiento.RECEPCION,
             )
         except VisitDomainError as exc:
             _auditar_cita(request, user, "CitaEstatusCambiado", "FAILED", cita_id=cita.id,

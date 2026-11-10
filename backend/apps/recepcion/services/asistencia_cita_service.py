@@ -18,7 +18,7 @@ from datetime import timedelta
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
-from apps.recepcion.models import CitaMedica, EstatusCita, Visit
+from apps.recepcion.models import CanalMovimiento, CitaMedica, EstatusCita, Visit
 from apps.recepcion.services.errors import VisitDomainError
 
 PARAM_ANTICIPACION = "citas.anticipacion_checkin_min"
@@ -81,13 +81,15 @@ def citas_vencidas_sin_checkin():
     ).exclude(Exists(con_ficha))
 
 
-def confirmar_por_checkin(appointment_id: str | None, changed_by_id: int | None) -> None:
-    """La ficha de una cita la deja confirmada (la máquina de estados registra la bitácora)."""
+def confirmar_por_checkin(appointment_id: str | None, changed_by_id: int | None,
+                          canal: str = CanalMovimiento.RECEPCION) -> None:
+    """La ficha de una cita la deja confirmada (la máquina de estados registra la bitácora).
+    ``canal``: RECEPCION en el check-in; SISTEMA en la ficha automática."""
     from apps.recepcion.repositories.citas_repository import CitasRepository
 
     cita = _cita_pendiente(appointment_id)
     if cita is not None and cita.estatus == EstatusCita.AGENDADA:
-        CitasRepository.update_estatus(cita, EstatusCita.CONFIRMADA, changed_by_id=changed_by_id)
+        CitasRepository.update_estatus(cita, EstatusCita.CONFIRMADA, changed_by_id=changed_by_id, canal=canal)
 
 
 def marcar_atendida(appointment_id: str | None, changed_by_id: int | None) -> None:
@@ -96,7 +98,9 @@ def marcar_atendida(appointment_id: str | None, changed_by_id: int | None) -> No
 
     cita = _cita_pendiente(appointment_id)
     if cita is not None:
-        CitasRepository.update_estatus(cita, EstatusCita.ATENDIDA, changed_by_id=changed_by_id)
+        CitasRepository.update_estatus(
+            cita, EstatusCita.ATENDIDA, changed_by_id=changed_by_id, canal=CanalMovimiento.MEDICO,
+        )
 
 
 def cita_de_ficha(appointment_id: str | None) -> CitaMedica | None:

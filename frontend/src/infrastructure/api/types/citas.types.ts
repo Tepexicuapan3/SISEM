@@ -147,7 +147,11 @@ export interface CitaHistorialItem {
   changedByNombre: string | null;
   changedAt:       string;  // ISO 8601
   notes:           string | null;
+  /** Desde dónde se hizo el movimiento; null en los anteriores a este campo. */
+  canal:           CanalMovimiento | null;
 }
+
+export type CanalMovimiento = "RECEPCION" | "MEDICO" | "PORTAL" | "SISTEMA";
 
 export interface CitaHistorialResponse {
   items: CitaHistorialItem[];

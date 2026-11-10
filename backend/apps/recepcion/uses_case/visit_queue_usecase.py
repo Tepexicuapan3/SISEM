@@ -6,7 +6,7 @@ import logging
 from apps.administracion.use_cases.expedientes.buscar_expediente import ExpedientesNoDisponible, buscar_expediente
 from apps.authentication.services.authorization_service import has_capability
 from apps.medicos.identity import medico_id_for_usuario
-from apps.recepcion.models import HorarioDisponible, Visit
+from apps.recepcion.models import CanalMovimiento, HorarioDisponible, Visit
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services import asistencia_cita_service
 from apps.recepcion.services.alcance_centro import exigir_en_alcance
@@ -358,7 +358,10 @@ def create_visit(
             changed_by_id=created_by_id,
             notes=NOTA_FICHA_AUTOMATICA if automatica else "Check-in inicial",
         )
-        asistencia_cita_service.confirmar_por_checkin(appointment_id, created_by_id)
+        asistencia_cita_service.confirmar_por_checkin(
+            appointment_id, created_by_id,
+            canal=CanalMovimiento.SISTEMA if automatica else CanalMovimiento.RECEPCION,
+        )
     return VisitRepository.to_contract(visit)
 
 

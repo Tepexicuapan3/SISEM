@@ -16,7 +16,7 @@ from apps.administracion.models import AuditoriaEvento
 from apps.catalogos.models import Consultorios, Turnos
 from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import RelMedicoConsultorio, RelMedicoConsultorioHorario
-from apps.recepcion.models import EstatusCita
+from apps.recepcion.models import CanalMovimiento, CitaEstatusLog, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.tests import test_checkin_manual_api as base
 from apps.recepcion.uses_case import agendar_cita_usecase
@@ -94,4 +94,5 @@ class CitaAuditoriaApiTests(APITestCase):
         evento = self._evento("CitaEstatusCambiado")
         self.assertEqual((evento.recurso_tipo, evento.recurso_id), ("cita", cita.id))
         self.assertEqual(evento.datos_antes, {"estatus": "agendada"})
+        self.assertEqual(CitaEstatusLog.objects.get(cita=cita).canal, CanalMovimiento.RECEPCION)
         self.assertEqual(evento.datos_despues["estatus"], "confirmada")

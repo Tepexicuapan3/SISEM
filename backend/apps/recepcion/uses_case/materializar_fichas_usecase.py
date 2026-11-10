@@ -40,7 +40,7 @@ from apps.catalogos.models import MotivoCita
 from apps.realtime.events import publish_visit_created, publish_visit_no_show
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.asistencia_cita_service import ESTATUS_PENDIENTE, MOTIVO_NO_ASISTIO_AUTOMATICO
-from apps.recepcion.models import CitaMedica, EstatusCita, OrigenCanalCita, Visit
+from apps.recepcion.models import CanalMovimiento, CitaMedica, EstatusCita, OrigenCanalCita, Visit
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.qr_checkin_usecase import _resolver_paciente
 from apps.recepcion.uses_case.visit_queue_usecase import NOTA_FICHA_AUTOMATICA, change_visit_status, create_visit
@@ -171,6 +171,7 @@ def _marcar_no_llego(visit: Visit, motivo, minutos: int) -> None:
                 motivo_cancelacion=motivo,
                 motivo_detalle=f"Automático: no llegó {minutos} min después de la hora de la cita.",
                 changed_by_id=None,
+                canal=CanalMovimiento.SISTEMA,
             )
         transaction.on_commit(lambda: _avisar_no_show(contrato))
 

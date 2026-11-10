@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from apps.catalogos.models import MotivoCita
 from apps.medicos.models import CatMedico
-from .models import CitaMedica, EstatusCita
+from .models import CanalMovimiento, CitaMedica, EstatusCita
 from .repositories.citas_repository import CitasRepository
 from .services.asistencia_cita_service import (
     MOTIVO_NO_ASISTIO_AUTOMATICO,
@@ -207,6 +207,7 @@ def marcar_no_asistio():
                 motivo_cancelacion=motivo_automatico,
                 motivo_detalle=f"Automático: sin check-in {minutos} min antes de la hora de la cita.",
                 changed_by_id=None,
+                canal=CanalMovimiento.SISTEMA,
             )
             actualizadas += 1
         except Exception as exc:

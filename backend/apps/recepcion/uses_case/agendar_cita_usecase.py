@@ -21,7 +21,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalogos.models.consultorios import Consultorios
-from apps.recepcion.models import CitaMedica
+from apps.recepcion.models import CanalMovimiento, CitaMedica
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
 from apps.recepcion.services.errors import VisitDomainError
@@ -73,6 +73,7 @@ def agendar_cita(
     notas=None,
     id_cita_afectada=None,
     excepcion_consultorio_familiar=None,
+    canal=CanalMovimiento.RECEPCION,
 ) -> dict:
     """
     Crea la cita o lanza VisitDomainError. ``operador`` es un Operador o una
@@ -116,6 +117,7 @@ def agendar_cita(
                 motivo=motivo,
                 notas=notas,
                 created_by_id=created_by_id,
+                canal=canal,
             )
             if id_cita_afectada:
                 vincular_reagenda(

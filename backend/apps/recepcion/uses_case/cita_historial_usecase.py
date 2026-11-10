@@ -18,6 +18,7 @@ def _contrato(log: CitaEstatusLog, nombres: dict) -> dict:
         "changedByNombre": nombres.get(log.changed_by_id),
         "changedAt":       log.changed_at.isoformat() if log.changed_at else None,
         "notes":           log.notes,
+        "canal":           log.canal,
     }
 
 

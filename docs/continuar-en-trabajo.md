@@ -1691,6 +1691,14 @@ ficha).
   `CitaEstatusCambiado`, con actor, request, IP, navegador, resultado (también
   los rechazos, con su código) y el antes y después (folio, estatus, fecha,
   médico, consultorio, canal; sin datos personales del paciente).
+- B4: migración `recepcion/0038_bitacora_cita_canal`: columna `canal` en
+  `citas_estatus_log` (admite vacío; los movimientos anteriores quedan sin
+  canal). Valores (`CanalMovimiento`): `RECEPCION` (alta y cambios de
+  recepción, check-in, P-03), `MEDICO` (seguimiento desde la consulta y cita
+  atendida al cerrarla), `PORTAL` (reserva y cancelación del paciente) y
+  `SISTEMA` (ficha automática, no asistió automático). Sale en
+  `GET /citas/{id}/historial` y en "Ver movimientos" ("Rosa Mora · Recepción",
+  "Portal", "Sistema").
 
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).

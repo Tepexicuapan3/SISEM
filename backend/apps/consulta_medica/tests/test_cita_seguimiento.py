@@ -22,7 +22,7 @@ from apps.consulta_medica.uses_case.follow_up_usecase import (
 )
 from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
-from apps.recepcion.models import CitaMedica, HorarioDisponible, Visit
+from apps.recepcion.models import CanalMovimiento, CitaEstatusLog, CitaMedica, HorarioDisponible, Visit
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case import agendar_cita_usecase
@@ -157,6 +157,7 @@ class CitaSeguimientoTests(TestCase):
         self.assertEqual((cita.patient.no_exp, cita.medico_id, cita.motivo), ("EXP-SEG", self.medico.id, MOTIVO_SEGUIMIENTO))
         self.assertEqual(cita.notas, f"Consulta {visit.folio}")
         self.assertEqual(payload["followUpAppointment"]["folio"], cita.folio)
+        self.assertEqual(CitaEstatusLog.objects.get(cita=cita).canal, CanalMovimiento.MEDICO)
         slot.refresh_from_db()
         self.assertEqual(slot.cita, cita)
 

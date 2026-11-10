@@ -25,6 +25,7 @@ from apps.recepcion.models import (
     AdscripcionCitaAfectada,
     AdscripcionConsultorio,
     AdscripcionPaciente,
+    CanalMovimiento,
     CitaMedica,
     EstatusCita,
 )
@@ -308,6 +309,7 @@ def _adscribir(*, id_paciente, consultorio_id, id_adscripcion_esperada, citas_a_
                 motivo_cancelacion=motivo,
                 motivo_detalle=MOTIVO_DETALLE_CANCELACION,
                 changed_by_id=operador.id_usuario,
+                canal=CanalMovimiento.RECEPCION,
             )
             AdscripcionCitaAfectada.objects.create(
                 adscripcion=nueva, cita_cancelada=cita, id_usuario_creacion=operador.id_usuario,

@@ -12,11 +12,11 @@ vi.mock("@features/recepcion/modules/citas/queries/useCitaHistorial", () => ({
 const items: CitaHistorialItem[] = [
   {
     id: 1, fromStatus: null, toStatus: "agendada", changedById: 5, changedByNombre: "Rosa Mora",
-    changedAt: "2026-11-10T15:00:00Z", notes: "Cita agendada",
+    changedAt: "2026-11-10T15:00:00Z", notes: "Cita agendada", canal: "RECEPCION",
   },
   {
     id: 2, fromStatus: "agendada", toStatus: "cancelada", changedById: null, changedByNombre: null,
-    changedAt: "2026-11-10T16:00:00Z", notes: "Paciente lo solicitó",
+    changedAt: "2026-11-10T16:00:00Z", notes: "Paciente lo solicitó", canal: "PORTAL",
   },
 ];
 
@@ -46,10 +46,10 @@ describe("CitaMovimientos", () => {
     await user.click(screen.getByRole("button", { name: /Ver movimientos/ }));
 
     expect(vi.mocked(useCitaHistorial)).toHaveBeenLastCalledWith(9, true);
-    expect(screen.getByText(/Rosa Mora/)).toBeInTheDocument();
+    expect(screen.getByText(/Rosa Mora · Recepción/)).toBeInTheDocument();
     expect(screen.getByText("Paciente lo solicitó")).toBeInTheDocument();
-    // Sin usuario: el paciente desde el portal o una tarea automática.
-    expect(screen.getByText(/Portal o automático/)).toBeInTheDocument();
+    // Sin usuario: el canal dice si fue el paciente (portal) o el sistema.
+    expect(screen.getByText(/· Portal$/)).toBeInTheDocument();
     expect(screen.getByText("Cancelada")).toBeInTheDocument();
   });
 

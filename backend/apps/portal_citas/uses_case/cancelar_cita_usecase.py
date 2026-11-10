@@ -58,7 +58,7 @@ from apps.portal_citas.errors import PortalCancelacionError
 from apps.portal_citas.models import PortalMiembro
 from apps.portal_citas.services.nucleo_service import puede_gestionar_miembro
 from apps.portal_citas.tasks import enviar_cancelacion_portal_task
-from apps.recepcion.models import CitaMedica, EstatusCita
+from apps.recepcion.models import CanalMovimiento, CitaMedica, EstatusCita
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.consulta_medica.services.paciente_entrada import llave_publica
@@ -156,6 +156,7 @@ def cancelar_cita(
                 motivo_cancelacion=motivo_catalogo,
                 motivo_detalle=motivo or "Cancelada por el paciente desde el portal.",
                 changed_by_id=None,
+                canal=CanalMovimiento.PORTAL,
             )
         except VisitDomainError as exc:
             raise PortalCancelacionError(exc.code, exc.message, exc.status_code) from exc

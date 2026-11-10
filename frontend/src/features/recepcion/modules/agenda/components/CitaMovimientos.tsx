@@ -1,7 +1,22 @@
 import { useState } from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
+import type { CanalMovimiento, CitaHistorialItem } from "@api/types";
 import { useCitaHistorial } from "@features/recepcion/modules/citas/queries/useCitaHistorial";
 import { ESTATUS_LABEL } from "../pages/RecepcionAgendaPage.helpers";
+
+const CANAL_LABEL: Record<CanalMovimiento, string> = {
+  RECEPCION: "Recepción",
+  MEDICO:    "Médico",
+  PORTAL:    "Portal",
+  SISTEMA:   "Sistema",
+};
+
+/** Quién y desde dónde; los movimientos anteriores al canal no lo tienen. */
+const autor = (entry: CitaHistorialItem): string => {
+  const canal = entry.canal ? CANAL_LABEL[entry.canal] : null;
+  if (entry.changedByNombre) return canal ? `${entry.changedByNombre} · ${canal}` : entry.changedByNombre;
+  return canal ?? "Portal o automático";
+};
 
 const formatMomento = (iso: string): string =>
   new Date(iso).toLocaleString("es-MX", {
@@ -54,7 +69,7 @@ export function CitaMovimientos({ citaId }: { citaId: number }) {
                       <span className="font-semibold text-txt-body">{ESTATUS_LABEL[entry.toStatus]}</span>
                     </div>
                     <p className="text-[10px] text-txt-muted mt-0.5">
-                      {formatMomento(entry.changedAt)} · {entry.changedByNombre ?? "Portal o automático"}
+                      {formatMomento(entry.changedAt)} · {autor(entry)}
                     </p>
                     {entry.notes ? (
                       <p className="text-[10px] italic text-txt-muted/70 mt-0.5">{entry.notes}</p>

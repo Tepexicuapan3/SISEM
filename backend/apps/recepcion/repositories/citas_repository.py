@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from apps.catalogos.models import MotivoCita
 from apps.medicos.identity import display_name
-from apps.recepcion.models import CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
+from apps.recepcion.models import CanalMovimiento, CitaEstatusLog, CitaMedica, EstatusCita, HorarioDisponible
 
 # Primera entrada de la bitácora de cada cita (NOM-024): quién la agendó y cuándo.
 NOTA_CITA_AGENDADA = "Cita agendada"
@@ -232,6 +232,7 @@ class CitasRepository:
         motivo: str | None = None,
         notas: str | None = None,
         created_by_id: int | None = None,
+        canal: str = CanalMovimiento.RECEPCION,
     ) -> dict:
         if es_horario_pasado(fecha_hora):
             raise ValueError(MENSAJE_HORARIO_PASADO)
@@ -336,7 +337,7 @@ class CitasRepository:
             slot.disponible = False
             slot.cita = cita
             slot.save(update_fields=["disponible", "cita_id"])
-            CitasRepository.registrar_alta(cita, created_by_id)
+            CitasRepository.registrar_alta(cita, created_by_id, canal=canal)
 
         cita.refresh_from_db()
         cita = CitaMedica.objects.select_related(
@@ -345,7 +346,7 @@ class CitasRepository:
         return _serialize_cita(cita)
 
     @staticmethod
-    def registrar_alta(cita: CitaMedica, changed_by_id: int | None) -> None:
+    def registrar_alta(cita: CitaMedica, changed_by_id: int | None, *, canal: str) -> None:
         """Alta en la bitácora NOM-024, en la misma transacción que la cita."""
         CitaEstatusLog.objects.create(
             cita=cita,
@@ -353,6 +354,7 @@ class CitasRepository:
             to_status=cita.estatus,
             changed_by_id=changed_by_id,
             notes=NOTA_CITA_AGENDADA,
+            canal=canal,
         )
 
     @staticmethod
@@ -363,6 +365,7 @@ class CitasRepository:
         motivo_cancelacion=None,
         motivo_detalle: str | None = None,
         changed_by_id: int | None = None,
+        canal: str | None = None,
     ) -> dict:
         """
         ``motivo_cancelacion``: instancia (o PK) de ``catalogos.MotivoCita``
@@ -443,6 +446,7 @@ class CitasRepository:
                 to_status=estatus,
                 changed_by_id=changed_by_id,
                 notes=motivo_detalle or motivo_nombre,
+                canal=canal,
             )
 
         cita = CitaMedica.objects.select_related(

@@ -22,6 +22,14 @@ class OrigenCanalCita(models.TextChoices):
     PORTAL    = "PORTAL",    "Portal"
 
 
+class CanalMovimiento(models.TextChoices):
+    """Desde dónde se hizo cada movimiento de la bitácora de la cita."""
+    RECEPCION = "RECEPCION", "Recepción"
+    MEDICO    = "MEDICO",    "Médico"
+    PORTAL    = "PORTAL",    "Portal"
+    SISTEMA   = "SISTEMA",   "Sistema"
+
+
 class EstatusCita(models.TextChoices):
     AGENDADA   = "agendada",   "Agendada"
     CONFIRMADA = "confirmada", "Confirmada"
@@ -484,6 +492,10 @@ class CitaEstatusLog(models.Model):
     changed_by_id = models.BigIntegerField(null=True, blank=True, db_column="changed_by_id")
     changed_at    = models.DateTimeField(auto_now_add=True, db_column="changed_at")
     notes         = models.CharField(max_length=255, null=True, blank=True, db_column="notes")
+    # Vacío en los movimientos anteriores a este campo.
+    canal         = models.CharField(
+        max_length=10, choices=CanalMovimiento.choices, null=True, blank=True, db_column="canal",
+    )
 
     class Meta:
         db_table = "citas_estatus_log"
