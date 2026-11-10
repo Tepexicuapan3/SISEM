@@ -315,6 +315,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.recepcion.tasks.generar_slots_todos_medicos",
         "schedule": crontab(hour=1, minute=0),  # diario a la 1am
     },
+    "citas-materializar-fichas": {
+        "task": "apps.recepcion.tasks.materializar_fichas",
+        "schedule": crontab(minute="*/5", hour="5-23"),
+    },
     "citas-marcar-no-asistio": {
         "task": "apps.recepcion.tasks.marcar_no_asistio",
         "schedule": crontab(minute="*/5"),

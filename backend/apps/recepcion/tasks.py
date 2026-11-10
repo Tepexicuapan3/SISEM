@@ -144,6 +144,24 @@ def generar_slots_todos_medicos(self):
 
 
 @shared_task
+def materializar_fichas():
+    """
+    Cada 5 minutos de 5:00 a 23:55.
+
+    Crea la ficha en espera de las citas de hoy que no son del portal y
+    todavía no la tienen (ver ``materializar_fichas_usecase``). La primera
+    corrida del día crea las de la jornada; las siguientes reintentan las que
+    no se pudieron crear. No duplica.
+    """
+    from .uses_case.materializar_fichas_usecase import materializar_fichas_del_dia
+
+    resumen = materializar_fichas_del_dia()
+    if resumen["creadas"]:
+        logger.info("Fichas automáticas creadas: %s", resumen["creadas"])
+    return resumen
+
+
+@shared_task
 def marcar_no_asistio():
     """
     Cada 5 minutos.

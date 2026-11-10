@@ -28,8 +28,8 @@ interface Props {
 
 /**
  * Próximas citas: quién viene en los próximos días, incluidas las citas de
- * seguimiento que deja el médico al cerrar la consulta. La ficha se crea
- * el día de la cita, al hacer el check-in.
+ * seguimiento que deja el médico al cerrar la consulta. El día de la cita
+ * la ficha aparece sola en la bandeja; solo las del portal hacen check-in.
  */
 export function ProximasCitasView({ allMedicos, enabled }: Props) {
   const [rango, setRango] = useState<ProximasRango>("7dias");
@@ -59,8 +59,8 @@ export function ProximasCitasView({ allMedicos, enabled }: Props) {
         </h2>
         <p className="text-xs text-txt-muted">
           Citas agendadas y confirmadas. Las marcadas como <strong>Seguimiento</strong> las
-          dejó el médico al cerrar la consulta. La ficha se crea el día de la cita, al hacer
-          el check-in.
+          dejó el médico al cerrar la consulta. El día de la cita la ficha aparece sola en la
+          bandeja; solo las citas del portal hacen check-in.
         </p>
       </header>
 

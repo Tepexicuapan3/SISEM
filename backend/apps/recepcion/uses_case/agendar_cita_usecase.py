@@ -2,6 +2,10 @@
 Agendar una cita: un solo camino para recepción (``POST /citas``) y para el
 médico que deja el seguimiento al cerrar la consulta.
 
+Si la cita es para hoy y no es del portal, su ficha sale en ese momento
+(``materializar_fichas_usecase``); si no se puede, la cita queda igual y la
+reintenta la tarea de fichas automáticas.
+
 Reglas de negocio (antes en la vista): vigencia del paciente, clínica del
 paciente contra el centro del consultorio, consultorio familiar (P-03),
 horario libre (``CitasRepository.create``) y reagendado de una cita
@@ -11,7 +15,10 @@ La autorización queda en quien llama: permiso y alcance por centro en la
 vista de recepción; "solo en tu propia agenda" en el seguimiento del médico.
 """
 
+import logging
+
 from django.db import transaction
+from django.utils import timezone
 
 from apps.catalogos.models.consultorios import Consultorios
 from apps.recepcion.models import CitaMedica
@@ -24,6 +31,9 @@ from apps.recepcion.uses_case.adscripcion_usecase import (
     validar_consultorio_familiar,
     vincular_reagenda,
 )
+from apps.recepcion.uses_case.materializar_fichas_usecase import genera_ficha_automatica, materializar_ficha
+
+logger = logging.getLogger(__name__)
 
 
 def _validar_clinica_paciente(no_exp: str, pk_num: int, consultorio_id: int) -> None:
@@ -117,4 +127,18 @@ def agendar_cita(
     except ValueError as exc:
         # Ocupado, ausencia, tope por día, etc.
         raise VisitDomainError("CITA_NOT_AVAILABLE", str(exc), 400) from exc
+    _ficha_si_es_hoy(cita["id"])
     return cita
+
+
+def _ficha_si_es_hoy(cita_id) -> None:
+    cita = CitaMedica.objects.get(pk=cita_id)
+    if timezone.localtime(cita.fecha_hora).date() != timezone.localdate() or not genera_ficha_automatica(cita):
+        return
+    try:
+        materializar_ficha(cita)
+    except VisitDomainError as exc:
+        logger.info("La cita %s quedó sin ficha automática: %s", cita.folio, exc.code)
+    except Exception:
+        # La cita ya quedó agendada: la ficha la reintenta la tarea.
+        logger.exception("Error creando la ficha automática de la cita %s", cita.folio)

@@ -210,6 +210,19 @@ class CheckinManualApiTests(APITestCase):
 
         self.assertEqual(response.data["candidatos"], [])
 
+    def test_candidatos_excluye_la_cita_que_ya_tiene_ficha(self):
+        cita = self._cita_hoy()
+        Visit.objects.create(
+            folio="VIS-AUTO", patient=cita.patient, arrival_type=Visit.ArrivalType.APPOINTMENT,
+            appointment_id=cita.folio, status="en_espera", fecha_consulta=timezone.localdate(),
+        )
+
+        por_nombre = self.client.get("/api/v1/citas/checkin/candidatos", {"nombre": "hernandez"})
+        por_folio = self.client.get("/api/v1/citas/checkin/candidatos", {"folio": cita.folio})
+
+        self.assertNotIn(cita.folio, [c["folio"] for c in por_nombre.data["candidatos"]])
+        self.assertEqual(por_folio.data["candidatos"], [])
+
     # ── confirmar-folio ──────────────────────────────────────────────────
 
     def test_confirmar_folio_crea_visita_y_marca_verificada(self):

@@ -1626,6 +1626,29 @@ una cita futura. Aplica al QR, a `confirmar-folio` y a `create_visit` con cita.
 `GET /citas/checkin/candidatos?folio=` también deja fuera las citas de otro
 día, igual que la búsqueda por nombre.
 
+**12. Fichas automáticas de las citas (sin check-in).** Decisión 2026-11-10: las
+citas que no son del portal (`origen_canal != PORTAL`: recepción y el
+seguimiento del médico) generan su ficha en espera el día de la cita, sin
+check-in. El check-in (QR o folio) queda solo para las del portal. Caso de uso
+`recepcion/uses_case/materializar_fichas_usecase.py`; la ficha sale con
+`create_visit(..., automatica=True)`, que no exige la anticipación del
+check-in, no vuelve a reservar el horario, guarda `fecha_consulta` y
+`hora_consulta` de la cita, deja `num_ficha` vacío (se asignará cuando el
+paciente llegue) y anota "Ficha automática de la cita" en la bitácora. La cita
+pasa a confirmada.
+Cuándo se crea: tarea `recepcion.tasks.materializar_fichas` (beat
+`citas-materializar-fichas`, cada 5 min de 5:00 a 23:55, reintenta), al
+agendar una cita para hoy (`agendar_cita`) y con
+`manage.py materializar_fichas` (desarrollo, sin Celery). No duplica. No se
+crea si el paciente no tiene vigencia (`PATIENT_NO_SERVICE`: recepción la
+atiende con autorización de Capital Humano por el check-in) o tiene otra
+visita abierta (`VISIT_DUPLICATE_SUBMIT`). Las citas que ya tienen ficha no
+aparecen en `GET /citas/checkin/candidatos`.
+Pendiente (pasos 4 y 5): la marca "Llegó" con su número de ficha, la bandeja
+por `fecha_consulta` y el "no asistió" de las fichas automáticas. Mientras
+tanto, `marcar_no_asistio` sigue aplicando a las citas que se quedaron sin
+ficha.
+
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).
 

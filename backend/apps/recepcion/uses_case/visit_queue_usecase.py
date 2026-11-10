@@ -22,6 +22,9 @@ _ACTIVE_VISIT_STATUSES = (
 )
 
 RECEPCION_WRITE_CAPABILITY = "flow.recepcion.queue.write"
+
+# Nota de la bitácora para la ficha que genera la cita sin check-in.
+NOTA_FICHA_AUTOMATICA = "Ficha automática de la cita"
 VISIT_QUEUE_READ_CAPABILITY = "flow.visits.queue.read"
 SOMATOMETRIA_QUEUE_READ_CAPABILITY = "flow.somatometria.queue.read"
 DOCTOR_QUEUE_READ_CAPABILITY = "flow.doctor.queue.read"
@@ -281,8 +284,14 @@ def create_visit(
     hora_consulta=None,
     fecha_consulta=None,
     created_by_id: int | None = None,
+    automatica: bool = False,
 ) -> dict:
     """
+    ``automatica``: ficha que genera la cita el día de la cita, sin check-in
+    (``materializar_fichas_usecase``). No exige la anticipación del check-in,
+    no vuelve a reservar el horario (ya lo ocupa la cita) y no lleva número:
+    se lo asigna la llegada del paciente.
+
     ``doctor_id``: id de usuario (espacio SyUsuario) -- FK real de
     ``Visit.doctor``. ``medico_id``: PK surrogate de CatMedico (espacio
     médico) -- usado para reservar el slot de ``HorarioDisponible``. Si el
@@ -300,7 +309,7 @@ def create_visit(
     # Con cita: el paciente tuvo que presentarse con la anticipación del
     # parámetro citas.anticipacion_checkin_min; si no, no se lo atiende.
     cita = asistencia_cita_service.cita_de_ficha(appointment_id)
-    if cita is not None:
+    if cita is not None and not automatica:
         asistencia_cita_service.exigir_checkin_a_tiempo(cita)
 
     if medico_id is None:
@@ -311,11 +320,11 @@ def create_visit(
     # el horario del medico no queda ocupado sin ficha.
     with transaction.atomic():
         # Validar conflicto solo cuando se envió hora explícita
-        if doctor_id and hora_consulta:
+        if doctor_id and hora_consulta and not automatica:
             _check_and_reserve_slot(doctor_id, medico_id, hora_consulta, fecha_consulta=fecha_consulta)
 
         # Calcular número de ficha y turno al momento del registro
-        num_ficha, turno_nombre = _calcular_num_ficha()
+        num_ficha, turno_nombre = (None, None) if automatica else _calcular_num_ficha()
 
         visit = VisitRepository.create(
             no_exp=no_exp,
@@ -340,7 +349,7 @@ def create_visit(
             from_status=None,
             to_status="en_espera",
             changed_by_id=created_by_id,
-            notes="Check-in inicial",
+            notes=NOTA_FICHA_AUTOMATICA if automatica else "Check-in inicial",
         )
         asistencia_cita_service.confirmar_por_checkin(appointment_id, created_by_id)
     return VisitRepository.to_contract(visit)

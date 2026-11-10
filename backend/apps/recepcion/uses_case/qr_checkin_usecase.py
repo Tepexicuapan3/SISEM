@@ -22,6 +22,7 @@ import logging
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from apps.medicos.identity import display_name, usuario_id_for_medico
@@ -230,6 +231,8 @@ def _citas_candidatas_checkin_hoy(alcance=None) -> list[CitaMedica]:
         .select_related("medico__id_usuario__detalle", "consultorio")
         .filter(fecha_hora__date=hoy, verificado_en__isnull=True)
         .exclude(estatus__in=_ESTATUS_NO_CHECKIN)
+        # Ya tiene ficha (la automática de las citas que no son del portal).
+        .exclude(Exists(Visit.objects.filter(appointment_id=OuterRef("folio"))))
         .order_by("fecha_hora")
     )
     if alcance is not None:
@@ -248,7 +251,8 @@ def buscar_candidatos_checkin(nombre: str | None, folio: str | None, alcance=Non
     """
     if folio:
         cita = _cita_por_folio(folio, alcance)
-        candidatas = [cita] if cita else []
+        tiene_ficha = cita is not None and Visit.objects.filter(appointment_id=cita.folio).exists()
+        candidatas = [cita] if cita and not tiene_ficha else []
     else:
         candidatas = _citas_candidatas_checkin_hoy(alcance)
 
