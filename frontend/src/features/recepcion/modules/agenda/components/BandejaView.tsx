@@ -429,6 +429,15 @@ export function BandejaView({
                               #{visit.numFicha}
                             </span>
                           ) : null}
+                          {visit.llegadaPendiente ? (
+                            // Ficha automática de la cita: el número sale con "Llegó".
+                            <span
+                              title="Ficha automática de la cita. Da Llegó cuando el paciente esté en la sala."
+                              className="rounded-full bg-status-alert/10 px-2 py-0.5 text-[11px] font-semibold text-status-alert"
+                            >
+                              Por llegar
+                            </span>
+                          ) : null}
                           {visit.turnoNombre ? (
                             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary uppercase tracking-wide">
                               {visit.turnoNombre}

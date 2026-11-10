@@ -152,6 +152,27 @@ describe("RecepcionAgendaPage UI", () => {
     expect(folios).toEqual(["VST-003", "VST-001", "VST-002"]);
   });
 
+  it("marca Por llegar la ficha automática que espera al paciente", () => {
+    vi.mocked(useRecepcionAgendaQueue).mockReturnValue({
+      data: {
+        items: [
+          createVisit({ id: 1, folio: "VST-AUTO", numFicha: null, llegadaPendiente: true }),
+          createVisit({ id: 2, folio: "VST-SALA", numFicha: 4, llegadaPendiente: false }),
+        ],
+        page: 1, pageSize: 50, total: 2, totalPages: 1,
+      },
+      isLoading: false, isError: false, error: null, connectionStatus: "connected", refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useRecepcionAgendaQueue>);
+
+    render(<RecepcionAgendaPage />);
+
+    const automatica = screen.getByText("VST-AUTO").closest("article") as HTMLElement;
+    const enSala = screen.getByText("VST-SALA").closest("article") as HTMLElement;
+    expect(within(automatica).getByText("Por llegar")).toBeVisible();
+    expect(within(enSala).queryByText("Por llegar")).not.toBeInTheDocument();
+    expect(within(enSala).getByText("#4")).toBeVisible();
+  });
+
   it("muestra accion No llego solo para visitas con cita", () => {
     render(<RecepcionAgendaPage />);
 

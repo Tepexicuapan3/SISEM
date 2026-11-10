@@ -21,6 +21,7 @@ crea y la cita queda en el resumen con su motivo.
 """
 
 import logging
+import uuid
 
 from django.db import transaction
 from django.db.models import Exists, OuterRef
@@ -28,6 +29,7 @@ from django.utils import timezone
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 from apps.medicos.identity import usuario_id_for_medico
+from apps.realtime.events import publish_visit_created
 from apps.recepcion.models import CitaMedica, EstatusCita, OrigenCanalCita, Visit
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case.qr_checkin_usecase import _resolver_paciente
@@ -70,7 +72,7 @@ def materializar_ficha(cita: CitaMedica) -> dict:
     local = timezone.localtime(cita.fecha_hora)
     # Savepoint: si la ficha se rechaza, la transacción de quien llama sigue.
     with transaction.atomic():
-        return create_visit(
+        visit = create_visit(
             no_exp=no_exp,
             pk_num=pk_num,
             nombre_paciente=nombre or None,
@@ -85,6 +87,19 @@ def materializar_ficha(cita: CitaMedica) -> dict:
             hora_consulta=local.time(),
             automatica=True,
         )
+        # La bandeja se actualiza por tiempo real; solo si la ficha quedó guardada.
+        transaction.on_commit(lambda: _avisar_bandeja(visit))
+    return visit
+
+
+def _avisar_bandeja(visit: dict) -> None:
+    request_id = str(uuid.uuid4())
+    try:
+        publish_visit_created(
+            visit_id=visit["id"], status=visit["status"], request_id=request_id, correlation_id=request_id,
+        )
+    except Exception:
+        logger.exception("No se pudo publicar la ficha automática %s en tiempo real", visit["id"])
 
 
 def materializar_fichas_del_dia(fecha=None) -> dict:

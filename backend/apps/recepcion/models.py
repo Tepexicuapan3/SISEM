@@ -254,6 +254,11 @@ class Visit(models.Model):
         ESPECIALIDAD = "especialidad", "especialidad"
         URGENCIAS = "urgencias", "urgencias"
 
+    class OrigenFicha(models.TextChoices):
+        # La genera la cita el día de la cita, sin check-in
+        # (materializar_fichas_usecase). Vacío: la registró recepción o el check-in.
+        AUTOMATICA = "AUTOMATICA", "Automática de la cita"
+
     id_visit = models.BigAutoField(primary_key=True, db_column="id_visit")
     # unique=True ya crea indice, no hace falta db_index=True
     folio = models.CharField(max_length=32, db_column="folio", unique=True)
@@ -331,6 +336,13 @@ class Visit(models.Model):
     num_ficha     = models.PositiveSmallIntegerField(db_column="num_ficha", null=True, blank=True)
     # Nombre del turno al momento de la creación (inmutable para historial)
     turno_nombre  = models.CharField(db_column="turno_nombre", max_length=50, null=True, blank=True)
+    # Cuándo el paciente está en la sala. La ficha de recepción o del check-in
+    # llega al crearse; la automática, cuando recepción marca "Llegó" (ahí
+    # recibe su número). Vacío en las fichas anteriores a este campo.
+    llegada_en    = models.DateTimeField(db_column="llegada_en", null=True, blank=True)
+    origen_ficha  = models.CharField(
+        db_column="origen_ficha", max_length=12, choices=OrigenFicha.choices, null=True, blank=True,
+    )
     # dejamos db_index en el campo y quitamos el indice duplicado en Meta
     status = models.CharField(max_length=32, db_column="status", db_index=True)
     fch_alta = models.DateTimeField(auto_now_add=True, db_column="fch_alta")

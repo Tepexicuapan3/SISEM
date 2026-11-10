@@ -51,6 +51,10 @@ export interface VisitQueueItem {
   fechaCita:          string | null;  // ISO 8601 — datetime de la cita médica vinculada
   numFicha:           number | null;
   turnoNombre:        string;
+  /** ISO 8601 — cuándo el paciente está en la sala (opcional en mocks viejos). */
+  llegadaEn?:         string | null;
+  /** Ficha automática de la cita que espera el "Llegó"; recibe número al llegar. */
+  llegadaPendiente?:  boolean;
   status:             VisitStatus;
   fechaAlta:          string | null;
   /** ISO 8601 — `fch_modf` (auto_now) del backend. Opcional para no forzar a

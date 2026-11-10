@@ -1644,10 +1644,25 @@ crea si el paciente no tiene vigencia (`PATIENT_NO_SERVICE`: recepción la
 atiende con autorización de Capital Humano por el check-in) o tiene otra
 visita abierta (`VISIT_DUPLICATE_SUBMIT`). Las citas que ya tienen ficha no
 aparecen en `GET /citas/checkin/candidatos`.
-Pendiente (pasos 4 y 5): la marca "Llegó" con su número de ficha, la bandeja
-por `fecha_consulta` y el "no asistió" de las fichas automáticas. Mientras
-tanto, `marcar_no_asistio` sigue aplicando a las citas que se quedaron sin
-ficha.
+La ficha automática avisa a la bandeja por tiempo real (`publish_visit_created`,
+después del commit).
+
+**13. Llegada de la ficha automática.** Migración `recepcion/0037_visita_llegada`:
+dos columnas que admiten vacío en `rcp_visits`, sin rellenar filas:
+`llegada_en` (cuándo el paciente está en la sala) y `origen_ficha`
+(`AUTOMATICA` en las fichas que genera la cita; vacío en las de recepción o
+check-in, que guardan `llegada_en` al crearse). No hay botón nuevo: el "Llegó"
+de siempre de la bandeja (`PATCH /visits/{id}/status` en espera -> en
+somatometría) registra la llegada de la ficha automática en la misma
+transacción. La ficha recibe su número (`_calcular_num_ficha`, que ahora
+cuenta por `llegada_en` y solo las fichas con número, así una automática que
+espera no ocupa lugar), `llegada_en` y la nota "Llegada del paciente" en la
+bitácora (NOM-024). El contrato de la visita suma `llegadaEn` y
+`llegadaPendiente`; la tarjeta muestra **Por llegar** mientras espera. La
+bandeja por `fecha_consulta` no hizo falta: la ficha automática se crea el
+mismo día de la cita.
+Pendiente (paso 5): el "no asistió" de las fichas automáticas. Mientras tanto,
+`marcar_no_asistio` sigue aplicando a las citas que se quedaron sin ficha.
 
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).

@@ -32,6 +32,8 @@ class VisitRepository:
         num_ficha: int | None = None,
         turno_nombre: str | None = None,
         created_by_id: int | None = None,
+        llegada_en=None,
+        origen_ficha: str | None = None,
     ) -> Visit:
         return Visit.objects.create(
             folio=VisitRepository._build_folio(),
@@ -51,6 +53,8 @@ class VisitRepository:
             num_ficha=num_ficha,
             turno_nombre=turno_nombre,
             created_by_id=created_by_id,
+            llegada_en=llegada_en,
+            origen_ficha=origen_ficha,
             status="en_espera",
         )
 
@@ -120,6 +124,11 @@ class VisitRepository:
         transicionan la misma visita al mismo tiempo.
         """
         return Visit.objects.select_for_update().filter(id_visit=visit_id).first()
+
+    @staticmethod
+    def llegada_pendiente(visit: Visit) -> bool:
+        """Ficha automática a la que todavía no se le marcó "Llegó"."""
+        return visit.origen_ficha == Visit.OrigenFicha.AUTOMATICA and visit.llegada_en is None
 
     @staticmethod
     def update_status(
@@ -318,6 +327,8 @@ class VisitRepository:
             "fechaCita":         fecha_cita,
             "numFicha":          visit.num_ficha,
             "turnoNombre":       visit.turno_nombre or "",
+            "llegadaEn":         visit.llegada_en.isoformat() if visit.llegada_en else None,
+            "llegadaPendiente":  VisitRepository.llegada_pendiente(visit),
             "status":            visit.status,
             "fechaAlta":         visit.fch_alta.isoformat() if visit.fch_alta else None,
             "fechaModf":         visit.fch_modf.isoformat() if visit.fch_modf else None,

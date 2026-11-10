@@ -149,6 +149,17 @@ class MaterializarFichasTests(_FichasBase):
 
         self.assertEqual(materializar_fichas()["creadas"], 1)
 
+    def test_avisa_a_la_bandeja_en_tiempo_real_despues_del_commit(self):
+        self._cita()
+
+        with mock.patch.object(caso, "publish_visit_created") as publicar:
+            with self.captureOnCommitCallbacks(execute=True):
+                materializar_fichas_del_dia()
+
+        visit = Visit.objects.get()
+        self.assertEqual(publicar.call_args.kwargs["visit_id"], visit.id_visit)
+        self.assertEqual(publicar.call_args.kwargs["status"], "en_espera")
+
 class FichaAlAgendarParaHoyTests(_FichasBase):
     """Si recepción agenda para hoy, la ficha sale en ese momento."""
 

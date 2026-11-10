@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils import timezone
 
 import logging
 
@@ -25,6 +26,8 @@ RECEPCION_WRITE_CAPABILITY = "flow.recepcion.queue.write"
 
 # Nota de la bitácora para la ficha que genera la cita sin check-in.
 NOTA_FICHA_AUTOMATICA = "Ficha automática de la cita"
+# Nota de la bitácora cuando recepción da "Llegó" en una ficha automática.
+NOTA_LLEGADA = "Llegada del paciente"
 VISIT_QUEUE_READ_CAPABILITY = "flow.visits.queue.read"
 SOMATOMETRIA_QUEUE_READ_CAPABILITY = "flow.somatometria.queue.read"
 DOCTOR_QUEUE_READ_CAPABILITY = "flow.doctor.queue.read"
@@ -342,6 +345,10 @@ def create_visit(
             num_ficha=num_ficha,
             turno_nombre=turno_nombre,
             created_by_id=created_by_id,
+            # La ficha de recepción o del check-in se registra con el
+            # paciente presente; la automática espera el "Llegó".
+            llegada_en=None if automatica else timezone.now(),
+            origen_ficha=Visit.OrigenFicha.AUTOMATICA if automatica else None,
         )
         # Registrar el estado inicial en el log de auditoría
         VisitRepository.log_status_change(
@@ -355,11 +362,21 @@ def create_visit(
     return VisitRepository.to_contract(visit)
 
 
+def _con_numero():
+    from django.db.models.functions import Coalesce
+
+    return Visit.objects.filter(num_ficha__isnull=False).annotate(momento=Coalesce("llegada_en", "fch_alta"))
+
+
 def _calcular_num_ficha() -> tuple[int, str]:
     """
     Determina el número secuencial de ficha para el turno actual del día.
     Retorna (num_ficha, turno_nombre).
     Usa SELECT COUNT con el rango horario del turno → un solo query, O(1).
+
+    Cuenta las fichas que ya tienen número según cuándo llegó el paciente
+    (``llegada_en``; las anteriores a ese campo, por ``fch_alta``). Una ficha
+    automática que espera su "Llegó" no ocupa número.
     """
     from datetime import date, datetime
     from django.utils import timezone
@@ -377,13 +394,13 @@ def _calcular_num_ficha() -> tuple[int, str]:
         hoy = timezone.localtime(timezone.now()).date()
         inicio = timezone.make_aware(datetime.combine(hoy, datetime.min.time()))
         fin    = timezone.make_aware(datetime.combine(hoy, datetime.max.time()))
-        count  = Visit.objects.filter(fch_alta__gte=inicio, fch_alta__lte=fin).count()
+        count  = _con_numero().filter(momento__gte=inicio, momento__lte=fin).count()
         return count + 1, ""
 
     hoy       = timezone.localtime(timezone.now()).date()
     inicio_dt = timezone.make_aware(datetime.combine(hoy, turno.hora_inicio))
     fin_dt    = timezone.make_aware(datetime.combine(hoy, turno.hora_fin))
-    count     = Visit.objects.filter(fch_alta__gte=inicio_dt, fch_alta__lt=fin_dt).count()
+    count     = _con_numero().filter(momento__gte=inicio_dt, momento__lt=fin_dt).count()
 
     return count + 1, turno.nombre
 
@@ -472,6 +489,10 @@ def change_visit_status(
         next_state      = transition_visit_state(
             previous_status, target_status, ROLE_RECEPCION, motivo=motivo_cancelacion,
         )
+        # "Llegó" (en espera -> en somatometría) es la llegada de la ficha
+        # automática: se registra antes del cambio de estatus.
+        if next_state == "en_somatometria" and VisitRepository.llegada_pendiente(visit):
+            _registrar_llegada(visit, changed_by_id)
         # Solo persistimos motivo_cancelacion/motivo_detalle cuando la
         # transicion es a "cancelada" -- las demas transiciones (no_show,
         # en_somatometria) no aceptan/usan motivo, aunque llegue en el payload.
@@ -529,6 +550,24 @@ def change_visit_status(
                 ))
 
     return VisitRepository.to_contract(visit)
+
+
+def _registrar_llegada(visit: Visit, changed_by_id: int | None) -> None:
+    """
+    La ficha automática llega con el "Llegó" de la bandeja: recibe su número
+    de ficha (orden de llegada) y queda el registro en la bitácora (NOM-024).
+    Corre dentro de la transacción y con el lock de ``change_visit_status``.
+    """
+    visit.num_ficha, visit.turno_nombre = _calcular_num_ficha()
+    visit.llegada_en = timezone.now()
+    visit.save(update_fields=["num_ficha", "turno_nombre", "llegada_en", "fch_modf"])
+    VisitRepository.log_status_change(
+        visit=visit,
+        from_status="en_espera",
+        to_status="en_espera",
+        changed_by_id=changed_by_id,
+        notes=NOTA_LLEGADA,
+    )
 
 
 def get_visit_status_log(visit_id: int, alcance=None) -> list[dict]:
