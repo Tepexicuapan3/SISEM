@@ -95,6 +95,24 @@ de notas.
 | K8 | El control de crónicos **propone** la fecha de seguimiento de la nota **solo si está vacía** | C3 | Rellena el campo; el médico la cambia si quiere | La validación de `fe_seguimiento` y las notas con fecha ya puesta |
 | K9 | Liga real control ↔ cita: `id_cita` (admite vacío) en `cns_control_cronico` | C4 | Columna nueva; se llena cuando la cita se agenda desde la consulta o desde la lista | El motivo y las notas de la cita (la convención actual sigue) |
 | K10 | Filtro **opcional** "Solo controles de crónicos" y rango hasta +180 días **solo con ese filtro** en "Seguimientos por agendar" | C1, C4 | Parámetro opcional del endpoint | Sin el filtro, la lista es la de hoy (hoy−30 a hoy+60) |
+| K11 | **Aviso en recepción** al buscar al paciente: "Tiene un seguimiento indicado para el {fecha} sin agendar" (y "control de crónicos vencido") | P1 | Endpoint nuevo de solo lectura (o campo opcional en `patient-lookup`) con el contrato `seguimientos_indicados` que ya existe | La búsqueda de paciente y su respuesta actual |
+| K12 | **Horizonte de horarios como parámetro** `citas.dias_generacion_horarios` (por omisión **30**, el valor de hoy) | P2, C1 | `get_param` en la tarea diaria, igual que los topes de citas | Con el valor por omisión, la generación es idéntica a hoy; subirlo lo decide la institución |
+
+### 4.1 Lo que cambia por ser presencial (decisión del usuario 2026-11-11)
+
+Las citas de recepción y del médico se sacan **en persona**: no hay correo ni
+llamada. Entonces el único momento para dar la cita es **mientras el paciente
+está en la unidad**.
+
+| # | Consecuencia | Complemento |
+|---|---|---|
+| P1 | Si el seguimiento no se agenda ese día, la próxima oportunidad es **cuando el paciente vuelva por otro motivo**. Hoy recepción no se entera al buscarlo | K11 |
+| P2 | La opción "fecha indicada, recepción agenda después" **no sirve para controles largos**: recepción no tiene cómo localizar al paciente en 60 días | K12: con horarios a ~100–190 días el control de 90–180 días se agenda **en la misma visita** |
+
+Por eso, para crónicos, la recomendación cambia de "fecha indicada" a
+**subir el horizonte con K12** (lo decide la institución: más filas de
+horarios y más reprogramaciones por ausencias lejanas). Con 30 días, K11 es
+la red de seguridad.
 
 ## 5. Responsables (quién hace qué)
 
