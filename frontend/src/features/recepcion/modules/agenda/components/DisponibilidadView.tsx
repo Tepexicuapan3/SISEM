@@ -91,12 +91,16 @@ export function DisponibilidadView({
         </div>
       </div>
 
-      {/* Maestro-detalle: listado de médicos + grilla de slots */}
-      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+      {/* Maestro-detalle: listado de médicos + grilla de slots.
+          En pantallas grandes ocupa el alto visible y cada columna hace su
+          propio scroll: así las pestañas de la agenda y la navegación de
+          semana no se van hacia abajo al recorrer los horarios. */}
+      <div className="grid gap-4 lg:h-[calc(100svh-24rem)] lg:min-h-[26rem] lg:grid-cols-[300px_1fr]">
 
         {/* Lista de médicos */}
-        <div className="space-y-3 rounded-xl border border-line-struct bg-paper p-3 lg:max-h-[640px] lg:overflow-y-auto">
-          <div className="space-y-1.5">
+        <div className="space-y-3 rounded-xl border border-line-struct bg-paper p-3 lg:min-h-0 lg:overflow-y-auto">
+          {/* Buscador fijo arriba de la lista mientras se recorre */}
+          <div className="space-y-1.5 bg-paper lg:sticky lg:-top-3 lg:z-10 lg:-mx-3 lg:-mt-3 lg:px-3 lg:pt-3 lg:pb-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-txt-muted">
               Médicos {disponibilidadMedicos.length > 0 ? `(${disponibilidadMedicos.length})` : ""}
             </p>
@@ -130,8 +134,8 @@ export function DisponibilidadView({
           )}
         </div>
 
-        {/* Grilla de slots */}
-        <div>
+        {/* Grilla de slots: contenedor de scroll (la fila de días queda fija) */}
+        <div className="min-w-0 overflow-x-auto lg:min-h-0 lg:overflow-y-auto lg:pr-1">
           {calMedicoId ? (
             <>
             <SlotCalendar
@@ -158,7 +162,7 @@ export function DisponibilidadView({
                 Selecciona un médico de la lista para ver su disponibilidad semanal.
               </p>
               <p className="text-xs text-txt-muted/70">
-                Los slots en verde están disponibles — hacé clic para generar una ficha.
+                Los slots en verde están disponibles — haz clic para generar una ficha.
               </p>
             </div>
           )}

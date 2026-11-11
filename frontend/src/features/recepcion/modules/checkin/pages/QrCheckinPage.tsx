@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { CheckCircle2, Loader2, QrCode, RotateCcw, ScanLine, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, QrCode, RotateCcw, ScanLine, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { BarcodeScannerInput } from "@shared/ui/BarcodeScannerInput";
 import { Button } from "@shared/ui/button";
@@ -35,6 +36,8 @@ import {
   esErrorSinVigencia,
 } from "@features/recepcion/modules/checkin/domain/checkinVigencia";
 
+const AGENDA_PATH = "/recepcion/agenda";
+
 const CHECKIN_TAB = {
   QR: "qr",
   BUSQUEDA: "busqueda",
@@ -55,6 +58,8 @@ const CHECKIN_TAB = {
  */
 export const QrCheckinPage = () => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const goToAgenda = () => navigate(AGENDA_PATH);
 
   const [payloadValue, setPayloadValue] = useState("");
   const [verifiedPayload, setVerifiedPayload] = useState<string | null>(null);
@@ -79,6 +84,19 @@ export const QrCheckinPage = () => {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Esc vuelve a la agenda solo si no hay una ficha a medio confirmar: con
+  // ficha en pantalla, Esc no debe tirar el trabajo de la recepcionista.
+  const hasPendingFicha = ficha !== null;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || hasPendingFicha) return;
+      if (document.querySelector("[role='dialog']")) return;
+      navigate(AGENDA_PATH);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [hasPendingFicha, navigate]);
 
   const focusInputSoon = () => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -143,6 +161,7 @@ export const QrCheckinPage = () => {
       });
       toast.success("Check-in confirmado", {
         description: `${result.paciente || "Paciente"} — folio ${result.folio}.`,
+        action: { label: "Ver en agenda", onClick: goToAgenda },
       });
       setConflictoP03(null);
       resetForNextScan();
@@ -167,18 +186,33 @@ export const QrCheckinPage = () => {
   return (
     <section className="space-y-5 p-6">
       <SinCentroAviso />
-      <header className="space-y-2 rounded-xl border border-line-struct bg-paper p-5">
-        <div className="inline-flex items-center gap-2 rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted">
-          <QrCode className="size-3.5" />
-          Recepción · Check-in
+      <header className="flex flex-col gap-3 rounded-xl border border-line-struct bg-paper p-5 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted">
+            <QrCode className="size-3.5" />
+            Recepción · Check-in
+          </div>
+          <h1 className="text-2xl font-semibold text-txt-body">
+            Check-in de citas
+          </h1>
+          <p className="max-w-2xl text-sm text-txt-muted">
+            Escanea el código QR del comprobante, o busca al paciente por
+            nombre o folio si no lo trae a la mano.
+          </p>
         </div>
-        <h1 className="text-2xl font-semibold text-txt-body">
-          Check-in de citas
-        </h1>
-        <p className="max-w-2xl text-sm text-txt-muted">
-          Escanea el código QR del comprobante, o busca al paciente por
-          nombre o folio si no lo trae a la mano.
-        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2 self-start"
+          onClick={goToAgenda}
+          title="Volver a la agenda (Esc)"
+        >
+          <ArrowLeft className="size-4" />
+          Volver a la agenda
+          <kbd className="ml-1 rounded border border-line-hairline bg-subtle px-1.5 text-[10px] font-medium text-txt-muted">
+            Esc
+          </kbd>
+        </Button>
       </header>
 
       <Tabs defaultValue={CHECKIN_TAB.QR} className="w-full">

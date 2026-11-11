@@ -116,7 +116,7 @@ describe("RecepcionAgendaPage UI", () => {
     expect(useRecepcionAgendaQueue).toHaveBeenCalledWith({ enabled: false });
     expect(
       screen.getByText(
-        "No tenes permisos completos para cargar la agenda operativa de recepcion.",
+        "No tienes permisos completos para ver la agenda de recepción. Pide a tu administrador que te los asigne.",
       ),
     ).toBeVisible();
   });

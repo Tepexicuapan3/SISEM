@@ -394,7 +394,9 @@ export function SlotCalendar({ medicoId, medicoNombre, weekStart, onSlotClick }:
       ) : null}
 
       {/* ── Grilla ──────────────────────────────────────────────────── */}
-      <div className="overflow-x-auto">
+      {/* Sin overflow propio: el scroll lo pone el contenedor padre, así la
+          cabecera de días (sticky) se queda fija al bajar por los horarios. */}
+      <div>
         <div className="min-w-[680px] space-y-3">
 
           {/* Cabecera de días (una sola vez, compartida por todos los carriles) */}

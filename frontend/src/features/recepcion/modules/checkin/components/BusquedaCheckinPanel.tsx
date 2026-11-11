@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Globe, Loader2, RotateCcw, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { Alert, AlertDescription, AlertTitle } from "@shared/ui/alert";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
@@ -53,6 +54,7 @@ interface BusquedaCheckinPanelProps {
 export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [confirmingFolio, setConfirmingFolio] = useState<string | null>(null);
   const [confirmedFicha, setConfirmedFicha] = useState<FichaQRResponse | null>(null);
@@ -109,6 +111,7 @@ export function BusquedaCheckinPanel({ canConfirmCheckin }: BusquedaCheckinPanel
       setConflictoP03(null);
       toast.success("Check-in confirmado", {
         description: `${result.paciente || candidato.pacienteNombre} — folio ${result.folio}.`,
+        action: { label: "Ver en agenda", onClick: () => navigate("/recepcion/agenda") },
       });
     } catch (error) {
       // P-03: la cita es de otro consultorio que el familiar.

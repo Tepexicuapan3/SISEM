@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarClock, CalendarDays, ClipboardList, List, QrCode, RefreshCcw, Settings2 } from "lucide-react";
+import { CalendarClock, QrCode, RefreshCcw, Settings2 } from "lucide-react";
 import { useDebounce }           from "@shared/hooks/useDebounce";
 import { useCitasList }          from "@features/recepcion/modules/citas/queries/useCitasList";
 import { usePatientLookupHistorico }  from "@features/recepcion/modules/checkin/queries/usePatientLookup";
 import { visitsAPI }                   from "@api/resources/visits.api";
 import { TurnoIndicator } from "@features/recepcion/shared/components/TurnoIndicator";
+import { SOCKET_CONNECTION_STATUS } from "@realtime/visits/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,7 @@ import { RecepcionQuickCheckinDialog } from "@features/recepcion/modules/agenda/
 import { DisponibilidadView } from "@features/recepcion/modules/agenda/components/DisponibilidadView";
 import { HistorialView } from "@features/recepcion/modules/agenda/components/HistorialView";
 import { BandejaView } from "@features/recepcion/modules/agenda/components/BandejaView";
+import { AgendaTabs, type AgendaView } from "@features/recepcion/modules/agenda/components/AgendaTabs";
 import { ProximasCitasView } from "@features/recepcion/modules/agenda/components/ProximasCitasView";
 import { SeguimientosPorAgendar } from "@features/recepcion/modules/agenda/components/SeguimientosPorAgendar";
 import { CitasPorReagendarCard } from "@features/recepcion/modules/adscripcion/components/CitasPorReagendarCard";
@@ -79,6 +81,27 @@ import {
   type StatusFilter,
 } from "./RecepcionAgendaPage.helpers";
 
+// La recepcionista no necesita saber qué es un socket: solo si la lista se
+// actualiza sola o tiene que dar "Actualizar".
+const SyncIndicator = ({ status }: { status?: string }) => {
+  const live = status === SOCKET_CONNECTION_STATUS.CONNECTED;
+  const connecting = status === SOCKET_CONNECTION_STATUS.CONNECTING;
+  return (
+    <span
+      title={live ? "La lista se actualiza sola" : "Usa \"Actualizar\" para ver cambios recientes"}
+      className="inline-flex items-center gap-1.5 rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted"
+    >
+      <span
+        className={[
+          "size-2 rounded-full",
+          live ? "bg-status-stable" : connecting ? "bg-status-alert animate-pulse" : "bg-txt-muted/50",
+        ].join(" ")}
+      />
+      {live ? "En vivo" : connecting ? "Conectando..." : "Actualización manual"}
+    </span>
+  );
+};
+
 export const RecepcionAgendaPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -102,7 +125,7 @@ export const RecepcionAgendaPage = () => {
   const queueQuery = useRecepcionAgendaQueue({ enabled: canReadAgenda });
   const visitStatusAction = useVisitStatusAction();
 
-  const [view,         setView]         = useState<"bandeja" | "proximas" | "disponibilidad" | "historial">("bandeja");
+  const [view,         setView]         = useState<AgendaView>("bandeja");
   const [calCentroId,  setCalCentroId]  = useState<number | null>(null);
   const [calMedicoId,  setCalMedicoId]  = useState<number | null>(null);
   const [calWeekStart, setCalWeekStart] = useState(() => getMonday(new Date()));
@@ -428,72 +451,26 @@ export const RecepcionAgendaPage = () => {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted">
             <CalendarClock className="size-3.5" />
-            Centro de recepcion
+            Recepción
           </div>
           <h1 className="text-2xl font-semibold text-txt-body">
             Citas y check-in operativo
           </h1>
           <p className="max-w-2xl text-sm text-txt-muted">
-            Gestiona check-in de pacientes y agenda de citas con contexto
-            operativo en tiempo real.
+            Recibe a los pacientes de hoy: marca "Llegó" cuando estén en la
+            sala, o registra su llegada escaneando el QR de su cita.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Tab switcher */}
-          <div className="flex items-center gap-1 rounded-xl border border-line-struct bg-subtle/20 p-1">
-            <button
-              type="button"
-              onClick={() => setView("bandeja")}
-              className={[
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                view === "bandeja"
-                  ? "bg-paper text-txt-body shadow-sm"
-                  : "text-txt-muted hover:text-txt-body",
-              ].join(" ")}
-            >
-              <List className="size-3.5" /> Bandeja
-            </button>
-            {canReadCitas ? (
-            <button
-              type="button"
-              onClick={() => setView("proximas")}
-              className={[
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                view === "proximas"
-                  ? "bg-paper text-txt-body shadow-sm"
-                  : "text-txt-muted hover:text-txt-body",
-              ].join(" ")}
-            >
-              <CalendarClock className="size-3.5" /> Próximas citas
-            </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setView("disponibilidad")}
-              className={[
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                view === "disponibilidad"
-                  ? "bg-paper text-txt-body shadow-sm"
-                  : "text-txt-muted hover:text-txt-body",
-              ].join(" ")}
-            >
-              <CalendarDays className="size-3.5" /> Disponibilidad
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("historial")}
-              className={[
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                view === "historial"
-                  ? "bg-paper text-txt-body shadow-sm"
-                  : "text-txt-muted hover:text-txt-body",
-              ].join(" ")}
-            >
-              <ClipboardList className="size-3.5" /> Historial
-            </button>
-          </div>
-
+          <Button
+            type="button"
+            className="gap-2"
+            onClick={() => navigate("/recepcion/checkin/qr")}
+          >
+            <QrCode className="size-4" />
+            Check-in por QR
+          </Button>
           <TurnoIndicator />
           <Button
             type="button"
@@ -506,19 +483,8 @@ export const RecepcionAgendaPage = () => {
             <Settings2 className="size-4" />
           </Button>
           {view === "bandeja" && !bandejaIsHistorical ? (
-            <span className="rounded-full border border-line-hairline bg-subtle px-3 py-1 text-xs font-medium text-txt-muted">
-              Sync: {queueQuery.connectionStatus ?? "idle"}
-            </span>
+            <SyncIndicator status={queueQuery.connectionStatus} />
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2"
-            onClick={() => navigate("/recepcion/checkin/qr")}
-          >
-            <QrCode className="size-4" />
-            Check-in por QR
-          </Button>
           {view === "bandeja" ? (
             <Button
               type="button"
@@ -532,6 +498,13 @@ export const RecepcionAgendaPage = () => {
           ) : null}
         </div>
       </header>
+
+      <AgendaTabs
+        view={view}
+        onChange={setView}
+        canReadCitas={canReadCitas}
+        bandejaCount={bandejaIsHistorical ? undefined : openVisits.length}
+      />
 
       {/* ── Vista próximas citas (incluye las de seguimiento del médico) ── */}
       {view === "proximas" ? (

@@ -1,4 +1,5 @@
-import { Printer } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, FilterX, Printer } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@shared/ui/alert";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
@@ -140,13 +141,43 @@ export function BandejaView({
   setFichaVisit,
   setFichaOpen,
 }: Props) {
+  // Centro, consultorio y médico casi no se tocan en el día a día: van
+  // plegados para que la búsqueda y el estado queden a la vista.
+  const advancedActive =
+    (centroFilter !== "all" ? 1 : 0) +
+    (consultorioFilter !== "all" ? 1 : 0) +
+    (doctorFilter !== "all" ? 1 : 0);
+  const [showAdvanced, setShowAdvanced] = useState(advancedActive > 0);
+  const hasActiveFilters =
+    searchTerm.trim() !== "" ||
+    statusFilter !== STATUS_FILTER.OPEN ||
+    arrivalTypeFilter !== ARRIVAL_TYPE_FILTER.ALL ||
+    serviceFilter !== SERVICE_FILTER.ALL ||
+    advancedActive > 0;
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter(STATUS_FILTER.OPEN);
+    setArrivalTypeFilter(ARRIVAL_TYPE_FILTER.ALL);
+    setServiceFilter(SERVICE_FILTER.ALL);
+    setCentroFilter("all");
+    setConsultorioFilter("all");
+    setDoctorFilter("all");
+  };
+  const kpiClass = (active: boolean) =>
+    [
+      "rounded-xl border bg-paper p-4 text-left transition-colors",
+      active
+        ? "border-primary ring-1 ring-primary"
+        : "border-line-struct hover:border-primary/50 hover:bg-subtle/30",
+    ].join(" ");
+
   return (
     <>
       {/* ── Vista bandeja ────────────────────────────────────────────── */}
       {!canReadAgenda ? (
         <p className="text-sm text-txt-muted" role="status">
-          No tenes permisos completos para cargar la agenda operativa de
-          recepcion.
+          No tienes permisos completos para ver la agenda de recepción. Pide
+          a tu administrador que te los asigne.
         </p>
       ) : null}
 
@@ -194,7 +225,7 @@ export function BandejaView({
 
       {canReadAgenda && (bandejaIsHistorical ? historicalLoading : queueIsLoading) ? (
         <p className="text-sm text-txt-muted">
-          Cargando agenda de recepcion...
+          Cargando agenda de recepción...
         </p>
       ) : null}
 
@@ -202,7 +233,8 @@ export function BandejaView({
         <Alert variant="warning">
           <AlertTitle>Error al cargar</AlertTitle>
           <AlertDescription>
-            No se pudo cargar la agenda operativa de recepcion.
+            No se pudo cargar la agenda. Revisa tu conexión y presiona
+            "Actualizar".
           </AlertDescription>
         </Alert>
       ) : null}
@@ -213,18 +245,28 @@ export function BandejaView({
       visits.length > 0 ? (
         <>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article className="rounded-xl border border-line-struct bg-paper p-4">
+            <button
+              type="button"
+              title="Ver todas las visitas abiertas"
+              className={kpiClass(statusFilter === STATUS_FILTER.OPEN)}
+              onClick={() => setStatusFilter(STATUS_FILTER.OPEN)}
+            >
               <p className="text-sm text-txt-muted">Visitas abiertas</p>
               <p className="text-2xl font-semibold text-txt-body">
                 {openVisits.length}
               </p>
-            </article>
-            <article className="rounded-xl border border-line-struct bg-paper p-4">
+            </button>
+            <button
+              type="button"
+              title="Ver solo los pacientes en espera"
+              className={kpiClass(statusFilter === STATUS_FILTER.EN_ESPERA)}
+              onClick={() => setStatusFilter(STATUS_FILTER.EN_ESPERA)}
+            >
               <p className="text-sm text-txt-muted">En espera</p>
               <p className="text-2xl font-semibold text-txt-body">
                 {waitingCount}
               </p>
-            </article>
+            </button>
             <article className="rounded-xl border border-line-struct bg-paper p-4">
               <p className="text-sm text-txt-muted">Doctores con carga</p>
               <p className="text-2xl font-semibold text-txt-body">
@@ -232,22 +274,33 @@ export function BandejaView({
               </p>
             </article>
             <article className="rounded-xl border border-line-struct bg-paper p-4">
-              <p className="text-sm text-txt-muted">Pendientes de asignacion</p>
+              <p className="text-sm text-txt-muted">Sin médico asignado</p>
               <p className="text-2xl font-semibold text-txt-body">
                 {openVisitsWithoutDoctorCount}
               </p>
             </article>
           </section>
 
-          <section className="rounded-xl border border-line-struct bg-subtle p-3">
-            <p className="text-sm text-txt-muted" role="status">
-              Resumen operativo: {withAppointmentCount} con cita, {walkInCount}{" "}
-              sin cita, medicina general{" "}
-              {serviceCounts[RECEPCION_SERVICE.MEDICINA_GENERAL]}, especialidad{" "}
-              {serviceCounts[RECEPCION_SERVICE.ESPECIALIDAD]}, urgencias{" "}
-              {serviceCounts[RECEPCION_SERVICE.URGENCIAS]}, {activeDoctorCount}{" "}
-              doctores con carga.
-            </p>
+          <section
+            role="status"
+            aria-label="Resumen de visitas abiertas"
+            className="flex flex-wrap items-center gap-2 rounded-xl border border-line-struct bg-subtle p-3 text-xs"
+          >
+            {[
+              { label: "Con cita", value: withAppointmentCount },
+              { label: "Sin cita", value: walkInCount },
+              { label: "Medicina general", value: serviceCounts[RECEPCION_SERVICE.MEDICINA_GENERAL] },
+              { label: "Especialidad", value: serviceCounts[RECEPCION_SERVICE.ESPECIALIDAD] },
+              { label: "Urgencias", value: serviceCounts[RECEPCION_SERVICE.URGENCIAS] },
+            ].map((chip) => (
+              <span
+                key={chip.label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-line-hairline bg-paper px-3 py-1 text-txt-muted"
+              >
+                {chip.label}
+                <span className="font-semibold text-txt-body">{chip.value}</span>
+              </span>
+            ))}
           </section>
 
           <section className="space-y-4 rounded-xl border border-line-struct bg-paper p-4">
@@ -258,9 +311,10 @@ export function BandejaView({
                 </Label>
                 <Input
                   id="agenda-search"
+                  type="search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Ej. VST-001, 1234, APP-100"
+                  placeholder="Nombre, expediente o folio"
                 />
               </div>
 
@@ -278,7 +332,7 @@ export function BandejaView({
                     <SelectItem value={STATUS_FILTER.ALL}>Todas</SelectItem>
                     <SelectItem value={STATUS_FILTER.EN_ESPERA}>En espera</SelectItem>
                     <SelectItem value={STATUS_FILTER.EN_SOMATOMETRIA}>
-                      En somatometria
+                      En somatometría
                     </SelectItem>
                     <SelectItem value={STATUS_FILTER.LISTA_PARA_DOCTOR}>
                       Lista para doctor
@@ -286,7 +340,7 @@ export function BandejaView({
                     <SelectItem value={STATUS_FILTER.EN_CONSULTA}>En consulta</SelectItem>
                     <SelectItem value={STATUS_FILTER.CERRADA}>Cerrada</SelectItem>
                     <SelectItem value={STATUS_FILTER.CANCELADA}>Cancelada</SelectItem>
-                    <SelectItem value={STATUS_FILTER.NO_SHOW}>No show</SelectItem>
+                    <SelectItem value={STATUS_FILTER.NO_SHOW}>No asistió</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -332,9 +386,46 @@ export function BandejaView({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                aria-expanded={showAdvanced}
+                onClick={() => setShowAdvanced((v) => !v)}
+              >
+                <ChevronDown
+                  className={["size-4 transition-transform", showAdvanced ? "rotate-180" : ""].join(" ")}
+                />
+                Más filtros (centro, consultorio, médico)
+                {advancedActive > 0 ? (
+                  <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-white">
+                    {advancedActive}
+                  </span>
+                ) : null}
+              </Button>
+              {hasActiveFilters ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={clearFilters}
+                >
+                  <FilterX className="size-4" />
+                  Limpiar filtros
+                </Button>
+              ) : null}
+              <span className="ml-auto text-xs text-txt-muted">
+                {filteredVisits.length} de {visits.length} visita(s)
+              </span>
+            </div>
 
-
+            {showAdvanced ? (
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="agenda-centro-filter">Centro de atención</Label>
                 <Select
@@ -357,7 +448,7 @@ export function BandejaView({
                 </Select>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <Label htmlFor="agenda-cons-filter">Consultorio</Label>
                 <Select
                   value={consultorioFilter === "all" ? "all" : String(consultorioFilter)}
@@ -397,11 +488,19 @@ export function BandejaView({
                 </Select>
               </div>
             </div>
+            ) : null}
 
             {filteredVisits.length === 0 ? (
-              <p className="text-sm text-txt-muted">
-                No hay resultados para los filtros aplicados.
-              </p>
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-line-struct py-8 text-center">
+                <p className="text-sm text-txt-muted">
+                  Ningún paciente coincide con los filtros.
+                </p>
+                {hasActiveFilters ? (
+                  <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                    Limpiar filtros
+                  </Button>
+                ) : null}
+              </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredVisits.map((visit) => {
@@ -653,7 +752,7 @@ export function BandejaView({
         <p className="text-sm text-txt-muted">
           {bandejaIsHistorical
             ? `Sin fichas para el período seleccionado (${bFechaDesde} → ${bFechaHasta}).`
-            : "No hay visitas para mostrar en agenda."}
+            : 'Todavía no hay pacientes registrados hoy. Usa "Check-in por QR" cuando llegue el primero.'}
         </p>
       ) : null}
     </>
