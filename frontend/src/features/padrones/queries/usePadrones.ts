@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { padronesAPI } from "@api/resources/padrones.api";
 import type {
+  ChronicControlRegisterRequest,
   ChronicVisitEnrollRequest,
   PadronDischargeRequest,
   PadronEnrollRequest,
@@ -16,6 +17,26 @@ export const padronesKeys = {
     [...padronesKeys.all, registry, "options", search] as const,
   chronicVisitNotice: (visitId: number, cie: string) =>
     [...padronesKeys.all, "cronicos", "visit-notice", visitId, cie] as const,
+  chronicControlPanel: (visitId: number) =>
+    [...padronesKeys.all, "cronicos", "visit-control", visitId] as const,
+};
+
+/** Panel de control de cronicos de la consulta (vitales de hoy contra metas). */
+export const useChronicControlPanel = (visitId: number) =>
+  useQuery({
+    queryKey: padronesKeys.chronicControlPanel(visitId),
+    queryFn: () => padronesAPI.chronicControlPanel(visitId),
+    retry: false,
+  });
+
+export const useRegisterChronicControl = (visitId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ChronicControlRegisterRequest) => padronesAPI.registerChronicControl(visitId, data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: padronesKeys.chronicControlPanel(visitId) });
+    },
+  });
 };
 
 /** Aviso de cronicos de la consulta; `cie` es el diagnostico elegido (para la sugerencia). */

@@ -293,3 +293,11 @@ NAVIGATION_PERMISSIONS_SEED += [
     ("admin:autorizaciones-auditoria:read", "Ver la auditoría de solicitudes de autorización (firmas, IP y destinatarios)"),
     ("admin:autorizaciones-auditoria:export", "Exportar a Excel la auditoría de solicitudes de autorización"),
 ]
+
+# Decimonovena tanda (cronicos, entrega 2: docs/plans/cronicos-control.md):
+# registrar el control de un programa de cronicos en la consulta. Aparte de
+# clinico:padrones:write (inscribir) porque el control es un acto medico. Se
+# asigna a mano al rol de medico.
+NAVIGATION_PERMISSIONS_SEED += [
+    ("clinico:cronicos:control", "Registrar el control de pacientes crónicos en la consulta"),
+]

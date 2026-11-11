@@ -12,6 +12,8 @@ error_response y evento de auditoria por cada inscripcion o baja.
 Desde la consulta (docs/plans/cronicos-aviso-consulta.md):
   GET  padrones/cronicos/visita/<visitId>/aviso   inscripciones activas + sugerencia (?cie=)
   POST padrones/cronicos/visita/<visitId>         inscribir al paciente de la visita
+  GET  padrones/cronicos/visita/<visitId>/control panel de control (vitales vs metas)
+  POST padrones/cronicos/visita/<visitId>/control registrar el control de un programa
 """
 
 from django.utils.decorators import method_decorator
@@ -29,8 +31,9 @@ from apps.authentication.services.session_service import authenticate_request
 from apps.recepcion.services.errors import VisitDomainError
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
-from .serializers import DischargeSerializer, EnrollFromVisitSerializer, EnrollSerializer
+from .serializers import DischargeSerializer, EnrollFromVisitSerializer, EnrollSerializer, RegisterControlSerializer
 from .uses_case import aviso_consulta_usecase as aviso
+from .uses_case import control_cronico_usecase as control
 from .uses_case import padron_usecase as uc
 
 
@@ -245,3 +248,53 @@ class ChronicVisitEnrollView(APIView):
             uc.to_contract(aviso.CHRONIC, enrollment, permissions=permissions, roles=roles),
             status=status.HTTP_201_CREATED,
         )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ChronicVisitControlView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        permissions, roles = _access(user)
+        try:
+            payload = control.get_control_panel(visit_id, permissions=permissions, roles=roles)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        return Response(payload)
+
+    def post(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+        serializer = RegisterControlSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_response(request, serializer)
+        data = serializer.validated_data
+        permissions, _ = _access(user)
+        try:
+            registered = control.register_control(
+                visit_id, program_code=data["programCode"], values=data.get("values"),
+                adherence=data.get("adherence"), notes=data.get("notes"), actor=user, permissions=permissions,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        payload = control.control_contract(registered)
+        log_event(
+            request, "ChronicControlRegistered", "SUCCESS", actor_user=user,
+            resource_type="control_cronico", resource_id=registered.id,
+            datos_antes=None,
+            datos_despues={
+                "program": registered.program.code, "status": registered.status,
+                "nextControlOn": str(registered.next_control_on), "visitId": visit_id,
+                "values": {m["parameter"]: m["value"] for m in payload["measurements"]},
+            },
+            meta={"module": "padrones", "registry": "cronicos", "source": "consulta"},
+        )
+        return Response(payload, status=status.HTTP_201_CREATED)

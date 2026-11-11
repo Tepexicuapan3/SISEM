@@ -7,17 +7,13 @@ import {
   useEnrollChronicFromVisit,
 } from "@features/padrones/queries/usePadrones";
 import { getPadronesErrorMessage } from "@features/padrones/utils/padrones.feedback";
+import { formatPadronDate } from "@features/padrones/utils/padrones.format";
 
 interface Props {
   visitId: number;
   /** CIE-10 elegido en la consulta; el backend decide si sugiere inscribir. */
   cieCode: string;
 }
-
-const formatDate = (isoDate: string) => {
-  const [year, month, day] = isoDate.slice(0, 10).split("-");
-  return year && month && day ? `${day}/${month}/${year}` : isoDate;
-};
 
 /**
  * Aviso del padron de cronicos dentro de la consulta (P-04 del legado) y
@@ -67,7 +63,7 @@ export function ChronicConditionsNotice({ visitId, cieCode }: Props) {
                   {enrollment.item.code
                     ? `${enrollment.item.code} · ${enrollment.item.description}`
                     : enrollment.item.description}
-                  <span className="text-txt-muted"> · desde {formatDate(enrollment.enrolledOn)}</span>
+                  <span className="text-txt-muted"> · desde {formatPadronDate(enrollment.enrolledOn)}</span>
                 </li>
               ))}
             </ul>

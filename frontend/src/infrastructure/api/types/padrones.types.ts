@@ -106,3 +106,58 @@ export interface ChronicVisitEnrollRequest {
   itemId: string;
   notes?: string | null;
 }
+
+// Control de cronicos en la consulta (`padrones/cronicos/visita/<visitId>/control`).
+// El semaforo y el estado los calcula el backend.
+
+export type ChronicControlStatus = "sin_datos" | "descontrolado" | "incompleto" | "controlado";
+export type ChronicAdherence = "buena" | "regular" | "mala";
+export type ChronicMeasurementSource = "somatometria" | "manual";
+
+export interface ChronicControlParameter {
+  parameter: string;
+  label: string;
+  unit: string;
+  source: ChronicMeasurementSource;
+  value: number | null;
+  goalMin: number | null;
+  goalMax: number | null;
+  /** null: sin valor o sin meta (informativo). */
+  inGoal: boolean | null;
+}
+
+export interface ChronicControlRecord {
+  id: number;
+  program: ChronicProgramRef;
+  controlOn: string;
+  status: ChronicControlStatus;
+  nextControlOn: string;
+  adherence: ChronicAdherence | null;
+  notes: string | null;
+  registeredBy: string | null;
+  measurements: ChronicControlParameter[];
+}
+
+export interface ChronicControlProgramPanel {
+  program: ChronicProgramRef;
+  everyDays: number;
+  parameters: ChronicControlParameter[];
+  /** Estado con los valores de somatometria de hoy (sin los manuales). */
+  status: ChronicControlStatus;
+  suggestedNextControlOn: string;
+  registered: ChronicControlRecord | null;
+  last: { controlOn: string; status: ChronicControlStatus; nextControlOn: string; overdue: boolean } | null;
+}
+
+export interface ChronicControlPanel {
+  programs: ChronicControlProgramPanel[];
+  vitalsCapturedAt: string | null;
+  canRegister: boolean;
+}
+
+export interface ChronicControlRegisterRequest {
+  programCode: string;
+  values?: Record<string, string>;
+  adherence?: ChronicAdherence | null;
+  notes?: string | null;
+}

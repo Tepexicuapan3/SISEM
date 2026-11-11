@@ -1,6 +1,9 @@
 import apiClient from "@api/client";
 import { conIdPaciente } from "@api/paciente-ids";
 import type {
+  ChronicControlPanel,
+  ChronicControlRecord,
+  ChronicControlRegisterRequest,
   ChronicVisitEnrollRequest,
   ChronicVisitNotice,
   PadronDischargeRequest,
@@ -48,6 +51,19 @@ export const padronesAPI = {
 
   enrollChronicFromVisit: async (visitId: number, data: ChronicVisitEnrollRequest): Promise<PadronEnrollment> => {
     const response = await apiClient.post<PadronEnrollment>(`/padrones/cronicos/visita/${visitId}`, data);
+    return response.data;
+  },
+
+  chronicControlPanel: async (visitId: number): Promise<ChronicControlPanel> => {
+    const response = await apiClient.get<ChronicControlPanel>(`/padrones/cronicos/visita/${visitId}/control`);
+    return response.data;
+  },
+
+  registerChronicControl: async (
+    visitId: number,
+    data: ChronicControlRegisterRequest,
+  ): Promise<ChronicControlRecord> => {
+    const response = await apiClient.post<ChronicControlRecord>(`/padrones/cronicos/visita/${visitId}/control`, data);
     return response.data;
   },
 };

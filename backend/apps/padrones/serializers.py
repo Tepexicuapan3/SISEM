@@ -23,6 +23,14 @@ class EnrollFromVisitSerializer(serializers.Serializer):
     notes = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
 
 
+class RegisterControlSerializer(serializers.Serializer):
+    programCode = serializers.CharField(max_length=20)
+    # {parametro: valor} solo de captura manual; se valida en el caso de uso.
+    values = serializers.DictField(child=serializers.CharField(allow_blank=True, allow_null=True), required=False)
+    adherence = serializers.CharField(max_length=10, required=False, allow_blank=True, allow_null=True)
+    notes = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+
+
 class DischargeSerializer(serializers.Serializer):
     reasonId = serializers.IntegerField(min_value=1)
     detail = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)

@@ -18,6 +18,7 @@ import { SecondaryDiagnosesButton } from "@features/consulta-medica/modules/aten
 import { PhysicalExamButton } from "@features/consulta-medica/modules/atencion/components/PhysicalExamButton";
 import { PrescriptionItemsButton } from "@features/consulta-medica/modules/atencion/components/PrescriptionItemsButton";
 import { ChronicConditionsNotice } from "@features/padrones/components/ChronicConditionsNotice";
+import { ChronicControlPanel } from "@features/padrones/components/ChronicControlPanel";
 import {
   VISIT_STATUS,
   type CieSearchItem,
@@ -182,6 +183,7 @@ export function ConsultationDetailDialog({
 
               {/* Padron de cronicos: aviso y sugerencia de inscripcion */}
               <ChronicConditionsNotice visitId={selectedVisit.id} cieCode={selectedCieCode} />
+              <ChronicControlPanel visitId={selectedVisit.id} />
 
               {/* Datos de la cita */}
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
