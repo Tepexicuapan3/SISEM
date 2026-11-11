@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo } from "react";
 import { FileText, ImageIcon, X } from "lucide-react";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
@@ -34,17 +34,13 @@ export function AnuncioImagePicker({
   error,
 }: AnuncioFilePickerProps) {
   const inputId = useId();
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  // La URL del archivo elegido se deriva de él; el efecto solo la libera.
+  const objectUrl = useMemo(() => (value ? URL.createObjectURL(value) : null), [value]);
 
   useEffect(() => {
-    if (!value) {
-      setObjectUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(value);
-    setObjectUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [value]);
+    if (!objectUrl) return;
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [objectUrl]);
 
   const previewUrl = objectUrl ?? existingUrl ?? null;
   const displayName = useMemo(() => {

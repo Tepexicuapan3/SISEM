@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { DataTable } from "@features/admin/shared/components/DataTable";
 import { TableHeaderBar } from "@features/admin/shared/components/TableHeaderBar";
@@ -18,10 +18,13 @@ export function LegacyMedicosTab({ canRead }: LegacyMedicosTabProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const debouncedSearch = useDebounce(search, 400);
+  const [prevSearch, setPrevSearch] = useState(debouncedSearch);
 
-  useEffect(() => {
+  // Una búsqueda nueva siempre arranca en la primera página.
+  if (debouncedSearch !== prevSearch) {
+    setPrevSearch(debouncedSearch);
     setPage(1);
-  }, [debouncedSearch]);
+  }
 
   const { data, isLoading, error, refetch } = useLegacyMedicosList(
     { search: debouncedSearch.trim() || undefined, page, pageSize },

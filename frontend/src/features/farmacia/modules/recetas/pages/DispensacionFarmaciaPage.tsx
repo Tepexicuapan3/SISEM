@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pill, RotateCcw } from "lucide-react";
 import { Label } from "@shared/ui/label";
 import {
@@ -23,14 +23,11 @@ export function DispensacionFarmaciaPage() {
   const canDispense = hasCapability(DISPENSE_CAPABILITY, DISPENSE_REQUIREMENT);
 
   const almacenesQuery = useAlmacenesList({ tipo: "FARMACIA" }, { enabled: canDispense });
-  const [idAlmacen, setIdAlmacen] = useState<number | null>(null);
+  const [idAlmacenElegido, setIdAlmacen] = useState<number | null>(null);
   const [dispenseTarget, setDispenseTarget] = useState<DispensationQueueItem | null>(null);
 
-  useEffect(() => {
-    if (idAlmacen === null && almacenesQuery.data?.items.length) {
-      setIdAlmacen(almacenesQuery.data.items[0].id);
-    }
-  }, [almacenesQuery.data, idAlmacen]);
+  // Mientras no se elija otro, se usa el primer almacén de farmacia.
+  const idAlmacen = idAlmacenElegido ?? almacenesQuery.data?.items[0]?.id ?? null;
 
   const queueQuery = useDispensationQueue(
     idAlmacen ? { idAlmacen } : undefined,

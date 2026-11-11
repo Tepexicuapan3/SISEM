@@ -11,17 +11,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@shared/ui/alert";
 import type { FichaQRResponse } from "@api/types";
 import { RECEPCION_SERVICE_PROFILES } from "@features/recepcion/shared/domain/recepcion.services";
-
-export function formatFichaFechaHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "America/Mexico_City",
-  });
-}
+import { formatFichaFechaHora } from "@features/recepcion/shared/utils/recepcion-format";
 
 interface FichaCheckinCardProps {
   ficha: FichaQRResponse;

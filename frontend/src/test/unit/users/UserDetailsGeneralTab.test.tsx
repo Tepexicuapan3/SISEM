@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import userEvent from "@testing-library/user-event";
 import { useForm } from "react-hook-form";
 import { render, screen } from "@/test/utils";
 import { UserDetailsGeneralTab } from "@/domains/auth-access/components/admin/rbac/users/UserDetailsGeneralTab";

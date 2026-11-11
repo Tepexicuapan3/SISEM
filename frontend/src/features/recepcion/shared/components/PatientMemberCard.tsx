@@ -7,27 +7,7 @@
 import type { ReactNode } from "react";
 import { Badge } from "@shared/ui/badge";
 import type { PatientMember } from "@api/types";
-
-// ─── Mapa de parentesco → etiqueta legible ────────────────────────────────────
-
-const PARENTESCO_LABEL: Record<string, string> = {
-  TRABAJADOR: "Titular",
-  ESPOSA:     "Cónyuge",
-  ESPOSO:     "Cónyuge",
-  CONYUGE:    "Cónyuge",
-  HIJO:       "Hijo(a)",
-  HIJA:       "Hijo(a)",
-  MADRE:      "Madre",
-  PADRE:      "Padre",
-  CONCUBINO:  "Concubino(a)",
-  CONCUBINA:  "Concubino(a)",
-};
-
-export function resolveParentesco(raw: string | null | undefined): string {
-  if (!raw) return "Familiar";
-  const upper = raw.toUpperCase();
-  return PARENTESCO_LABEL[upper] ?? raw;
-}
+import { resolveParentesco } from "@features/recepcion/shared/utils/recepcion-format";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

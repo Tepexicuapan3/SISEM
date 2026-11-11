@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Boxes, RotateCcw, AlertTriangle } from "lucide-react";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { DataTable } from "@features/admin/shared/components/DataTable";
@@ -28,13 +28,10 @@ import { getCatalogErrorMessage } from "@features/almacen-insumos/modules/catalo
  */
 export function InventarioFarmaciaPage() {
   const almacenesQuery = useAlmacenesList({ tipo: "FARMACIA" });
-  const [idAlmacen, setIdAlmacen] = useState<number | null>(null);
+  const [idAlmacenElegido, setIdAlmacen] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (idAlmacen === null && almacenesQuery.data?.items.length) {
-      setIdAlmacen(almacenesQuery.data.items[0].id);
-    }
-  }, [almacenesQuery.data, idAlmacen]);
+  // Mientras no se elija otro, se usa el primer almacén de farmacia.
+  const idAlmacen = idAlmacenElegido ?? almacenesQuery.data?.items[0]?.id ?? null;
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);

@@ -28,10 +28,8 @@ import {
   conflictoConsultorioFamiliar,
   type ConflictoConsultorioFamiliar,
 } from "@features/recepcion/modules/adscripcion/domain/adscripcionEstado";
-import {
-  FichaCheckinCard,
-  formatFichaFechaHora,
-} from "@features/recepcion/modules/checkin/components/FichaCheckinCard";
+import { FichaCheckinCard } from "@features/recepcion/modules/checkin/components/FichaCheckinCard";
+import { formatFichaFechaHora } from "@features/recepcion/shared/utils/recepcion-format";
 
 interface BusquedaCheckinPanelProps {
   canConfirmCheckin: boolean;

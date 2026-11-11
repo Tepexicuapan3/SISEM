@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@shared/ui/button";
 import {
@@ -52,12 +52,16 @@ export function CancelarCitaDialog({ cita, onOpenChange }: CancelarCitaDialogPro
   const [detalle, setDetalle] = useState("");
   const updateEstatus = useUpdateEstatusCita(cita?.id ?? 0);
 
-  useEffect(() => {
+  const [prevCita, setPrevCita] = useState(cita);
+
+  // Cada cita nueva abre el diálogo sin el motivo de la anterior.
+  if (cita !== prevCita) {
+    setPrevCita(cita);
     if (cita) {
       setMotivoId("");
       setDetalle("");
     }
-  }, [cita]);
+  }
 
   const motivoValido = Boolean(motivoId);
 

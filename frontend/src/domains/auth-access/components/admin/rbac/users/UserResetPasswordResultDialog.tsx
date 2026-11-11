@@ -35,12 +35,13 @@ export function UserResetPasswordResultDialog({
   username,
 }: UserResetPasswordResultDialogProps) {
   const [copied, setCopied] = useState(false);
+  const [prevOpen, setPrevOpen] = useState(open);
 
-  useEffect(() => {
-    if (!open) {
-      setCopied(false);
-    }
-  }, [open]);
+  // Al cerrarse se olvida el "copiado", sin un efecto que vuelva a renderizar.
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (!open) setCopied(false);
+  }
 
   useEffect(() => {
     if (!copied) return;

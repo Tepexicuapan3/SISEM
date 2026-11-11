@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
@@ -48,12 +48,13 @@ export function DispensePrescriptionDialog({
   const dispensePrescription = useDispensePrescription();
 
   const [selection, setSelection] = useState<SelectionState>({});
+  const [prevPreview, setPrevPreview] = useState<typeof previewQuery.data>(undefined);
 
-  useEffect(() => {
-    if (previewQuery.data) {
-      setSelection(buildInitialSelection(previewQuery.data.items));
-    }
-  }, [previewQuery.data]);
+  // Cada preview nuevo reinicia la selección con lo pendiente por surtir.
+  if (previewQuery.data !== prevPreview) {
+    setPrevPreview(previewQuery.data);
+    if (previewQuery.data) setSelection(buildInitialSelection(previewQuery.data.items));
+  }
 
   const items = previewQuery.data?.items ?? [];
   const selectedItems = items.filter((item) => selection[item.itemId]?.selected);

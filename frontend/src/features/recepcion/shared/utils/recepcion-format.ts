@@ -63,3 +63,36 @@ export function formatCitaFechaHora(iso: string): string {
     timeZone: "America/Mexico_City",
   });
 }
+
+// ─── Mapa de parentesco → etiqueta legible ────────────────────────────────────
+
+const PARENTESCO_LABEL: Record<string, string> = {
+  TRABAJADOR: "Titular",
+  ESPOSA:     "Cónyuge",
+  ESPOSO:     "Cónyuge",
+  CONYUGE:    "Cónyuge",
+  HIJO:       "Hijo(a)",
+  HIJA:       "Hijo(a)",
+  MADRE:      "Madre",
+  PADRE:      "Padre",
+  CONCUBINO:  "Concubino(a)",
+  CONCUBINA:  "Concubino(a)",
+};
+
+export function resolveParentesco(raw: string | null | undefined): string {
+  if (!raw) return "Familiar";
+  const upper = raw.toUpperCase();
+  return PARENTESCO_LABEL[upper] ?? raw;
+}
+
+// Fecha y hora de la ficha en hora de la Ciudad de México.
+export function formatFichaFechaHora(iso: string): string {
+  return new Date(iso).toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Mexico_City",
+  });
+}
