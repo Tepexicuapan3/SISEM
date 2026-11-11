@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import apiClient from "@api/client";
 import { padronesAPI } from "@api/resources/padrones.api";
+import { registrarIdsPaciente } from "@api/paciente-ids";
 import {
   dischargePadronSchema,
   enrollPadronSchema,
@@ -59,8 +60,10 @@ describe("padronesAPI", () => {
     await padronesAPI.options("discapacidad", "mental");
     expect(mocked.get).toHaveBeenCalledWith("/padrones/discapacidad/opciones", { params: { search: "mental" } });
 
+    // El alta viaja solo con el idPaciente, sin expediente ni pkNum (C7).
+    registrarIdsPaciente([{ noExp: "1", pkNum: 0, idPaciente: 501 }]);
     await padronesAPI.enroll("cronicos", { noExp: "1", pkNum: 0, itemId: "E11" });
-    expect(mocked.post).toHaveBeenCalledWith("/padrones/cronicos", { noExp: "1", pkNum: 0, itemId: "E11" });
+    expect(mocked.post).toHaveBeenCalledWith("/padrones/cronicos", { itemId: "E11", idPaciente: 501 });
 
     await padronesAPI.discharge("cronicos", 9, { reasonId: 2 });
     expect(mocked.post).toHaveBeenCalledWith("/padrones/cronicos/9/baja", { reasonId: 2 });
