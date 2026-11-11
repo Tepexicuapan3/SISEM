@@ -6,7 +6,7 @@ implementación sale de las decisiones de la sección 7.
 
 > TL;DR: contra el legado, P-12 está **completo y no se toca**. Visto como
 > proceso de punta a punta le faltan 7 complementos: la cita no se cancela al
-> cancelar la nota, el paciente no recibe aviso, la indicación vencida se
+> cancelar la nota, el paciente se va sin comprobante, la indicación vencida se
 > pierde sin cierre, la auditoría del cierre no registra la cita, la nota
 > impresa no dice hora ni folio, no hay indicadores, y crónicos necesita
 > agendar controles a 90–180 días. Todos se resuelven **agregando**, sin
@@ -65,7 +65,7 @@ de notas.
 | # | Hueco | Evidencia | Riesgo |
 |---|---|---|---|
 | G1 | **Cancelar la nota no cancela su cita de seguimiento** | `note_cancellation_usecase._gather` cancela recetas, autorizaciones, pases, incapacidades y estudios; no la cita | El paciente llega a una cita de una consulta anulada; ocupa un horario |
-| G2 | **El paciente no recibe aviso** de la cita que le dio el médico | `tasks.enviar_recordatorios_proximos` solo recuerda si antes hubo una confirmación por correo (portal) | Inasistencia evitable |
+| G2 | **El paciente se va sin comprobante** de la cita presencial (la que da el médico o recepción) | El único comprobante es el del portal (`portal_citas/services/pdf_comprobante_service.py`, con QR); el registro de impresión solo tiene ficha, receta y nota. Las citas presenciales **no se notifican por correo** (decisión del usuario 2026-11-11: el paciente está en la unidad) | Olvida fecha u hora; inasistencia evitable |
 | G3 | La indicación sin agendar **se pierde sin cierre** | Ventana de hoy−30 de §16 | No hay forma de saber cuántos seguimientos se perdieron |
 | G4 | No existe **descartar** un seguimiento con motivo | — | La lista acumula casos que nunca se van a agendar |
 | G5 | La auditoría del cierre **no registra la cita** | `_close_consultation_datos_despues` no incluye la cita; solo queda en `citas_estatus_log` (canal MEDICO) | Trazabilidad NOM-024 repartida en dos lugares |
@@ -86,7 +86,7 @@ de notas.
 | # | Complemento | Cubre | Cómo se agrega | Qué NO cambia |
 |---|---|---|---|---|
 | K1 | La cancelación de la nota **también cancela su cita de seguimiento** (si no tiene ficha), con motivo "Consulta cancelada" | G1 | Un paso más en la cascada existente, mismo patrón que pases e incapacidades | Las validaciones, permisos y el resto de la cascada |
-| K2 | Aviso al paciente de la cita de seguimiento (correo si SERMED tiene correo) y su recordatorio | G2 | Confirmación en `CitaNotificacion` al crear la cita del médico; el recordatorio existente la toma solo | Las notificaciones del portal |
+| K2 | **Comprobante de cita impreso** para las citas presenciales (médico y recepción): folio, fecha, hora, médico, consultorio y "preséntese N minutos antes". Se ofrece al agendar ("Imprimir comprobante", igual que la receta al cerrar) y se puede reimprimir desde la agenda | G2 | Documento nuevo `cita` en `impresion/registry.py`, mismo motor que ficha, receta y nota. Sin QR: las citas presenciales generan su ficha automática y no hacen check-in | El comprobante y los correos del portal; las citas presenciales siguen **sin correo** |
 | K3 | **Cierre de seguimiento**: tabla `cns_seguimiento_cierre` (nota, motivo de catálogo, quién, cuándo) para **descartar** con motivo | G3, G4 | Tabla nueva + botón "Descartar" en "Seguimientos por agendar"; la lista excluye los cerrados | La ventana y los filtros actuales de la lista |
 | K4 | Campo opcional `followUp` (folio, fecha y hora) en el `datos_despues` de `ConsultationClosed` | G5 | Un campo más en la foto de auditoría | El evento, su invariante de 1 por request y lo demás del snapshot |
 | K5 | Nota impresa con hora, consultorio y folio cuando hay cita | G6 | Línea condicional en `nota.html` | La nota sin cita se imprime igual |
@@ -102,7 +102,7 @@ de notas.
 |---|---|---|---|
 | Indicar fecha / elegir horario | Hace | — | Valida reglas de agenda |
 | Agendar lo indicado | — | Hace (lista §16) | — |
-| Avisar al paciente | — | — | K2 |
+| Entregar comprobante al paciente | Imprime al cerrar (K2) | Imprime al agendar (K2) | — |
 | Descartar con motivo | Puede | Hace (K3) | — |
 | Cancelar al anular la nota | — | — | K1 |
 | No asistió | — | Revisa y vuelve a citar | Marca (§14) |
@@ -123,7 +123,7 @@ de notas.
 |---|---|---|---|
 | D1 | Orden de los complementos | Por riesgo o por crónicos | **Por riesgo**: K1 → K4 → K5 → K3 → K2 → K8 → K9 → K10 → K7 → K6 |
 | D2 | Motivos de descarte (K3) | Catálogo nuevo o reutilizar `cat_motivos` de cancelación de cita | **Catálogo nuevo** chico: "No desea", "Atendido en otra unidad", "Defunción", "Baja del servicio", "Otro" (con detalle) |
-| D3 | Canal del aviso (K2) | Solo correo / correo + SMS | **Solo correo** (ya existe el servicio); SMS cuando haya proveedor |
+| D3 | Comprobante de la cita presencial (K2) | Comprobante propio / solo la nota impresa (K5) | **Comprobante propio**: la nota impresa es expediente, no siempre se entrega al paciente, y recepción también agenda sin nota. Decidido: **sin correo** para citas presenciales |
 | D4 | K1 con la cita que ya tiene ficha | Cancelarla también / dejarla y avisar | **Dejarla y avisar** en la bitácora: si ya tiene ficha, el paciente ya está en la unidad |
 | D5 | Migrar `det_agendafam` histórico | Migrar / dejar en el respaldo | **Respaldo**: citas pasadas sin valor operativo; confirmar contra la política de retención |
 
@@ -132,7 +132,7 @@ de notas.
 | Riesgo | Mitigación |
 |---|---|
 | K1 cancela una cita que el paciente necesitaba igual | Solo citas sin ficha (D4) y motivo visible en la bitácora; recepción puede volver a agendar |
-| K2 manda correos a direcciones viejas de SERMED | Registrar el envío y el rebote en `CitaNotificacion` (ya existe); no reintentar en bucle |
+| K2 el comprobante muestra datos personales si se queda en el mostrador | Solo nombre y expediente, sin diagnóstico ni motivo clínico de la cita |
 | K3 se usa para "limpiar" la lista sin atender | Motivo obligatorio + auditoría + indicador de descartados (K6) |
 
 ## 9. Criterio de terminado (por complemento, cuando se aprueben)
