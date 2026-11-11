@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, RefreshCw, Stethoscope, UserCircle, X } from "lucide-react";
+import {
+  ChevronRight,
+  ClipboardList,
+  RefreshCw,
+  Search,
+  UserCircle,
+  X,
+} from "lucide-react";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Badge } from "@shared/ui/badge";
@@ -328,6 +335,7 @@ function ExpedienteDetalle({
               <th className="px-3 py-2 text-left">Clínica</th>
               <th className="px-3 py-2 text-left">Vigencia</th>
               <th className="px-3 py-2 text-left">Foto</th>
+              <th className="px-3 py-2 text-left">Historial clínico</th>
             </tr>
           </thead>
           <tbody>
@@ -347,29 +355,35 @@ function ExpedienteDetalle({
                 <td className="px-3 py-2">{p.CLINICA ?? "—"}</td>
                 <td className="px-3 py-2">{p.FEC_VIG ?? "--/--"}</td>
                 <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    {p.FOTO ? (
-                      <img
-                        src={`data:image/jpeg;base64,${p.FOTO}`}
-                        alt="Foto"
-                        className="w-32 h-auto border rounded"
-                      />
-                    ) : (
-                      <div className="w-14 h-16 border rounded flex items-center justify-center bg-muted">
-                        <UserCircle className="w-6 h-6 text-txt-hint" />
-                      </div>
-                    )}
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="icon-sm"
-                      title="Ver expediente clínico"
+                  {p.FOTO ? (
+                    <img
+                      src={`data:image/jpeg;base64,${p.FOTO}`}
+                      alt="Foto"
+                      className="w-32 h-auto border rounded"
+                    />
+                  ) : (
+                    <div className="w-14 h-16 border rounded flex items-center justify-center bg-muted">
+                      <UserCircle className="w-6 h-6 text-txt-hint" />
+                    </div>
+                  )}
+                </td>
+                <td className="px-3 py-2">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="border-brand/40 text-brand hover:bg-brand/10 hover:border-brand"
+                    title="Abrir el historial clínico del paciente (consultas, diagnósticos y recetas)"
+                  >
+                    <Link
+                      to={`/clinico/expedientes/${p.NO_EXP}`}
+                      aria-label={`Ver historial clínico de ${[p.DS_NOMBRE, p.DS_PATERNO].filter(Boolean).join(" ")}`}
                     >
-                      <Link to={`/clinico/expedientes/${p.NO_EXP}`}>
-                        <Stethoscope className="w-4 h-4" />
-                      </Link>
-                    </Button>
-                  </div>
+                      <ClipboardList />
+                      Historial clínico
+                      <ChevronRight />
+                    </Link>
+                  </Button>
                 </td>
               </tr>
             ))}
