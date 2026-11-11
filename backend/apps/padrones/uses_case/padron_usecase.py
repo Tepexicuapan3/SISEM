@@ -213,10 +213,18 @@ def enroll(kind, *, no_exp, pk_num, item_id, center_id=None, enrolled_on=None, n
     center = _resolve_center(center_id, actor)
     enrolled_on = enrolled_on or timezone.localdate()
     _ensure_not_future("enrolledOn", enrolled_on)
+    return create_enrollment(
+        spec, get_patient=lambda: PatientRepository.get_or_create(no_exp, pk_num or 0, created_by_id=actor.pk)[0],
+        item=item, center=center, enrolled_on=enrolled_on, notes=notes, actor=actor,
+    )
 
+
+def create_enrollment(spec, *, get_patient, item, center, enrolled_on, notes, actor):
+    """Crea la inscripcion activa (ya validados item, centro y fecha). Lo usan
+    el alta del padron y la inscripcion desde la consulta."""
     try:
         with transaction.atomic():
-            patient, _ = PatientRepository.get_or_create(no_exp, pk_num or 0, created_by_id=actor.pk)
+            patient = get_patient()
             already = spec.model.objects.filter(
                 patient=patient, status=RegistryStatus.ACTIVO, **{spec.item_field: item},
             ).exists()

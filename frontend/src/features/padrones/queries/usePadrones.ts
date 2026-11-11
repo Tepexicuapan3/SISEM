@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { padronesAPI } from "@api/resources/padrones.api";
 import type {
+  ChronicVisitEnrollRequest,
   PadronDischargeRequest,
   PadronEnrollRequest,
   PadronListParams,
@@ -13,6 +14,28 @@ export const padronesKeys = {
     [...padronesKeys.all, registry, "list", params] as const,
   options: (registry: PadronRegistry, search: string) =>
     [...padronesKeys.all, registry, "options", search] as const,
+  chronicVisitNotice: (visitId: number, cie: string) =>
+    [...padronesKeys.all, "cronicos", "visit-notice", visitId, cie] as const,
+};
+
+/** Aviso de cronicos de la consulta; `cie` es el diagnostico elegido (para la sugerencia). */
+export const useChronicVisitNotice = (visitId: number, cie: string) =>
+  useQuery({
+    queryKey: padronesKeys.chronicVisitNotice(visitId, cie),
+    queryFn: () => padronesAPI.chronicVisitNotice(visitId, cie),
+    staleTime: 60 * 1000,
+    // Sin permiso o sin padron el aviso simplemente no aparece: no reintentar.
+    retry: false,
+  });
+
+export const useEnrollChronicFromVisit = (visitId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ChronicVisitEnrollRequest) => padronesAPI.enrollChronicFromVisit(visitId, data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [...padronesKeys.all, "cronicos"] });
+    },
+  });
 };
 
 export const usePadronList = (

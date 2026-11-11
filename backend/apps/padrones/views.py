@@ -8,6 +8,10 @@ error_response y evento de auditoria por cada inscripcion o baja.
   POST padrones/<registry>/<id>/baja    dar de baja la inscripcion
   GET  padrones/<registry>/opciones     CIE-10 o discapacidades para inscribir (?search=)
 <registry> = cronicos | discapacidad
+
+Desde la consulta (docs/plans/cronicos-aviso-consulta.md):
+  GET  padrones/cronicos/visita/<visitId>/aviso   inscripciones activas + sugerencia (?cie=)
+  POST padrones/cronicos/visita/<visitId>         inscribir al paciente de la visita
 """
 
 from django.utils.decorators import method_decorator
@@ -25,7 +29,8 @@ from apps.authentication.services.session_service import authenticate_request
 from apps.recepcion.services.errors import VisitDomainError
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
-from .serializers import DischargeSerializer, EnrollSerializer
+from .serializers import DischargeSerializer, EnrollFromVisitSerializer, EnrollSerializer
+from .uses_case import aviso_consulta_usecase as aviso
 from .uses_case import padron_usecase as uc
 
 
@@ -68,12 +73,12 @@ def _access(user):
     return auth_user.get("permissions", []), auth_user.get("roles", [])
 
 
-def _audit(request, user, action, registry, enrollment, before, after):
+def _audit(request, user, action, registry, enrollment, before, after, **extra_meta):
     log_event(
         request, action, "SUCCESS", actor_user=user,
         resource_type=f"padron_{registry}", resource_id=enrollment.id,
         datos_antes=before, datos_despues=after,
-        meta={"module": "padrones", "registry": registry, "noExp": llave_publica(enrollment)[0]},
+        meta={"module": "padrones", "registry": registry, "noExp": llave_publica(enrollment)[0], **extra_meta},
     )
 
 
@@ -188,3 +193,55 @@ class RegistryDischargeView(APIView):
                {"status": enrollment.status, "reasonId": enrollment.discharge_reason_id,
                 "dischargedOn": str(enrollment.discharged_on)})
         return Response(uc.to_contract(spec, enrollment, permissions=permissions, roles=roles))
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ChronicVisitNoticeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        permissions, roles = _access(user)
+        try:
+            payload = aviso.get_notice(
+                visit_id, cie=request.query_params.get("cie"), permissions=permissions, roles=roles,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        return Response(payload)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ChronicVisitEnrollView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, visit_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+        serializer = EnrollFromVisitSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_response(request, serializer)
+        data = serializer.validated_data
+        permissions, roles = _access(user)
+        try:
+            enrollment = aviso.enroll_from_visit(
+                visit_id, item_id=data["itemId"], notes=data.get("notes"), actor=user, permissions=permissions,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        _audit(request, user, "RegistryEnrollmentCreated", "cronicos", enrollment, None, {
+            "itemId": enrollment.cie_id, "centerId": enrollment.center_id,
+            "enrolledOn": str(enrollment.enrolled_on), "visitId": visit_id,
+        }, source="consulta")
+        return Response(
+            uc.to_contract(aviso.CHRONIC, enrollment, permissions=permissions, roles=roles),
+            status=status.HTTP_201_CREATED,
+        )

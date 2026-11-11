@@ -17,6 +17,7 @@ import { EmitirPaseButton } from "@features/consulta-medica/modules/atencion/com
 import { SecondaryDiagnosesButton } from "@features/consulta-medica/modules/atencion/components/SecondaryDiagnosesButton";
 import { PhysicalExamButton } from "@features/consulta-medica/modules/atencion/components/PhysicalExamButton";
 import { PrescriptionItemsButton } from "@features/consulta-medica/modules/atencion/components/PrescriptionItemsButton";
+import { ChronicConditionsNotice } from "@features/padrones/components/ChronicConditionsNotice";
 import {
   VISIT_STATUS,
   type CieSearchItem,
@@ -178,6 +179,9 @@ export function ConsultationDetailDialog({
                   Exp. {selectedVisit.noExp}{selectedVisit.pkNum > 0 ? ` · familiar #${selectedVisit.pkNum}` : ""}
                 </p>
               )}
+
+              {/* Padron de cronicos: aviso y sugerencia de inscripcion */}
+              <ChronicConditionsNotice visitId={selectedVisit.id} cieCode={selectedCieCode} />
 
               {/* Datos de la cita */}
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">

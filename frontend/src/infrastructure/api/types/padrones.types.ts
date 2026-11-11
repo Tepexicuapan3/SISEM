@@ -73,3 +73,36 @@ export interface PadronDischargeRequest {
   detail?: string | null;
   dischargedOn?: string | null;
 }
+
+// Aviso de cronicos dentro de la consulta (`padrones/cronicos/visita/<visitId>`).
+// La regla de que CIE pertenece a que programa vive en el backend.
+
+export interface ChronicProgramRef {
+  code: string;
+  name: string;
+}
+
+export interface ChronicNoticeEnrollment {
+  id: number;
+  item: PadronItemRef;
+  /** null si el diagnostico esta restringido (el programa lo delataria). */
+  program: ChronicProgramRef | null;
+  enrolledOn: string;
+}
+
+export interface ChronicEnrollmentSuggestion {
+  cie: { code: string; description: string };
+  program: ChronicProgramRef;
+}
+
+export interface ChronicVisitNotice {
+  enrollments: ChronicNoticeEnrollment[];
+  suggestion: ChronicEnrollmentSuggestion | null;
+  /** Tiene clinico:padrones:write: puede inscribir desde la consulta. */
+  canEnroll: boolean;
+}
+
+export interface ChronicVisitEnrollRequest {
+  itemId: string;
+  notes?: string | null;
+}

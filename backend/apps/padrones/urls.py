@@ -1,8 +1,25 @@
 from django.urls import path
 
-from apps.padrones.views import RegistryDischargeView, RegistryListCreateView, RegistryOptionsView
+from apps.padrones.views import (
+    ChronicVisitEnrollView,
+    ChronicVisitNoticeView,
+    RegistryDischargeView,
+    RegistryListCreateView,
+    RegistryOptionsView,
+)
 
 urlpatterns = [
+    # Desde la consulta: antes que las rutas genericas <registry>.
+    path(
+        "padrones/cronicos/visita/<int:visit_id>/aviso",
+        ChronicVisitNoticeView.as_view(),
+        name="padrones-cronicos-visit-notice",
+    ),
+    path(
+        "padrones/cronicos/visita/<int:visit_id>",
+        ChronicVisitEnrollView.as_view(),
+        name="padrones-cronicos-visit-enroll",
+    ),
     path("padrones/<str:registry>", RegistryListCreateView.as_view(), name="padrones-list-create"),
     path("padrones/<str:registry>/opciones", RegistryOptionsView.as_view(), name="padrones-options"),
     path(

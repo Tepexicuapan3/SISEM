@@ -7,6 +7,7 @@ import { consultoriosHandlers } from "./handlers/consultorios";
 import { rolesHandlers } from "./handlers/roles";
 import { permissionsHandlers } from "./handlers/permissions";
 import { visitsHandlers } from "./handlers/visits";
+import { padronesHandlers } from "./handlers/padrones";
 import { getApiUrl } from "./urls";
 
 export const handlers = [
@@ -45,4 +46,5 @@ export const handlers = [
   ...rolesHandlers,
   ...permissionsHandlers,
   ...visitsHandlers,
+  ...padronesHandlers,
 ];

@@ -82,6 +82,44 @@ class ChronicEnrollment(RegistryEnrollmentBase):
         ]
 
 
+class ChronicProgram(models.Model):
+    """
+    Programa de control de cronicos (diabetes, hipertension...). Agrupa los
+    CIE-10 que lo disparan: con el se sugiere inscribir al paciente cuando el
+    medico elige uno de esos diagnosticos (docs/plans/cronicos-aviso-consulta.md).
+    """
+
+    id = models.BigAutoField(primary_key=True, db_column="id_programa_cronico")
+    code = models.CharField(max_length=20, unique=True, db_column="clave")
+    name = models.CharField(max_length=100, db_column="nombre")
+    is_active = models.BooleanField(default=True, db_column="est_activo")
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+    updated_at = models.DateTimeField(db_column="fch_modf", auto_now=True)
+
+    class Meta:
+        db_table = "cat_programa_cronico"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ChronicProgramCie(models.Model):
+    """Prefijo CIE-10 de un programa, sin punto (E11 cubre E11.9 y E119)."""
+
+    id = models.BigAutoField(primary_key=True, db_column="id_programa_cronico_cie")
+    program = models.ForeignKey(
+        ChronicProgram, db_column="id_programa_cronico", on_delete=models.PROTECT,
+        related_name="cie_prefixes",
+    )
+    # Un prefijo pertenece a un solo programa: si no, la sugerencia seria ambigua.
+    cie_prefix = models.CharField(max_length=8, unique=True, db_column="prefijo_cie")
+    created_at = models.DateTimeField(db_column="fch_alta", auto_now_add=True)
+
+    class Meta:
+        db_table = "cat_programa_cronico_cie"
+
+
 class DisabilityEnrollment(RegistryEnrollmentBase):
     disability = models.ForeignKey(
         "catalogos.Discapacidades", db_column="id_discapacidad", on_delete=models.PROTECT,

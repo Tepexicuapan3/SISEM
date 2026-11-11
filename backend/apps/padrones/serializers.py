@@ -17,6 +17,12 @@ class EnrollSerializer(serializers.Serializer):
         return resolver_paciente_en_datos(super().validate(attrs))
 
 
+class EnrollFromVisitSerializer(serializers.Serializer):
+    # El paciente y el centro salen de la visita; solo se elige el CIE-10.
+    itemId = serializers.CharField(max_length=20)
+    notes = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+
+
 class DischargeSerializer(serializers.Serializer):
     reasonId = serializers.IntegerField(min_value=1)
     detail = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
