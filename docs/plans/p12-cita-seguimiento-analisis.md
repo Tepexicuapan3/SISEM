@@ -1,87 +1,144 @@
 # P-12 Cita de seguimiento — análisis antes de implementar
 
-Estado: **análisis, sin código** (2026-11-11). Proceso 1 de la lista de crónicos
-(ver [cronicos-control.md](cronicos-control.md)). El siguiente plan de
-implementación sale de las decisiones de la sección 5.
+Estado: **análisis, sin código** (2026-11-11, revisión 2). Proceso 1 de la lista
+de crónicos (ver [cronicos-control.md](cronicos-control.md)). El plan de
+implementación sale de las decisiones de la sección 7.
 
-> TL;DR: P-12 ya funciona para seguimientos de **hasta 30 días**. Para crónicos
-> (control cada 90 o 180 días) no alcanza: el médico no tiene horarios generados
-> tan lejos, el atajo "3 meses" no encuentra día, y la fecha del próximo control
-> del programa y la fecha de seguimiento de la nota son dos datos que no se
-> hablan. Faltan 4 decisiones antes de tocar código.
+> TL;DR: contra el legado, P-12 está **completo y no se toca**. Visto como
+> proceso de punta a punta le faltan 7 complementos: la cita no se cancela al
+> cancelar la nota, el paciente no recibe aviso, la indicación vencida se
+> pierde sin cierre, la auditoría del cierre no registra la cita, la nota
+> impresa no dice hora ni folio, no hay indicadores, y crónicos necesita
+> agendar controles a 90–180 días. Todos se resuelven **agregando**, sin
+> cambiar el comportamiento actual.
+
+## 0. Regla de este análisis: solo agregar
+
+Lo que ya funciona queda igual: mismas pantallas, mismas validaciones, mismos
+contratos, mismas ventanas. Los complementos solo pueden:
+
+- agregar columnas que admiten vacío, tablas, estados derivados o endpoints nuevos;
+- agregar campos **opcionales** a contratos existentes (nadie que no los lea se entera);
+- agregar filtros **opcionales** (sin el filtro, la respuesta es la de hoy).
+
+Si un complemento no cabe en esas tres formas, no entra en este plan.
 
 ## 1. Reglas del legado contra SIRES
 
 Fuente del legado: mapa de procesos P-12 (`parte_familiar.jsp` → `horario_fam.jsp`)
-y P-06 (agenda). Fuente de SIRES: `consulta_medica/uses_case/follow_up_usecase.py`,
+y P-06. Fuente de SIRES: `consulta_medica/uses_case/follow_up_usecase.py`,
 `recepcion/uses_case/agendar_cita_usecase.py`, `continuar-en-trabajo.md` §7, §9–§16.
 
 | # | Regla del legado | SIRES hoy | Estado |
 |---|---|---|---|
 | 1 | Casilla "Cita Para" en el SOAP o el complemento | "Indicar fecha de seguimiento" + calendario y horarios en la consulta | ✅ |
 | 2 | Mismo motor de agenda que recepción | `agendar_cita`, el mismo caso de uso de recepción | ✅ |
-| 3 | Medicina general (servicios 1 y 6) agenda con el **médico familiar**; otros servicios, con el médico actual | Siempre con el médico que atiende. Si el paciente tiene **otro consultorio familiar** (P-03), la nota no se cierra con ese horario y la cita la agenda recepción | ⚠️ Distinto a propósito (decisión 2026-11-10) |
-| 4 | La cita se crea por AJAX **aunque no se guarde la nota** (dos escrituras separadas) | Se crea **al cerrar la nota, en la misma transacción**; si falla, la nota no se cierra | ✅ Mejora |
-| 5 | Desmarcar la casilla da de baja la cita (`det_agendafam = B`) | Antes de cerrar no hay cita que dar de baja; después, recepción cancela o reprograma (B5) | ✅ |
-| 6 | La fecha queda en la nota (`his_notas.fe_cita`) | `fe_seguimiento` en la consulta, posterior a la consulta | ✅ |
-| 7 | Máximo 3 citas por expediente por día; no dos el mismo día al mismo paciente (P-06) | `citas.max_por_expediente_dia` = 3 y `citas.max_por_paciente_dia` = 1 (parámetros) | ✅ |
-| 8 | Sin horario elegido, la cita la agenda recepción | "Seguimientos por agendar" en Próximas citas (§16), de hoy−30 a hoy+60 | ✅ |
-| 9 | — (no existía) | Ficha automática el día de la cita, "Por llegar" y no asistió automático (§12–§14) | ✅ Nuevo |
+| 3 | Medicina general agenda con el **médico familiar**; otros servicios, con el médico actual | Siempre con el médico que atiende; si el paciente tiene **otro consultorio familiar** (P-03), la cita la agenda recepción | ⚠️ Distinto a propósito (decisión 2026-11-10) |
+| 4 | La cita se crea por AJAX **aunque no se guarde la nota** | Se crea **al cerrar la nota, en la misma transacción** | ✅ Mejora |
+| 5 | Desmarcar la casilla da de baja la cita | Antes de cerrar no hay cita; después, recepción cancela o reprograma (B5) | ✅ |
+| 6 | La fecha queda en la nota (`his_notas.fe_cita`) | `fe_seguimiento`, posterior a la consulta | ✅ |
+| 7 | Máximo 3 citas por expediente por día; no dos el mismo día al paciente | Parámetros `citas.max_por_expediente_dia` = 3 y `citas.max_por_paciente_dia` = 1 | ✅ |
+| 8 | Sin horario, la cita la agenda recepción | "Seguimientos por agendar" (§16), de hoy−30 a hoy+60 | ✅ |
+| 9 | — | Ficha automática, "Por llegar" y no asistió automático (§12–§14) | ✅ Nuevo |
 
-**Conclusión:** contra el legado, P-12 está **completo**. La marca "sin revisar"
+**Conclusión:** contra el legado, P-12 está completo. La marca "sin revisar"
 del mapa (2026-10-16) es anterior a estos cambios.
 
-## 2. Datos
+## 2. El proceso de punta a punta (ciclo de vida del seguimiento)
+
+Buenas prácticas de un proceso: cada caso tiene un estado, un responsable, un
+cierre explícito y una medida. Hoy el seguimiento **no tiene estado propio**:
+se deduce de si existe la fecha en la nota y si hay una cita con la convención
+de notas.
+
+| Estado (derivado, no se guarda) | Cómo se sabe hoy | Responsable | ¿Tiene cierre? |
+|---|---|---|---|
+| Indicado | Nota cerrada con `fe_seguimiento` y sin cita | Recepción | ❌ Si nadie lo agenda, sale de la lista a los 30 días **sin registro** |
+| Agendado | Cita no cancelada con motivo "Cita de seguimiento" y notas "Consulta <folio>" | Recepción / médico | ✅ |
+| Atendido | La cita pasa a atendida al cerrar la consulta siguiente | Médico | ✅ |
+| No asistió | No asistió automático (§14) | Sistema | ✅ Pero nadie lo vuelve a citar |
+| Descartado | — | — | ❌ No existe (paciente no quiere, ya se atendió en otro lado, falleció) |
+| Huérfano | La nota se cancela y la cita sigue viva | — | ❌ Ver G1 |
+
+## 3. Huecos encontrados (todos se cubren agregando)
+
+| # | Hueco | Evidencia | Riesgo |
+|---|---|---|---|
+| G1 | **Cancelar la nota no cancela su cita de seguimiento** | `note_cancellation_usecase._gather` cancela recetas, autorizaciones, pases, incapacidades y estudios; no la cita | El paciente llega a una cita de una consulta anulada; ocupa un horario |
+| G2 | **El paciente no recibe aviso** de la cita que le dio el médico | `tasks.enviar_recordatorios_proximos` solo recuerda si antes hubo una confirmación por correo (portal) | Inasistencia evitable |
+| G3 | La indicación sin agendar **se pierde sin cierre** | Ventana de hoy−30 de §16 | No hay forma de saber cuántos seguimientos se perdieron |
+| G4 | No existe **descartar** un seguimiento con motivo | — | La lista acumula casos que nunca se van a agendar |
+| G5 | La auditoría del cierre **no registra la cita** | `_close_consultation_datos_despues` no incluye la cita; solo queda en `citas_estatus_log` (canal MEDICO) | Trazabilidad NOM-024 repartida en dos lugares |
+| G6 | La nota impresa dice solo la fecha | `nota.html`: "Cita de seguimiento: {fecha}" | El paciente sale sin hora, consultorio ni folio |
+| G7 | **Sin indicadores**: indicados, agendados, atendidos, perdidos | — | No se puede medir el proceso |
+
+### Huecos propios de crónicos
+
+| # | Hueco | Evidencia | Riesgo |
+|---|---|---|---|
+| C1 | Los horarios se generan **30 días adelante** | `recepcion/tasks.py` `dias_adelante=30` (60 al cambiar consultorio) | Un control a 90–180 días no se agenda desde la consulta |
+| C2 | El atajo "3 meses" no encuentra día y no dice por qué | `FOLLOW_UP_SHORTCUTS` + `next_follow_up_day` | El médico cree que es una falla |
+| C3 | `fe_seguimiento` (nota) y `fe_proximo_control` (control) no se hablan | Modelos | Dos fechas distintas para lo mismo |
+| C4 | La cita no sabe que es un control de crónicos | Motivo genérico | No se mide inasistencia de crónicos ni se prioriza |
+
+## 4. Complementos propuestos (sin cambiar lo existente)
+
+| # | Complemento | Cubre | Cómo se agrega | Qué NO cambia |
+|---|---|---|---|---|
+| K1 | La cancelación de la nota **también cancela su cita de seguimiento** (si no tiene ficha), con motivo "Consulta cancelada" | G1 | Un paso más en la cascada existente, mismo patrón que pases e incapacidades | Las validaciones, permisos y el resto de la cascada |
+| K2 | Aviso al paciente de la cita de seguimiento (correo si SERMED tiene correo) y su recordatorio | G2 | Confirmación en `CitaNotificacion` al crear la cita del médico; el recordatorio existente la toma solo | Las notificaciones del portal |
+| K3 | **Cierre de seguimiento**: tabla `cns_seguimiento_cierre` (nota, motivo de catálogo, quién, cuándo) para **descartar** con motivo | G3, G4 | Tabla nueva + botón "Descartar" en "Seguimientos por agendar"; la lista excluye los cerrados | La ventana y los filtros actuales de la lista |
+| K4 | Campo opcional `followUp` (folio, fecha y hora) en el `datos_despues` de `ConsultationClosed` | G5 | Un campo más en la foto de auditoría | El evento, su invariante de 1 por request y lo demás del snapshot |
+| K5 | Nota impresa con hora, consultorio y folio cuando hay cita | G6 | Línea condicional en `nota.html` | La nota sin cita se imprime igual |
+| K6 | Indicadores: indicados, agendados, atendidos, no asistió, descartados y perdidos, por centro y periodo | G7 | Endpoint de solo lectura + reporte | Ninguna tabla operativa |
+| K7 | **Control de crónicos con fecha larga**: si no hay horarios a esa fecha, el atajo explica "Sin horarios generados aún; queda como fecha indicada y la agenda recepción" | C1, C2 | Mensaje nuevo; el comportamiento de "fecha indicada" ya existe | La generación de horarios (30 días) y el calendario |
+| K8 | El control de crónicos **propone** la fecha de seguimiento de la nota **solo si está vacía** | C3 | Rellena el campo; el médico la cambia si quiere | La validación de `fe_seguimiento` y las notas con fecha ya puesta |
+| K9 | Liga real control ↔ cita: `id_cita` (admite vacío) en `cns_control_cronico` | C4 | Columna nueva; se llena cuando la cita se agenda desde la consulta o desde la lista | El motivo y las notas de la cita (la convención actual sigue) |
+| K10 | Filtro **opcional** "Solo controles de crónicos" y rango hasta +180 días **solo con ese filtro** en "Seguimientos por agendar" | C1, C4 | Parámetro opcional del endpoint | Sin el filtro, la lista es la de hoy (hoy−30 a hoy+60) |
+
+## 5. Responsables (quién hace qué)
+
+| Paso | Médico | Recepción | Sistema |
+|---|---|---|---|
+| Indicar fecha / elegir horario | Hace | — | Valida reglas de agenda |
+| Agendar lo indicado | — | Hace (lista §16) | — |
+| Avisar al paciente | — | — | K2 |
+| Descartar con motivo | Puede | Hace (K3) | — |
+| Cancelar al anular la nota | — | — | K1 |
+| No asistió | — | Revisa y vuelve a citar | Marca (§14) |
+| Medir | Jefatura | — | K6 |
+
+## 6. Datos
 
 | Legado | SIRES | Nota |
 |---|---|---|
-| `det_agendafam` (con `cd_snota`) | `citas_medicas` (motivo "Cita de seguimiento", notas "Consulta <folio>") | La liga cita ↔ nota es por **convención de texto**, no por llave foránea |
+| `det_agendafam` (con `cd_snota`) | `citas_medicas` (motivo + notas "Consulta <folio>") | Liga cita ↔ nota por convención de texto; se conserva |
 | `his_notas.fe_cita` | `cns_visit_consultation.fe_seguimiento` | — |
-| — | `cns_control_cronico.fe_proximo_control` | Nuevo (crónicos, entrega 2). **No está ligado** a `fe_seguimiento` ni a la cita |
-| `det_agendafam` histórico | Sin migrar | Volumen por medir en `Dump20260903.sql`; ver decisión D4 |
+| — | `cns_control_cronico.fe_proximo_control` | Se liga con K8 y K9 |
+| `det_agendafam` histórico | Sin migrar | D5 |
 
-## 3. Hallazgos contra crónicos
-
-| # | Hallazgo | Evidencia | Impacto |
-|---|---|---|---|
-| H1 | Los horarios de los médicos se generan **30 días adelante** (tarea diaria; 60 al cambiar el consultorio) | `recepcion/tasks.py` `dias_adelante=30`; `consultorio_usecase.py` `dias_adelante=60` | Un control a 90 o 180 días **no se puede agendar** desde la consulta |
-| H2 | El atajo "3 meses" busca el primer día libre desde hoy+3 meses; no hay horarios ahí | `FOLLOW_UP_SHORTCUTS` + `next_follow_up_day` | El atajo responde "sin lugar" y el médico no entiende por qué |
-| H3 | El calendario pide rangos de hasta 62 días | `FOLLOW_UP_DAYS_MAX_RANGE = 62` | Solo afecta si se generan horarios más lejos (D1) |
-| H4 | "Seguimientos por agendar" muestra de hoy−30 a hoy+60 | §16 | Un seguimiento a 90 días aparece en la lista recién 30 días antes; puede ser suficiente (D2) |
-| H5 | Dos fechas para lo mismo: `fe_seguimiento` (nota) y `fe_proximo_control` (control de crónicos) | Modelos | Pueden quedar distintas: el médico propone 90 días en el control y pone 30 en la nota |
-| H6 | La cita no sabe que es un control de crónicos | Motivo genérico "Cita de seguimiento" | Recepción no puede priorizarlos ni el tablero puede medir inasistencia de crónicos |
-| H7 | El no asistió automático ya existe (§14) | `marcar_fichas_no_llegaron` | Sirve para medir **inasistencia de crónicos** sin trabajo extra, si se liga la cita al control (D3) |
-
-## 4. Alternativas para el horizonte (H1–H4)
-
-| Opción | Qué es | A favor | En contra |
-|---|---|---|---|
-| **A. Fecha indicada + recepción agenda cuando hay horarios** (recomendada) | Para controles de más de 30 días el médico deja **solo la fecha**; aparece en "Seguimientos por agendar" y recepción la agenda cuando ya hay horarios | No cambia la generación de horarios ni la carga de la base; reutiliza lo que ya existe (§16) | La cita no queda reservada el día de la consulta; depende de que recepción revise la lista |
-| B. Generar horarios a 180 días | La tarea diaria crea horarios a 6 meses | El médico reserva el control en el momento | 6 veces más filas en `citas_horarios_disponibles`; las ausencias y los cambios de horario lejanos obligan a reprogramar más citas |
-| C. Cita "tentativa" sin horario | Cita con fecha y sin hora que recepción confirma después | El paciente sale con una fecha | Estado nuevo en las citas, el portal y el check-in: es mucho para el beneficio |
-
-## 5. Decisiones pendientes (las toma el usuario o la institución)
+## 7. Decisiones pendientes
 
 | # | Decisión | Opciones | Recomendación |
 |---|---|---|---|
-| D1 | Horizonte de los controles largos | A, B o C (sección 4) | **A** |
-| D2 | Ventana de "Seguimientos por agendar" | Dejar hoy+60 o ampliar a hoy+180 | Ampliar a **+180 solo para controles de crónicos** (filtro aparte), para que recepción los vea con tiempo |
-| D3 | Ligar la cita y el control | (a) Sin liga; (b) el control lleva `id_cita` y la cita un motivo "Control de crónicos"; (c) liga por la convención de notas | **(b)**: llave real, no texto. Permite medir inasistencia (H7) |
-| D4 | Una sola fecha (H5) | (a) El control propone y llena `fe_seguimiento`; (b) dos fechas independientes | **(a)**: el control **sugiere** la fecha de seguimiento de la nota y el médico la puede cambiar; se guarda la que quede |
-| D5 | Migrar `det_agendafam` histórico | Migrar, o dejarlo en el respaldo del legado | Dejarlo en el respaldo: son citas pasadas sin valor operativo. Confirmar contra la política de retención (no es expediente) |
+| D1 | Orden de los complementos | Por riesgo o por crónicos | **Por riesgo**: K1 → K4 → K5 → K3 → K2 → K8 → K9 → K10 → K7 → K6 |
+| D2 | Motivos de descarte (K3) | Catálogo nuevo o reutilizar `cat_motivos` de cancelación de cita | **Catálogo nuevo** chico: "No desea", "Atendido en otra unidad", "Defunción", "Baja del servicio", "Otro" (con detalle) |
+| D3 | Canal del aviso (K2) | Solo correo / correo + SMS | **Solo correo** (ya existe el servicio); SMS cuando haya proveedor |
+| D4 | K1 con la cita que ya tiene ficha | Cancelarla también / dejarla y avisar | **Dejarla y avisar** en la bitácora: si ya tiene ficha, el paciente ya está en la unidad |
+| D5 | Migrar `det_agendafam` histórico | Migrar / dejar en el respaldo | **Respaldo**: citas pasadas sin valor operativo; confirmar contra la política de retención |
 
-## 6. Riesgos
+## 8. Riesgos
 
 | Riesgo | Mitigación |
 |---|---|
-| Recepción no revisa "Seguimientos por agendar" y el control se pierde | Contador en el menú de recepción y "vencido" en rojo (ya existe `vencido`); el tablero de crónicos muestra los controles sin cita |
-| El médico cree que el control quedó agendado cuando solo quedó la fecha | Mensaje explícito al cerrar: "Fecha indicada, la cita la agenda recepción" |
-| Doble fuente de fecha (si se elige D4-b) | Elegir D4-a |
+| K1 cancela una cita que el paciente necesitaba igual | Solo citas sin ficha (D4) y motivo visible en la bitácora; recepción puede volver a agendar |
+| K2 manda correos a direcciones viejas de SERMED | Registrar el envío y el rebote en `CitaNotificacion` (ya existe); no reintentar en bucle |
+| K3 se usa para "limpiar" la lista sin atender | Motivo obligatorio + auditoría + indicador de descartados (K6) |
 
-## 7. Criterio de terminado del plan de implementación (cuando se aprueben las decisiones)
+## 9. Criterio de terminado (por complemento, cuando se aprueben)
 
-- [ ] Pruebas primero: control de 90 días sin horarios → queda como fecha indicada y aparece en la lista de recepción.
-- [ ] El control sugiere `fe_seguimiento` y la nota guarda la fecha final (D4).
-- [ ] La cita agendada desde la lista queda ligada al control (D3) y su no asistió se ve en el panel de crónicos.
-- [ ] El atajo "3 meses" explica por qué no hay horarios en lugar de solo "sin lugar".
-- [ ] Documentación actualizada: este archivo, `continuar-en-trabajo.md` y la marca de P-12 en el mapa.
+- [ ] Pruebas primero de cada complemento, incluida una que demuestre que **lo existente no cambió** (mismo contrato y misma respuesta sin los campos o filtros nuevos).
+- [ ] K1: cancelar una nota con cita sin ficha la cancela con motivo; con ficha, no y queda la nota en la bitácora.
+- [ ] K4: `ConsultationClosed` trae `followUp` solo cuando hubo cita.
+- [ ] K3: descartar pide motivo, queda auditado y el caso sale de la lista.
+- [ ] Documentación: este archivo, `continuar-en-trabajo.md` y la marca de P-12 en el mapa.
