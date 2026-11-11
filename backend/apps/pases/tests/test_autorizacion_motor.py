@@ -56,6 +56,8 @@ class _Base(_ConsultationAuditApiTestBase):
         return Referral.objects.get(pk=resultado["id"]), resultado
 
 
+# Apagado explicito: el .env local puede tenerlo encendido.
+@override_settings(AUTORIZACIONES_PASES_V2=False)
 class InterruptorApagadoTests(_Base):
     def test_no_crea_solicitud(self):
         pase, contrato = self._pase(LAB, self.marcado_lab)

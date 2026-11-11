@@ -5,7 +5,7 @@ La copia del legado no existe en tests: his_clinica y his_clinicad se simulan.
 from datetime import date
 from unittest import mock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.catalogos.models import CatHabito
 from apps.consulta_medica.models import (
@@ -31,6 +31,11 @@ HIS_CLINICAD = [{
 }]
 
 
+# Los tests simulan la copia del legado en Postgres con nombres logicos; sin
+# esto heredarian el LEGADO_* del .env local (p. ej. el espejo MySQL).
+SIN_ESPEJO_LOCAL = {"LEGADO_MOTOR": "postgresql", "LEGADO_ESQUEMA_ACTUAL": "", "LEGADO_MYSQL": {}}
+
+
 class _Copia:
     def __init__(self, clinica=HIS_CLINICA, clinicad=HIS_CLINICAD):
         self.tablas = {"his_clinica": clinica, "his_clinicad": clinicad}
@@ -44,6 +49,7 @@ class _Copia:
         return []
 
 
+@override_settings(**SIN_ESPEJO_LOCAL)
 class ConfirmacionTests(TestCase):
     def setUp(self):
         for codigo in ("tabaquismo", "alcoholismo", "toxicomanias", "otro", "alimentacion"):

@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 from apps.administracion.models import RelRolPermiso, RelUsuarioRol
 from apps.authentication.infrastructure.policy_store import PolicyStore
 from apps.authentication.models import DetUsuario, SyUsuario
-from apps.catalogos.models import CatCies, MotivoCita, Permisos, Roles
+from apps.catalogos.models import CatCentroAtencion, CatCies, MotivoCita, Permisos, Roles
 from apps.recepcion.models import Visit
 from apps.realtime.consumers.visits import VISITS_STREAM_GROUP
 from apps.realtime.events import (
@@ -31,6 +31,11 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
         self.recepcion_password = "Recep_123456"
         self.clinico_password = "Clinico_123456"
         self.doctor_password = "Doctor_123456"
+        # Alcance por centro: recepción solo registra y ve visitas de su centro.
+        self.centro = CatCentroAtencion.objects.create(
+            name="Centro WS", code="CT-WS",
+            center_type=CatCentroAtencion.TipoCentro.CLINICA, is_active=True,
+        )
 
         self._create_user_with_role(
             username="recepcion_ws",
@@ -42,6 +47,7 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
                 "recepcion:fichas:medicina_general:read",
                 "recepcion:fichas:medicina_general:create",
             ],
+            centro=self.centro,
         )
         self._create_user_with_role(
             username="clinico_ws",
@@ -65,6 +71,7 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
             arrival_type=Visit.ArrivalType.APPOINTMENT,
             appointment_id="APP-WS-0001",
             status="en_espera",
+            centro=self.centro,
         )
         self.visit_somatometria = Visit.objects.create(
             folio="WS-SMT-0001",
@@ -109,6 +116,7 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
         role_code,
         landing_route,
         permissions=None,
+        centro=None,
     ):
         user = SyUsuario.objects.create(
             usuario=username,
@@ -123,6 +131,7 @@ class VisitStreamRealtimeEventsApiTests(APITestCase):
             nombre=username,
             paterno="Test",
             materno="User",
+            id_centro_atencion=centro,
         )
         role, _ = Roles.objects.get_or_create(
             rol=role_code,

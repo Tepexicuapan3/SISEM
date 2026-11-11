@@ -23,6 +23,11 @@ CON_LEGADO = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memo
               "legado": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
 
 
+# Los tests simulan la copia del legado en Postgres con nombres logicos; sin
+# esto heredarian el LEGADO_* del .env local (p. ej. el espejo MySQL).
+SIN_ESPEJO_LOCAL = {"LEGADO_MOTOR": "postgresql", "LEGADO_ESQUEMA_ACTUAL": "", "LEGADO_MYSQL": {}}
+
+
 class MapaPuenteTests(TestCase):
     def setUp(self):
         self.mapa = MapaPuente.desde_filas(CAT_FAMILIAR)
@@ -73,7 +78,9 @@ class RegistrarCdFamiliarTests(TestCase):
         self.assertEqual(self._cd_familiar(hijo), [])
 
 
-@override_settings(IDENTIDAD_PACIENTE={"VERIFICAR_SERMED": "apagado", "RECIEN_NACIDOS": False})
+@override_settings(
+    IDENTIDAD_PACIENTE={"VERIFICAR_SERMED": "apagado", "RECIEN_NACIDOS": False}, **SIN_ESPEJO_LOCAL,
+)
 class PuenteAlAbrirTests(TestCase):
     def test_al_abrir_un_familiar_se_registra_despues_del_commit(self):
         filas = [f for f in CAT_FAMILIAR if f["cd_familiar"] == 501]

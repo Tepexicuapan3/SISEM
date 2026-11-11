@@ -7,7 +7,7 @@ La copia no existe en tests: sus respuestas se simulan por consulta.
 from datetime import date
 from unittest import mock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.catalogos.models import SensitiveCieRange
 from apps.catalogos.services.sensitive_diagnosis_service import invalidate_cache
@@ -33,6 +33,11 @@ def _nota(folio, fecha, cie=None, diagnostico=None, **kw):
             "cd_servicio": 22, "tp_consulta": 1, "cd_especialidad": 0,
             "ds_servicio": "SERVICIO ESPECIAL", "ds_tpconsulta": "NORMAL", "ds_especialidad": " SIN ESPECIALIDAD",
             "cd_cie": cie, "ds_cie": f"DESC {cie}" if cie else None, **kw}
+
+
+# Los tests simulan la copia del legado en Postgres con nombres logicos; sin
+# esto heredarian el LEGADO_* del .env local (p. ej. el espejo MySQL).
+SIN_ESPEJO_LOCAL = {"LEGADO_MOTOR": "postgresql", "LEGADO_ESQUEMA_ACTUAL": "", "LEGADO_MYSQL": {}}
 
 
 class _CopiaSimulada:
@@ -72,6 +77,7 @@ class _CopiaSimulada:
         return []
 
 
+@override_settings(**SIN_ESPEJO_LOCAL)
 class LlavesLegadoTests(TestCase):
     def test_titular_y_familiar_de_la_misma_persona(self):
         titular = Patient.objects.create(no_exp="40041", pk_num=0)
@@ -94,6 +100,7 @@ class LlavesLegadoTests(TestCase):
         self.assertEqual(legado_historial.llaves_legado("40041", 9), [])
 
 
+@override_settings(**SIN_ESPEJO_LOCAL)
 class HistorialTests(TestCase):
     def setUp(self):
         self.hijo = Patient.objects.create(no_exp="40041", pk_num=3)
