@@ -370,9 +370,8 @@ function ExpedienteDetalle({
                 <td className="px-3 py-2">
                   <Button
                     asChild
-                    variant="outline"
-                    size="sm"
-                    className="border-brand/40 text-brand hover:bg-brand/10 hover:border-brand"
+                    size="lg"
+                    className="[&_svg:not([class*='size-'])]:size-5"
                     title="Abrir el historial clínico del paciente (consultas, diagnósticos y recetas)"
                   >
                     <Link
