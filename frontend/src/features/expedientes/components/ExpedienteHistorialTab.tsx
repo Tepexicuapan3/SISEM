@@ -10,6 +10,8 @@ import { ConsultationAddendaSection } from "@features/expedientes/components/Con
 import { LegacyConsultationHistorySection } from "@features/expedientes/components/LegacyConsultationHistorySection";
 import { LegacyReviewSection } from "@features/expedientes/components/LegacyReviewSection";
 import { SoapNoteView } from "@features/expedientes/components/SoapNoteView";
+import { PrescriptionAuthorizationBadge } from "@features/expedientes/components/PrescriptionAuthorizationBadge";
+import { canPrintPrescription } from "@features/expedientes/domain/prescription-authorization";
 
 interface ExpedienteHistorialTabProps {
   noExp: string;
@@ -88,8 +90,14 @@ export function ExpedienteHistorialTab({
                   size="sm"
                   variant="outline"
                 />
-                {/* La receta imprime los medicamentos activos: sin ellos daria 409. */}
+                {/* La receta imprime los medicamentos activos: sin ellos daria 409.
+                    Pendiente o rechazada tampoco se imprime: se dice en que va. */}
                 {consulta.visitStatus === "cerrada" && consulta.prescriptionMedications.length > 0 ? (
+                  <PrescriptionAuthorizationBadge authorization={consulta.prescriptionAuthorization} />
+                ) : null}
+                {consulta.visitStatus === "cerrada" &&
+                consulta.prescriptionMedications.length > 0 &&
+                canPrintPrescription(consulta.prescriptionAuthorization) ? (
                   <PrintButton
                     documento="receta"
                     resourceId={consulta.visitId}

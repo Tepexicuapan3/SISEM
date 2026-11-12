@@ -20,6 +20,12 @@ export interface PatientConsultationHistoryItem {
   prescriptionItems: string[];
   // Medicamentos activos: lo que imprime la receta (decide el boton de imprimir).
   prescriptionMedications: string[];
+  prescriptionFolio: string | null;
+  // Ultima autorizacion de la receta (especial o controlado); null si no la pidio.
+  prescriptionAuthorization: {
+    status: "pendiente" | "autorizada" | "rechazada";
+    rejectionReason: string | null;
+  } | null;
   // Diagnosticos sensibles (change `diagnosticos-sensibles`): true cuando
   // el CIE-10 de esta consulta cae en un rango sensible (VIH/salud
   // mental/sustancias) y el usuario actual no tiene el permiso requerido

@@ -17,6 +17,7 @@ import {
   tiempoRestante,
 } from "@features/autorizaciones/domain/solicitud.format";
 import { useSolicitudDetalle } from "@features/autorizaciones/queries/useSolicitudes";
+import { SolicitudAccionOrigen } from "@features/autorizaciones/components/SolicitudAccionOrigen";
 import { getSolicitudErrorMessage } from "@features/autorizaciones/utils/solicitud.feedback";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
 
@@ -194,6 +195,9 @@ export function SolicitudDetallePage() {
               </Dato>
             ) : null}
           </dl>
+          <div className="mt-4 empty:hidden">
+            <SolicitudAccionOrigen accion={solicitud.accionOrigen} />
+          </div>
         </Tarjeta>
 
         <Tarjeta titulo="Qué se autoriza">

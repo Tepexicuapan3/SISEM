@@ -211,9 +211,12 @@ export const DoctorConsultationPage = () => {
   const prescriptionItemsQuery = usePrescriptionItems(selectedVisit?.id, {
     enabled: canPrintReceta && selectedVisitStatus === VISIT_STATUS.EN_CONSULTA,
   });
-  const hasActiveMedications = (prescriptionItemsQuery.data?.items ?? []).some(
+  const activeMedications = (prescriptionItemsQuery.data?.items ?? []).filter(
     (item) => item.status === "activo",
   );
+  const hasActiveMedications = activeMedications.length > 0;
+  // Especial o controlado: al cerrar la receta queda pendiente de autorizacion.
+  const prescriptionNeedsAuthorization = activeMedications.some((item) => item.requiresAuthorization);
   const { print: printReceta } = usePrintDocument("receta");
 
   const canStartSelectedVisit =
@@ -494,8 +497,18 @@ export const DoctorConsultationPage = () => {
       });
       const seguimiento = closeResult.followUpAppointment;
       const closedVisitId = selectedVisit.id;
+      const followUpText = seguimiento
+        ? `Cita de seguimiento ${seguimiento.folio}, ${new Date(seguimiento.fechaHora).toLocaleString("es-MX", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: "America/Mexico_City",
+          })}.`
+        : undefined;
+      const authorizationText = prescriptionNeedsAuthorization
+        ? "La receta quedó pendiente de autorización: se avisa al autorizador y, cuando la autorice, podrás imprimirla."
+        : undefined;
       toast.success("Consulta cerrada", {
-        ...(hasActiveMedications
+        ...(hasActiveMedications && !prescriptionNeedsAuthorization
           ? {
               action: {
                 label: "Imprimir receta",
@@ -503,13 +516,7 @@ export const DoctorConsultationPage = () => {
               },
             }
           : {}),
-        description: seguimiento
-          ? `Cita de seguimiento ${seguimiento.folio}, ${new Date(seguimiento.fechaHora).toLocaleString("es-MX", {
-              dateStyle: "medium",
-              timeStyle: "short",
-              timeZone: "America/Mexico_City",
-            })}.`
-          : undefined,
+        description: [authorizationText, followUpText].filter(Boolean).join(" ") || undefined,
       });
       navigate("/clinico/consultas/doctor");
       diagnosisForm.reset(DEFAULT_DIAGNOSIS_FORM_VALUES);

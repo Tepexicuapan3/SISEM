@@ -48,6 +48,12 @@ export interface AddPrescriptionItemRequest {
   acknowledgeAllergyWarning?: boolean;
 }
 
+/** Correccion de un renglon (el medicamento no cambia). */
+export type UpdatePrescriptionItemRequest = Omit<
+  AddPrescriptionItemRequest,
+  "medicationId" | "acknowledgeAllergyWarning"
+>;
+
 export interface AllergyWarning {
   /** null si la alergia viene del sistema anterior y nadie la confirmo todavia. */
   allergyId: number | null;

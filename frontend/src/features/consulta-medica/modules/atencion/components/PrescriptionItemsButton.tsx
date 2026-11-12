@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
-import * as z from "zod";
 import { Button } from "@shared/ui/button";
 import {
   Dialog,
@@ -15,23 +14,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@shared/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@shared/ui/form";
+import { Form } from "@shared/ui/form";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@shared/ui/select";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { medicamentosAPI } from "@api/resources/catalogos/medicamentos.api";
 import { usePrescriptionItems } from "@features/consulta-medica/modules/atencion/queries/usePrescriptionItems";
@@ -40,12 +25,14 @@ import { MedicationControlBadges } from "@features/consulta-medica/modules/atenc
 import { PrescriptionItemsList } from "@features/consulta-medica/modules/atencion/components/PrescriptionItemsList";
 import { activePrescriptionItems } from "@features/consulta-medica/modules/atencion/domain/prescription-items";
 import { resolvePrescriptionItemError } from "@features/consulta-medica/modules/atencion/domain/prescription-item-errors";
+import { PrescriptionItemFields } from "@features/consulta-medica/modules/atencion/components/PrescriptionItemFields";
 import {
-  DURATION_PRESETS,
-  FREQUENCY_PRESETS,
-} from "@features/consulta-medica/modules/atencion/domain/prescription-presets";
+  addPrescriptionItemSchema,
+  emptyPrescriptionItemFields,
+  prescriptionItemFieldsToPayload,
+  type AddPrescriptionItemFormValues,
+} from "@features/consulta-medica/modules/atencion/domain/prescription-item-form";
 import type { AllergyWarning, MedicamentoListItem } from "@api/types";
-import { ADMINISTRATION_ROUTES } from "@features/consulta-medica/modules/atencion/domain/administration-routes";
 
 const SEVERITY_LABEL: Record<NonNullable<AllergyWarning["severity"]>, string> = {
   L: "Leve",
@@ -55,53 +42,6 @@ const SEVERITY_LABEL: Record<NonNullable<AllergyWarning["severity"]>, string> = 
 
 const MIN_SEARCH_LENGTH = 2;
 const SEARCH_PAGE_SIZE = 20;
-
-const addItemSchema = z.object({
-  medicationId: z.string().min(1, { error: "Selecciona un medicamento" }),
-  dose: z.string().optional(),
-  indications: z.string().trim().min(1, { error: "Ingresa las indicaciones" }),
-  quantity: z.number().int().min(1, { error: "Minimo 1" }),
-  // Via, frecuencia y duracion (RIS art. 30); el backend tambien las exige.
-  route: z.string().min(1, { error: "Selecciona la vía de administración" }),
-  frequency: z.string().trim().min(1, { error: "Ingresa la frecuencia" }).max(60),
-  duration: z.string().trim().min(1, { error: "Ingresa la duración" }).max(60),
-});
-
-type AddItemFormValues = z.infer<typeof addItemSchema>;
-
-const buildDefaultValues = (): AddItemFormValues => ({
-  medicationId: "",
-  dose: "",
-  indications: "",
-  quantity: 1,
-  route: "",
-  frequency: "",
-  duration: "",
-});
-
-interface PresetChipsProps {
-  presets: readonly string[];
-  onPick: (value: string) => void;
-}
-
-function PresetChips({ presets, onPick }: PresetChipsProps) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {presets.map((preset) => (
-        <Button
-          key={preset}
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 rounded-full px-2.5 text-xs"
-          onClick={() => onPick(preset)}
-        >
-          {preset}
-        </Button>
-      ))}
-    </div>
-  );
-}
 
 interface PrescriptionItemsButtonProps {
   visitId: number;
@@ -114,7 +54,7 @@ export function PrescriptionItemsButton({
 }: PrescriptionItemsButtonProps) {
   const [open, setOpen] = useState(false);
   const [allergyWarning, setAllergyWarning] = useState<AllergyWarning | null>(null);
-  const [pendingValues, setPendingValues] = useState<AddItemFormValues | null>(null);
+  const [pendingValues, setPendingValues] = useState<AddPrescriptionItemFormValues | null>(null);
   const [search, setSearch] = useState("");
   const [selectedMedication, setSelectedMedication] = useState<MedicamentoListItem | null>(null);
   const debouncedSearch = useDebounce(search.trim(), 300);
@@ -137,13 +77,13 @@ export function PrescriptionItemsButton({
 
   const addItem = useAddPrescriptionItem();
 
-  const form = useForm<AddItemFormValues>({
-    resolver: zodResolver(addItemSchema),
-    defaultValues: buildDefaultValues(),
+  const form = useForm<AddPrescriptionItemFormValues>({
+    resolver: zodResolver(addPrescriptionItemSchema),
+    defaultValues: { medicationId: "", ...emptyPrescriptionItemFields() },
   });
 
   const resetForm = () => {
-    form.reset(buildDefaultValues());
+    form.reset({ medicationId: "", ...emptyPrescriptionItemFields() });
     setSelectedMedication(null);
     setSearch("");
   };
@@ -164,23 +104,15 @@ export function PrescriptionItemsButton({
     });
   };
 
-  const pickPreset = (field: "frequency" | "duration") => (value: string) =>
-    form.setValue(field, value, { shouldDirty: true, shouldValidate: true });
-
   const submitItem = async (
-    values: AddItemFormValues,
+    values: AddPrescriptionItemFormValues,
     { acknowledgeAllergyWarning = false }: { acknowledgeAllergyWarning?: boolean } = {},
   ) => {
     const result = await addItem.mutateAsync({
       visitId,
       data: {
         medicationId: Number(values.medicationId),
-        quantity: values.quantity,
-        indications: values.indications.trim(),
-        dose: values.dose?.trim() || undefined,
-        route: values.route,
-        frequency: values.frequency.trim(),
-        duration: values.duration.trim(),
+        ...prescriptionItemFieldsToPayload(values),
         acknowledgeAllergyWarning,
       },
     });
@@ -205,7 +137,7 @@ export function PrescriptionItemsButton({
     resetForm();
   };
 
-  const onSubmit = async (values: AddItemFormValues) => {
+  const onSubmit = async (values: AddPrescriptionItemFormValues) => {
     try {
       await submitItem(values);
     } catch (error) {
@@ -398,111 +330,7 @@ export function PrescriptionItemsButton({
                 ) : null}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="dose"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Dosis (opcional)</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="1 tableta" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="route"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vía de administración</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona la vía" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {ADMINISTRATION_ROUTES.map((route) => (
-                            <SelectItem key={route.value} value={route.value}>
-                              {route.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="quantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cantidad (cajas)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={selectedMedication?.maxQuantity ?? undefined}
-                          {...field}
-                          onChange={(event) =>
-                            field.onChange(event.target.valueAsNumber)
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="frequency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Frecuencia</FormLabel>
-                      <FormControl>
-                        <Input {...field} maxLength={60} placeholder="Cada 8 horas" />
-                      </FormControl>
-                      <PresetChips presets={FREQUENCY_PRESETS} onPick={pickPreset("frequency")} />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="duration"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duración</FormLabel>
-                      <FormControl>
-                        <Input {...field} maxLength={60} placeholder="5 días" />
-                      </FormControl>
-                      <PresetChips presets={DURATION_PRESETS} onPick={pickPreset("duration")} />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="indications"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Indicaciones</FormLabel>
-                    <FormControl>
-                      <Input {...field} maxLength={140} placeholder="Después de comer" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <PrescriptionItemFields form={form} maxQuantity={selectedMedication?.maxQuantity} />
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>

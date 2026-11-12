@@ -58,7 +58,14 @@ export interface SolicitudResumen {
   version: number;
 }
 
+/** Lo que el origen permite con el resultado (p. ej. imprimir la receta autorizada). */
+export interface SolicitudAccionOrigen {
+  tipo: "IMPRIMIR_RECETA";
+  visitId: number;
+}
+
 export interface SolicitudDetalle extends SolicitudResumen {
+  accionOrigen: SolicitudAccionOrigen | null;
   items: { tipoItem: string; descripcion: string; cantidad: number | null; motivo: string | null }[];
   destinatarios: {
     autorizador: { id: number; nombre: string };

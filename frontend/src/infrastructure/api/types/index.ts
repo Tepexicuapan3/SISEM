@@ -473,6 +473,7 @@ export type {
   PrescriptionItem,
   VisitPrescriptionItemsResponse,
   AddPrescriptionItemRequest,
+  UpdatePrescriptionItemRequest,
   AllergyWarning,
   AllergyAcknowledgedInfo,
   AddPrescriptionItemRequiresAcknowledgment,

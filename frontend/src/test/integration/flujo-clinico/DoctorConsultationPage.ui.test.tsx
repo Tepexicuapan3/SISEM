@@ -915,6 +915,25 @@ describe("DoctorConsultationPage UI", () => {
     expect(printReceta).toHaveBeenCalledWith(1);
   });
 
+  it("al cerrar con un especial o controlado avisa que la receta queda pendiente de autorizacion", async () => {
+    vi.mocked(visitsAPI.getPrescriptionItems).mockResolvedValue({
+      items: [{ id: 5, visitId: 1, status: "activo", requiresAuthorization: true } as PrescriptionItem],
+      total: 1,
+    });
+
+    await closeConsultationWithCie();
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        "Consulta cerrada",
+        expect.objectContaining({
+          description: expect.stringContaining("pendiente de autorización"),
+        }),
+      );
+    });
+    expect(vi.mocked(toast.success).mock.calls.at(-1)?.[1]).not.toHaveProperty("action");
+  });
+
   it("al cerrar sin medicamentos activos el aviso no ofrece imprimir", async () => {
     vi.mocked(visitsAPI.getPrescriptionItems).mockResolvedValue({
       items: [{ id: 5, visitId: 1, status: "cancelado" } as PrescriptionItem],

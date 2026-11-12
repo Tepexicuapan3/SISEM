@@ -44,6 +44,8 @@ const buildItem = (
   plan: null,
   prescriptionItems: [],
   prescriptionMedications: [],
+  prescriptionFolio: null,
+  prescriptionAuthorization: null,
   restricted: false,
   ...overrides,
 });
@@ -176,5 +178,43 @@ describe("ExpedienteHistorialTab - imprimir receta", () => {
     expect(within(subjetivo).getByText("Dolor de garganta")).toBeInTheDocument();
     expect(within(screen.getByRole("group", { name: /P\s*Plan/ })).getByText("Reposo")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: /O\s*Objetivo/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("ExpedienteHistorialTab - autorizacion de la receta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const conReceta = (prescriptionAuthorization: PatientConsultationHistoryItem["prescriptionAuthorization"]) =>
+    buildItem(1, "cerrada", {
+      prescriptionMedications: ["Insulina glargina"],
+      prescriptionFolio: "RX-2026-000003",
+      prescriptionAuthorization,
+    });
+
+  it("pendiente: lo dice y no ofrece imprimir", () => {
+    setup({ capability: true, items: [conReceta({ status: "pendiente", rejectionReason: null })] });
+    render(<ExpedienteHistorialTab noExp="100" />);
+
+    expect(screen.getByText("Receta pendiente de autorización")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Imprimir receta/ })).toBeNull();
+  });
+
+  it("rechazada: muestra el motivo y no ofrece imprimir", () => {
+    setup({ capability: true, items: [conReceta({ status: "rechazada", rejectionReason: "Hay alternativa" })] });
+    render(<ExpedienteHistorialTab noExp="100" />);
+
+    expect(screen.getByText("Receta rechazada")).toBeInTheDocument();
+    expect(screen.getByText(/Hay alternativa/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Imprimir receta/ })).toBeNull();
+  });
+
+  it("autorizada: se puede imprimir", () => {
+    setup({ capability: true, items: [conReceta({ status: "autorizada", rejectionReason: null })] });
+    render(<ExpedienteHistorialTab noExp="100" />);
+
+    expect(screen.getByText("Receta autorizada")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Imprimir receta/ })).toBeInTheDocument();
   });
 });

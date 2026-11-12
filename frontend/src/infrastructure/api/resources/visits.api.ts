@@ -2,6 +2,7 @@ import apiClient from "@api/client";
 import { registrarIdsPaciente } from "@api/paciente-ids";
 import type {
   AddPrescriptionItemRequest,
+  UpdatePrescriptionItemRequest,
   AddPrescriptionItemResult,
   AddSecondaryDiagnosisRequest,
   CieSearchParams,
@@ -205,6 +206,18 @@ export const visitsAPI = {
   ): Promise<AddPrescriptionItemResult> => {
     const response = await apiClient.post<AddPrescriptionItemResult>(
       `/visits/${visitId}/prescription-items`,
+      data,
+    );
+    return response.data;
+  },
+
+  updatePrescriptionItem: async (
+    visitId: number,
+    itemId: number,
+    data: UpdatePrescriptionItemRequest,
+  ): Promise<PrescriptionItem> => {
+    const response = await apiClient.patch<PrescriptionItem>(
+      `/visits/${visitId}/prescription-items/${itemId}`,
       data,
     );
     return response.data;
