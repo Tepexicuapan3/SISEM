@@ -203,6 +203,11 @@ export const NAV_CONFIG: NavSection[] = [
             permissions: ["admin:catalogos:grupos_medicamentos:read"],
           },
           {
+            title: "Medicamentos",
+            url: "/admin/catalogos/medicamentos",
+            permissions: ["admin:catalogos:medicamentos:read"],
+          },
+          {
             title: "Ocupaciones",
             url: "/admin/catalogos/ocupaciones",
             permissions: ["admin:catalogos:ocupaciones:read"],

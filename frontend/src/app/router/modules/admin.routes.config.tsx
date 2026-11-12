@@ -37,6 +37,7 @@ import EscuelasPage from "@features/admin/modules/catalogos/escuelas/pages/Escue
 import EspecialidadesPage from "@features/admin/modules/catalogos/especialidades/pages/EspecialidadesPage";
 import EstudiosMedicosPage from "@features/admin/modules/catalogos/estudios-medicos/pages/EstudiosMedicosPage";
 import GruposMedicamentosPage from "@features/admin/modules/catalogos/grupos-medicamentos/pages/GruposMedicamentosPage";
+import MedicamentosPage from "@features/admin/modules/catalogos/medicamentos/pages/MedicamentosPage";
 import OcupacionesPage from "@features/admin/modules/catalogos/ocupaciones/pages/OcupacionesPage";
 import OrigenConsultaPage from "@features/admin/modules/catalogos/origen-consulta/pages/OrigenConsultaPage";
 import ParentescosPage from "@features/admin/modules/catalogos/parentescos/pages/ParentescosPage";
@@ -364,6 +365,14 @@ export const adminRoutes: RouteObject[] = [
         element: (
           <ProtectedRoute requiredPermission="admin:catalogos:grupos_medicamentos:read">
             <GruposMedicamentosPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "medicamentos",
+        element: (
+          <ProtectedRoute requiredPermission="admin:catalogos:medicamentos:read">
+            <MedicamentosPage />
           </ProtectedRoute>
         ),
       },

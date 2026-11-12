@@ -115,6 +115,10 @@ export const MENU_DESTINATION_LABELS: Record<
     label: "Grupos de Medicamentos",
     grupo: "Catálogos",
   },
+  "/admin/catalogos/medicamentos": {
+    label: "Medicamentos",
+    grupo: "Catálogos",
+  },
   "/admin/catalogos/licencias": {
     label: "Licencias (Catálogo)",
     grupo: "Catálogos",

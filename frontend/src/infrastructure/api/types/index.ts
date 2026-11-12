@@ -517,6 +517,13 @@ export type {
 export type {
   CuadroBasico,
   MedicamentoListItem,
+  MedicamentoDetail,
+  MedicamentoDetailResponse,
+  CreateMedicamentoRequest,
+  CreateMedicamentoResponse,
+  UpdateMedicamentoRequest,
+  UpdateMedicamentoResponse,
+  DeleteMedicamentoResponse,
   MedicamentosListResponse,
   MedicamentosListParams,
 } from "@api/types/catalogos/medicamentos.types";

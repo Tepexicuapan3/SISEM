@@ -53,6 +53,7 @@ export const MENU_DESTINATIONS: MenuDestination[] = [
   {"path":"/admin/catalogos/estudios-medicos","permissions":["admin:catalogos:estudios_med:read"]},
   {"path":"/admin/catalogos/grupos-medicamentos","permissions":["admin:catalogos:grupos_medicamentos:read"]},
   {"path":"/admin/catalogos/licencias","permissions":["admin:catalogos:licencias:read"]},
+  {"path":"/admin/catalogos/medicamentos","permissions":["admin:catalogos:medicamentos:read"]},
   {"path":"/admin/catalogos/motivos-baja-padron","permissions":["admin:catalogos:motivos_baja_padron:read"],"capability":"admin.catalogs.motivosbajapadron.read"},
   {"path":"/admin/catalogos/motivos-cancelacion-cirugia","permissions":["admin:catalogos:motivos_cancelacion_cirugia:read"],"capability":"admin.catalogs.motivoscancelacioncirugia.read"},
   {"path":"/admin/catalogos/motivos-cancelacion-nota","permissions":["admin:catalogos:motivos_cancelacion_nota:read"],"capability":"admin.catalogs.motivoscancelacionnota.read"},

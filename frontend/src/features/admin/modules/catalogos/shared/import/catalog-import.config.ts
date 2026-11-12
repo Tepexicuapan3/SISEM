@@ -80,3 +80,20 @@ export const ESCUELAS_IMPORT_CONFIG: CatalogImportConfig = {
     { key: "Activo", header: "Activo", align: "center", className: "w-[120px]" },
   ],
 };
+
+export const MEDICAMENTOS_IMPORT_CONFIG: CatalogImportConfig = {
+  slug: "medications",
+  catalogLabel: "Medicamentos",
+  templateFilename: "plantilla_medicamentos.xlsx",
+  columns: [
+    { key: "ID", header: "ID", align: "center", className: "w-[80px]" },
+    { key: "Clave", header: "Clave", className: "w-[140px]" },
+    { key: "Nombre", header: "Nombre" },
+    { key: "Generico", header: "Genérico" },
+    { key: "Presentacion", header: "Presentación" },
+    { key: "Cuadro", header: "Cuadro", className: "w-[110px]" },
+    { key: "Controlado", header: "Controlado", align: "center", className: "w-[100px]" },
+    { key: "Maximo de cajas", header: "Máx. cajas", align: "center", className: "w-[100px]" },
+    { key: "Activo", header: "Activo", align: "center", className: "w-[90px]" },
+  ],
+};
