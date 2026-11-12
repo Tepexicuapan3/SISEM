@@ -56,6 +56,8 @@ export type DeleteMedicamentoResponse = SuccessResponse;
 export type MedicamentosListResponse = ListResponse<MedicamentoListItem>;
 
 export interface MedicamentosListParams extends PaginationParams {
+  /** Busca por nombre, generico o clave. */
+  search?: string;
   isActive?: boolean;
   cuadroBasico?: CuadroBasico;
 }

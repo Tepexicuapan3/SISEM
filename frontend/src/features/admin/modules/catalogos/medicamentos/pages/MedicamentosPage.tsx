@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, Pill, Plus, RotateCcw, Upload } from "lucide-react";
+import { Pill, Plus, RotateCcw, Upload } from "lucide-react";
 import { useDebounce } from "@shared/hooks/useDebounce";
 import { DataTable } from "@features/admin/shared/components/DataTable";
 import {
@@ -200,12 +200,6 @@ export function MedicamentosPage() {
         if (isFetching) return;
         void refetch();
       },
-    },
-    {
-      id: "export-medicamentos",
-      label: "Exportar",
-      icon: Download,
-      loadingAnimation: "pulse",
     },
     {
       id: "import-medicamentos",

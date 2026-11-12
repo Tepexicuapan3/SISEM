@@ -437,9 +437,9 @@ export const DoctorConsultationPage = () => {
         ...current,
         [selectedVisit.id]: result.items,
       }));
-      toast.success("Receta guardada");
+      toast.success("Indicaciones guardadas");
     } catch (error) {
-      toast.error("No se pudo guardar la receta", {
+      toast.error("No se pudieron guardar las indicaciones", {
         description: resolveDomainErrorMessage(
           error,
           SAVE_PRESCRIPTIONS_DOMAIN_ERROR_MESSAGE,

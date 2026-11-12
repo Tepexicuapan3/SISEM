@@ -135,6 +135,14 @@ describe("MedicamentosPage UI", () => {
     expect(screen.getByText("Importar medications")).toBeVisible();
   });
 
+  it("no ofrece Exportar (no hace nada)", async () => {
+    const user = userEvent.setup();
+    render(<MedicamentosPage />);
+
+    await user.click(screen.getByRole("button", { name: /opciones/i }));
+    expect(screen.queryByRole("menuitem", { name: "Exportar" })).toBeNull();
+  });
+
   it("abre el detalle al hacer clic en una fila", async () => {
     const user = userEvent.setup();
     render(<MedicamentosPage />);

@@ -8,6 +8,9 @@ import { useCancelPrescriptionItem } from "@features/consulta-medica/modules/ate
 import { medicamentosAPI } from "@api/resources/catalogos/medicamentos.api";
 import type { PrescriptionItem } from "@api/types";
 
+vi.mock("@shared/hooks/useDebounce", () => ({
+  useDebounce: (value: string) => value,
+}));
 vi.mock("@features/consulta-medica/modules/atencion/queries/usePrescriptionItems", () => ({
   usePrescriptionItems: vi.fn(),
 }));
@@ -22,7 +25,7 @@ vi.mock("@api/resources/catalogos/medicamentos.api", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const item = (overrides: Partial<PrescriptionItem> = {}): PrescriptionItem => ({
+const prescriptionItem = (overrides: Partial<PrescriptionItem> = {}): PrescriptionItem => ({
   id: 1,
   visitId: 7,
   prescriptionFolio: "RX-2026-1",
@@ -30,6 +33,9 @@ const item = (overrides: Partial<PrescriptionItem> = {}): PrescriptionItem => ({
   medicationName: "Paracetamol 500mg",
   genericName: "Paracetamol",
   presentation: "Tableta",
+  cuadroBasico: "BASICO",
+  isControlled: false,
+  requiresAuthorization: false,
   dose: "1 tab",
   indications: "Despues de comer",
   route: "oral",
@@ -45,7 +51,19 @@ const item = (overrides: Partial<PrescriptionItem> = {}): PrescriptionItem => ({
   ...overrides,
 });
 
-describe("PrescriptionItemsButton - via, frecuencia y duracion", () => {
+const PARACETAMOL = {
+  id: 10,
+  code: null,
+  name: "Paracetamol 500mg",
+  genericName: "Paracetamol",
+  presentation: "Tableta",
+  cuadroBasico: "BASICO",
+  isControlled: false,
+  maxQuantity: 2,
+  isActive: true,
+};
+
+describe("PrescriptionItemsButton", () => {
   const mutateAsync = vi.fn();
 
   beforeEach(() => {
@@ -64,27 +82,47 @@ describe("PrescriptionItemsButton - via, frecuencia y duracion", () => {
       isPending: false,
     } as unknown as ReturnType<typeof useCancelPrescriptionItem>);
     vi.mocked(medicamentosAPI.getAll).mockResolvedValue({
-      items: [{ id: 10, name: "Paracetamol 500mg", presentation: "Tableta", maxQuantity: null }],
+      items: [PARACETAMOL, { ...PARACETAMOL, id: 11, name: "Clonazepam 2mg", genericName: "Clonazepam", isControlled: true }],
     } as unknown as Awaited<ReturnType<typeof medicamentosAPI.getAll>>);
-    mutateAsync.mockResolvedValue(item());
+    mutateAsync.mockResolvedValue(prescriptionItem());
   });
 
   const openDialog = async () => {
     const user = userEvent.setup();
     render(<PrescriptionItemsButton visitId={7} />);
-    await user.click(screen.getByRole("button", { name: /Receta \(catálogo\)/ }));
+    await user.click(screen.getByRole("button", { name: /Agregar medicamento/ }));
     return { user, dialog: await screen.findByRole("dialog") };
   };
 
-  const choose = async (user: ReturnType<typeof userEvent.setup>, combobox: HTMLElement, option: string) => {
-    await user.click(combobox);
-    await user.click(await screen.findByRole("option", { name: option }));
+  const pickMedication = async (user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, name: RegExp) => {
+    await user.type(within(dialog).getByLabelText("Buscar medicamento"), "par");
+    await user.click(await within(dialog).findByRole("button", { name }));
   };
+
+  it("busca el medicamento en el servidor por nombre, generico o clave", async () => {
+    const { user, dialog } = await openDialog();
+
+    await user.type(within(dialog).getByLabelText("Buscar medicamento"), "para");
+
+    await waitFor(() => {
+      expect(medicamentosAPI.getAll).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: "para", isActive: true }),
+      );
+    });
+    expect(await within(dialog).findByRole("button", { name: /Clonazepam 2mg/ })).toHaveTextContent("Controlado");
+  });
+
+  it("muestra el medicamento elegido con su tope de cajas", async () => {
+    const { user, dialog } = await openDialog();
+    await pickMedication(user, dialog, /Paracetamol 500mg/);
+
+    expect(within(dialog).getByText(/Máximo 2 cajas por receta/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cambiar" })).toBeInTheDocument();
+  });
 
   it("no agrega el medicamento sin via, frecuencia y duracion", async () => {
     const { user, dialog } = await openDialog();
-    const [medicationSelect] = within(dialog).getAllByRole("combobox");
-    await choose(user, medicationSelect, "Paracetamol 500mg (Tableta)");
+    await pickMedication(user, dialog, /Paracetamol 500mg/);
     await user.type(within(dialog).getByLabelText("Indicaciones"), "Despues de comer");
 
     await user.click(within(dialog).getByRole("button", { name: "Agregar" }));
@@ -95,13 +133,13 @@ describe("PrescriptionItemsButton - via, frecuencia y duracion", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("envia via, frecuencia y duracion al agregar", async () => {
+  it("envia via, frecuencia y duracion; los atajos llenan frecuencia y duracion", async () => {
     const { user, dialog } = await openDialog();
-    const [medicationSelect, routeSelect] = within(dialog).getAllByRole("combobox");
-    await choose(user, medicationSelect, "Paracetamol 500mg (Tableta)");
-    await choose(user, routeSelect, "Oral");
-    await user.type(within(dialog).getByLabelText("Frecuencia"), "Cada 8 horas");
-    await user.type(within(dialog).getByLabelText("Duración"), "5 dias");
+    await pickMedication(user, dialog, /Paracetamol 500mg/);
+    await user.click(within(dialog).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Oral" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cada 8 horas" }));
+    await user.click(within(dialog).getByRole("button", { name: "5 días" }));
     await user.type(within(dialog).getByLabelText("Indicaciones"), "Despues de comer");
 
     await user.click(within(dialog).getByRole("button", { name: "Agregar" }));
@@ -113,27 +151,34 @@ describe("PrescriptionItemsButton - via, frecuencia y duracion", () => {
           medicationId: 10,
           route: "oral",
           frequency: "Cada 8 horas",
-          duration: "5 dias",
+          duration: "5 días",
           indications: "Despues de comer",
         }),
       });
     });
   });
 
-  it("muestra via, frecuencia y duracion de los medicamentos agregados", async () => {
+  it("lista los agregados con via, frecuencia, duracion y si piden autorizacion", async () => {
     vi.mocked(usePrescriptionItems).mockReturnValue({
-      data: { items: [item()], total: 1 },
+      data: {
+        items: [
+          prescriptionItem(),
+          prescriptionItem({ id: 2, medicationName: "Clonazepam 2mg", isControlled: true, requiresAuthorization: true }),
+        ],
+        total: 2,
+      },
       isLoading: false,
     } as unknown as ReturnType<typeof usePrescriptionItems>);
 
     const { dialog } = await openDialog();
 
-    expect(within(dialog).getByText(/Oral · Cada 8 horas · 5 dias/)).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/Oral · Cada 8 horas · 5 dias/)).toHaveLength(2);
+    expect(within(dialog).getByText("Controlado")).toBeInTheDocument();
   });
 
-  it("los medicamentos guardados antes de este cambio se siguen mostrando", async () => {
+  it("los medicamentos guardados antes de via/frecuencia/duracion se siguen mostrando", async () => {
     vi.mocked(usePrescriptionItems).mockReturnValue({
-      data: { items: [item({ route: null, routeLabel: null, frequency: null, duration: null })], total: 1 },
+      data: { items: [prescriptionItem({ route: null, routeLabel: null, frequency: null, duration: null })], total: 1 },
       isLoading: false,
     } as unknown as ReturnType<typeof usePrescriptionItems>);
 

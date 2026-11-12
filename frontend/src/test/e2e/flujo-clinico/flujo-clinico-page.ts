@@ -722,11 +722,11 @@ export class FlujoClinicoPage {
   async savePrescription(input: SavePrescriptionInput): Promise<void> {
     await this.openTabIfPresent(/Receta/i);
     await expect(
-      this.page.getByLabel(/Receta \(una indicacion por linea\)/i),
+      this.page.getByLabel(/Indicaciones generales/i),
     ).toBeVisible({ timeout: DEFAULT_TIMEOUT_MS });
 
     await this.page
-      .getByLabel(/Receta \(una indicacion por linea\)/i)
+      .getByLabel(/Indicaciones generales/i)
       .fill(input.items.join("\n"));
 
     const [prescriptionsResponse] = await Promise.all([
@@ -735,11 +735,11 @@ export class FlujoClinicoPage {
           response.url().includes("/prescriptions") &&
           response.request().method() === "POST",
       ),
-      this.page.getByRole("button", { name: "Guardar receta" }).click(),
+      this.page.getByRole("button", { name: "Guardar indicaciones" }).click(),
     ]);
 
     expect(prescriptionsResponse.status()).toBe(200);
-    await this.expectSuccessToast(/Receta guardada/i);
+    await this.expectSuccessToast(/Indicaciones guardadas/i);
   }
 
   async closeConsultation(input: CloseConsultationInput): Promise<void> {

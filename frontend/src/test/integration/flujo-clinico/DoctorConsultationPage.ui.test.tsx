@@ -337,7 +337,7 @@ describe("DoctorConsultationPage UI", () => {
       screen.getByRole("button", { name: "Guardar diagnostico" }),
     ).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Guardar receta" }),
+      screen.getByRole("button", { name: "Guardar indicaciones" }),
     ).toBeDisabled();
   });
 
@@ -638,7 +638,7 @@ describe("DoctorConsultationPage UI", () => {
     });
   });
 
-  it("guarda receta con una indicacion por linea", async () => {
+  it("guarda las indicaciones generales, una por linea", async () => {
     vi.mocked(useDoctorQueue).mockReturnValue({
       data: {
         items: [createVisit({ status: "en_consulta" })],
@@ -656,11 +656,11 @@ describe("DoctorConsultationPage UI", () => {
     renderDoctorPage("/clinico/consultas/doctor/1");
 
     await user.type(
-      screen.getByLabelText("Receta (una indicacion por linea)"),
+      screen.getByLabelText(/Indicaciones generales/),
       "Paracetamol 500mg cada 8h por 3 dias\nHidratacion oral libre",
     );
 
-    await user.click(screen.getByRole("button", { name: "Guardar receta" }));
+    await user.click(screen.getByRole("button", { name: "Guardar indicaciones" }));
 
     await waitFor(() => {
       expect(savePrescriptionsMutateAsync).toHaveBeenCalledWith({
@@ -674,7 +674,43 @@ describe("DoctorConsultationPage UI", () => {
       });
     });
 
-    expect(toast.success).toHaveBeenCalledWith("Receta guardada");
+    expect(toast.success).toHaveBeenCalledWith("Indicaciones guardadas");
+  });
+
+  it("ordena la consulta en apartados con titulo", () => {
+    renderDoctorPage("/clinico/consultas/doctor/1");
+
+    for (const title of ["Datos de la visita", "Diagnóstico", "Nota médica", "Receta", "Otros documentos"]) {
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    }
+  });
+
+  it("aclara que los medicamentos no van en las indicaciones generales", () => {
+    renderDoctorPage("/clinico/consultas/doctor/1");
+
+    expect(
+      screen.getByText(/Los medicamentos se agregan arriba, en Medicamentos/),
+    ).toBeInTheDocument();
+  });
+
+  it("oculta Iniciar consulta cuando la consulta ya esta iniciada", () => {
+    vi.mocked(useDoctorQueue).mockReturnValue({
+      data: {
+        items: [createVisit({ status: "en_consulta" })],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof useDoctorQueue>);
+
+    renderDoctorPage("/clinico/consultas/doctor/1");
+
+    expect(screen.queryByRole("button", { name: "Iniciar consulta" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Finalizar consulta" })).toBeInTheDocument();
   });
 
   it("bloquea cierre hasta iniciar consulta, completar diagnostico + nota final y elegir CIE", async () => {

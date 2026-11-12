@@ -9,6 +9,10 @@ export interface PrescriptionItem {
   medicationName: string;
   genericName: string | null;
   presentation: string | null;
+  cuadroBasico: "BASICO" | "ESPECIAL" | "INSTITUCIONAL";
+  isControlled: boolean;
+  /** Especial o controlado: la receta pide autorizacion antes de imprimirse. */
+  requiresAuthorization: boolean;
   dose: string | null;
   indications: string;
   /** Via, frecuencia y duracion (RIS art. 30). null en medicamentos guardados antes de exigirlas. */
