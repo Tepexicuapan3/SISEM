@@ -31,6 +31,7 @@ from apps.recepcion.services.errors import VisitDomainError
 from .serializers import (
     AddConsultationAddendumSerializer,
     AddPrescriptionItemSerializer,
+    UpdatePrescriptionItemSerializer,
     AddSecondaryDiagnosisSerializer,
     AllergyWriteSerializer,
     PatientProfileUpdateSerializer,
@@ -100,6 +101,7 @@ from .uses_case.prescription_item_usecase import (
     add_prescription_item,
     authorize_prescription,
     cancel_prescription_item,
+    update_prescription_item,
     get_prescription_items,
     list_pending_prescription_authorizations,
     list_prescription_authorizations_history,
@@ -2189,6 +2191,76 @@ class VisitPrescriptionItemCancelView(APIView):
                 visit_id,
                 item_id,
                 roles,
+                actor_id=actor_id,
+                permissions=permissions,
+                audit_hook=audit_hook,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class VisitPrescriptionItemDetailView(APIView):
+    """PATCH: corrige un renglon de la receta con la consulta abierta."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def patch(self, request, visit_id, item_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+
+        serializer = UpdatePrescriptionItemSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                "VALIDATION_ERROR",
+                "Hay errores en el formulario",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details=serializer.errors,
+                request_id=get_request_id(request),
+            )
+
+        actor_id, roles, permissions = _actor_context(user)
+        data = serializer.validated_data
+
+        def audit_hook(*, resource_id, datos_antes, datos_despues, strict=True):
+            log_event(
+                request,
+                "PrescriptionItemUpdated",
+                "SUCCESS",
+                actor_user=user,
+                resource_type="consulta_medica",
+                resource_id=resource_id,
+                datos_antes=datos_antes,
+                datos_despues=datos_despues,
+                meta={
+                    "module": "consulta_medica",
+                    "endpoint": request.path,
+                    "visitId": visit_id,
+                    "itemId": item_id,
+                    "actorId": actor_id,
+                },
+                raise_on_error=strict,
+            )
+
+        try:
+            payload = update_prescription_item(
+                visit_id,
+                item_id,
+                roles,
+                quantity=data["quantity"],
+                indications=data["indications"],
+                dose=data.get("dose"),
+                route=data.get("route"),
+                frequency=data.get("frequency"),
+                duration=data.get("duration"),
                 actor_id=actor_id,
                 permissions=permissions,
                 audit_hook=audit_hook,

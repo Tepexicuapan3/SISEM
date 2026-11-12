@@ -129,5 +129,16 @@ def aplicar_resultado(evento: events.SolicitudResuelta):
         )
 
 
+def accion_resultado(id_origen, estatus):
+    """Con la receta autorizada, el detalle de la solicitud ofrece imprimirla."""
+    if estatus != "AUTORIZADA":
+        return None
+    visit_id = (
+        PrescriptionAuthorization.objects.filter(pk=id_origen).values_list("visit_id", flat=True).first()
+    )
+    return {"tipo": "IMPRIMIR_RECETA", "visitId": visit_id} if visit_id else None
+
+
 def conectar():
     events.suscribir("SolicitudResuelta", aplicar_resultado)
+    contracts.registrar_accion_origen(TIPO_ORIGEN, accion_resultado)

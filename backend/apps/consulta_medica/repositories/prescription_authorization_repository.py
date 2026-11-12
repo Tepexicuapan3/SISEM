@@ -6,6 +6,19 @@ from apps.consulta_medica.services.paciente_entrada import llave_publica
 
 class PrescriptionAuthorizationRepository:
     @staticmethod
+    def latest_by_visit(visit_ids):
+        """Ultima autorizacion de cada visita, en una sola consulta: {visit_id: {status, rejectionReason}}."""
+        latest = {}
+        rows = (
+            PrescriptionAuthorization.objects.filter(visit_id__in=list(visit_ids))
+            .order_by("visit_id", "-created_at", "-pk")
+            .values_list("visit_id", "status", "rejection_reason")
+        )
+        for visit_id, status, reason in rows:
+            latest.setdefault(visit_id, {"status": status, "rejectionReason": reason})
+        return latest
+
+    @staticmethod
     def get_pending_for_prescription(prescription):
         return PrescriptionAuthorization.objects.filter(
             prescription=prescription, status=PrescriptionAuthorization.Status.PENDIENTE,

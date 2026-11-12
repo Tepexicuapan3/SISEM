@@ -17,6 +17,8 @@ from .repositories.politica_repository import PoliticaRepository as Repo
 
 __all__ = [
     "Decision",
+    "accion_origen",
+    "registrar_accion_origen",
     "Elegible",
     "Motivo",
     "autorizadores_elegibles",
@@ -162,3 +164,20 @@ def tiene_solicitud_pendiente(tipo_origen: str, id_origen: int) -> bool:
     return Solicitud.objects.filter(
         tipo_origen=tipo_origen, id_origen=id_origen, estatus=Solicitud.Estatus.PENDIENTE,
     ).exists()
+
+
+# Que puede hacer quien ve la solicitud con su resultado (p. ej. imprimir la
+# receta autorizada). Lo registra el dominio de origen al arrancar: este
+# modulo no conoce recetas ni pases. La notificacion nunca lleva estos datos;
+# solo el detalle, que exige sesion.
+_ACCIONES_ORIGEN = {}
+
+
+def registrar_accion_origen(tipo_origen: str, construir) -> None:
+    """`construir(id_origen, estatus) -> dict | None`."""
+    _ACCIONES_ORIGEN[tipo_origen] = construir
+
+
+def accion_origen(tipo_origen: str, id_origen: int, estatus: str):
+    construir = _ACCIONES_ORIGEN.get(tipo_origen)
+    return construir(id_origen, estatus) if construir else None

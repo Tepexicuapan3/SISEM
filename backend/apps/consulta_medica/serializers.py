@@ -391,6 +391,19 @@ class AddPrescriptionItemSerializer(serializers.Serializer):
     acknowledgeAllergyWarning = serializers.BooleanField(required=False, default=False)
 
 
+class UpdatePrescriptionItemSerializer(serializers.Serializer):
+    """Correccion de un renglon: lo mismo que al agregar salvo el medicamento
+    (para otro se quita y se agrega). Las reglas las decide
+    update_prescription_item."""
+
+    quantity = serializers.IntegerField(min_value=1)
+    indications = serializers.CharField(max_length=140, allow_blank=False)
+    dose = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    route = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    frequency = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
+    duration = serializers.CharField(max_length=60, required=False, allow_blank=True, allow_null=True)
+
+
 class SearchCieSerializer(serializers.Serializer):
     search = serializers.CharField(max_length=120, allow_blank=False)
     limit = serializers.IntegerField(min_value=1, max_value=20, required=False, default=8)

@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.catalogos.serializers import build_user_ref
 
+from . import contracts
 from .models import Solicitud, SolicitudDecision, SolicitudDestinatario, SolicitudItem
 from .repositories.solicitud_repository import SolicitudRepository as Repo
 from .uses_case.solicitud_use_case import acciones_para
@@ -83,6 +84,7 @@ def construir_solicitud(solicitud: Solicitud, *, id_usuario: int, detalle: bool 
     if not detalle:
         return datos
 
+    datos["accionOrigen"] = contracts.accion_origen(solicitud.tipo_origen, solicitud.id_origen, solicitud.estatus)
     datos["items"] = [
         {
             "tipoItem": item.tipo_item,

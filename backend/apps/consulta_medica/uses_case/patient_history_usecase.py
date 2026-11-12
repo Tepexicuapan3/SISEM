@@ -2,6 +2,9 @@ from apps.consulta_medica.repositories.consultation_repository import Consultati
 from apps.consulta_medica.repositories.legacy_consultation_repository import (
     LegacyConsultationRepository,
 )
+from apps.consulta_medica.repositories.prescription_authorization_repository import (
+    PrescriptionAuthorizationRepository,
+)
 from apps.consulta_medica.repositories.prescription_item_repository import PrescriptionItemRepository
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.services import legado_archivo, legado_historial
@@ -17,7 +20,7 @@ def _doctor_name(doctor):
     return detalle.nombre_completo if detalle else None
 
 
-def _consultation_to_history_item(consultation, permissions, roles=None, medications=()):
+def _consultation_to_history_item(consultation, permissions, roles=None, medications=(), authorization=None):
     visit = consultation.id_visit
     prescription = PrescriptionRepository.get_by_visit(visit)
 
@@ -55,6 +58,9 @@ def _consultation_to_history_item(consultation, permissions, roles=None, medicat
         "prescriptionItems": list(prescription.items or []) if prescription else [],
         # Medicamentos activos: lo que imprime la receta (el boton depende de esto).
         "prescriptionMedications": list(medications),
+        "prescriptionFolio": prescription.folio if prescription else None,
+        # Ultima autorizacion (especial o controlado): el medico ve si ya puede imprimir.
+        "prescriptionAuthorization": authorization,
         "restricted": restricted,
     }
 
@@ -63,9 +69,13 @@ def get_patient_consultations_history(no_exp, pk_num, roles, permissions=None):
     ensure_doctor_role(roles, permissions)
 
     consultations = list(ConsultationRepository.list_for_patient(no_exp, pk_num))
-    medications = PrescriptionItemRepository.active_names_by_visit(c.id_visit_id for c in consultations)
+    visit_ids = [c.id_visit_id for c in consultations]
+    medications = PrescriptionItemRepository.active_names_by_visit(visit_ids)
+    authorizations = PrescriptionAuthorizationRepository.latest_by_visit(visit_ids)
     items = [
-        _consultation_to_history_item(c, permissions, roles, medications.get(c.id_visit_id, ()))
+        _consultation_to_history_item(
+            c, permissions, roles, medications.get(c.id_visit_id, ()), authorizations.get(c.id_visit_id),
+        )
         for c in consultations
     ]
     redacted_visit_ids = [item["visitId"] for item in items if item["restricted"]]

@@ -91,6 +91,15 @@ class FlujoTests(_Base):
         self.assertTrue(self.notificaciones(self.a, "AUT_VENCIDA").exists())
 
 
+class AccionOrigenTests(_Base):
+    def test_un_origen_sin_accion_registrada_no_ofrece_nada(self):
+        from apps.autorizaciones.serializers_solicitud import construir_solicitud
+
+        solicitud = self.solicitar()
+        datos = construir_solicitud(solicitud, id_usuario=self.medico.id_usuario, detalle=True)
+        self.assertIsNone(datos["accionOrigen"])
+
+
 class EnvioManualTests(_Base):
     def setUp(self):
         super().setUp()

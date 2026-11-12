@@ -478,6 +478,47 @@ class ConsultationAuditEventTests(_ConsultationAuditApiTestBase):
         self.assertEqual(event.datos_despues["status"], "rechazada")
         self.assertEqual(event.datos_despues["rejectionReason"], "Sin existencias en farmacia")
 
+    def test_prescription_item_updated_writes_audit_event(self):
+        visit = self._visit_with_consultation()
+        item_payload = add_prescription_item(
+            visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.id, quantity=2,
+            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
+        )
+        self._login_doctor()
+
+        response = self.client.patch(
+            f"/api/v1/visits/{visit.id_visit}/prescription-items/{item_payload['id']}",
+            {"quantity": 1, "indications": "Despues de comer", "dose": "1 tab", **ADMINISTRATION},
+            format="json", HTTP_X_REQUEST_ID=self.request_id, **self._csrf_headers(),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.data["indications"], "Despues de comer")
+
+        event = AuditoriaEvento.objects.get(
+            accion="PrescriptionItemUpdated", request_id=self.request_id,
+        )
+        self.assertEqual(event.recurso_tipo, "consulta_medica")
+        self.assertEqual(event.datos_antes["indications"], "Cada 8 horas")
+        self.assertEqual(event.datos_antes["quantity"], 2)
+        self.assertEqual(event.datos_despues["indications"], "Despues de comer")
+        self.assertEqual(event.datos_despues["medicationId"], self.med_basico.id)
+
+    def test_prescription_item_update_validates_shape(self):
+        visit = self._visit_with_consultation()
+        item_payload = add_prescription_item(
+            visit.id_visit, ["DOCTOR"], medication_id=self.med_basico.id, quantity=2,
+            indications="Cada 8 horas", actor_id=self.doctor_user.id_usuario, **ADMINISTRATION,
+        )
+        self._login_doctor()
+
+        response = self.client.patch(
+            f"/api/v1/visits/{visit.id_visit}/prescription-items/{item_payload['id']}",
+            {"quantity": 0, "indications": "x", **ADMINISTRATION},
+            format="json", HTTP_X_REQUEST_ID=self.request_id, **self._csrf_headers(),
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(AuditoriaEvento.objects.filter(accion="PrescriptionItemUpdated").exists())
+
     def test_prescription_item_cancelled_writes_audit_event(self):
         visit = self._visit_with_consultation()
         item_payload = add_prescription_item(

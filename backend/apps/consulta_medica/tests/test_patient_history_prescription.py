@@ -87,3 +87,52 @@ class HistoryPrescriptionMedicationsTests(TestCase):
             q for q in ctx.captured_queries if "cns_visit_prescription_item" in q["sql"].lower()
         ]
         self.assertEqual(len(medication_queries), 1)
+
+
+class HistoryPrescriptionAuthorizationTests(HistoryPrescriptionMedicationsTests):
+    """El historial dice en que va la autorizacion de cada receta, para que el
+    medico sepa si ya la puede imprimir."""
+
+    def _authorization(self, visit, status, reason=None):
+        from apps.consulta_medica.models import PrescriptionAuthorization
+        from apps.consulta_medica.repositories.prescription_authorization_repository import (
+            PrescriptionAuthorizationRepository,
+        )
+
+        authorization = PrescriptionAuthorizationRepository.create(
+            VisitPrescription.objects.get(id_visit=visit), visit, prescribed_by_id=self.doctor.id_usuario,
+            medications_count=1, specialized_count=1, controlled_count=0,
+        )
+        PrescriptionAuthorization.objects.filter(pk=authorization.pk).update(status=status, rejection_reason=reason)
+
+    def test_folio_and_authorization_status(self):
+        visit = self._visit("HA-1")
+        self._prescription(visit, [self.paracetamol])
+        self._authorization(visit, "rechazada", "Sin justificacion")
+
+        item = self._item()
+        self.assertEqual(item["prescriptionFolio"], "RX-HA-1")
+        self.assertEqual(
+            item["prescriptionAuthorization"], {"status": "rechazada", "rejectionReason": "Sin justificacion"},
+        )
+
+    def test_the_latest_authorization_wins(self):
+        visit = self._visit("HA-2")
+        self._prescription(visit, [self.paracetamol])
+        self._authorization(visit, "autorizada")
+        self._authorization(visit, "pendiente")
+        self.assertEqual(self._item()["prescriptionAuthorization"]["status"], "pendiente")
+
+    def test_without_authorization(self):
+        self._prescription(self._visit("HA-3"), [self.paracetamol])
+        self.assertIsNone(self._item()["prescriptionAuthorization"])
+
+    def test_authorizations_are_read_in_one_query_for_all_visits(self):
+        for n in range(3):
+            visit = self._visit(f"HA-4{n}", no_exp="EXP-HA4")
+            self._prescription(visit, [self.paracetamol])
+            self._authorization(visit, "pendiente")
+        with CaptureQueriesContext(connection) as ctx:
+            get_patient_consultations_history("EXP-HA4", 0, ["DOCTOR"], permissions=[])
+        queries = [q for q in ctx.captured_queries if "cns_prescription_authorization" in q["sql"].lower()]
+        self.assertEqual(len(queries), 1)

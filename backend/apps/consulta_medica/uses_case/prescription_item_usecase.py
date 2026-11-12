@@ -22,6 +22,7 @@ from apps.consulta_medica.services.visit_guards import (
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
 from .consultation_usecase import ensure_doctor_role
+from .prescription_authorization_request import request_authorization_if_needed
 
 # Permiso separado del rol de doctor -- quien autoriza no necesariamente
 # prescribe (mismo criterio que clinico:ambulancias:authorize, separado
@@ -63,57 +64,6 @@ def _ensure_not_self_authorization(authorization, actor_id):
             "No podes autorizar o rechazar una receta que vos mismo prescribiste.",
             403,
         )
-
-
-def _maybe_create_authorization(prescription, visit):
-    """
-    Recalcula los conteos de la receta completa (items ACTIVOS) y crea una
-    solicitud de autorizacion PENDIENTE si hace falta (al menos un
-    medicamento ESPECIAL o controlado) y todavia no hay una pendiente --
-    ver docstring de PrescriptionAuthorization.
-    """
-    items = PrescriptionItemRepository.list_for_prescription(prescription)
-
-    medications_count = 0
-    specialized_count = 0
-    controlled_count = 0
-    for item in items:
-        medications_count += 1
-        if item.medication.cuadro_basico == Medicamentos.CuadroBasico.ESPECIAL:
-            specialized_count += 1
-        if item.medication.is_controlled:
-            controlled_count += 1
-
-    requires_authorization = any(item.medication.requires_prescription_authorization for item in items)
-    if not requires_authorization:
-        return
-
-    pending = PrescriptionAuthorizationRepository.get_pending_for_prescription(prescription)
-    if pending is not None:
-        # Ya hay una solicitud pendiente -- se actualiza para reflejar el
-        # estado ACTUAL de la receta (el autorizador debe ver los
-        # conteos vigentes, no un snapshot congelado del primer item que
-        # disparo la solicitud).
-        PrescriptionAuthorizationRepository.update_counts(
-            pending,
-            medications_count=medications_count,
-            specialized_count=specialized_count,
-            controlled_count=controlled_count,
-        )
-        # Motor de autorizaciones (solo con AUTORIZACIONES_RECETAS_V2): recalcula su solicitud.
-        motor.sincronizar_solicitud(pending)
-        return
-
-    authorization = PrescriptionAuthorizationRepository.create(
-        prescription,
-        visit,
-        prescribed_by_id=prescription.created_by_id,
-        medications_count=medications_count,
-        specialized_count=specialized_count,
-        controlled_count=controlled_count,
-    )
-    # Motor de autorizaciones (solo con AUTORIZACIONES_RECETAS_V2): crea su solicitud.
-    motor.sincronizar_solicitud(authorization)
 
 
 def _get_visit_or_error(visit_id):
@@ -323,7 +273,8 @@ def add_prescription_item(
             created_by_id=actor_id,
             updated_by_id=actor_id,
         )
-        _maybe_create_authorization(prescription, visit)
+        # El aviso al autorizador (motor) sale al finalizar la consulta.
+        request_authorization_if_needed(prescription, visit, sync_motor=False)
 
     payload = PrescriptionItemRepository.to_contract(item)
     if allergy_match is not None or legacy_match is not None:
@@ -383,6 +334,106 @@ def cancel_prescription_item(visit_id, item_id, roles, *, actor_id, permissions=
                 "medicationId": item.medication_id,
                 "quantity": item.quantity,
             },
+            strict=True,
+        )
+    return PrescriptionItemRepository.to_contract(item)
+
+
+_EDITABLE_FIELDS = ("dose", "indications", "quantity", "route", "frequency", "duration")
+
+
+def _item_snapshot(item):
+    return {"medicationId": item.medication_id, **{field: getattr(item, field) for field in _EDITABLE_FIELDS}}
+
+
+def update_prescription_item(
+    visit_id,
+    item_id,
+    roles,
+    *,
+    quantity,
+    indications,
+    dose=None,
+    route=None,
+    frequency=None,
+    duration=None,
+    actor_id,
+    permissions=None,
+    audit_hook,
+):
+    """
+    Corrige un renglon de la receta (dosis, via, frecuencia, duracion,
+    indicaciones y cantidad) mientras la consulta este abierta y farmacia no
+    lo haya surtido. El medicamento no cambia: para otro, se quita y se
+    agrega. Mismas validaciones que al agregar.
+
+    Si el medicamento pide autorizacion y la receta ya tenia una (por ejemplo
+    resuelta), se vuelve a pedir: un especial o controlado editado se
+    autoriza de nuevo.
+    """
+    ensure_doctor_role(roles, permissions)
+
+    visit = _get_visit_or_error(visit_id)
+    ensure_visit_not_cancelled(visit)
+    if visit.status != "en_consulta":
+        raise VisitDomainError(
+            "PRESCRIPTION_LOCKED",
+            "La consulta ya se cerro: la receta no se puede editar.",
+            409,
+        )
+    prescription = PrescriptionRepository.get_by_visit(visit)
+    item = PrescriptionItemRepository.get_by_id(item_id) if prescription is not None else None
+    if (
+        item is None
+        or item.prescription_id != prescription.id_prescription
+        or item.status != VisitPrescriptionItem.Status.ACTIVO
+    ):
+        raise VisitDomainError("PRESCRIPTION_ITEM_NOT_FOUND", "Item de receta no encontrado.", 404)
+
+    administration = _validate_administration(route, frequency, duration)
+    normalized_indications = (indications or "").strip()
+    if not normalized_indications:
+        raise VisitDomainError(
+            "VALIDATION_ERROR", "Hay errores en el formulario", 422,
+            details={"indications": ["Las indicaciones son obligatorias."]},
+        )
+    medication = item.medication
+    if medication.max_quantity and quantity > medication.max_quantity:
+        raise VisitDomainError(
+            "VALIDATION_ERROR", "Hay errores en el formulario", 422,
+            details={"quantity": [f"Maximo {medication.max_quantity} unidades para este medicamento."]},
+        )
+
+    with transaction.atomic():
+        lock_visit_not_cancelled(visit.id_visit)
+        # Mismo candado que al quitar: lo surtido ya no cambia (lock contra
+        # una dispensacion simultanea sobre la misma fila).
+        item = VisitPrescriptionItem.objects.select_for_update().select_related("medication").get(pk=item.pk)
+        if item.dispensed_quantity > 0:
+            raise VisitDomainError(
+                "PRESCRIPTION_ITEM_DISPENSED",
+                "Farmacia ya surtio este medicamento: no se puede editar.",
+                409,
+                details={"dispensedQuantity": item.dispensed_quantity},
+            )
+        datos_antes = _item_snapshot(item)
+        item.dose = (dose or "").strip() or None
+        item.indications = normalized_indications
+        item.quantity = quantity
+        for field, value in administration.items():
+            setattr(item, field, value)
+        item.updated_by_id = actor_id
+        item.save(update_fields=[*_EDITABLE_FIELDS, "updated_by_id", "updated_at"])
+
+        if medication.requires_prescription_authorization:
+            # Un especial o controlado editado se autoriza de nuevo: si la
+            # ultima ya estaba resuelta, queda una nueva pendiente.
+            request_authorization_if_needed(prescription, visit, sync_motor=False)
+
+        audit_hook(
+            resource_id=item.id_prescription_item,
+            datos_antes=datos_antes,
+            datos_despues=_item_snapshot(item),
             strict=True,
         )
     return PrescriptionItemRepository.to_contract(item)

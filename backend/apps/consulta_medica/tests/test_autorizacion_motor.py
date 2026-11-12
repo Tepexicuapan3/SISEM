@@ -2,8 +2,9 @@
 
 Interruptor AUTORIZACIONES_RECETAS_V2 (apagado por defecto):
 - apagado: todo igual que antes (no se crea solicitud en el motor);
-- encendido: la autorizacion de receta crea/recalcula su solicitud, la pantalla
-  vieja ya no decide esas recetas y la decision del motor se refleja aqui.
+- encendido: al FINALIZAR la consulta se crea la solicitud con la receta
+  completa (ahi se avisa al autorizador; decision del usuario 2026-11-12), la
+  pantalla vieja ya no decide esas recetas y la decision del motor se refleja aqui.
 """
 from datetime import timedelta
 from unittest import mock
@@ -26,7 +27,7 @@ from apps.catalogos.tests.designacion_factories import make_center
 from apps.consulta_medica.models import PrescriptionAuthorization, VisitPrescription
 from apps.consulta_medica.services import autorizacion_motor_service as motor
 from apps.consulta_medica.tests.test_note_cancellation import _CancellationBase
-from apps.consulta_medica.uses_case.consultation_usecase import save_diagnosis
+from apps.consulta_medica.uses_case.consultation_usecase import close_consultation, save_diagnosis
 from apps.consulta_medica.uses_case.prescription_item_usecase import (
     add_prescription_item,
     authorize_prescription,
@@ -86,10 +87,22 @@ class _Base(TestCase):
             indications="Una vez al dia", actor_id=self.doctor_id, **ADMINISTRATION,
         )
 
+    def _cerrar(self, visit):
+        return close_consultation(
+            visit_id=visit.id_visit, roles=["DOCTOR"], primary_diagnosis="Dx", final_note="Nota",
+            doctor_id=self.doctor_id, cie_code="I10", morbidity="1", audit_hook=_hook,
+        )
+
+    def _recetar_y_cerrar(self, medicamento, **visita):
+        visit = self._visita(**visita)
+        self._agregar(visit, medicamento)
+        self._cerrar(visit)
+        return visit
+
 
 class InterruptorApagadoTests(_Base):
     def test_no_crea_solicitud_y_la_pantalla_actual_sigue_igual(self):
-        self._agregar(self._visita(), self.especial)
+        self._recetar_y_cerrar(self.especial)
         autorizacion = PrescriptionAuthorization.objects.get()
         self.assertFalse(Solicitud.objects.exists())
 
@@ -101,9 +114,13 @@ class InterruptorApagadoTests(_Base):
 
 @override_settings(AUTORIZACIONES_RECETAS_V2=True)
 class InterruptorEncendidoTests(_Base):
-    def test_crea_la_solicitud_en_el_motor(self):
+    def test_crea_la_solicitud_en_el_motor_al_finalizar_la_consulta(self):
         visit = self._visita()
         self._agregar(visit, self.especial)
+        # Con la consulta abierta todavia no se avisa a nadie.
+        self.assertFalse(Solicitud.objects.exists())
+
+        self._cerrar(visit)
         autorizacion = PrescriptionAuthorization.objects.get()
         solicitud = Solicitud.objects.get()
 
@@ -119,18 +136,19 @@ class InterruptorEncendidoTests(_Base):
         )
         self.assertTrue(solicitud.destinatarios.filter(autorizador=self.autorizador).exists())
 
-    def test_agregar_otro_medicamento_recalcula_la_misma_solicitud(self):
+    def test_una_sola_solicitud_con_toda_la_receta(self):
         visit = self._visita()
         self._agregar(visit, self.especial)
         self._agregar(visit, self.controlado)
+        self._cerrar(visit)
 
         solicitud = Solicitud.objects.get()
         self.assertEqual(sorted(solicitud.motivos), ["MEDICAMENTO_CONTROLADO", "MEDICAMENTO_ESPECIAL"])
         self.assertEqual(solicitud.items.filter(esta_activo=True).count(), 2)
-        self.assertTrue(SolicitudTransicion.objects.filter(solicitud=solicitud, evento="RECALCULADA").exists())
+        self.assertFalse(SolicitudTransicion.objects.filter(solicitud=solicitud, evento="RECALCULADA").exists())
 
     def test_la_pantalla_anterior_ya_no_decide_esa_receta(self):
-        self._agregar(self._visita(), self.especial)
+        self._recetar_y_cerrar(self.especial)
         autorizacion = PrescriptionAuthorization.objects.get()
 
         for decidir, extra in ((authorize_prescription, {}), (reject_prescription, {"reason": "x"})):
@@ -156,7 +174,7 @@ class InterruptorEncendidoTests(_Base):
         )
 
     def test_autorizar_en_el_motor_autoriza_la_receta(self):
-        self._agregar(self._visita(), self.especial)
+        self._recetar_y_cerrar(self.especial)
         self._decidir("APROBAR")
 
         autorizacion = PrescriptionAuthorization.objects.get()
@@ -165,7 +183,7 @@ class InterruptorEncendidoTests(_Base):
         self.assertIsNotNone(autorizacion.authorized_at)
 
     def test_rechazar_en_el_motor_rechaza_la_receta_con_el_motivo(self):
-        self._agregar(self._visita(), self.especial)
+        self._recetar_y_cerrar(self.especial)
         self._decidir(
             "RECHAZAR", motivoId=motivo("RECHAZO", "NO_JUSTIFICADO").id_motivo,
             descripcionMotivo="Hay alternativa disponible",
@@ -176,8 +194,29 @@ class InterruptorEncendidoTests(_Base):
         self.assertIn("No está justificado clínicamente", autorizacion.rejection_reason)
         self.assertIn("Hay alternativa disponible", autorizacion.rejection_reason)
 
+    def _accion_en_detalle(self):
+        from apps.autorizaciones.serializers_solicitud import construir_solicitud
+
+        solicitud = Solicitud.objects.get()
+        return construir_solicitud(solicitud, id_usuario=self.doctor_id, detalle=True)["accionOrigen"]
+
+    def test_el_detalle_de_una_receta_autorizada_ofrece_imprimirla(self):
+        visit = self._recetar_y_cerrar(self.especial)
+        self.assertIsNone(self._accion_en_detalle())
+
+        self._decidir("APROBAR")
+
+        self.assertEqual(self._accion_en_detalle(), {"tipo": "IMPRIMIR_RECETA", "visitId": visit.id_visit})
+
+    def test_el_detalle_de_una_receta_rechazada_no_ofrece_imprimir(self):
+        self._recetar_y_cerrar(self.especial)
+        self._decidir(
+            "RECHAZAR", motivoId=motivo("RECHAZO", "NO_JUSTIFICADO").id_motivo, descripcionMotivo="x",
+        )
+        self.assertIsNone(self._accion_en_detalle())
+
     def test_sin_centro_resoluble_sigue_el_flujo_anterior(self):
-        self._agregar(self._visita(con_consultorio=False), self.especial)
+        self._recetar_y_cerrar(self.especial, con_consultorio=False)
         autorizacion = PrescriptionAuthorization.objects.get()
         self.assertFalse(Solicitud.objects.exists())
 
