@@ -146,3 +146,22 @@ Revisión de solo lectura de la base de desarrollo:
 surtido de la receta del legado (texto verificado en `Receta.pdf`). La leyenda
 solo se corrige si conserva el valor sembrado; reversible. Rojo: 6 fallas en
 `test_parametros`; verde: 150 OK (parámetros, impresión, receta).
+
+## 8. Fase 1: catálogo de medicamentos (2026-11-12)
+
+Reusa lo existente, sin reglas nuevas para los catálogos que ya estaban:
+
+| Pieza | Qué se reusó | Qué se agregó |
+|---|---|---|
+| Clave del medicamento (D2) | `cat_medicamentos` | `cve_medic` nullable (`catalogos/0047`), única solo entre las cargadas; se imprime en la columna "Clave" de la receta (vacía si no hay) |
+| Import por Excel | Motor genérico `CATALOG_IMPORT_REGISTRY` (plantilla → vista previa → confirmar; todo o nada; solo alta, un ID existente es error) | Spec `medications` y tipos de columna `choice` / `positive_int`; unicidad de texto en archivo y catálogo (opcional por columna) |
+| CRUD | `/medications/` (ya existía) | `code` en los serializers, con validación de unicidad |
+| Pantalla | Patrón de catálogos del admin (Discapacidades) | `Administración → Catálogos → Medicamentos` con alta, edición, baja lógica e "Importar Excel" |
+| Menú | Seed `navigation_seed.py` + `nav-config.ts` (fallback) | Entrada "Medicamentos", permiso `admin:catalogos:medicamentos:read` (existe desde `administracion/0017`) |
+
+Reglas que se mantienen: el nombre no se repite (igual que el CRUD); el tope
+de cajas lo sigue validando la receta; ESPECIAL o controlado siguen pidiendo
+autorización. En el import, la celda "Controlado" vacía es **No** (un
+controlado se marca a propósito); "Activo" vacía sigue siendo Sí.
+
+Antes no existía la pantalla de Medicamentos en el frontend (solo la API).

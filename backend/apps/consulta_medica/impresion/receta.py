@@ -88,6 +88,7 @@ def _ensure_authorized(prescription):
 def _item_row(item):
     med = item.medication
     row = {
+        "code": med.code or "",
         "name": med.name,
         "generic_name": med.generic_name or "",
         "presentation": med.presentation or "",

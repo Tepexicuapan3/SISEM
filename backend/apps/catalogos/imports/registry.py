@@ -13,9 +13,10 @@ from apps.catalogos.models import (
     Discapacidades,
     Escuelas,
     Especialidades,
+    Medicamentos,
 )
 
-ColumnKind = Literal["int_id", "text", "bool_si_no"]
+ColumnKind = Literal["int_id", "text", "bool_si_no", "choice", "positive_int"]
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,15 @@ class ImportColumn:
     required: bool = True
     max_length: Optional[int] = None
     unique_in_file: bool = False
+    # Texto: tambien unico contra lo ya cargado (sin distinguir mayusculas).
+    unique_in_catalog: bool = False
+    # Texto vacio se guarda como NULL (columnas nullable del modelo).
+    empty_as_null: bool = False
+    # bool_si_no / choice: valor de la celda vacia (bool_si_no sin indicar => Si).
+    default: object = None
+    # choice: ((texto aceptado sin acentos ni mayusculas, valor), ...).
+    choices: tuple = ()
+    choices_hint: str = ""
 
 
 @dataclass(frozen=True)
@@ -229,6 +239,45 @@ _AMBULANCE_DESTINATIONS = CatalogImportSpec(
     ),
 )
 
+# Medicamentos: el listado oficial lo entrega farmacia (clave del Compendio,
+# D2). Solo alta: un ID, nombre o clave ya cargados son error, nunca se pisan.
+_MEDICATIONS = CatalogImportSpec(
+    slug="medications",
+    permission_catalog="medicamentos",
+    model=Medicamentos,
+    pk_db_column="id_medic",
+    columns=(
+        ImportColumn(header="ID", field="id", kind="int_id", required=True, unique_in_file=True),
+        ImportColumn(header="Clave", field="code", kind="text", required=False, max_length=30,
+                     unique_in_file=True, unique_in_catalog=True, empty_as_null=True),
+        ImportColumn(header="Nombre", field="name", kind="text", required=True, max_length=150,
+                     unique_in_file=True, unique_in_catalog=True),
+        ImportColumn(header="Generico", field="generic_name", kind="text", required=False,
+                     max_length=150, empty_as_null=True),
+        ImportColumn(header="Presentacion", field="presentation", kind="text", required=False,
+                     max_length=150, empty_as_null=True),
+        ImportColumn(header="Cuadro", field="cuadro_basico", kind="choice", required=False,
+                     default=Medicamentos.CuadroBasico.BASICO,
+                     choices=(
+                         ("basico", Medicamentos.CuadroBasico.BASICO),
+                         ("cuadro basico", Medicamentos.CuadroBasico.BASICO),
+                         ("especial", Medicamentos.CuadroBasico.ESPECIAL),
+                         ("institucional", Medicamentos.CuadroBasico.INSTITUCIONAL),
+                     ),
+                     choices_hint="Basico, Especial o Institucional"),
+        # Vacio = NO controlado: un controlado se marca a proposito.
+        ImportColumn(header="Controlado", field="is_controlled", kind="bool_si_no", required=False,
+                     default=False),
+        ImportColumn(header="Maximo de cajas", field="max_quantity", kind="positive_int", required=False),
+        ImportColumn(header="Activo", field="is_active", kind="bool_si_no", required=False),
+    ),
+    sample_rows=(
+        (1, "010.000.0104.00", "PARACETAMOL 500 MG", "PARACETAMOL", "TABLETA. CAJA CON 10",
+         "Basico", "No", 2, "Si"),
+        (2, "", "CLONAZEPAM 2 MG", "CLONAZEPAM", "TABLETA. CAJA CON 30", "Basico", "Si", 1, "Si"),
+    ),
+)
+
 CATALOG_IMPORT_REGISTRY = {
     _DISABILITIES.slug: _DISABILITIES,
     _SPECIALTIES.slug: _SPECIALTIES,
@@ -241,4 +290,5 @@ CATALOG_IMPORT_REGISTRY = {
     _TRANSFER_TYPES.slug: _TRANSFER_TYPES,
     _AMBULANCE_SERVICE_TYPES.slug: _AMBULANCE_SERVICE_TYPES,
     _AMBULANCE_DESTINATIONS.slug: _AMBULANCE_DESTINATIONS,
+    _MEDICATIONS.slug: _MEDICATIONS,
 }

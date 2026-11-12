@@ -244,6 +244,11 @@ class RecetaBlocksTests(TestCase):
         self.assertNotIn("Tomar liquidos", render_to_string(sheet, dict(ctx, sheet={"last": False, "items": []})))
         self.assertIn("Tomar liquidos", render_to_string(sheet, dict(ctx, sheet={"last": True, "items": []})))
 
+    def test_medication_block_prints_the_drug_code(self):
+        item = {"label": {"primary": "X", "secondary": ""}, "quantity": 1, "code": "010.000.0104.00"}
+        html = render_to_string(f"{_BLOCKS}/_medicamentos.html", {"sheet": {"items": [item], "first_number": 1}})
+        self.assertIn('<td class="num">010.000.0104.00</td>', html)
+
     def test_medication_block_shows_generic_before_name(self):
         item = {"label": {"primary": "Clonazepam", "secondary": "Clonazepam 2mg. Tableta"}, "quantity": 1}
         html = render_to_string(f"{_BLOCKS}/_medicamentos.html", {"sheet": {"items": [item], "first_number": 1}})
@@ -265,6 +270,14 @@ class RecetaBuilderTests(_Base):
         self.assertFalse(pctx.is_cancelled)
         self.assertEqual([s["label"] for s in pctx.context["sheets"]], ["ORIGINAL", "COPIA", "CONTROLADO"])
         self.assertEqual(pctx.context["general_indications"], ["Tomar liquidos"])
+
+    def test_rows_carry_the_drug_code(self):
+        Medicamentos.objects.filter(pk=self.med.pk).update(code="010.000.0104.00")
+        visit = self._visit("V-R10")
+        self._consultation(visit)
+        self._prescription(visit, [self.med, self.med_ctrl])
+        items = self._build(visit).context["sheets"][0]["items"]
+        self.assertEqual([i["code"] for i in items], ["010.000.0104.00", ""])
 
     def test_context_has_form_boxes_and_barcode(self):
         visit = self._visit("V-R9")

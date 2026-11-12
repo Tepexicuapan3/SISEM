@@ -5,8 +5,8 @@
     {% for item in sheet.items %}
     <tr>
       <td class="num">{{ forloop.counter0|add:sheet.first_number }}</td>
-      {# Clave del medicamento: el catalogo aun no la tiene (D2) #}
-      <td class="num"></td>
+      {# Clave del Compendio (D2): vacia mientras farmacia no la cargue #}
+      <td class="num">{{ item.code }}</td>
       {# Generico primero (RIS art. 31) #}
       <td><span class="generic">{{ item.label.primary }}</span>{% if item.label.secondary %}<br><small>{{ item.label.secondary }}</small>{% endif %}</td>
       <td class="qty">{{ item.quantity }}</td>

@@ -769,6 +769,7 @@ class GruposDeMedicamentosWriteSerializer(CatalogWriteSerializer):
 
 
 class MedicamentosListSerializer(CatalogListSerializer):
+    code = serializers.CharField(allow_null=True, required=False)
     genericName = serializers.CharField(
         source="generic_name", allow_null=True, required=False,
     )
@@ -784,11 +785,12 @@ class MedicamentosListSerializer(CatalogListSerializer):
     class Meta(CatalogListSerializer.Meta):
         model = Medicamentos
         fields = CatalogListSerializer.Meta.fields + (
-            "genericName", "presentation", "cuadroBasico", "isControlled", "maxQuantity",
+            "code", "genericName", "presentation", "cuadroBasico", "isControlled", "maxQuantity",
         )
 
 
 class MedicamentosDetailSerializer(CatalogDetailSerializer):
+    code = serializers.CharField(allow_null=True, required=False)
     genericName = serializers.CharField(
         source="generic_name", allow_null=True, required=False,
     )
@@ -804,11 +806,14 @@ class MedicamentosDetailSerializer(CatalogDetailSerializer):
     class Meta(CatalogDetailSerializer.Meta):
         model = Medicamentos
         fields = CatalogDetailSerializer.Meta.fields + (
-            "genericName", "presentation", "cuadroBasico", "isControlled", "maxQuantity",
+            "code", "genericName", "presentation", "cuadroBasico", "isControlled", "maxQuantity",
         )
 
 
 class MedicamentosWriteSerializer(CatalogWriteSerializer):
+    code = serializers.CharField(
+        allow_null=True, allow_blank=True, required=False, max_length=30,
+    )
     genericName = serializers.CharField(
         source="generic_name", allow_null=True, required=False,
     )
@@ -824,8 +829,19 @@ class MedicamentosWriteSerializer(CatalogWriteSerializer):
     class Meta(CatalogWriteSerializer.Meta):
         model = Medicamentos
         fields = CatalogWriteSerializer.Meta.fields + (
-            "genericName", "presentation", "cuadroBasico", "isControlled", "maxQuantity",
+            "code", "genericName", "presentation", "cuadroBasico", "isControlled", "maxQuantity",
         )
+
+    def validate_code(self, value):
+        # Vacio = sin clave; la unicidad solo aplica entre las cargadas.
+        value = (value or "").strip() or None
+        if value is not None:
+            taken = Medicamentos.objects.filter(code=value)
+            if self.instance is not None:
+                taken = taken.exclude(pk=self.instance.pk)
+            if taken.exists():
+                raise serializers.ValidationError("Ya existe un medicamento con esta clave.")
+        return value
 
 
 class LicenciasListSerializer(CatalogListSerializer):

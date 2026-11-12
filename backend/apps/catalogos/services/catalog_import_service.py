@@ -5,6 +5,7 @@ from typing import Optional
 
 import openpyxl
 import pandas as pd
+from django.db.models.functions import Upper
 
 from apps.catalogos.imports.registry import CatalogImportSpec, ImportColumn
 
@@ -74,15 +75,68 @@ def _parse_text(raw, column: ImportColumn) -> tuple:
     return text, error
 
 
-def _parse_bool_si_no(raw) -> tuple:
-    # "Si"/"Sí"/"No" case- y acento-insensible; vacío => Si. Cualquier otro literal
-    # ("true", "1", "SI ") es error explícito, nunca se interpreta como truthy.
+def _parse_bool_si_no(raw, column: ImportColumn) -> tuple:
+    # "Si"/"Sí"/"No" case- y acento-insensible; vacío => `column.default` (Si si no
+    # se indica). Cualquier otro literal ("true", "1", "SI ") es error explícito,
+    # nunca se interpreta como truthy.
+    empty_value = True if column.default is None else column.default
     text = _strip_accents(_clean_text(raw)).lower()
-    if text == "" or text == "si":
+    if text == "":
+        return empty_value, ""
+    if text == "si":
         return True, ""
     if text == "no":
         return False, ""
-    return True, "Activo debe ser 'Si' o 'No'. "
+    return empty_value, f"{column.header} debe ser 'Si' o 'No'. "
+
+
+def _parse_choice(raw, column: ImportColumn) -> tuple:
+    # Texto aceptado sin acentos ni mayúsculas -> valor guardado; vacío => default.
+    text = _strip_accents(_clean_text(raw)).lower()
+    if text == "":
+        if column.required:
+            return None, f"{column.header} vacío. "
+        return column.default, ""
+    for accepted, value in column.choices:
+        if text == accepted:
+            return value, ""
+    return column.default, f"{column.header} debe ser {column.choices_hint}. "
+
+
+def _parse_positive_int(raw, column: ImportColumn) -> tuple:
+    text = _clean_text(raw)
+    if text == "":
+        return None, (f"{column.header} vacío. " if column.required else "")
+    try:
+        as_float = float(text)
+    except ValueError:
+        as_float = None
+    if as_float is None or not as_float.is_integer() or as_float < 1:
+        return None, f"{column.header} debe ser un entero mayor a 0. "
+    return int(as_float), ""
+
+
+def _duplicates(values) -> set:
+    """Valores (en mayúsculas) que aparecen más de una vez; ignora vacíos."""
+    seen, repeated = set(), set()
+    for value in values:
+        if not value:
+            continue
+        key = value.upper()
+        (repeated if key in seen else seen).add(key)
+    return repeated
+
+
+def _existing(spec: CatalogImportSpec, column: ImportColumn, values) -> set:
+    """Valores (en mayúsculas) que ya están en el catálogo."""
+    keys = {value.upper() for value in values if value}
+    if not keys:
+        return set()
+    return set(
+        spec.model.objects.annotate(_key=Upper(column.field))
+        .filter(_key__in=keys)
+        .values_list("_key", flat=True)
+    )
 
 
 def _read_dataframe(spec: CatalogImportSpec, file) -> pd.DataFrame:
@@ -150,6 +204,16 @@ def parse_and_validate(spec: CatalogImportSpec, file) -> dict:
         spec.model.objects.filter(pk__in=valid_ids).values_list("pk", flat=True)
     ) if valid_ids else set()
 
+    # Unicidad de columnas de texto, en el archivo y contra el catálogo.
+    unique_checks = {}
+    for column in other_columns:
+        if column.kind == "text" and (column.unique_in_file or column.unique_in_catalog):
+            values = [_clean_text(raw) for raw in df[column.header]]
+            unique_checks[column.header] = (
+                _duplicates(values) if column.unique_in_file else set(),
+                _existing(spec, column, values) if column.unique_in_catalog else set(),
+            )
+
     display_rows = []
     records = []
     total_errores = 0
@@ -175,11 +239,22 @@ def parse_and_validate(spec: CatalogImportSpec, file) -> dict:
             raw_value = df.iloc[row_idx][column.header]
             if column.kind == "text":
                 value, col_error = _parse_text(raw_value, column)
+                if value and column.header in unique_checks:
+                    in_file, in_catalog = unique_checks[column.header]
+                    if value.upper() in in_file:
+                        col_error += f"{column.header} repetido en el archivo. "
+                    if value.upper() in in_catalog:
+                        col_error += f"{column.header} ya existe en el catálogo. "
                 display_row[column.header] = value
-                record[column.field] = value
+                record[column.field] = None if (column.empty_as_null and value == "") else value
             elif column.kind == "bool_si_no":
-                value, col_error = _parse_bool_si_no(raw_value)
+                value, col_error = _parse_bool_si_no(raw_value, column)
                 display_row[column.header] = "Si" if value else "No"
+                record[column.field] = value
+            elif column.kind in ("choice", "positive_int"):
+                parse = _parse_choice if column.kind == "choice" else _parse_positive_int
+                value, col_error = parse(raw_value, column)
+                display_row[column.header] = _clean_text(raw_value) if col_error else (value or "")
                 record[column.field] = value
             else:  # pragma: no cover - guarda contra specs mal configurados
                 raise ValueError(f"Tipo de columna no soportado: {column.kind}")

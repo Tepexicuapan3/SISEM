@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from .base import CatalogBase
 
 
@@ -15,6 +16,9 @@ class Medicamentos(CatalogBase):
         INSTITUCIONAL = "INSTITUCIONAL", "Institucional"
 
     id = models.BigAutoField(primary_key=True, db_column="id_medic")
+    # Clave del Compendio Nacional de Insumos (D2). Opcional hasta que farmacia
+    # entregue el listado; unica entre las cargadas.
+    code = models.CharField(max_length=30, db_column="cve_medic", null=True, blank=True)
     name = models.CharField(max_length=150, db_column="ds_medic")
     generic_name = models.CharField(
         max_length=150, db_column="ds_activo", null=True, blank=True,
@@ -36,3 +40,10 @@ class Medicamentos(CatalogBase):
     class Meta:
         db_table = "cat_medicamentos"
         managed = True
+        constraints = [
+            models.UniqueConstraint(
+                fields=["code"],
+                condition=Q(code__isnull=False) & ~Q(code=""),
+                name="cat_medic_code_unique",
+            ),
+        ]

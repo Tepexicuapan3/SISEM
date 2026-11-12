@@ -404,6 +404,18 @@ NAV_SEED = [
         "permisos": ["admin:catalogos:grupos_medicamentos:read"],
     },
     {
+        "clave": "administracion.catalogos.medicamentos",
+        "titulo": "Medicamentos",
+        "icono": None,
+        "url": "/admin/catalogos/medicamentos",
+        "badge": None,
+        "orden": 16,
+        "es_seccion": False,
+        "grupo": "primary",
+        "parent_clave": "administracion.catalogos",
+        "permisos": ["admin:catalogos:medicamentos:read"],
+    },
+    {
         "clave": "administracion.catalogos.ocupaciones",
         "titulo": "Ocupaciones",
         "icono": None,
