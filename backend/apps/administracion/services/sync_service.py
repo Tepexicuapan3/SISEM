@@ -95,33 +95,41 @@ def _fetch_llaves_postgres(cursor, pk_str: str, tabla: str, no_exp: str,
     return llaves
 
 
-def _fetch_fechas_oracle(cursor, pk_str: str, fec_act: str, tabla: str,
-                         no_exp: str, expediente: str, batch_size: int) -> dict:
+def _fetch_filas_oracle(cursor, columnas: list[str], indices_pk: list[int], fec_act: str,
+                        tabla: str, no_exp: str, expediente: str, batch_size: int) -> dict:
+    """Filas completas del expediente en Oracle (LOBs ya leídos). Si una llave
+    está repetida gana la de fecha más reciente, igual que ``_select_oracle``."""
+    db_driver = _require_oracledb()
     cursor.execute(
-        f"SELECT {pk_str}, {fec_act} FROM {tabla} WHERE {no_exp} = :1", (expediente,)
+        f"SELECT {', '.join(columnas)} FROM {tabla} WHERE {no_exp} = :1 "
+        f"ORDER BY {fec_act} DESC NULLS LAST",
+        (expediente,),
     )
-    idx = len(pk_str.split(","))
     resultado: dict = {}
     while True:
         rows = cursor.fetchmany(batch_size)
         if not rows:
             break
-        resultado.update({tuple(row[:idx]): row[idx] for row in rows})
+        for row in rows:
+            fila = [v.read() if isinstance(v, db_driver.LOB) else v for v in row]
+            resultado.setdefault(tuple(fila[i] for i in indices_pk), fila)
     return resultado
 
 
-def _fetch_fechas_postgres(cursor, pk_str: str, fec_act: str, tabla: str,
-                           no_exp: str, expediente: str, batch_size: int) -> dict:
+def _fetch_filas_postgres_expediente(cursor, columnas: list[str], indices_pk: list[int],
+                                     tabla: str, no_exp: str, expediente: str,
+                                     batch_size: int) -> dict:
+    col_str = ", ".join(f'"{c}"' for c in columnas)
     cursor.execute(
-        f'SELECT {pk_str}, {fec_act} FROM "{tabla}" WHERE "{no_exp}" = %s', (expediente,)
+        f'SELECT {col_str} FROM "{tabla}" WHERE "{no_exp}" = %s', (expediente,)
     )
-    idx = len(pk_str.split(","))
     resultado: dict = {}
     while True:
         rows = cursor.fetchmany(batch_size)
         if not rows:
             break
-        resultado.update({tuple(row[:idx]): row[idx] for row in rows})
+        for row in rows:
+            resultado[tuple(row[i] for i in indices_pk)] = list(row)
     return resultado
 
 
@@ -180,6 +188,54 @@ def _comparable(valor: Any) -> Any:
 def _clave(valores) -> tuple:
     """Clave normalizada para cruzar filas de Oracle y de Postgres."""
     return tuple(str(v).strip() for v in valores)
+
+
+def _binario_replica(valor: Any) -> Any:
+    """La réplica guarda los LOB comprimidos con zlib (``_procesar_blob``)."""
+    if isinstance(valor, memoryview):
+        valor = valor.tobytes()
+    if isinstance(valor, (bytes, bytearray)):
+        try:
+            return zlib.decompress(valor)
+        except zlib.error:
+            return bytes(valor)
+    return valor
+
+
+def _mismo_valor(oracle: Any, replica: Any) -> bool:
+    oracle, replica = _comparable(oracle), _comparable(replica)
+    if oracle == replica:
+        return True
+    # NUMBER contra varchar y CHAR con relleno: 42393 == "42393 ".
+    return (
+        oracle is not None and replica is not None
+        and not isinstance(oracle, dict) and not isinstance(replica, dict)
+        and str(oracle).strip() == str(replica).strip()
+    )
+
+
+def _llaves_a_actualizar(filas_oracle: dict, filas_pg: dict,
+                         columnas: list[str], columnas_blob: list[str]) -> list[tuple]:
+    """
+    Llaves de la réplica cuya fila difiere de Oracle en cualquier columna.
+    Antes solo se comparaba la fecha de actualización: un cambio sin mover la
+    fecha (p. ej. una foto reasignada a otro familiar) o una fecha NULL en los
+    dos lados nunca se replicaba. Devuelve las llaves tal como las tiene la réplica.
+    """
+    oracle_por_clave = {_clave(llave): fila for llave, fila in filas_oracle.items()}
+    blobs = {columnas.index(c) for c in columnas_blob}
+    actualizar = []
+    for llave, fila_pg in filas_pg.items():
+        fila_ora = oracle_por_clave.get(_clave(llave))
+        if fila_ora is None:
+            continue
+        distinta = any(
+            (_binario_replica(pg) != ora) if i in blobs else not _mismo_valor(ora, pg)
+            for i, (ora, pg) in enumerate(zip(fila_ora, fila_pg))
+        )
+        if distinta:
+            actualizar.append(llave)
+    return actualizar
 
 
 def _llave_legible(llaves_primarias: list[str], valores) -> str:
@@ -403,14 +459,16 @@ def sincronizar_tabla(
                 logger.info("  ↳ Insertados en %.2fs", time.time() - t0)
 
             # ── UPDATE ──────────────────────────────────────────────────────
-            fechas_oracle = _fetch_fechas_oracle(
-                oracle_cursor, pk_str, fec_actualizacion, tabla, no_exp, expediente, BATCH_SIZE
+            indices_pk = [columnas.index(c) for c in llaves_primarias]
+            filas_oracle = _fetch_filas_oracle(
+                oracle_cursor, columnas, indices_pk, fec_actualizacion,
+                tabla, no_exp, expediente, BATCH_SIZE,
             )
-            fechas_pg = _fetch_fechas_postgres(
-                pg_cursor, pk_str, fec_actualizacion, tabla, no_exp, expediente, BATCH_SIZE
+            filas_pg = _fetch_filas_postgres_expediente(
+                pg_cursor, columnas, indices_pk, tabla, no_exp, expediente, BATCH_SIZE
             )
 
-            actualizar = [k for k in fechas_pg if fechas_pg.get(k) != fechas_oracle.get(k)]
+            actualizar = _llaves_a_actualizar(filas_oracle, filas_pg, columnas, columnas_blob)
             logger.info("  ↳ Por actualizar: %d", len(actualizar))
 
             if actualizar:
@@ -420,7 +478,7 @@ def sincronizar_tabla(
                 sql_upd = f'UPDATE "{tabla}" SET {set_clause} WHERE {where_clause}'
                 orden_upd = columnas_act + llaves_primarias
                 previas = (
-                    _fetch_filas_postgres(pg_cursor, tabla, columnas, llaves_primarias, actualizar)
+                    {_clave(k): dict(zip(columnas, filas_pg[k])) for k in actualizar}
                     if registrar else {}
                 )
 

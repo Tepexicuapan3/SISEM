@@ -2,8 +2,8 @@
 Llenado inicial de CURP y sexo en la replica cat_empleados (historia clinica unificada, 5.1).
 
 Hace falta una sola vez despues de aplicar storage/expedientes-ddl/003: el sync
-(sync_service.sincronizar_tabla) solo actualiza una fila cuando cambia su
-fec_ult_actualizacion, asi que los empleados ya replicados se quedarian con curp NULL.
+(sync_service.sincronizar_tabla) solo corre por expediente al pulsar "Actualizar",
+asi que los empleados ya replicados se quedarian con curp NULL hasta entonces.
 
 Oracle es SOLO LECTURA: aqui unicamente se hace SELECT. Los valores se copian tal cual
 vienen de Oracle (incluido 'SIN CURP' y CD_SEXO F/M), igual que el sync. La limpieza y el
