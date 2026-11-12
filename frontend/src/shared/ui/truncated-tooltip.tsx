@@ -40,7 +40,10 @@ const useIsOverflowed = () => {
     if (!element) return undefined;
 
     const update = () => {
-      const hasOverflow = element.scrollWidth > element.clientWidth;
+      // Horizontal (truncate) o vertical (line-clamp).
+      const hasOverflow =
+        element.scrollWidth > element.clientWidth ||
+        element.scrollHeight > element.clientHeight;
       setIsOverflowed(hasOverflow);
     };
 

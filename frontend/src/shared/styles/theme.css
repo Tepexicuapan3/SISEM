@@ -262,8 +262,8 @@
   --sidebar-ring: var(--metro-orange-500);
 
   /* Sidebar: Ancho (sin importar modo) 
-     16rem = 256px - compacto pero legible */
-  --sidebar-width: 16rem;
+     18rem = 288px - deja ver nombres largos de modulos/submenus */
+  --sidebar-width: 18rem;
   --sidebar-width-icon: 3rem;
   --sidebar-width-mobile: 18rem;
 }

@@ -61,7 +61,11 @@ const BADGE_DOT_STYLES: Record<BadgeKey, string> = {
 };
 
 const BADGE_TEXT_CLASSES = "max-w-[4rem] truncate";
-const TITLE_TEXT_CLASSES = "max-w-[8.5rem] truncate block";
+// Sin tope de ancho fijo: el titulo usa todo el espacio de la columna y
+// parte hasta en 2 lineas antes de cortar con "...". `whitespace-normal!`
+// le gana al `[&>span:last-child]:truncate` del boton base.
+const TITLE_TEXT_CLASSES =
+  "line-clamp-2 break-words leading-snug whitespace-normal!";
 
 const resolveBadgeKey = (badge: string): BadgeKey =>
   badge in BADGE_LABELS ? (badge as BadgeKey) : "Dev";
