@@ -188,9 +188,13 @@ export function ParametroDetailsDialog({
             </Badge>
           }
           icon={<SlidersHorizontal className="size-7" />}
+          wrapTitle
         />
       }
       topContent={<Separator />}
+      // DialogContent es grid: sin min-w-0 el cuerpo crece al ancho del titulo largo.
+      bodyClassName="flex max-h-[90vh] min-h-0 min-w-0 flex-col"
+      headerClassName="min-w-0 px-8 pt-8"
       isDirty={isDirty}
       sections={sections}
       defaultSectionId="general"

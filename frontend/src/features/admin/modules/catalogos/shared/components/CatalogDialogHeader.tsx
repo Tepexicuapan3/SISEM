@@ -7,6 +7,7 @@ interface CatalogDialogHeaderProps {
   status?: ReactNode;
   meta?: ReactNode;
   icon: ReactNode;
+  wrapTitle?: boolean;
 }
 
 export function CatalogDialogHeader({
@@ -15,10 +16,12 @@ export function CatalogDialogHeader({
   status,
   meta,
   icon,
+  wrapTitle,
 }: CatalogDialogHeaderProps) {
   return (
     <AdminDetailsHeader
       title={title}
+      wrapTitle={wrapTitle}
       subtitle={subtitle}
       status={status}
       meta={meta}

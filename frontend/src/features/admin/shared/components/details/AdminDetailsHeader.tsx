@@ -6,6 +6,8 @@ interface AdminDetailsHeaderProps {
   status?: ReactNode;
   meta?: ReactNode;
   leadingVisual?: ReactNode;
+  /** Parte el titulo en lineas en vez de truncarlo (titulos largos tipo oracion). */
+  wrapTitle?: boolean;
 }
 
 export function AdminDetailsHeader({
@@ -14,6 +16,7 @@ export function AdminDetailsHeader({
   status,
   meta,
   leadingVisual,
+  wrapTitle = false,
 }: AdminDetailsHeaderProps) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -22,7 +25,11 @@ export function AdminDetailsHeader({
         <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center space-y-1">
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className="block max-w-full truncate text-lg font-semibold text-txt-body"
+              className={
+                wrapTitle
+                  ? "block max-w-full text-lg leading-snug font-semibold text-txt-body break-words"
+                  : "block max-w-full truncate text-lg font-semibold text-txt-body"
+              }
               title={title}
             >
               {title}

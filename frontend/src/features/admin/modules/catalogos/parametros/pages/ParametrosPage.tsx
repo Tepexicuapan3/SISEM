@@ -23,32 +23,36 @@ const columns: DataTableColumn<Parametro>[] = [
   {
     key: "description",
     header: "Parámetro",
-    className: "w-[360px]",
+    // Sin ancho fijo: toma el espacio que dejan las demas columnas.
+    // El td base es whitespace-nowrap; aqui el texto debe partirse en lineas.
+    className: "whitespace-normal py-3",
     render: (row) => (
-      <div className="min-w-0">
-        <p className="font-medium text-txt-body">{row.description}</p>
-        <p className="font-mono text-xs text-txt-muted">{row.key}</p>
+      <div className="min-w-0 space-y-0.5">
+        <p className="font-medium leading-snug text-txt-body break-words">{row.description}</p>
+        <p className="font-mono text-xs text-txt-muted break-all">{row.key}</p>
       </div>
     ),
   },
   {
     key: "module",
     header: "Módulo",
-    className: "w-[140px]",
+    className: "w-[130px]",
     render: (row) => moduleLabel(row.module),
   },
   {
     key: "generalValue",
     header: "Valor general",
-    className: "w-[260px]",
+    className: "w-[240px] whitespace-normal",
     render: (row) => (
-      <span className="line-clamp-2">{formatParametroValue(row.valueType, row.generalValue)}</span>
+      <span className="line-clamp-2 break-words">
+        {formatParametroValue(row.valueType, row.generalValue)}
+      </span>
     ),
   },
   {
     key: "centers",
     header: "Por centro",
-    className: "w-[180px]",
+    className: "w-[190px] whitespace-normal",
     render: (row) =>
       !row.allowsCenterOverride ? (
         <Badge variant="outline">Solo general</Badge>
@@ -112,6 +116,7 @@ export function ParametrosPage() {
       <DataTable
         columns={columns}
         rows={rows}
+        minWidthClassName="min-w-[900px]"
         isLoading={canRead && isLoading}
         isError={canRead && Boolean(error)}
         errorTitle="No se pudieron cargar los parámetros"
