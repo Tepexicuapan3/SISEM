@@ -158,3 +158,45 @@ class MedicamentosImportConfirmTests(TestCase):
         )
         self.assertTrue(result["has_errors"])
         self.assertEqual(Medicamentos.objects.count(), 0)
+
+
+class MedicamentosAutorizacionTests(TestCase):
+    def test_especial_o_controlado_requieren_autorizacion(self):
+        self.assertFalse(Medicamentos(name="A").requires_prescription_authorization)
+        self.assertTrue(Medicamentos(name="B", is_controlled=True).requires_prescription_authorization)
+        self.assertTrue(
+            Medicamentos(name="C", cuadro_basico=Medicamentos.CuadroBasico.ESPECIAL)
+            .requires_prescription_authorization
+        )
+        self.assertFalse(
+            Medicamentos(name="D", cuadro_basico=Medicamentos.CuadroBasico.INSTITUCIONAL)
+            .requires_prescription_authorization
+        )
+
+
+class MedicamentosBusquedaTests(TestCase):
+    """El medico busca por nombre, generico o clave (la lista ya no se corta en 200)."""
+
+    def setUp(self):
+        Medicamentos.objects.create(name="TEMPRA 500 MG", generic_name="PARACETAMOL", code="010.000.0104.00")
+        Medicamentos.objects.create(name="CLONAZEPAM 2 MG", generic_name="CLONAZEPAM")
+
+    def _names(self, term):
+        from apps.catalogos.views import MedicamentosListCreateView
+
+        qs = MedicamentosListCreateView().apply_search(Medicamentos.objects.all(), term)
+        return sorted(qs.values_list("name", flat=True))
+
+    def test_por_nombre_generico_o_clave(self):
+        self.assertEqual(self._names("tempra"), ["TEMPRA 500 MG"])
+        self.assertEqual(self._names("paracet"), ["TEMPRA 500 MG"])
+        self.assertEqual(self._names("0104"), ["TEMPRA 500 MG"])
+        self.assertEqual(self._names("zepam"), ["CLONAZEPAM 2 MG"])
+
+    def test_los_demas_catalogos_siguen_buscando_solo_por_nombre(self):
+        from apps.catalogos.models import Especialidades
+        from apps.catalogos.views import EspecialidadesListCreateView
+
+        Especialidades.objects.create(name="Cardiologia")
+        qs = EspecialidadesListCreateView().apply_search(Especialidades.objects.all(), "cardio")
+        self.assertEqual(list(qs.values_list("name", flat=True)), ["Cardiologia"])

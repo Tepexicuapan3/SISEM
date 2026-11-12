@@ -84,7 +84,7 @@ def _maybe_create_authorization(prescription, visit):
         if item.medication.is_controlled:
             controlled_count += 1
 
-    requires_authorization = specialized_count > 0 or controlled_count > 0
+    requires_authorization = any(item.medication.requires_prescription_authorization for item in items)
     if not requires_authorization:
         return
 

@@ -37,6 +37,11 @@ class Medicamentos(CatalogBase):
         db_column="no_caja", null=True, blank=True,
     )
 
+    @property
+    def requires_prescription_authorization(self) -> bool:
+        """Cuadro especial o controlado: la receta pide autorizacion antes de imprimirse."""
+        return self.is_controlled or self.cuadro_basico == self.CuadroBasico.ESPECIAL
+
     class Meta:
         db_table = "cat_medicamentos"
         managed = True

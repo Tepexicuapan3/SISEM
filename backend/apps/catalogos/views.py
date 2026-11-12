@@ -1,6 +1,7 @@
 from types import MappingProxyType
 import traceback
 
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -200,11 +201,19 @@ class CatalogBaseListCreateView(PaginationMixin, CatalogPermissionMixin, ErrorMi
     list_serializer = None
     write_serializer = None
     name_field = "name"
+    # Campos de `?search=`; sin indicar, solo el nombre (comportamiento original).
+    search_fields = None
     error_codes = MappingProxyType({})
     sort_map = MappingProxyType({"name": "name", "isActive": "is_active"})
 
     def get_queryset(self):
         return self.model.objects.all()
+
+    def apply_search(self, qs, search):
+        condition = Q()
+        for field in self.search_fields or (self.name_field,):
+            condition |= Q(**{f"{field}__icontains": search})
+        return qs.filter(condition)
 
     def _model_field_names(self):
         meta = getattr(self.model, "_meta", None)
@@ -242,7 +251,7 @@ class CatalogBaseListCreateView(PaginationMixin, CatalogPermissionMixin, ErrorMi
         is_active_raw = request.query_params.get("isActive")
 
         if search:
-            qs = qs.filter(**{f"{self.name_field}__icontains": search})
+            qs = self.apply_search(qs, search)
 
         if is_active_raw is not None:
             is_active = _parse_bool_param(is_active_raw)
@@ -1145,6 +1154,8 @@ class EstudiosMedDetailView(CatalogBaseDetailView):
 class MedicamentosListCreateView(CatalogBaseListCreateView):
     catalog = "medicamentos"
     model = Medicamentos
+    # El medico busca al recetar por nombre, generico o clave del Compendio.
+    search_fields = ("name", "generic_name", "code")
     list_serializer = MedicamentosListSerializer
     write_serializer = MedicamentosWriteSerializer
     error_codes = MappingProxyType({"exists": "MEDICATIONS_EXISTS"})

@@ -89,6 +89,10 @@ class PrescriptionItemRepository:
             "medicationName": item.medication.name,
             "genericName": item.medication.generic_name,
             "presentation": item.medication.presentation,
+            # Para avisar antes del cierre: especial o controlado piden autorizacion.
+            "cuadroBasico": item.medication.cuadro_basico,
+            "isControlled": item.medication.is_controlled,
+            "requiresAuthorization": item.medication.requires_prescription_authorization,
             "dose": item.dose,
             "indications": item.indications,
             # Via, frecuencia y duracion (RIS art. 30); nulas en renglones previos.

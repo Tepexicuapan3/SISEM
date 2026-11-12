@@ -108,3 +108,22 @@ class RecetaAdministrationTextTests(SimpleTestCase):
     def test_old_item_without_administration_prints_as_before(self):
         row = {"dose": "1 tab", "route_label": "", "frequency": "", "duration": "", "indications": "Cada 8 h"}
         self.assertEqual(_administration_text(row), "1 tab · Cada 8 h")
+
+
+class PrescriptionItemAuthorizationFlagsTests(AddPrescriptionItemAdministrationTests):
+    """El renglon dice si su medicamento pide autorizacion (especial o
+    controlado), para avisarle al medico antes de cerrar."""
+
+    def test_basic_medication_does_not_require_authorization(self):
+        payload = self._add()
+        self.assertEqual(payload["cuadroBasico"], "BASICO")
+        self.assertFalse(payload["isControlled"])
+        self.assertFalse(payload["requiresAuthorization"])
+
+    def test_controlled_or_special_requires_authorization(self):
+        controlled = Medicamentos.objects.create(name="Clonazepam 2mg", is_controlled=True)
+        special = Medicamentos.objects.create(
+            name="Insulina glargina", cuadro_basico=Medicamentos.CuadroBasico.ESPECIAL,
+        )
+        self.assertTrue(self._add(medication_id=controlled.id)["requiresAuthorization"])
+        self.assertTrue(self._add(medication_id=special.id)["requiresAuthorization"])
