@@ -21,6 +21,20 @@ class ReferralRepository:
         ).first()
 
     @staticmethod
+    def active_by_consultation(consultation_ids):
+        """Pases activos de cada consulta: {id_consulta: [{folio, type, label}]}."""
+        labels = dict(Referral.ReferralType.choices)
+        result = {}
+        referrals = Referral.objects.filter(
+            consultation_id__in=consultation_ids, status=Referral.Status.ACTIVO, is_active=True,
+        ).order_by("pk").values("consultation_id", "folio", "referral_type")
+        for row in referrals:
+            result.setdefault(row["consultation_id"], []).append({
+                "folio": row["folio"], "type": row["referral_type"], "label": labels.get(row["referral_type"]),
+            })
+        return result
+
+    @staticmethod
     def create(
         *,
         consultation,

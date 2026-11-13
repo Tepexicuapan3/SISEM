@@ -14,12 +14,15 @@ from django.utils import timezone
 
 from apps.consulta_medica.models import PrescriptionAuthorization
 from apps.consulta_medica.repositories.consultation_repository import ConsultationRepository
+from apps.consulta_medica.repositories.medical_leave_repository import MedicalLeaveRepository
 from apps.consulta_medica.repositories.prescription_authorization_repository import (
     PrescriptionAuthorizationRepository,
 )
 from apps.consulta_medica.repositories.prescription_item_repository import PrescriptionItemRepository
 from apps.consulta_medica.repositories.prescription_repository import PrescriptionRepository
 from apps.consulta_medica.services.paciente_entrada import llave_publica
+# Pases es otro dominio: se lee por su repositorio (mismo camino que la cancelacion de notas).
+from apps.pases.repositories.referral_repository import ReferralRepository
 
 from .consultation_usecase import ensure_doctor_role
 
@@ -57,6 +60,9 @@ def list_attended_today(actor_id, roles, permissions=None, *, today=None):
     folios = PrescriptionRepository.active_folios_by_visit(visit_ids)
     summaries = PrescriptionItemRepository.active_summary_by_visit(visit_ids)
     authorizations = PrescriptionAuthorizationRepository.latest_by_visit(visit_ids)
+    consultation_ids = [c.pk for c in consultations]
+    leaves = MedicalLeaveRepository.active_by_consultation(consultation_ids)
+    referrals = ReferralRepository.active_by_consultation(consultation_ids)
 
     items = []
     for consultation in consultations:
@@ -76,5 +82,12 @@ def list_attended_today(actor_id, roles, permissions=None, *, today=None):
                 if visit.id_visit in folios
                 else None
             ),
+            # Lo demas que salio de la consulta: la nota cerrada siempre se puede reimprimir.
+            "documents": {
+                "notePrintable": True,
+                "medicalLeave": leaves.get(consultation.pk),
+                "referrals": referrals.get(consultation.pk, []),
+                "followUpDate": consultation.follow_up_date.isoformat() if consultation.follow_up_date else None,
+            },
         })
     return {"items": items, "total": len(items)}

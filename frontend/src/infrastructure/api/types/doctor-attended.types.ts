@@ -12,6 +12,16 @@ export interface DoctorAttendedPrescription {
   printable: boolean;
 }
 
+/** Lo demas que salio de la consulta. */
+export interface DoctorAttendedDocuments {
+  /** La nota cerrada se puede reimprimir. */
+  notePrintable: boolean;
+  medicalLeave: { folio: string; days: number } | null;
+  referrals: { folio: string; type: string; label: string | null }[];
+  /** Fecha de seguimiento indicada en la nota (YYYY-MM-DD). */
+  followUpDate: string | null;
+}
+
 export interface DoctorAttendedItem {
   visitId: number;
   folio: string;
@@ -20,6 +30,7 @@ export interface DoctorAttendedItem {
   pkNum: number | null;
   attendedAt: string | null;
   prescription: DoctorAttendedPrescription | null;
+  documents: DoctorAttendedDocuments;
 }
 
 export interface DoctorAttendedTodayResponse {

@@ -12,8 +12,9 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.authentication.models import SyUsuario
-from apps.catalogos.models import Medicamentos
+from apps.catalogos.models import Licencias, Medicamentos
 from apps.consulta_medica.models import (
+    MedicalLeave,
     PrescriptionAuthorization,
     VisitConsultation,
     VisitPrescription,
@@ -27,6 +28,7 @@ from apps.consulta_medica.uses_case.attended_today_usecase import (
     MX_TZ,
     list_attended_today,
 )
+from apps.pases.models import Referral
 from apps.recepcion.models import Visit
 
 TODAY = date(2026, 11, 13)
@@ -123,6 +125,34 @@ class AttendedTodayTests(TestCase):
             updated_at=datetime(2026, 11, 13, 12, 0, tzinfo=MX_TZ)
         )
         self.assertEqual([i["folio"] for i in self._items()], ["J-13", "J-14"])
+
+    def test_documents_without_extras(self):
+        self._visit("J-15")
+        self.assertEqual(self._items()[0]["documents"], {
+            "notePrintable": True, "medicalLeave": None, "referrals": [], "followUpDate": None,
+        })
+
+    def test_documents_list_leave_referrals_and_follow_up(self):
+        visit = self._visit("J-16")
+        consultation = visit.consultation
+        VisitConsultation.objects.filter(pk=consultation.pk).update(follow_up_date=date(2026, 11, 27))
+        leave_type = Licencias.objects.create(name="Enfermedad general")
+        for folio, status in (("INC-1", MedicalLeave.Status.EMITIDA), ("INC-0", MedicalLeave.Status.CANCELADA)):
+            MedicalLeave.objects.create(
+                consultation=consultation, patient_id=visit.patient_id, leave_type=leave_type, days=3,
+                start_date=TODAY, end_date=TODAY + timedelta(days=2), folio=folio, status=status,
+            )
+        for folio, kind, status in (
+            ("PL-1", Referral.ReferralType.LABORATORIO, Referral.Status.ACTIVO),
+            ("PE-1", Referral.ReferralType.ESPECIALIDAD, Referral.Status.CANCELADO),
+        ):
+            Referral.objects.create(
+                consultation=consultation, patient_id=visit.patient_id, referral_type=kind, folio=folio, status=status,
+            )
+        documents = self._items()[0]["documents"]
+        self.assertEqual(documents["medicalLeave"], {"folio": "INC-1", "days": 3})
+        self.assertEqual(documents["referrals"], [{"folio": "PL-1", "type": "laboratorio", "label": "Laboratorio"}])
+        self.assertEqual(documents["followUpDate"], "2026-11-27")
 
     def test_requires_doctor_role(self):
         from apps.recepcion.services.errors import VisitDomainError

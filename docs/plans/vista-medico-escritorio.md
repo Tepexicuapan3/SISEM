@@ -37,13 +37,19 @@ Devuelve solo las consultas **del médico autenticado**, **activas**, con visita
       "folio": "RX-2026-31", "medicationsCount": 2, "hasControlled": true,
       "authorization": {"status": "pendiente", "rejectionReason": null},
       "printable": false
+    },
+    "documents": {
+      "notePrintable": true,
+      "medicalLeave": {"folio": "INC-12", "days": 3},
+      "referrals": [{"folio": "PL-7", "type": "laboratorio", "label": "Laboratorio"}],
+      "followUpDate": "2026-11-27"
     }
   }],
   "total": 1
 }
 ```
 
-`prescription` es `null` si no hay receta. `printable` aplica la misma regla que la impresión: con medicamentos activos y sin autorización pendiente ni rechazada.
+`prescription` es `null` si no hay receta. `documents` (agregado con Mi consultorio): la nota cerrada siempre se puede reimprimir (`GET /impresion/nota/<visitId>`, con bitácora); incapacidad emitida, pases activos (leídos por `ReferralRepository`, el repositorio del dominio pases) y la fecha de seguimiento de la nota son informativos. `printable` aplica la misma regla que la impresión: con medicamentos activos y sin autorización pendiente ni rechazada.
 
 **Normas:** NOM-024 (disponibilidad: la receta no depende de un aviso pasajero; confidencialidad: solo las consultas propias del día). Lo histórico queda en el expediente → Historial.
 
@@ -61,3 +67,19 @@ Las dos vistas usan el mismo componente (`ConsultationWorkspace`): mismas reglas
 **Pendiente de esta fase:** exploración física, diagnósticos secundarios y medicamentos siguen abriendo su propia ventana. Pasarlos a edición en línea va junto con la Fase 4 (la nota se crea al iniciar), porque hoy dependen de que el diagnóstico esté guardado.
 
 **Archivos:** `components/ConsultationWorkspace.tsx`, `components/ConsultationDetailDialog.tsx` (envoltorio del modal), `state/consultationLayoutStore.ts`, `pages/DoctorConsultationPage.tsx`. Tests: bloque "vista escritorio" en `DoctorConsultationPage.ui.test.tsx`.
+
+## Mi consultorio (evolución de la vista Escritorio)
+
+Con **Vista: Escritorio** la página es fija en tres columnas (≥ 1280 px; en pantallas angostas pasan a pestañas *Por atender · Consulta · Atendidas hoy*):
+
+| Columna | Contenido |
+|---|---|
+| Por atender | Aviso de próxima cita y cola compacta; el paciente abierto queda marcado |
+| Consulta | El workspace de la Fase 2, o "Elegí un paciente de Por atender" |
+| Atendidas hoy | Resumen de recetas por autorizar y rechazadas; por paciente: imprimir receta, reimprimir nota, incapacidad, pases y seguimiento |
+
+Al finalizar la consulta el paciente pasa de la izquierda a la derecha con sus documentos. **Ventana** sigue igual (solo suma el botón Nota en Atendidas hoy).
+
+**Pendiente:** imprimir incapacidad y pase (no hay plantilla de impresión); la cita de seguimiento agendada vive en recepción y aquí solo se muestra la fecha indicada en la nota.
+
+**Archivos:** `components/DoctorDeskLayout.tsx`, `components/DeskQueueList.tsx`, `AttendedTodayList.tsx` (documentos, nota, pendientes), `MedicalLeaveRepository.active_by_consultation`, `ReferralRepository.active_by_consultation`.

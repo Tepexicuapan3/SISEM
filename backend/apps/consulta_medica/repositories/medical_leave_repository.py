@@ -15,6 +15,14 @@ class MedicalLeaveRepository:
         ).first()
 
     @staticmethod
+    def active_by_consultation(consultation_ids):
+        """Incapacidad emitida de cada consulta: {id_consulta: {folio, days}}."""
+        leaves = MedicalLeave.objects.filter(
+            consultation_id__in=consultation_ids, is_active=True, status=MedicalLeave.Status.EMITIDA,
+        ).values("consultation_id", "folio", "days")
+        return {row["consultation_id"]: {"folio": row["folio"], "days": row["days"]} for row in leaves}
+
+    @staticmethod
     def get_active_overlap_for_patient(no_exp, pk_num, on_date):
         return (
             for_patient(

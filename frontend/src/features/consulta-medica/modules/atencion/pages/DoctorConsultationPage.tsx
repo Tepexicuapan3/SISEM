@@ -63,6 +63,8 @@ import { OpenConsultationsGrid } from "@features/consulta-medica/modules/atencio
 import { ConsultationDetailDialog } from "@features/consulta-medica/modules/atencion/components/ConsultationDetailDialog";
 import { ConsultationWorkspace } from "@features/consulta-medica/modules/atencion/components/ConsultationWorkspace";
 import { useConsultationLayoutStore } from "@features/consulta-medica/modules/atencion/state/consultationLayoutStore";
+import { DoctorDeskLayout } from "@features/consulta-medica/modules/atencion/components/DoctorDeskLayout";
+import { DeskQueueList } from "@features/consulta-medica/modules/atencion/components/DeskQueueList";
 import { DoctorPipelineView } from "@features/consulta-medica/modules/atencion/components/DoctorPipelineView";
 
 export const DoctorConsultationPage = () => {
@@ -160,8 +162,6 @@ export const DoctorConsultationPage = () => {
   const parsedVisitId = Number.parseInt(params.visitId ?? "", 10);
   const selectedVisitId = Number.isNaN(parsedVisitId) ? null : parsedVisitId;
   const isDetailRoute = params.visitId !== undefined;
-  // Vista escritorio (PROPUESTA, Fase 2): la consulta ocupa la pagina.
-  const isDeskWorkspace = layout === "escritorio" && isDetailRoute;
 
   const selectedVisit =
     visits.find((visit) => visit.id === selectedVisitId) ?? null;
@@ -225,6 +225,10 @@ export const DoctorConsultationPage = () => {
   // Especial o controlado: al cerrar la receta queda pendiente de autorizacion.
   const prescriptionNeedsAuthorization = activeMedications.some((item) => item.requiresAuthorization);
   const { print: printReceta } = usePrintDocument("receta");
+  const canPrintNota = hasCapability(
+    PRINT_CAPABILITIES.nota.key,
+    PRINT_CAPABILITIES.nota.fallback,
+  );
 
   const canStartSelectedVisit =
     Boolean(selectedVisit) &&
@@ -617,6 +621,48 @@ export const DoctorConsultationPage = () => {
     navigate,
   };
 
+  const nextAppointmentBanner =
+    nextPendingVisit && nextPendingVisit.minutesUntil !== null && nextPendingVisit.minutesUntil <= 15 ? (
+      <div className={[
+        "flex items-center gap-3 rounded-xl border px-4 py-3",
+        nextPendingVisit.minutesUntil <= 5
+          ? "border-red-300 bg-red-50"
+          : "border-amber-300 bg-amber-50",
+      ].join(" ")}>
+        <AlarmClock className={[
+          "size-5 shrink-0",
+          nextPendingVisit.minutesUntil <= 5 ? "text-red-500 animate-pulse" : "text-amber-600",
+        ].join(" ")} />
+        <div className="flex-1 min-w-0">
+          <p className={[
+            "text-sm font-bold",
+            nextPendingVisit.minutesUntil <= 5 ? "text-red-700" : "text-amber-800",
+          ].join(" ")}>
+            {nextPendingVisit.minutesUntil <= 0
+              ? `La cita empezó hace ${Math.abs(nextPendingVisit.minutesUntil)} min — pendiente de atención`
+              : nextPendingVisit.minutesUntil <= 5
+              ? `¡La siguiente cita empieza en ${nextPendingVisit.minutesUntil} minuto${nextPendingVisit.minutesUntil === 1 ? "" : "s"}!`
+              : `Próxima cita en ${nextPendingVisit.minutesUntil} minutos`}
+          </p>
+          <p className="text-xs text-txt-muted mt-0.5 truncate">
+            {nextPendingVisit.visit.nombrePaciente ?? `Exp. ${nextPendingVisit.visit.noExp}`}
+            {nextPendingVisit.visit.consultorioNombre
+              ? ` · ${nextPendingVisit.visit.consultorioNombre}`
+              : null}
+          </p>
+        </div>
+        <span className={[
+          "font-mono text-xl font-bold shrink-0",
+          nextPendingVisit.minutesUntil <= 5 ? "text-red-600" : "text-amber-700",
+        ].join(" ")}>
+          {nextPendingVisit.visit.horaConsulta}
+        </span>
+      </div>
+    ) : null;
+
+  const isQueueReady =
+    view === "consulta" && canReadDoctorQueue && !queueQuery.isLoading && !queueQuery.isError;
+
   return (
     <section className="space-y-6 p-6">
       <SinCentroAviso />
@@ -713,72 +759,17 @@ export const DoctorConsultationPage = () => {
         </Alert>
       ) : null}
 
-      {view === "consulta" &&
-      canReadDoctorQueue &&
-      !queueQuery.isLoading &&
-      !queueQuery.isError &&
-      visits.length === 0 ? (
+      {isQueueReady && layout === "ventana" && visits.length === 0 ? (
         <p className="text-sm text-txt-muted">
           No hay pacientes listos para doctor.
         </p>
       ) : null}
 
-      {view === "consulta" &&
-      canReadDoctorQueue &&
-      !queueQuery.isLoading &&
-      !queueQuery.isError &&
-      (visits.length > 0 || isDetailRoute) ? (
+      {isQueueReady && layout === "ventana" && (visits.length > 0 || isDetailRoute) ? (
         <section className="space-y-4">
-          {isDeskWorkspace ? (
-            <section
-              aria-label="Consulta en curso"
-              data-testid="doctor-consultation-workspace"
-              className="rounded-xl border border-line-struct bg-paper"
-            >
-              <ConsultationWorkspace variant="page" {...workspaceProps} />
-            </section>
-          ) : null}
+          {nextAppointmentBanner}
 
-          {/* ── Banner próxima cita ────────────────────────────────── */}
-          {!isDeskWorkspace && nextPendingVisit && nextPendingVisit.minutesUntil !== null && nextPendingVisit.minutesUntil <= 15 ? (
-            <div className={[
-              "flex items-center gap-3 rounded-xl border px-4 py-3",
-              nextPendingVisit.minutesUntil <= 5
-                ? "border-red-300 bg-red-50"
-                : "border-amber-300 bg-amber-50",
-            ].join(" ")}>
-              <AlarmClock className={[
-                "size-5 shrink-0",
-                nextPendingVisit.minutesUntil <= 5 ? "text-red-500 animate-pulse" : "text-amber-600",
-              ].join(" ")} />
-              <div className="flex-1 min-w-0">
-                <p className={[
-                  "text-sm font-bold",
-                  nextPendingVisit.minutesUntil <= 5 ? "text-red-700" : "text-amber-800",
-                ].join(" ")}>
-                  {nextPendingVisit.minutesUntil <= 0
-                    ? `La cita empezó hace ${Math.abs(nextPendingVisit.minutesUntil)} min — pendiente de atención`
-                    : nextPendingVisit.minutesUntil <= 5
-                    ? `¡La siguiente cita empieza en ${nextPendingVisit.minutesUntil} minuto${nextPendingVisit.minutesUntil === 1 ? "" : "s"}!`
-                    : `Próxima cita en ${nextPendingVisit.minutesUntil} minutos`}
-                </p>
-                <p className="text-xs text-txt-muted mt-0.5 truncate">
-                  {nextPendingVisit.visit.nombrePaciente ?? `Exp. ${nextPendingVisit.visit.noExp}`}
-                  {nextPendingVisit.visit.consultorioNombre
-                    ? ` · ${nextPendingVisit.visit.consultorioNombre}`
-                    : null}
-                </p>
-              </div>
-              <span className={[
-                "font-mono text-xl font-bold shrink-0",
-                nextPendingVisit.minutesUntil <= 5 ? "text-red-600" : "text-amber-700",
-              ].join(" ")}>
-                {nextPendingVisit.visit.horaConsulta}
-              </span>
-            </div>
-          ) : null}
-
-          {!isDeskWorkspace && visits.length > 0 ? (
+          {visits.length > 0 ? (
             <OpenConsultationsGrid
               visits={visits}
               now={now}
@@ -787,18 +778,58 @@ export const DoctorConsultationPage = () => {
             />
           ) : null}
 
-          {layout === "ventana" ? (
-            <ConsultationDetailDialog
-              isDetailRoute={isDetailRoute}
-              handleConsultationModalOpenChange={handleConsultationModalOpenChange}
-              {...workspaceProps}
-            />
-          ) : null}
+          <ConsultationDetailDialog
+            isDetailRoute={isDetailRoute}
+            handleConsultationModalOpenChange={handleConsultationModalOpenChange}
+            {...workspaceProps}
+          />
         </section>
       ) : null}
 
-      {view === "consulta" && canReadDoctorQueue && !isDeskWorkspace ? (
-        <AttendedTodayPanel canPrint={canPrintReceta} />
+      {/* Mi consultorio (PROPUESTA): cola, consulta y atendidas a la vista. */}
+      {isQueueReady && layout === "escritorio" ? (
+        <DoctorDeskLayout
+          key={selectedVisitId ?? "sin-paciente"}
+          hasOpenConsultation={isDetailRoute}
+          queue={
+            <div className="space-y-2">
+              {nextAppointmentBanner}
+              {visits.length > 0 ? (
+                <DeskQueueList
+                  visits={visits}
+                  now={now}
+                  consultationStartedAtByVisitId={consultationStartedAtByVisitId}
+                  selectedVisitId={selectedVisitId}
+                  onSelectVisit={handleVisitChange}
+                />
+              ) : (
+                <p className="text-sm text-txt-muted">No hay pacientes listos para doctor.</p>
+              )}
+            </div>
+          }
+          consultation={
+            isDetailRoute ? (
+              <section
+                aria-label="Consulta en curso"
+                data-testid="doctor-consultation-workspace"
+                className="rounded-xl border border-line-struct bg-paper"
+              >
+                <ConsultationWorkspace variant="page" {...workspaceProps} />
+              </section>
+            ) : (
+              <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-line-struct p-6 text-center">
+                <p className="max-w-xs text-sm text-txt-muted">
+                  Elegí un paciente de Por atender para empezar la consulta.
+                </p>
+              </div>
+            )
+          }
+          attended={<AttendedTodayPanel canPrint={canPrintReceta} canPrintNote={canPrintNota} />}
+        />
+      ) : null}
+
+      {view === "consulta" && canReadDoctorQueue && layout === "ventana" ? (
+        <AttendedTodayPanel canPrint={canPrintReceta} canPrintNote={canPrintNota} />
       ) : null}
     </section>
   );

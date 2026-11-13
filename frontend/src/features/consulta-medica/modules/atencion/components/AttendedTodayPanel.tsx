@@ -5,15 +5,18 @@ import { AttendedTodayList } from "./AttendedTodayList";
 
 interface AttendedTodayPanelProps {
   canPrint: boolean;
+  /** Reimprimir la nota de la consulta cerrada. */
+  canPrintNote?: boolean;
 }
 
 /**
  * Atendidas hoy: la consulta cerrada sale de la cola, pero el medico la sigue
  * viendo aqui e imprime la receta cuando quede lista (NOM-024: disponibilidad).
  */
-export function AttendedTodayPanel({ canPrint }: AttendedTodayPanelProps) {
+export function AttendedTodayPanel({ canPrint, canPrintNote = false }: AttendedTodayPanelProps) {
   const { data, isLoading, isError } = useDoctorAttendedToday();
   const { print, isPrinting } = usePrintDocument("receta");
+  const { print: printNote, isPrinting: isPrintingNote } = usePrintDocument("nota");
 
   return (
     <section className="space-y-3" aria-labelledby="attended-today-title" data-testid="attended-today-panel">
@@ -27,8 +30,10 @@ export function AttendedTodayPanel({ canPrint }: AttendedTodayPanelProps) {
         <AttendedTodayList
           items={data.items}
           canPrint={canPrint}
-          isPrinting={isPrinting}
+          isPrinting={isPrinting || isPrintingNote}
           onPrint={(visitId) => void print(visitId)}
+          canPrintNote={canPrintNote}
+          onPrintNote={(visitId) => void printNote(visitId)}
         />
       ) : null}
     </section>

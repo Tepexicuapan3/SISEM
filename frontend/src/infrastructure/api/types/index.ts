@@ -480,6 +480,7 @@ export type {
   AddPrescriptionItemResult,
 } from "@api/types/prescription-item.types";
 export type {
+  DoctorAttendedDocuments,
   DoctorAttendedItem,
   DoctorAttendedPrescription,
   DoctorAttendedTodayResponse,

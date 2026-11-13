@@ -1289,7 +1289,7 @@ describe("DoctorConsultationPage UI", () => {
         error: null,
       } as unknown as ReturnType<typeof useDoctorQueue>);
 
-    it("la consulta se abre en la pagina, sin ventana encima, con indice de apartados", () => {
+    it("mi consultorio: cola, consulta y atendidas a la vez, sin ventana encima", () => {
       useConsultationLayoutStore.setState({ layout: "escritorio" });
       inConsultation();
       renderDoctorPage("/clinico/consultas/doctor/1");
@@ -1297,8 +1297,9 @@ describe("DoctorConsultationPage UI", () => {
       const workspace = screen.getByTestId("doctor-consultation-workspace");
       expect(workspace).toHaveTextContent("VST-2001");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      // Concentrado en el paciente: la bandeja no compite con la consulta.
-      expect(screen.queryByTestId("doctor-visit-card-1")).not.toBeInTheDocument();
+      // La cola sigue a la izquierda, marcando al paciente abierto.
+      expect(screen.getByTestId("doctor-visit-card-1")).toHaveAttribute("aria-current", "true");
+      expect(screen.getByTestId("attended-today-panel")).toBeInTheDocument();
 
       const nav = screen.getByRole("navigation", { name: "Apartados de la consulta" });
       for (const name of ["Visita", "Diagnóstico", "Nota médica", "Receta", "Otros documentos"]) {
@@ -1331,6 +1332,31 @@ describe("DoctorConsultationPage UI", () => {
         expect(screen.queryByTestId("doctor-consultation-workspace")).not.toBeInTheDocument();
       });
       expect(screen.getByTestId("doctor-visit-card-1")).toBeVisible();
+      expect(screen.getByText(/Elegí un paciente de Por atender/)).toBeVisible();
+    });
+
+    it("sin paciente abierto muestra la cola, el lugar de la consulta y las atendidas", () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      renderDoctorPage();
+
+      expect(screen.getByRole("heading", { name: /Por atender/ })).toBeInTheDocument();
+      expect(screen.getByText(/Elegí un paciente de Por atender/)).toBeVisible();
+      expect(screen.getByTestId("attended-today-panel")).toBeInTheDocument();
+      expect(screen.queryByTestId("doctor-open-consultations-grid")).not.toBeInTheDocument();
+    });
+
+    it("sin pacientes en cola igual deja ver las atendidas", () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      vi.mocked(useDoctorQueue).mockReturnValue({
+        data: { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof useDoctorQueue>);
+      renderDoctorPage();
+
+      expect(screen.getByText("No hay pacientes listos para doctor.")).toBeVisible();
+      expect(screen.getByTestId("attended-today-panel")).toBeInTheDocument();
     });
 
     it("guarda el diagnostico desde la pagina", async () => {
