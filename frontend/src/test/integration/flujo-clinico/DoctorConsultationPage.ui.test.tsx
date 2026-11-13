@@ -685,6 +685,19 @@ describe("DoctorConsultationPage UI", () => {
     }
   });
 
+  it("con la consulta iniciada avisa que lo demas requiere guardar el diagnostico", () => {
+    vi.mocked(useDoctorQueue).mockReturnValue({
+      data: { items: [createVisit({ status: "en_consulta" })], page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof useDoctorQueue>);
+
+    renderDoctorPage("/clinico/consultas/doctor/1");
+
+    expect(screen.getByText(/Al guardar el diagnóstico se crea la nota de la consulta/)).toBeInTheDocument();
+  });
+
   it("aclara que los medicamentos no van en las indicaciones generales", () => {
     renderDoctorPage("/clinico/consultas/doctor/1");
 

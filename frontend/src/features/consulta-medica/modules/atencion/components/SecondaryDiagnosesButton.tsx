@@ -19,11 +19,15 @@ import { useCieSearch } from "@features/consulta-medica/modules/atencion/queries
 import { useSecondaryDiagnoses } from "@features/consulta-medica/modules/atencion/queries/useSecondaryDiagnoses";
 import { useAddSecondaryDiagnosis } from "@features/consulta-medica/modules/atencion/mutations/useAddSecondaryDiagnosis";
 import { useCancelSecondaryDiagnosis } from "@features/consulta-medica/modules/atencion/mutations/useCancelSecondaryDiagnosis";
+import {
+  DIAGNOSIS_FIRST_MESSAGE,
+  isConsultationNoteMissing,
+} from "@features/consulta-medica/modules/atencion/domain/consultation-note";
 
 const SECONDARY_DIAGNOSIS_ERROR_MESSAGE: Record<string, string> = {
   ROLE_NOT_ALLOWED: "No tenes permiso para editar diagnosticos.",
   VISIT_NOT_FOUND: "La visita ya no existe o fue cerrada por otro usuario.",
-  CONSULTATION_NOT_FOUND: "Primero guarda el diagnostico principal de esta consulta.",
+  CONSULTATION_NOT_FOUND: DIAGNOSIS_FIRST_MESSAGE,
   DIAGNOSIS_ALREADY_EXISTS: "Ese codigo CIE-10 ya esta agregado a esta consulta.",
   DIAGNOSIS_NOT_FOUND: "El diagnostico ya no existe.",
   VALIDATION_ERROR: "Revisa el codigo CIE-10 ingresado.",
@@ -63,7 +67,11 @@ export function SecondaryDiagnosesButton({
     return () => clearTimeout(timeout);
   }, [searchTerm]);
 
-  const { data: diagnosesData, isLoading: isLoadingDiagnoses } = useSecondaryDiagnoses(
+  const {
+    data: diagnosesData,
+    isLoading: isLoadingDiagnoses,
+    error: diagnosesError,
+  } = useSecondaryDiagnoses(
     visitId,
     { enabled: open },
   );
@@ -147,6 +155,10 @@ export function SecondaryDiagnosesButton({
           <div className="space-y-2">
             {isLoadingDiagnoses ? (
               <p className="text-sm text-txt-muted">Cargando...</p>
+            ) : isConsultationNoteMissing(diagnosesError) ? (
+              <p className="text-sm text-status-alert" role="status">
+                {DIAGNOSIS_FIRST_MESSAGE}
+              </p>
             ) : activeDiagnoses.length === 0 ? (
               <p className="text-sm text-txt-muted">
                 No hay diagnósticos secundarios agregados todavía.

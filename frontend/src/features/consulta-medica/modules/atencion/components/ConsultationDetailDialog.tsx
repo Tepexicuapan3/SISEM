@@ -390,7 +390,11 @@ export function ConsultationDetailDialog({
 
               <ConsultationSection
                 title="Diagnóstico"
-                description="El CIE es opcional para guardar avance y obligatorio para finalizar."
+                description={
+                  selectedVisitStatus === VISIT_STATUS.EN_CONSULTA
+                    ? "Al guardar el diagnóstico se crea la nota de la consulta; después podrás registrar diagnósticos secundarios, exploración física y medicamentos. El CIE es opcional para guardar avance y obligatorio para finalizar."
+                    : "El CIE es opcional para guardar avance y obligatorio para finalizar."
+                }
                 actions={
                   <SecondaryDiagnosesButton
                     visitId={selectedVisit.id}

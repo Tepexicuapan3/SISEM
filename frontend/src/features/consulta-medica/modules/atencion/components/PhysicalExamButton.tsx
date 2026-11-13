@@ -11,6 +11,7 @@ import { Label } from "@shared/ui/label";
 import { Textarea } from "@shared/ui/textarea";
 import { useBodyRegions, usePhysicalExam } from "@features/consulta-medica/modules/atencion/queries/usePhysicalExam";
 import { useSavePhysicalExam } from "@features/consulta-medica/modules/atencion/mutations/useSavePhysicalExam";
+import { DIAGNOSIS_FIRST_MESSAGE } from "@features/consulta-medica/modules/atencion/domain/consultation-note";
 
 interface PhysicalExamButtonProps {
   visitId: number;
@@ -24,7 +25,7 @@ interface RegionDraft {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
-  CONSULTATION_NOT_FOUND: "Primero inicia la consulta.",
+  CONSULTATION_NOT_FOUND: DIAGNOSIS_FIRST_MESSAGE,
   VISIT_STATE_INVALID: "La consulta ya se cerró: usa una nota de aclaración.",
   ROLE_NOT_ALLOWED: "No tenés permiso para registrar la exploración.",
 };
