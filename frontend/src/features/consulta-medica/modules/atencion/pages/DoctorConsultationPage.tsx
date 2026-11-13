@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlarmClock, ClipboardList, Stethoscope } from "lucide-react";
+import { AlarmClock, AppWindow, ClipboardList, PanelsTopLeft, Stethoscope } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -61,6 +61,8 @@ import {
 } from "./DoctorConsultationPage.helpers";
 import { OpenConsultationsGrid } from "@features/consulta-medica/modules/atencion/components/OpenConsultationsGrid";
 import { ConsultationDetailDialog } from "@features/consulta-medica/modules/atencion/components/ConsultationDetailDialog";
+import { ConsultationWorkspace } from "@features/consulta-medica/modules/atencion/components/ConsultationWorkspace";
+import { useConsultationLayoutStore } from "@features/consulta-medica/modules/atencion/state/consultationLayoutStore";
 import { DoctorPipelineView } from "@features/consulta-medica/modules/atencion/components/DoctorPipelineView";
 
 export const DoctorConsultationPage = () => {
@@ -106,6 +108,8 @@ export const DoctorConsultationPage = () => {
   >({});
 
   const [view, setView] = useState<"consulta" | "pipeline">("consulta");
+  const layout = useConsultationLayoutStore((state) => state.layout);
+  const setLayout = useConsultationLayoutStore((state) => state.setLayout);
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -156,6 +160,8 @@ export const DoctorConsultationPage = () => {
   const parsedVisitId = Number.parseInt(params.visitId ?? "", 10);
   const selectedVisitId = Number.isNaN(parsedVisitId) ? null : parsedVisitId;
   const isDetailRoute = params.visitId !== undefined;
+  // Vista escritorio (PROPUESTA, Fase 2): la consulta ocupa la pagina.
+  const isDeskWorkspace = layout === "escritorio" && isDetailRoute;
 
   const selectedVisit =
     visits.find((visit) => visit.id === selectedVisitId) ?? null;
@@ -571,6 +577,46 @@ export const DoctorConsultationPage = () => {
     void diagnosisForm.handleSubmit(handleCloseVisit)();
   };
 
+  const workspaceProps = {
+    selectedVisit,
+    hasStaleSelectedVisit,
+    selectedVisitStatus,
+    consultationStartedAtByVisitId,
+    now,
+    selectedMinutesUntil,
+    selectedAppointmentDate,
+    selectedVitals,
+    hasOptionalVitals,
+    canStartSelectedVisit,
+    startConsultation,
+    saveDiagnosis,
+    closeVisit,
+    savePrescriptions,
+    handleStartConsultation,
+    canWriteDoctorConsultation,
+    cieSearchTerm,
+    setCieSearchTerm,
+    selectedCieCode,
+    diagnosisForm,
+    selectedCieByVisitId,
+    setSelectedCieByVisitId,
+    selectedCieLabel,
+    handleClearCieSelection,
+    canSaveClinicalData,
+    shouldSearchCies,
+    ciesSearchQuery,
+    ciesSearchItems,
+    handleSelectCie,
+    prescriptionsForm,
+    selectedSavedPrescriptions,
+    handleSaveDraftClick,
+    handleSavePrescriptionClick,
+    handleResetDrafts,
+    handleCloseConsultationClick,
+    canCloseSelectedVisit,
+    navigate,
+  };
+
   return (
     <section className="space-y-6 p-6">
       <SinCentroAviso />
@@ -584,6 +630,36 @@ export const DoctorConsultationPage = () => {
             finaliza la atencion.
           </p>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+        {view === "consulta" ? (
+          <div
+            role="radiogroup"
+            aria-label="Vista de la consulta"
+            className="flex items-center gap-1 rounded-xl border border-line-struct bg-subtle/20 p-1"
+          >
+            {([
+              { value: "ventana", label: "Ventana", Icon: AppWindow },
+              { value: "escritorio", label: "Escritorio", Icon: PanelsTopLeft },
+            ] as const).map(({ value, label, Icon }) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={layout === value}
+                onClick={() => setLayout(value)}
+                className={[
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  layout === value
+                    ? "bg-paper text-txt-body shadow-sm"
+                    : "text-txt-muted hover:text-txt-body",
+                ].join(" ")}
+              >
+                <Icon className="size-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flex items-center gap-1 rounded-xl border border-line-struct bg-subtle/20 p-1">
           <button
@@ -612,6 +688,7 @@ export const DoctorConsultationPage = () => {
           >
             <ClipboardList className="size-3.5" /> Pacientes en proceso
           </button>
+        </div>
         </div>
       </header>
 
@@ -652,8 +729,18 @@ export const DoctorConsultationPage = () => {
       !queueQuery.isError &&
       (visits.length > 0 || isDetailRoute) ? (
         <section className="space-y-4">
+          {isDeskWorkspace ? (
+            <section
+              aria-label="Consulta en curso"
+              data-testid="doctor-consultation-workspace"
+              className="rounded-xl border border-line-struct bg-paper"
+            >
+              <ConsultationWorkspace variant="page" {...workspaceProps} />
+            </section>
+          ) : null}
+
           {/* ── Banner próxima cita ────────────────────────────────── */}
-          {nextPendingVisit && nextPendingVisit.minutesUntil !== null && nextPendingVisit.minutesUntil <= 15 ? (
+          {!isDeskWorkspace && nextPendingVisit && nextPendingVisit.minutesUntil !== null && nextPendingVisit.minutesUntil <= 15 ? (
             <div className={[
               "flex items-center gap-3 rounded-xl border px-4 py-3",
               nextPendingVisit.minutesUntil <= 5
@@ -691,7 +778,7 @@ export const DoctorConsultationPage = () => {
             </div>
           ) : null}
 
-          {visits.length > 0 ? (
+          {!isDeskWorkspace && visits.length > 0 ? (
             <OpenConsultationsGrid
               visits={visits}
               now={now}
@@ -700,51 +787,17 @@ export const DoctorConsultationPage = () => {
             />
           ) : null}
 
-          <ConsultationDetailDialog
-            isDetailRoute={isDetailRoute}
-            handleConsultationModalOpenChange={handleConsultationModalOpenChange}
-            selectedVisit={selectedVisit}
-            hasStaleSelectedVisit={hasStaleSelectedVisit}
-            selectedVisitStatus={selectedVisitStatus}
-            consultationStartedAtByVisitId={consultationStartedAtByVisitId}
-            now={now}
-            selectedMinutesUntil={selectedMinutesUntil}
-            selectedAppointmentDate={selectedAppointmentDate}
-            selectedVitals={selectedVitals}
-            hasOptionalVitals={hasOptionalVitals}
-            canStartSelectedVisit={canStartSelectedVisit}
-            startConsultation={startConsultation}
-            saveDiagnosis={saveDiagnosis}
-            closeVisit={closeVisit}
-            savePrescriptions={savePrescriptions}
-            handleStartConsultation={handleStartConsultation}
-            canWriteDoctorConsultation={canWriteDoctorConsultation}
-            cieSearchTerm={cieSearchTerm}
-            setCieSearchTerm={setCieSearchTerm}
-            selectedCieCode={selectedCieCode}
-            diagnosisForm={diagnosisForm}
-            selectedCieByVisitId={selectedCieByVisitId}
-            setSelectedCieByVisitId={setSelectedCieByVisitId}
-            selectedCieLabel={selectedCieLabel}
-            handleClearCieSelection={handleClearCieSelection}
-            canSaveClinicalData={canSaveClinicalData}
-            shouldSearchCies={shouldSearchCies}
-            ciesSearchQuery={ciesSearchQuery}
-            ciesSearchItems={ciesSearchItems}
-            handleSelectCie={handleSelectCie}
-            prescriptionsForm={prescriptionsForm}
-            selectedSavedPrescriptions={selectedSavedPrescriptions}
-            handleSaveDraftClick={handleSaveDraftClick}
-            handleSavePrescriptionClick={handleSavePrescriptionClick}
-            handleResetDrafts={handleResetDrafts}
-            handleCloseConsultationClick={handleCloseConsultationClick}
-            canCloseSelectedVisit={canCloseSelectedVisit}
-            navigate={navigate}
-          />
+          {layout === "ventana" ? (
+            <ConsultationDetailDialog
+              isDetailRoute={isDetailRoute}
+              handleConsultationModalOpenChange={handleConsultationModalOpenChange}
+              {...workspaceProps}
+            />
+          ) : null}
         </section>
       ) : null}
 
-      {view === "consulta" && canReadDoctorQueue ? (
+      {view === "consulta" && canReadDoctorQueue && !isDeskWorkspace ? (
         <AttendedTodayPanel canPrint={canPrintReceta} />
       ) : null}
     </section>

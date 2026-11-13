@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "@api/utils/errors";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import type { VisitQueueItem } from "@api/types";
 import { visitsAPI } from "@api/resources/visits.api";
 import { usePrintDocument } from "@shared/hooks/usePrintDocument";
 import type { PrescriptionItem } from "@api/types";
+import { useConsultationLayoutStore } from "@features/consulta-medica/modules/atencion/state/consultationLayoutStore";
 
 vi.mock(
   "@features/consulta-medica/modules/atencion/queries/useDoctorQueue",
@@ -165,6 +166,7 @@ describe("DoctorConsultationPage UI", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useConsultationLayoutStore.setState({ layout: "ventana" });
     vi.mocked(visitsAPI.getPrescriptionItems).mockResolvedValue({ items: [], total: 0 });
     vi.mocked(usePrintDocument).mockReturnValue({ print: printReceta, isPrinting: false });
     vi.mocked(visitsAPI.getMorbiditySuggestion).mockResolvedValue({
@@ -1276,5 +1278,86 @@ describe("DoctorConsultationPage UI", () => {
     expect(screen.getByTestId("doctor-pipeline-card-502")).toBeVisible();
     expect(screen.getByText("VST-0501")).toBeVisible();
     expect(screen.getByText("VST-0502")).toBeVisible();
+  });
+
+  describe("vista escritorio (Fase 2, propuesta)", () => {
+    const inConsultation = () =>
+      vi.mocked(useDoctorQueue).mockReturnValue({
+        data: { items: [createVisit({ status: "en_consulta" })], page: 1, pageSize: 20, total: 1, totalPages: 1 },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof useDoctorQueue>);
+
+    it("la consulta se abre en la pagina, sin ventana encima, con indice de apartados", () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      inConsultation();
+      renderDoctorPage("/clinico/consultas/doctor/1");
+
+      const workspace = screen.getByTestId("doctor-consultation-workspace");
+      expect(workspace).toHaveTextContent("VST-2001");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      // Concentrado en el paciente: la bandeja no compite con la consulta.
+      expect(screen.queryByTestId("doctor-visit-card-1")).not.toBeInTheDocument();
+
+      const nav = screen.getByRole("navigation", { name: "Apartados de la consulta" });
+      for (const name of ["Visita", "Diagnóstico", "Nota médica", "Receta", "Otros documentos"]) {
+        expect(within(nav).getByRole("link", { name })).toBeInTheDocument();
+      }
+    });
+
+    it("el selector cambia de ventana a escritorio y lo recuerda", async () => {
+      const user = userEvent.setup();
+      renderDoctorPage();
+      expect(screen.getByRole("radio", { name: "Ventana" })).toHaveAttribute("aria-checked", "true");
+
+      await user.click(screen.getByRole("radio", { name: "Escritorio" }));
+      await user.click(screen.getByTestId("doctor-visit-card-1"));
+
+      expect(screen.getByTestId("doctor-consultation-workspace")).toBeVisible();
+      expect(screen.queryByTestId("doctor-consultation-modal")).not.toBeInTheDocument();
+      expect(useConsultationLayoutStore.getState().layout).toBe("escritorio");
+    });
+
+    it("volver a bandeja deja la pagina en la cola", async () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      const user = userEvent.setup();
+      renderDoctorPage("/clinico/consultas/doctor/1");
+      expect(screen.getByTestId("doctor-consultation-workspace")).toBeVisible();
+
+      await user.click(screen.getByRole("button", { name: "Volver a bandeja" }));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("doctor-consultation-workspace")).not.toBeInTheDocument();
+      });
+      expect(screen.getByTestId("doctor-visit-card-1")).toBeVisible();
+    });
+
+    it("guarda el diagnostico desde la pagina", async () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      inConsultation();
+      const user = userEvent.setup();
+      renderDoctorPage("/clinico/consultas/doctor/1");
+
+      await user.type(screen.getByLabelText("Diagnostico principal"), "Gastroenteritis aguda");
+      await user.type(screen.getByLabelText("Nota final"), "Paciente estable.");
+      await user.click(screen.getByRole("button", { name: "Guardar diagnostico" }));
+
+      await waitFor(() => {
+        expect(saveDiagnosisMutateAsync).toHaveBeenCalledWith({
+          visitId: 1,
+          data: { primaryDiagnosis: "Gastroenteritis aguda", finalNote: "Paciente estable.", ...EMPTY_NOTE_FIELDS },
+        });
+      });
+    });
+
+    it("con una consulta que ya no esta en la cola lo avisa en la pagina", () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      renderDoctorPage("/clinico/consultas/doctor/99");
+
+      expect(screen.getByTestId("doctor-consultation-workspace")).toHaveTextContent(
+        "La consulta seleccionada ya no esta disponible",
+      );
+    });
   });
 });

@@ -15,7 +15,7 @@ Propuesta funcional en desarrollo para presentar a la Gerencia de Salud.
 | Fase | Qué | Estado |
 |---|---|---|
 | 1. Mi jornada | "Atendidas hoy": consultas cerradas hoy por el médico, estado de la receta e imprimir | ✅ Implementada |
-| 2. Escritorio en página | Secciones del modal a la página `/consulta/:visitId`, edición en línea | Pendiente |
+| 2. Escritorio en página | La consulta ocupa la página `/clinico/consultas/doctor/:visitId` con índice de apartados; selector Ventana/Escritorio | ✅ Implementada (sin modales anidados: pendiente) |
 | 3. Resumen del paciente | Alergias siempre visibles + panel con signos, crónicos y última consulta | Pendiente |
 | 4. Orden libre | La nota se crea al iniciar la consulta | Pendiente (toca el flujo clínico) |
 | 5. Autoguardado y cierre guiado | Borrador automático, aviso al salir, checklist y resumen de hojas a imprimir | Pendiente |
@@ -48,3 +48,16 @@ Devuelve solo las consultas **del médico autenticado**, **activas**, con visita
 **Normas:** NOM-024 (disponibilidad: la receta no depende de un aviso pasajero; confidencialidad: solo las consultas propias del día). Lo histórico queda en el expediente → Historial.
 
 **Archivos:** `uses_case/attended_today_usecase.py`, `DoctorAttendedTodayView`, `components/AttendedTodayPanel.tsx` y `AttendedTodayList.tsx`, `queries/useDoctorAttendedToday.ts`. Tests: `test_doctor_attended_today.py`, `AttendedTodayList.ui.test.tsx`.
+
+## Fase 2: escritorio en página
+
+Selector **Vista de la consulta: Ventana / Escritorio** en el encabezado (preferencia de cada médico, guardada en su navegador; por default **Ventana**, la vista actual, hasta que la Gerencia decida).
+
+- **Ventana:** igual que hoy, la consulta en un modal sobre la bandeja.
+- **Escritorio:** al abrir una consulta, ocupa la página. Se ocultan la bandeja, el aviso de próxima cita y "Atendidas hoy" para concentrarse en el paciente. El encabezado del paciente queda fijo con el **índice de apartados** (Visita, Diagnóstico, Nota médica, Receta, Otros documentos) y las acciones (Guardar diagnóstico, Finalizar consulta, Volver a bandeja) quedan fijas abajo.
+
+Las dos vistas usan el mismo componente (`ConsultationWorkspace`): mismas reglas, mismos permisos y mismos guardados. No cambia el backend ni el flujo clínico.
+
+**Pendiente de esta fase:** exploración física, diagnósticos secundarios y medicamentos siguen abriendo su propia ventana. Pasarlos a edición en línea va junto con la Fase 4 (la nota se crea al iniciar), porque hoy dependen de que el diagnóstico esté guardado.
+
+**Archivos:** `components/ConsultationWorkspace.tsx`, `components/ConsultationDetailDialog.tsx` (envoltorio del modal), `state/consultationLayoutStore.ts`, `pages/DoctorConsultationPage.tsx`. Tests: bloque "vista escritorio" en `DoctorConsultationPage.ui.test.tsx`.
