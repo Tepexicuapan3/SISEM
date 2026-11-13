@@ -3,4 +3,8 @@
 {% include "consulta_medica/impresion/receta/bloques/_medicamentos.html" %}
 {# Indicaciones generales una sola vez, en la ultima hoja #}
 {% if sheet.last %}{% include "consulta_medica/impresion/receta/bloques/_indicaciones.html" %}{% endif %}
+{# El controlado va en su propia hoja, que retiene la farmacia #}
+{% if sheet.last and sheet.controlled_ref_suffix %}
+<div class="indications"><strong>Medicamento controlado:</strong> se entrega en receta aparte, folio {{ folio }}{{ sheet.controlled_ref_suffix }}.</div>
+{% endif %}
 {% include "consulta_medica/impresion/receta/bloques/_firma.html" %}

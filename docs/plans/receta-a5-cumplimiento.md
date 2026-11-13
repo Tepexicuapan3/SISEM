@@ -165,3 +165,30 @@ autorización. En el import, la celda "Controlado" vacía es **No** (un
 controlado se marca a propósito); "Activo" vacía sigue siendo Sí.
 
 Antes no existía la pantalla de Medicamentos en el frontend (solo la API).
+
+## 9. Separación de recetas por destino del papel (2026-11-13) — PROPUESTA
+
+Propuesta funcional en desarrollo para presentar a la Gerencia de Salud; la
+definición final la hacen ellos con farmacia y jurídico.
+
+**Motivo.** La farmacia retiene la receta del controlado (LGS 251-252). Si el
+controlado también va en el ORIGINAL que se lleva el paciente, queda un segundo
+papel surtible fuera de SIRES.
+
+| Hoja | Destino | Contenido |
+|---|---|---|
+| ORIGINAL | Paciente | Solo lo no controlado + "Medicamento controlado: se entrega en receta aparte, folio X-C". Si todo es controlado y no hay indicaciones generales, no se imprime |
+| COPIA | Archivo de la clínica | Todos los medicamentos, marca "NO VÁLIDA PARA SURTIR" |
+| CONTROLADO | Farmacia (la retiene) | Solo los controlados, folio con sufijo `-C` |
+
+Implementado en `apps/consulta_medica/impresion/receta.py` (`build_sheets`) y
+plantillas `receta/`. Tests: `test_print_receta_nota.py` (`RecetaSheetsTests`).
+
+**Siguiente fase (espera a la Gerencia, D7 y D9).** Reemplazar "controlado sí/no"
+por una clase regulatoria en el catálogo (ninguna, antibiótico, psicotrópico
+IV/III/II, estupefaciente) con una tabla configurable *clase → hoja, surtidos,
+¿se prescribe en SIRES?*. Los estupefacientes van en el recetario especial
+COFEPRIS y SIRES no los dejaría agregar. La interpretación legal queda en datos
+del catálogo, no en código. Puntos a validar contra el DOF: resurtidos del grupo
+III, tratamiento del grupo II, clasificación de benzodiacepinas y la
+reclasificación del tramadol (2026).

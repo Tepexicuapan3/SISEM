@@ -10,7 +10,7 @@
       <div class="doc-title">RECETA MÉDICA</div>
     </td>
     <td class="folio-col">
-      <div class="folio">NO.<span class="right">{{ folio }}</span></div>
+      <div class="folio">NO.<span class="right">{{ folio }}{{ sheet.folio_suffix }}</span></div>
       <div class="fn">FN: {{ issued_date }}{% if issued_time %} {{ issued_time }}{% endif %}<em class="right">{{ prescription_type|upper }}</em></div>
     </td>
   </tr>

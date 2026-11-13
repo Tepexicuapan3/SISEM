@@ -96,6 +96,38 @@ class RecetaSheetsTests(TestCase):
         self.assertEqual([s["label"] for s in sheets], ["ORIGINAL", "COPIA", "CONTROLADO"])
         self.assertEqual([r["name"] for r in sheets[2]["items"]], ["b"])
 
+    # Separacion de recetas: el controlado lo retiene la farmacia, asi que no
+    # va en el ORIGINAL que se lleva el paciente (evita un segundo papel surtible).
+    def test_original_leaves_out_controlled_and_copy_keeps_all(self):
+        rows = [{"is_controlled": False, "name": "a"}, {"is_controlled": True, "name": "b"}]
+        original, copia, _ = build_sheets(rows, NORMAL)
+        self.assertEqual([r["name"] for r in original["items"]], ["a"])
+        self.assertEqual([r["name"] for r in copia["items"]], ["a", "b"])
+
+    def test_only_controlled_skips_original(self):
+        sheets = build_sheets([{"is_controlled": True}], NORMAL)
+        self.assertEqual([s["label"] for s in sheets], ["COPIA", "CONTROLADO"])
+
+    def test_only_controlled_keeps_original_for_general_indications(self):
+        sheets = build_sheets([{"is_controlled": True}], NORMAL, has_general_indications=True)
+        self.assertEqual([s["label"] for s in sheets], ["ORIGINAL", "COPIA", "CONTROLADO"])
+        self.assertEqual(sheets[0]["items"], [])
+
+    def test_original_refers_to_controlled_sheet_folio(self):
+        rows = [{"is_controlled": False}, {"is_controlled": True}]
+        self.assertEqual([s["controlled_ref_suffix"] for s in build_sheets(rows, NORMAL)], ["-C", "", ""])
+        self.assertEqual(build_sheets([{"is_controlled": False}], NORMAL)[0]["controlled_ref_suffix"], "")
+
+    def test_controlled_sheet_has_own_folio_suffix(self):
+        rows = [{"is_controlled": False}, {"is_controlled": True}]
+        self.assertEqual([s["folio_suffix"] for s in build_sheets(rows, NORMAL)], ["", "", "-C"])
+
+    def test_copy_is_not_valid_to_dispense(self):
+        rows = [{"is_controlled": False}, {"is_controlled": True}]
+        self.assertEqual(
+            [s["notice"] for s in build_sheets(rows, NORMAL)], [None, "NO VÁLIDA PARA SURTIR", None]
+        )
+
     def test_original_and_copy_use_normal_design(self):
         sheets = build_sheets([{"is_controlled": False}], NORMAL)
         self.assertEqual({s["template"] for s in sheets}, {SHEET_TEMPLATE_NORMAL})
@@ -106,10 +138,10 @@ class RecetaSheetsTests(TestCase):
 
     def test_controlled_sheet_uses_controlled_design(self):
         sheets = build_sheets([{"is_controlled": True}], NORMAL)
-        self.assertEqual(sheets[2]["template"], SHEET_TEMPLATE_CONTROLADO)
+        self.assertEqual(sheets[-1]["template"], SHEET_TEMPLATE_CONTROLADO)
 
     def test_only_copy_carries_stamp(self):
-        sheets = build_sheets([{"is_controlled": True}], NORMAL)
+        sheets = build_sheets([{"is_controlled": False}, {"is_controlled": True}], NORMAL)
         self.assertEqual([s["stamp"] for s in sheets], [None, "COPIA", None])
 
     # A2 (receta-a5-cumplimiento): lo que no cabe en una hoja sigue en otra.
@@ -276,8 +308,9 @@ class RecetaBuilderTests(_Base):
         visit = self._visit("V-R10")
         self._consultation(visit)
         self._prescription(visit, [self.med, self.med_ctrl])
-        items = self._build(visit).context["sheets"][0]["items"]
-        self.assertEqual([i["code"] for i in items], ["010.000.0104.00", ""])
+        copia = self._build(visit).context["sheets"][1]
+        self.assertEqual(copia["label"], "COPIA")
+        self.assertEqual([i["code"] for i in copia["items"]], ["010.000.0104.00", ""])
 
     def test_context_has_form_boxes_and_barcode(self):
         visit = self._visit("V-R9")
@@ -382,6 +415,15 @@ class RecetaBuilderTests(_Base):
         original, _copia, controlado = self._render_sheets([self.med_ctrl], "RX-2026-11")
         self.assertIn("Tomar liquidos", original)
         self.assertNotIn("Tomar liquidos", controlado)
+
+    def test_controlled_goes_only_on_its_sheet_with_suffixed_folio(self):
+        original, copia, controlado = self._render_sheets([self.med, self.med_ctrl], "RX-2026-14")
+        self.assertNotIn("Clonazepam", original)
+        self.assertIn("RX-2026-14-C", original)
+        self.assertIn("Clonazepam", copia)
+        self.assertIn("NO VÁLIDA PARA SURTIR", copia)
+        self.assertIn("RX-2026-14-C", controlado)
+        self.assertIn("Clonazepam", controlado)
 
     def test_background_uses_local_asset(self):
         self.assertIn('url("fondos/receta-fondo-a5.jpg")', self._render([self.med], "RX-2026-12"))

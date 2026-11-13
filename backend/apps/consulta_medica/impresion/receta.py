@@ -3,8 +3,12 @@ apps/consulta_medica/impresion/receta.py
 ============================================
 Builder de la Receta para el modulo ``impresion`` (solo lectura).
 
-Hojas en un solo PDF: ORIGINAL y COPIA siempre; CONTROLADO si algun
-medicamento es controlado (solo esos renglones). Cada hoja dice que plantilla
+Hojas en un solo PDF (separacion por destino del papel):
+- ORIGINAL (paciente): solo lo no controlado; remite al folio de la hoja del
+  controlado. Si todo es controlado y no hay indicaciones generales, no sale.
+- COPIA (archivo de la clinica): todo, marcada "no valida para surtir".
+- CONTROLADO (la retiene la farmacia): solo los controlados, folio con "-C".
+Cada hoja dice que plantilla
 de ``receta/hojas/`` la dibuja (formato STC, docs/plans/receta-diseno-stc.md). La hoja ANTIBIOTICO queda
 fuera hasta que farmacia la confirme (decision 2026-10-16).
 
@@ -42,6 +46,9 @@ PRINT_TZ = ZoneInfo("America/Mexico_City")
 SHEET_ORIGINAL = "ORIGINAL"
 SHEET_COPIA = "COPIA"
 SHEET_CONTROLADO = "CONTROLADO"
+
+CONTROLLED_FOLIO_SUFFIX = "-C"
+COPY_NOTICE = "NO VÁLIDA PARA SURTIR"
 
 _SHEETS_DIR = "consulta_medica/impresion/receta/hojas"
 SHEET_TEMPLATE_NORMAL = f"{_SHEETS_DIR}/normal.html"
@@ -125,7 +132,7 @@ def _drug_label(row):
     return {"primary": primary, "secondary": secondary}
 
 
-def _paged(label, template, rows, stamp):
+def _paged(label, template, rows, stamp, *, notice=None, folio_suffix="", controlled_ref_suffix=""):
     """Una hoja por cada ROWS_PER_SHEET renglones: lo que no cabe sigue en
     hojas de continuacion ("Hoja i de n") con la numeracion corrida."""
     chunks = [rows[i:i + ROWS_PER_SHEET] for i in range(0, len(rows), ROWS_PER_SHEET)] or [[]]
@@ -134,19 +141,33 @@ def _paged(label, template, rows, stamp):
             "label": label, "template": template, "items": chunk, "stamp": stamp,
             "page": page, "pages": len(chunks), "last": page == len(chunks),
             "first_number": (page - 1) * ROWS_PER_SHEET + 1,
+            "notice": notice, "folio_suffix": folio_suffix,
+            "controlled_ref_suffix": controlled_ref_suffix,
         }
         for page, chunk in enumerate(chunks, start=1)
     ]
 
 
-def build_sheets(rows, prescription_type):
+def build_sheets(rows, prescription_type, *, has_general_indications=False):
     """Hojas a imprimir y el diseno de cada una. Funcion pura para poder
-    probar la seleccion."""
+    probar la seleccion.
+
+    El controlado no va en el ORIGINAL: la farmacia retiene su hoja, y un
+    segundo papel con el mismo medicamento se podria surtir dos veces."""
     template = _TEMPLATE_BY_TYPE.get(prescription_type, SHEET_TEMPLATE_NORMAL)
-    sheets = _paged(SHEET_ORIGINAL, template, rows, None) + _paged(SHEET_COPIA, template, rows, SHEET_COPIA)
     controlled = [r for r in rows if r["is_controlled"]]
+    general = [r for r in rows if not r["is_controlled"]]
+    ref = CONTROLLED_FOLIO_SUFFIX if controlled else ""
+
+    sheets = []
+    if general or has_general_indications:
+        sheets += _paged(SHEET_ORIGINAL, template, general, None, controlled_ref_suffix=ref)
+    sheets += _paged(SHEET_COPIA, template, rows, SHEET_COPIA, notice=COPY_NOTICE)
     if controlled:
-        sheets += _paged(SHEET_CONTROLADO, SHEET_TEMPLATE_CONTROLADO, controlled, None)
+        sheets += _paged(
+            SHEET_CONTROLADO, SHEET_TEMPLATE_CONTROLADO, controlled, None,
+            folio_suffix=CONTROLLED_FOLIO_SUFFIX,
+        )
     return sheets
 
 
@@ -193,6 +214,7 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
     if not rows:
         raise not_printable("La receta no tiene medicamentos activos.")
 
+    general_indications = _general_indications(prescription.items)
     header = patient_header_or_409(visit)
     center = center_of(visit)
     folio = prescription.folio or ""
@@ -214,14 +236,16 @@ def build_receta_context(visit_id, actor, *, permissions=None, roles=None):
         "center_address": _center_address(center),
         "clues": getattr(center, "code", "") or "",
         "consultorio": getattr(visit.consultorio, "name", "") if visit.consultorio else "",
-        "general_indications": _general_indications(prescription.items),
+        "general_indications": general_indications,
         # ope_param.ds_mreceta del legado, ahora parametro por centro.
         "legend": get_param("receta.leyenda", center_id=getattr(center, "pk", None), default=""),
         "health_message": get_param(
             "receta.mensaje_salud", center_id=getattr(center, "pk", None), default=""
         ),
         "microtext": _MICROTEXT,
-        "sheets": build_sheets(rows, prescription.prescription_type),
+        "sheets": build_sheets(
+            rows, prescription.prescription_type, has_general_indications=bool(general_indications)
+        ),
     }
     return PrintContext(
         context=context,

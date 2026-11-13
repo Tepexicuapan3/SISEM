@@ -5,6 +5,7 @@
 {% for sheet in sheets %}
 <div class="sheet">
   {% if sheet.stamp %}<div class="stamp">{{ sheet.stamp }}</div>{% endif %}
+  {% if sheet.notice %}<div class="notice">{{ sheet.notice }}</div>{% endif %}
   {% include sheet.template %}
 </div>
 {% endfor %}
