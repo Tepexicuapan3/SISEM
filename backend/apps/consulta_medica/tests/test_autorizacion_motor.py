@@ -100,6 +100,7 @@ class _Base(TestCase):
         return visit
 
 
+@override_settings(AUTORIZACIONES_RECETAS_V2=False)
 class InterruptorApagadoTests(_Base):
     def test_no_crea_solicitud_y_la_pantalla_actual_sigue_igual(self):
         self._recetar_y_cerrar(self.especial)
