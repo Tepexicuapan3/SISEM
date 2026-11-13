@@ -2,33 +2,33 @@ import { CheckCircle2 } from "lucide-react";
 import { usePrintDocument } from "@shared/hooks/usePrintDocument";
 import { useDoctorAttendedToday } from "@features/consulta-medica/modules/atencion/queries/useDoctorAttendedToday";
 import { AttendedTodayList } from "./AttendedTodayList";
+import { DeskPanel } from "./DeskPanel";
 
 interface AttendedTodayPanelProps {
   canPrint: boolean;
   /** Reimprimir la nota de la consulta cerrada. */
   canPrintNote?: boolean;
+  /** "row": seccion bajo la bandeja (Ventana). "card": columna de Mi consultorio. */
+  variant?: "row" | "card";
 }
 
 /**
  * Atendidas hoy: la consulta cerrada sale de la cola, pero el medico la sigue
  * viendo aqui e imprime la receta cuando quede lista (NOM-024: disponibilidad).
  */
-export function AttendedTodayPanel({ canPrint, canPrintNote = false }: AttendedTodayPanelProps) {
+export function AttendedTodayPanel({ canPrint, canPrintNote = false, variant = "row" }: AttendedTodayPanelProps) {
   const { data, isLoading, isError } = useDoctorAttendedToday();
   const { print, isPrinting } = usePrintDocument("receta");
   const { print: printNote, isPrinting: isPrintingNote } = usePrintDocument("nota");
 
-  return (
-    <section className="space-y-3" aria-labelledby="attended-today-title" data-testid="attended-today-panel">
-      <h2 id="attended-today-title" className="flex items-center gap-2 text-sm font-semibold text-txt-body">
-        <CheckCircle2 className="size-4 text-brand" />
-        Atendidas hoy{data ? ` (${data.total})` : ""}
-      </h2>
+  const body = (
+    <>
       {isLoading ? <p className="text-sm text-txt-muted">Cargando consultas de hoy...</p> : null}
       {isError ? <p className="text-sm text-status-alert">No se pudieron cargar las consultas de hoy.</p> : null}
       {data ? (
         <AttendedTodayList
           items={data.items}
+          variant={variant}
           canPrint={canPrint}
           isPrinting={isPrinting || isPrintingNote}
           onPrint={(visitId) => void print(visitId)}
@@ -36,6 +36,30 @@ export function AttendedTodayPanel({ canPrint, canPrintNote = false }: AttendedT
           onPrintNote={(visitId) => void printNote(visitId)}
         />
       ) : null}
+    </>
+  );
+
+  if (variant === "card") {
+    return (
+      <DeskPanel
+        icon={CheckCircle2}
+        title="Atendidas hoy"
+        count={data?.total}
+        hint="Recetas y notas de lo que cerraste hoy."
+        testId="attended-today-panel"
+      >
+        {body}
+      </DeskPanel>
+    );
+  }
+
+  return (
+    <section className="space-y-3" aria-labelledby="attended-today-title" data-testid="attended-today-panel">
+      <h2 id="attended-today-title" className="flex items-center gap-2 text-sm font-semibold text-txt-body">
+        <CheckCircle2 className="size-4 text-brand" />
+        Atendidas hoy{data ? ` (${data.total})` : ""}
+      </h2>
+      {body}
     </section>
   );
 }

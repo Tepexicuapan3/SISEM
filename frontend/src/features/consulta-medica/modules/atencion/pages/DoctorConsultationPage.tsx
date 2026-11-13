@@ -64,7 +64,12 @@ import { ConsultationDetailDialog } from "@features/consulta-medica/modules/aten
 import { ConsultationWorkspace } from "@features/consulta-medica/modules/atencion/components/ConsultationWorkspace";
 import { useConsultationLayoutStore } from "@features/consulta-medica/modules/atencion/state/consultationLayoutStore";
 import { DoctorDeskLayout } from "@features/consulta-medica/modules/atencion/components/DoctorDeskLayout";
-import { DeskQueueList } from "@features/consulta-medica/modules/atencion/components/DeskQueueList";
+import {
+  DeskQueueList,
+  NextAppointmentNotice,
+} from "@features/consulta-medica/modules/atencion/components/DeskQueueList";
+import { DeskEmptyConsultation } from "@features/consulta-medica/modules/atencion/components/DeskEmptyConsultation";
+import { useDoctorAttendedToday } from "@features/consulta-medica/modules/atencion/queries/useDoctorAttendedToday";
 import { DoctorPipelineView } from "@features/consulta-medica/modules/atencion/components/DoctorPipelineView";
 
 export const DoctorConsultationPage = () => {
@@ -88,6 +93,8 @@ export const DoctorConsultationPage = () => {
     canStartDoctorConsultation && canCloseDoctorConsultation;
 
   const queueQuery = useDoctorQueue({ enabled: canReadDoctorQueue });
+  // Mismo query que el panel de atendidas: solo para el contador de Mi consultorio.
+  const attendedTodayQuery = useDoctorAttendedToday({ enabled: canReadDoctorQueue });
   const startConsultation = useStartConsultation();
   const saveDiagnosis = useSaveDiagnosis();
   const savePrescriptions = useSavePrescriptions();
@@ -660,6 +667,14 @@ export const DoctorConsultationPage = () => {
       </div>
     ) : null;
 
+  // Siguiente paciente sugerido en Mi consultorio: retomar el que esta en
+  // consulta; si no, la proxima cita; si no, el primero que espera.
+  const suggestedNextVisit =
+    visits.find((visit) => visit.status === VISIT_STATUS.EN_CONSULTA) ??
+    nextPendingVisit?.visit ??
+    visits.find((visit) => visit.status === VISIT_STATUS.LISTA_PARA_DOCTOR) ??
+    null;
+
   const isQueueReady =
     view === "consulta" && canReadDoctorQueue && !queueQuery.isLoading && !queueQuery.isError;
 
@@ -791,9 +806,17 @@ export const DoctorConsultationPage = () => {
         <DoctorDeskLayout
           key={selectedVisitId ?? "sin-paciente"}
           hasOpenConsultation={isDetailRoute}
+          queueCount={visits.length}
+          attendedCount={attendedTodayQuery.data?.total}
           queue={
-            <div className="space-y-2">
-              {nextAppointmentBanner}
+            <div className="space-y-3">
+              {nextPendingVisit && nextPendingVisit.minutesUntil !== null && nextPendingVisit.minutesUntil <= 15 ? (
+                <NextAppointmentNotice
+                  visit={nextPendingVisit.visit}
+                  minutesUntil={nextPendingVisit.minutesUntil}
+                  onOpen={handleVisitChange}
+                />
+              ) : null}
               {visits.length > 0 ? (
                 <DeskQueueList
                   visits={visits}
@@ -803,7 +826,7 @@ export const DoctorConsultationPage = () => {
                   onSelectVisit={handleVisitChange}
                 />
               ) : (
-                <p className="text-sm text-txt-muted">No hay pacientes listos para doctor.</p>
+                <p className="py-6 text-center text-sm text-txt-muted">No hay pacientes listos para doctor.</p>
               )}
             </div>
           }
@@ -817,14 +840,10 @@ export const DoctorConsultationPage = () => {
                 <ConsultationWorkspace variant="page" {...workspaceProps} />
               </section>
             ) : (
-              <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-line-struct p-6 text-center">
-                <p className="max-w-xs text-sm text-txt-muted">
-                  Elegí un paciente de Por atender para empezar la consulta.
-                </p>
-              </div>
+              <DeskEmptyConsultation nextVisit={suggestedNextVisit} onOpen={handleVisitChange} />
             )
           }
-          attended={<AttendedTodayPanel canPrint={canPrintReceta} canPrintNote={canPrintNota} />}
+          attended={<AttendedTodayPanel variant="card" canPrint={canPrintReceta} canPrintNote={canPrintNota} />}
         />
       ) : null}
 

@@ -132,6 +132,56 @@ describe("Mi jornada: atendidas hoy", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
+  describe("en tarjetas (Mi consultorio)", () => {
+    const card = (name: string) => screen.getByText(name).closest("li") as HTMLElement;
+
+    it("imprime la receta y la nota desde la tarjeta", async () => {
+      const onPrint = vi.fn();
+      const onPrintNote = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <AttendedTodayList items={[item()]} variant="card" canPrint onPrint={onPrint} canPrintNote onPrintNote={onPrintNote} />,
+      );
+      const li = card("PEREZ LOPEZ JUAN");
+      expect(within(li).getByText("Lista para imprimir")).toBeInTheDocument();
+
+      await user.click(within(li).getByRole("button", { name: /Imprimir receta/ }));
+      await user.click(within(li).getByRole("button", { name: /Imprimir nota/ }));
+
+      expect(onPrint).toHaveBeenCalledWith(31);
+      expect(onPrintNote).toHaveBeenCalledWith(31);
+    });
+
+    it("rechazada con motivo y sin boton de receta", () => {
+      render(
+        <AttendedTodayList
+          items={[item({ prescription: rx({ printable: false, authorization: { status: "rechazada", rejectionReason: "Dosis excede" } }) })]}
+          variant="card"
+          canPrint
+          onPrint={vi.fn()}
+        />,
+      );
+      const li = card("PEREZ LOPEZ JUAN");
+      expect(within(li).getByText("Rechazada")).toBeInTheDocument();
+      expect(within(li).getByText("Dosis excede")).toBeInTheDocument();
+      expect(within(li).queryByRole("button", { name: /Imprimir receta/ })).toBeNull();
+    });
+
+    it("lista los documentos de la consulta", () => {
+      render(
+        <AttendedTodayList
+          items={[item({ documents: docs({ medicalLeave: { folio: "INC-1", days: 3 }, followUpDate: "2026-11-27" }) })]}
+          variant="card"
+          canPrint
+          onPrint={vi.fn()}
+        />,
+      );
+      const li = card("PEREZ LOPEZ JUAN");
+      expect(within(li).getByText("Incapacidad INC-1 · 3 días")).toBeInTheDocument();
+      expect(within(li).getByText(/Seguimiento 27/)).toBeInTheDocument();
+    });
+  });
+
   it("lista vacia", () => {
     render(<AttendedTodayList items={[]} canPrint onPrint={vi.fn()} />);
     expect(screen.getByText(/Todavía no cerraste consultas hoy/)).toBeInTheDocument();

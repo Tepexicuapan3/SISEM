@@ -83,3 +83,13 @@ Al finalizar la consulta el paciente pasa de la izquierda a la derecha con sus d
 **Pendiente:** imprimir incapacidad y pase (no hay plantilla de impresión); la cita de seguimiento agendada vive en recepción y aquí solo se muestra la fecha indicada en la nota.
 
 **Archivos:** `components/DoctorDeskLayout.tsx`, `components/DeskQueueList.tsx`, `AttendedTodayList.tsx` (documentos, nota, pendientes), `MedicalLeaveRepository.active_by_consultation`, `ReferralRepository.active_by_consultation`.
+
+### Diseño de Mi consultorio
+
+- **Tres paneles con el mismo encabezado** (ícono, título, contador y una línea de ayuda) para leerlos igual.
+- **Barra de color a la izquierda** = urgencia o estado, con los tokens del sistema (funcionan en modo oscuro):
+  - Por atender: azul en consulta, rojo "¡ahora!" (±5 min), ámbar ≤ 15 min.
+  - Atendidas: verde lista, ámbar pendiente, rojo rechazada.
+- **Por atender** ordena en consulta primero y luego por hora; la hora va grande. El aviso de próxima cita abre al paciente con un clic.
+- **Consulta vacía:** botón "Atender a …" / "Continuar con …" con el siguiente sugerido (en consulta → próxima cita → primero que espera).
+- **Atendidas hoy en tarjetas:** estado con ícono, documentos con ícono y botones Receta / Nota de ancho completo. La vista Ventana conserva su renglón.

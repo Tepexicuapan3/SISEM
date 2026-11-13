@@ -1345,6 +1345,23 @@ describe("DoctorConsultationPage UI", () => {
       expect(screen.queryByTestId("doctor-open-consultations-grid")).not.toBeInTheDocument();
     });
 
+    it("sin paciente abierto ofrece atender al siguiente con un clic", async () => {
+      useConsultationLayoutStore.setState({ layout: "escritorio" });
+      vi.mocked(useDoctorQueue).mockReturnValue({
+        data: { items: [createVisit({ nombrePaciente: "PEREZ JUAN" })], page: 1, pageSize: 20, total: 1, totalPages: 1 },
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof useDoctorQueue>);
+      const user = userEvent.setup();
+      renderDoctorPage();
+
+      expect(screen.getByRole("heading", { name: "Por atender (1)" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Atender a PEREZ JUAN" }));
+
+      expect(screen.getByTestId("doctor-consultation-workspace")).toHaveTextContent("PEREZ JUAN");
+    });
+
     it("sin pacientes en cola igual deja ver las atendidas", () => {
       useConsultationLayoutStore.setState({ layout: "escritorio" });
       vi.mocked(useDoctorQueue).mockReturnValue({
