@@ -34,6 +34,19 @@ class ConsultationRepository:
         )
 
     @staticmethod
+    def closed_by_doctor_between(doctor_id, start, end):
+        """Consultas activas que el medico atendio en [start, end) y cuya
+        visita ya esta cerrada; las mas recientes primero."""
+        return (
+            VisitConsultation.objects.filter(
+                doctor_id=doctor_id, is_active=True, id_visit__status="cerrada",
+                created_at__gte=start, created_at__lt=end,
+            )
+            .select_related("id_visit")
+            .order_by("-updated_at", "-pk")
+        )
+
+    @staticmethod
     def list_daily_report(fecha_inicio, fecha_fin, *, doctor_id=None, consultorio_id=None):
         """
         Consultas cerradas en un rango de fechas -- equivalente al "Informe

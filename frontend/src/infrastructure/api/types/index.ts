@@ -479,6 +479,11 @@ export type {
   AddPrescriptionItemRequiresAcknowledgment,
   AddPrescriptionItemResult,
 } from "@api/types/prescription-item.types";
+export type {
+  DoctorAttendedItem,
+  DoctorAttendedPrescription,
+  DoctorAttendedTodayResponse,
+} from "@api/types/doctor-attended.types";
 
 // =============================================================================
 // ALERGIAS (Allergy) -- change `alergias-unificadas`

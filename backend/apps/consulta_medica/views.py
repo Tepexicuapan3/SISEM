@@ -97,6 +97,7 @@ from .uses_case.patient_history_usecase import (
     get_patient_consultations_history,
     get_patient_legacy_consultations_history,
 )
+from .uses_case.attended_today_usecase import list_attended_today
 from .uses_case.prescription_item_usecase import (
     add_prescription_item,
     authorize_prescription,
@@ -1823,6 +1824,30 @@ class VisitPrescriptionItemsView(APIView):
             )
 
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class DoctorAttendedTodayView(APIView):
+    """
+    GET /doctor/attended-today -- consultas que el medico cerro hoy, con el
+    estado de su receta (Mi jornada).
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+
+        actor_id, roles, permissions = _actor_context(user)
+
+        try:
+            payload = list_attended_today(actor_id, roles, permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class PrescriptionAuthorizationsPendingView(APIView):

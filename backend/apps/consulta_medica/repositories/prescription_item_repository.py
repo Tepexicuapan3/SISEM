@@ -1,7 +1,27 @@
+from django.db.models import Count, Q
+
 from apps.consulta_medica.models import VisitPrescriptionItem
 
 
 class PrescriptionItemRepository:
+    @staticmethod
+    def active_summary_by_visit(visit_ids):
+        """{visit_id: {"count", "controlled"}} de los medicamentos activos de
+        la receta activa, en una sola consulta."""
+        rows = (
+            VisitPrescriptionItem.objects.filter(
+                prescription__id_visit_id__in=list(visit_ids),
+                prescription__is_active=True,
+                status=VisitPrescriptionItem.Status.ACTIVO,
+            )
+            .values("prescription__id_visit_id")
+            .annotate(count=Count("pk"), controlled=Count("pk", filter=Q(medication__is_controlled=True)))
+        )
+        return {
+            row["prescription__id_visit_id"]: {"count": row["count"], "controlled": row["controlled"]}
+            for row in rows
+        }
+
     @staticmethod
     def active_names_by_visit(visit_ids):
         """{visit_id: [nombre, ...]} de los medicamentos activos de la receta

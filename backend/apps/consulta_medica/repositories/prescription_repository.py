@@ -48,6 +48,14 @@ class PrescriptionRepository:
         return prescription, created, previous_snapshot
 
     @staticmethod
+    def active_folios_by_visit(visit_ids):
+        """{visit_id: folio} de las recetas activas, en una sola consulta."""
+        rows = VisitPrescription.objects.filter(
+            id_visit_id__in=list(visit_ids), is_active=True,
+        ).values_list("id_visit_id", "folio")
+        return {visit_id: folio or "" for visit_id, folio in rows}
+
+    @staticmethod
     def get_by_visit(visit):
         return VisitPrescription.objects.filter(id_visit=visit).first()
 

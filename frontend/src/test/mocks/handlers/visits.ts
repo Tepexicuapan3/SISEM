@@ -86,6 +86,11 @@ const updateVisitStatus = (
 };
 
 export const visitsHandlers = [
+  // Mi jornada: por defecto el medico no cerro consultas hoy.
+  http.get(getApiUrl("doctor/attended-today"), () => {
+    return HttpResponse.json({ items: [], total: 0 });
+  }),
+
   http.get(getApiUrl("visits"), ({ request }) => {
     const state = getVisitsState();
     const url = new URL(request.url);

@@ -32,6 +32,7 @@ import { useDoctorQueue } from "@features/consulta-medica/modules/atencion/queri
 import { usePrescriptionItems } from "@features/consulta-medica/modules/atencion/queries/usePrescriptionItems";
 import { usePrintDocument } from "@shared/hooks/usePrintDocument";
 import { PRINT_CAPABILITIES } from "@shared/components/print/printCapabilities";
+import { AttendedTodayPanel } from "@features/consulta-medica/modules/atencion/components/AttendedTodayPanel";
 
 import {
   buildDiagnosisFingerprint,
@@ -741,6 +742,10 @@ export const DoctorConsultationPage = () => {
             navigate={navigate}
           />
         </section>
+      ) : null}
+
+      {view === "consulta" && canReadDoctorQueue ? (
+        <AttendedTodayPanel canPrint={canPrintReceta} />
       ) : null}
     </section>
   );

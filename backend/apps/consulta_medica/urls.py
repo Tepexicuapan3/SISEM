@@ -19,6 +19,7 @@ from apps.consulta_medica.views import (
     PrescriptionAuthorizationRejectView,
     PrescriptionAuthorizationsHistoryView,
     PrescriptionAuthorizationsPendingView,
+    DoctorAttendedTodayView,
     PrescriptionDispensationsPendingView,
     PrescriptionDispensationView,
     PrescriptionDispenseView,
@@ -243,6 +244,11 @@ urlpatterns = [
         "visits/<int:visit_id>/prescription-items/<int:item_id>/cancel",
         VisitPrescriptionItemCancelView.as_view(),
         name="visit-prescription-item-cancel",
+    ),
+    path(
+        "doctor/attended-today",
+        DoctorAttendedTodayView.as_view(),
+        name="doctor-attended-today",
     ),
     path(
         "prescriptions/authorizations/pending",

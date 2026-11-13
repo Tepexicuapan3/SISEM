@@ -24,6 +24,7 @@ import type {
   CloseVisitResponse,
   CreateVisitRequest,
   CreateVisitResponse,
+  DoctorAttendedTodayResponse,
   PatientLookupResponse,
   SaveDiagnosisRequest,
   SaveDiagnosisResponse,
@@ -188,6 +189,11 @@ export const visitsAPI = {
     const response = await apiClient.patch<SecondaryDiagnosisItem>(
       `/visits/${visitId}/diagnoses/${diagnosisId}/cancel`,
     );
+    return response.data;
+  },
+
+  getDoctorAttendedToday: async (): Promise<DoctorAttendedTodayResponse> => {
+    const response = await apiClient.get<DoctorAttendedTodayResponse>("/doctor/attended-today");
     return response.data;
   },
 
