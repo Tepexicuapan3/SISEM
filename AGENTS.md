@@ -442,6 +442,7 @@ This is the minimum required Engram protocol at repository level and applies eve
 - Hard ban: do not start backend/frontend/supporting services directly on the host machine for test execution.
 - Preferred flow: `docker compose up -d` for dependencies/services, run test commands in containerized context, then inspect logs with `docker compose logs -f` if needed.
 - Any exception to Docker-first test execution must be explicitly approved by the user in the same thread.
+- Approved standing exception (2026-11-13): local development runs on Windows WITHOUT Docker; Docker is used only on the server at deploy time. Agents may run backend tests with `backend\venv` (`python manage.py test <app> --noinput`, SQLite in memory by default, real data untouched) and frontend tests with `pnpm vitest run`. See `docs/getting-started/setup.md` ("Opcion local (sin Docker)").
 
 ## Development Commands
 

@@ -49,7 +49,43 @@ docker compose logs -f frontend
 
 ## Opcion local (sin Docker)
 
-No recomendada. La configuracion soportada para el equipo es docker-first.
+Es el entorno de **desarrollo** que se usa hoy (Windows, sin Docker). Docker
+se usa **solo en el servidor**, al desplegar: el `Dockerfile` del backend es
+el que arma el servidor, asi que cualquier dependencia de sistema nueva
+(WeasyPrint/Pango, fuentes) se agrega tambien ahi.
+
+Backend (Python 3.12, entorno virtual `backend\venv`):
+
+```powershell
+cd backend
+.\venv\Scripts\activate
+python manage.py migrate
+python manage.py runserver
+```
+
+Pruebas de backend:
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe manage.py test apps.padrones --noinput
+```
+
+- Por defecto usan **SQLite en memoria** (`config/settings.py`): no tocan la
+  base real.
+- Las que SQLite no reproduce (concurrencia, triggers) se corren con
+  `TESTS_EN_POSTGRES=1`: Django crea y borra su propia base `test_<nombre>`
+  en el mismo servidor.
+
+Frontend:
+
+```powershell
+cd frontend
+pnpm dev
+pnpm vitest run
+```
+
+Cuidado con `pip freeze > requirements.txt` en Windows: agrega paquetes que el
+`Dockerfile` del servidor no puede compilar (por ejemplo `mysqlclient`).
 
 ## Comandos operativos frecuentes
 
