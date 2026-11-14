@@ -11,13 +11,16 @@ import {
 const base: AdscripcionResumen = {
   estado: "VIGENTE",
   requiereReasignar: false,
+  claveClinicaSermed: "1",
   idCentroSermed: 5,
+  centroSermed: "CUAUHTÉMOC",
   idAdscripcion: 10,
   idConsultorio: 3,
   consultorio: "Consultorio 3",
   numeroConsultorio: 3,
   turno: "Matutino",
   idCentroAdscripcion: 5,
+  centroAdscripcion: "CUAUHTÉMOC",
   sinMedicoActivo: false,
   citasFuturas: 0,
 };
@@ -38,12 +41,28 @@ describe("presentarEstadoAdscripcion", () => {
   it("sin adscripción: pide asignar", () => {
     const p = presentarEstadoAdscripcion({ ...base, estado: "SIN_ADSCRIPCION", idAdscripcion: null });
     expect(p).toMatchObject({ etiqueta: "Sin consultorio", variante: "alert", accion: "asignar" });
+    expect(p?.aviso).toMatch(/^Clínica CUAUHTÉMOC\. No tiene consultorio familiar/);
   });
 
   it("no coincide: pide reasignar y cuenta las citas", () => {
     const p = presentarEstadoAdscripcion({ ...base, estado: "NO_COINCIDE", requiereReasignar: true, citasFuturas: 2 });
     expect(p).toMatchObject({ etiqueta: "No coincide", variante: "critical", accion: "reasignar" });
     expect(p?.aviso).toMatch(/2 citas/);
+  });
+
+  it("no coincide: dice de qué clínica a cuál lo cambiaron", () => {
+    const p = presentarEstadoAdscripcion({
+      ...base, estado: "NO_COINCIDE", requiereReasignar: true, idCentroSermed: 2, centroSermed: "TAXQUEÑA",
+    });
+    expect(p?.aviso).toMatch(/^Cambió de clínica en SERMED: CUAUHTÉMOC \(Cons\. 3 · Matutino\) → TAXQUEÑA\./);
+    expect(p?.aviso).toMatch(/consultorio en TAXQUEÑA/);
+  });
+
+  it("sin nombres de clínica, los avisos no muestran huecos", () => {
+    const sinNombres = { ...base, centroSermed: null, centroAdscripcion: null };
+    expect(presentarEstadoAdscripcion({ ...sinNombres, estado: "SIN_ADSCRIPCION" })?.aviso)
+      .toBe("No tiene consultorio familiar. Asígnele uno antes de la ficha de medicina general.");
+    expect(presentarEstadoAdscripcion({ ...sinNombres, estado: "NO_COINCIDE" })?.aviso).not.toMatch(/null|undefined/);
   });
 
   it("consultorio inactivo: pide reasignar", () => {
@@ -54,6 +73,7 @@ describe("presentarEstadoAdscripcion", () => {
   it("clínica sin centro: avisa al administrador, sin acción de recepción", () => {
     const p = presentarEstadoAdscripcion({ ...base, estado: "CLINICA_SIN_CENTRO" });
     expect(p).toMatchObject({ etiqueta: "Clínica no registrada", accion: null });
+    expect(p?.aviso).toMatch(/clínica 1 de SERMED/);
   });
 
   it("estados sin P-03 no muestran nada", () => {

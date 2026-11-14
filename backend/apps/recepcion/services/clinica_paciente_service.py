@@ -12,6 +12,7 @@ Sin dato de clínica en SERMED (o centro sin asignar) NO se bloquea.
 
 from collections.abc import Callable
 
+from apps.catalogos.models import CatCentroAtencion
 from apps.recepcion.models import AdscripcionClinicaCentro
 from apps.recepcion.services.vigencia_service import buscar_fila_paciente
 
@@ -42,6 +43,23 @@ def regla_de_clinica(centro_paciente: str | None) -> Callable[[object], bool]:
     )
     esperado = str(equivalente) if equivalente is not None else centro_paciente
     return lambda centro_id: centro_id is None or str(centro_id).strip() == esperado
+
+
+def centro_de_clave(centro_paciente: str | None) -> CatCentroAtencion | None:
+    """El centro de SIRES de la clínica del paciente, con la misma regla que ``regla_de_clinica``."""
+    if centro_paciente is None:
+        return None
+    centro_paciente = str(centro_paciente).strip()
+    equivalencia = (
+        AdscripcionClinicaCentro.objects.select_related("centro")
+        .filter(clave_clinica_sermed=centro_paciente, esta_activo=True)
+        .first()
+    )
+    if equivalencia is not None:
+        return equivalencia.centro
+    if not centro_paciente.isdigit():
+        return None
+    return CatCentroAtencion.objects.filter(pk=int(centro_paciente)).first()
 
 
 def centro_permitido(centro_paciente: str | None, centro_id) -> bool:

@@ -55,6 +55,7 @@ class EvaluacionAdscripcion:
     estado: str
     clave_clinica_sermed: str | None = None
     centro_sermed_id: int | None = None
+    centro_sermed: str | None = None  # nombre, para que recepción sepa a qué clínica pertenece
     adscripcion: AdscripcionPaciente | None = None
     sin_medico_activo: bool = False
     citas_futuras: tuple = ()
@@ -193,14 +194,14 @@ def estado_de_miembro(*, id_paciente, clave_clinica, vigente) -> EvaluacionAdscr
 
 def evaluar_clave(id_paciente, clave) -> EvaluacionAdscripcion:
     """V4 a V10 a partir de la clave de clínica de SERMED, ya vigente."""
-    equivalencia = AdscripcionClinicaCentro.objects.filter(  # V4
+    equivalencia = AdscripcionClinicaCentro.objects.select_related("centro").filter(  # V4
         clave_clinica_sermed=clave, esta_activo=True,
     ).first()
     if equivalencia is None:
         return EvaluacionAdscripcion(estado=EstadoAdscripcion.CLINICA_SIN_CENTRO, clave_clinica_sermed=clave)
 
     centro_id = equivalencia.centro_id
-    base = {"clave_clinica_sermed": clave, "centro_sermed_id": centro_id}
+    base = {"clave_clinica_sermed": clave, "centro_sermed_id": centro_id, "centro_sermed": equivalencia.centro.name}
     if not consultorios_familiares(centro_id).exists():  # V5
         return EvaluacionAdscripcion(estado=EstadoAdscripcion.P03_INACTIVO, **base)
 
@@ -232,13 +233,16 @@ def resumen_para_busqueda(evaluacion: EvaluacionAdscripcion) -> dict:
     return {
         "estado": evaluacion.estado,
         "requiereReasignar": evaluacion.requiere_reasignar,
+        "claveClinicaSermed": evaluacion.clave_clinica_sermed,
         "idCentroSermed": evaluacion.centro_sermed_id,
+        "centroSermed": evaluacion.centro_sermed,
         "idAdscripcion": adscripcion.id if adscripcion else None,
         "idConsultorio": adscripcion.consultorio_id if adscripcion else None,
         "consultorio": adscripcion.consultorio.name if adscripcion else None,
         "numeroConsultorio": adscripcion.consultorio.numero if adscripcion else None,
         "turno": adscripcion.turno.name if adscripcion else None,
         "idCentroAdscripcion": adscripcion.centro_id if adscripcion else None,
+        "centroAdscripcion": adscripcion.centro.name if adscripcion else None,
         "sinMedicoActivo": evaluacion.sin_medico_activo,
         "citasFuturas": len(evaluacion.citas_futuras),
     }

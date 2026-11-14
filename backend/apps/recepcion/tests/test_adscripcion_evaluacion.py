@@ -12,7 +12,11 @@ from apps.administracion.use_cases.expedientes.buscar_expediente import Expedien
 from apps.consulta_medica.models import Patient
 from apps.medicos.models import RelMedicoConsultorio
 from apps.recepcion.models import AdscripcionClinicaCentro, AdscripcionConsultorio, EstatusCita
-from apps.recepcion.services.adscripcion_evaluacion import EstadoAdscripcion, evaluar_adscripcion
+from apps.recepcion.services.adscripcion_evaluacion import (
+    EstadoAdscripcion,
+    evaluar_adscripcion,
+    resumen_para_busqueda,
+)
 from apps.recepcion.tests._adscripcion_base import BUSCAR_EXPEDIENTE, AdscripcionTestBase, fila_sermed
 
 
@@ -58,6 +62,8 @@ class EvaluacionCentroTests(AdscripcionTestBase):
             evaluacion = evaluar_adscripcion(self.paciente)
         self.assertEqual(evaluacion.estado, EstadoAdscripcion.CLINICA_SIN_CENTRO)
         self.assertEqual(evaluacion.clave_clinica_sermed, "9")
+        # Recepción tiene que poder decirle al administrador qué clave falta.
+        self.assertEqual(resumen_para_busqueda(evaluacion)["claveClinicaSermed"], "9")
 
     def test_equivalencia_inactiva(self):
         AdscripcionClinicaCentro.objects.filter(clave_clinica_sermed="5").update(esta_activo=False)
@@ -96,6 +102,9 @@ class EvaluacionAdscripcionTests(AdscripcionTestBase):
         self.assertEqual(evaluacion.estado, EstadoAdscripcion.SIN_ADSCRIPCION)
         self.assertEqual(evaluacion.centro_sermed_id, self.clinica5.id)
         self.assertIsNone(evaluacion.adscripcion)
+        resumen = resumen_para_busqueda(evaluacion)
+        self.assertEqual(resumen["centroSermed"], "Clínica 5")
+        self.assertIsNone(resumen["centroAdscripcion"])
 
     def test_vigente(self):
         adscripcion = self._adscribir(self.paciente, self.consultorio5)
@@ -123,6 +132,10 @@ class EvaluacionAdscripcionTests(AdscripcionTestBase):
         self.assertEqual(evaluacion.estado, EstadoAdscripcion.NO_COINCIDE)
         self.assertEqual(evaluacion.centro_sermed_id, self.clinica7.id)
         self.assertTrue(evaluacion.requiere_reasignar)
+        # De dónde a dónde lo movió Capital Humano.
+        resumen = resumen_para_busqueda(evaluacion)
+        self.assertEqual(resumen["centroAdscripcion"], "Clínica 5")
+        self.assertEqual(resumen["centroSermed"], "Clínica 7")
 
     def test_no_coincide_lista_solo_citas_futuras_de_medicina_general(self):
         self._adscribir(self.paciente, self.consultorio5)

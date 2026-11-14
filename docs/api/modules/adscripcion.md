@@ -34,6 +34,8 @@ Sin `todos_centros`, quien opera solo actúa sobre pacientes cuyo centro SERMED 
 
 La búsqueda del expediente (`GET /api/v1/visits/patient-lookup`) agrega `adscripcion: AdscripcionResumen | null` a cada miembro, sin volver a consultar SERMED. Los recién nacidos provisionales usan la clínica del titular, leída en vivo.
 
+`AdscripcionResumen`: `estado`, `requiereReasignar`, `claveClinicaSermed`, `idCentroSermed`, `centroSermed` (nombre del centro que SERMED le marca hoy), `idAdscripcion`, `idConsultorio`, `consultorio`, `numeroConsultorio`, `turno`, `idCentroAdscripcion`, `centroAdscripcion` (nombre del centro de su consultorio actual), `sinMedicoActivo` y `citasFuturas`. Con los nombres, recepción ve a qué clínica pertenece la persona y, en `NO_COINCIDE`, de cuál a cuál la cambió Capital Humano.
+
 ## Endpoints de recepción
 
 | Método | Ruta | Permiso | Request | Response | Status |
@@ -118,7 +120,7 @@ Ejemplo `POST /api/v1/adscripcion`:
 | `POST /api/v1/citas` | `idPaciente?`, `idCitaAfectada?`, `excepcionConsultorioFamiliar?` | Misma validación; con `idCitaAfectada` la cita nueva queda ligada y la afectada pasa a `REAGENDADA` (misma transacción; tiene que ser en el consultorio de la adscripción activa) |
 | Confirmar check-in por folio y por QR | `excepcionConsultorioFamiliar?` | Misma validación sobre la cita; las respuestas agregan `idPaciente` |
 
-Regla de clínica (`WRONG_CLINIC` en `POST /api/v1/citas`, `CLINICA_NO_CORRESPONDE` y filtros del portal de citas): `CD_CLINICA` de SERMED se traduce al centro de SIRES con la equivalencia activa de `adscripcion_clinica_centro`. Sin equivalencia se compara con el id del centro (comportamiento anterior a P-03). Sin dato de clínica no se bloquea. Aplica a todos los usuarios, admin incluido, sin excepción. Fuente única: `apps/recepcion/services/clinica_paciente_service.py`.
+Regla de clínica (`WRONG_CLINIC` en `POST /api/v1/citas`, `CLINICA_NO_CORRESPONDE` y filtros del portal de citas): `CD_CLINICA` de SERMED se traduce al centro de SIRES con la equivalencia activa de `adscripcion_clinica_centro`. Sin equivalencia se compara con el id del centro (comportamiento anterior a P-03). Sin dato de clínica no se bloquea. Aplica a todos los usuarios, admin incluido, sin excepción. Fuente única: `apps/recepcion/services/clinica_paciente_service.py`. El mensaje de `WRONG_CLINIC` nombra el centro del paciente y el del consultorio (o la clave de SERMED si no tiene equivalencia), con `details`: `idCentroPaciente`, `centroPaciente` y `claveClinicaSermed`.
 
 `details` de `CONSULTORIO_FAMILIAR_DIFERENTE`: `estado`, `idAdscripcion`, `idConsultorioFamiliar`, `idConsultorioSolicitado`, `idCentroSermed`.
 

@@ -24,6 +24,16 @@ export const etiquetaConsultorio = (consultorio: { numero: number | null; turno:
 
 const citas = (n: number) => (n === 1 ? "1 cita futura" : `${n} citas futuras`);
 
+/** Recepción tiene que ver a qué clínica pertenece la persona, no solo que "es otra". */
+const avisoNoCoincide = (resumen: AdscripcionResumen) => {
+  const cancela = resumen.citasFuturas > 0 ? `; se cancelarán ${citas(resumen.citasFuturas)} del consultorio anterior.` : ".";
+  if (!resumen.centroSermed) return `SERMED lo tiene en otra clínica. Hay que reasignarle consultorio${cancela}`;
+  const antes = resumen.centroAdscripcion
+    ? `${resumen.centroAdscripcion} (${etiquetaConsultorio({ numero: resumen.numeroConsultorio, turno: resumen.turno })}) → `
+    : "";
+  return `Cambió de clínica en SERMED: ${antes}${resumen.centroSermed}. Hay que reasignarle consultorio en ${resumen.centroSermed}${cancela}`;
+};
+
 /** null cuando P-03 no aplica a la persona (no se muestra nada nuevo). */
 export function presentarEstadoAdscripcion(
   resumen: AdscripcionResumen | null | undefined,
@@ -46,7 +56,9 @@ export function presentarEstadoAdscripcion(
         etiqueta: "Sin consultorio",
         variante: "alert",
         accion: "asignar",
-        aviso: "No tiene consultorio familiar. Asígnele uno antes de la ficha de medicina general.",
+        aviso:
+          (resumen.centroSermed ? `Clínica ${resumen.centroSermed}. ` : "") +
+          "No tiene consultorio familiar. Asígnele uno antes de la ficha de medicina general.",
       };
     case "NO_COINCIDE":
       return {
@@ -54,9 +66,7 @@ export function presentarEstadoAdscripcion(
         etiqueta: "No coincide",
         variante: "critical",
         accion: "reasignar",
-        aviso:
-          "SERMED lo tiene en otra clínica. Hay que reasignarle consultorio" +
-          (resumen.citasFuturas > 0 ? `; se cancelarán ${citas(resumen.citasFuturas)} del consultorio anterior.` : "."),
+        aviso: avisoNoCoincide(resumen),
       };
     case "CONSULTORIO_INACTIVO":
       return {
@@ -74,7 +84,9 @@ export function presentarEstadoAdscripcion(
         etiqueta: "Clínica no registrada",
         variante: "alert",
         accion: null,
-        aviso: "La clínica de SERMED de esta persona no está registrada en SIRES. Avise al administrador.",
+        aviso: resumen.claveClinicaSermed
+          ? `La clínica ${resumen.claveClinicaSermed} de SERMED de esta persona no está registrada en SIRES. Avise al administrador.`
+          : "La clínica de SERMED de esta persona no está registrada en SIRES. Avise al administrador.",
       };
     default:
       // P03_INACTIVO, SIN_DATO_EXPEDIENTE, NO_VIGENTE: se trabaja como hoy.

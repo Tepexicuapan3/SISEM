@@ -14,7 +14,7 @@ from apps.authentication.models import DetUsuario, SyUsuario
 from apps.catalogos.models import CatCentroAtencion, Consultorios, Turnos
 from apps.medicos.disponibilidad import dia_semana
 from apps.medicos.models import CatMedico, RelMedicoConsultorio, RelMedicoConsultorioHorario
-from apps.recepcion.models import CitaMedica, HorarioDisponible
+from apps.recepcion.models import AdscripcionClinicaCentro, CitaMedica, HorarioDisponible
 from apps.recepcion.repositories.citas_repository import CitasRepository
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.uses_case import agendar_cita_usecase as caso
@@ -82,6 +82,32 @@ class AgendarCitaTests(TestCase):
 
         self.assertEqual(raised.exception.code, "WRONG_CLINIC")
         self.assertFalse(CitaMedica.objects.exists())
+
+    def test_otra_clinica_dice_a_que_centro_pertenece(self):
+        otro = CatCentroAtencion.objects.create(
+            name="TAXQUEÑA", code="C-2", center_type=CatCentroAtencion.TipoCentro.CLINICA, is_active=True,
+        )
+        AdscripcionClinicaCentro.objects.create(clave_clinica_sermed="2", centro=otro, id_usuario_creacion=1)
+        self.clinica.stop()
+        with mock.patch.object(caso, "centro_del_paciente", return_value="2"):
+            with self.assertRaises(VisitDomainError) as raised:
+                self._agendar()
+
+        error = raised.exception
+        self.assertEqual(error.code, "WRONG_CLINIC")
+        self.assertIn("TAXQUEÑA", error.message)
+        self.assertIn("Centro Uno", error.message)
+        self.assertNotIn("clínica 2", error.message)
+        self.assertEqual(error.details, {"idCentroPaciente": otro.id, "centroPaciente": "TAXQUEÑA", "claveClinicaSermed": "2"})
+
+    def test_otra_clinica_sin_equivalencia_dice_la_clave_de_sermed(self):
+        self.clinica.stop()
+        with mock.patch.object(caso, "centro_del_paciente", return_value="88"):
+            with self.assertRaises(VisitDomainError) as raised:
+                self._agendar()
+
+        self.assertIn("clínica 88 de SERMED", raised.exception.message)
+        self.assertIsNone(raised.exception.details["centroPaciente"])
 
     def test_aplica_el_consultorio_familiar(self):
         rechazo = VisitDomainError("CONSULTORIO_FAMILIAR_DIFERENTE", "Otro consultorio.", 409)

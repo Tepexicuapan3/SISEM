@@ -23,7 +23,7 @@ from django.utils import timezone
 from apps.catalogos.models.consultorios import Consultorios
 from apps.recepcion.models import MOTIVO_CITA_SEGUIMIENTO, CanalMovimiento, CitaMedica
 from apps.recepcion.repositories.citas_repository import CitasRepository
-from apps.recepcion.services.clinica_paciente_service import centro_del_paciente, centro_permitido
+from apps.recepcion.services.clinica_paciente_service import centro_de_clave, centro_del_paciente, centro_permitido
 from apps.recepcion.services.errors import VisitDomainError
 from apps.recepcion.services.vigencia_service import tiene_vigencia
 from apps.recepcion.uses_case.adscripcion_usecase import (
@@ -49,15 +49,23 @@ def _validar_clinica_paciente(no_exp: str, pk_num: int, consultorio_id: int) -> 
     sin asignar no se bloquea.
     """
     centro_paciente = centro_del_paciente(no_exp, pk_num)
-    centro_consultorio = (
-        Consultorios.objects.filter(id=consultorio_id).values_list("id_center_id", flat=True).first()
-    )
+    consultorio = Consultorios.objects.select_related("id_center").filter(id=consultorio_id).first()
+    centro_consultorio = consultorio.id_center_id if consultorio else None
     if not centro_permitido(centro_paciente, centro_consultorio):
+        # Con nombres: recepción tiene que saber a qué clínica lo mandó SERMED.
+        centro = centro_de_clave(centro_paciente)
+        destino = centro.name if centro else f"la clínica {centro_paciente} de SERMED"
+        aqui = consultorio.id_center.name if consultorio and consultorio.id_center else "este centro de atención"
         raise VisitDomainError(
             "WRONG_CLINIC",
-            f"El paciente pertenece a la clínica {centro_paciente} y no puede "
-            f"agendar cita en este centro de atención.",
+            f"El paciente pertenece a {destino} y este consultorio es de {aqui}. "
+            f"Agéndele la cita en su clínica.",
             400,
+            {
+                "idCentroPaciente": centro.id if centro else None,
+                "centroPaciente": centro.name if centro else None,
+                "claveClinicaSermed": centro_paciente,
+            },
         )
 
 

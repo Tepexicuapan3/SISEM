@@ -19,13 +19,18 @@ export type OrigenAdscripcion = "CHECKIN" | "CITA" | "MANUAL";
 export interface AdscripcionResumen {
   estado: EstadoAdscripcion;
   requiereReasignar: boolean;
+  claveClinicaSermed: string | null;
   idCentroSermed: number | null;
+  /** Nombre del centro que SERMED le marca hoy (por la equivalencia). */
+  centroSermed: string | null;
   idAdscripcion: number | null;
   idConsultorio: number | null;
   consultorio: string | null;
   numeroConsultorio: number | null;
   turno: string | null;
   idCentroAdscripcion: number | null;
+  /** Centro de su consultorio actual; difiere de centroSermed si lo cambiaron de clínica. */
+  centroAdscripcion: string | null;
   sinMedicoActivo: boolean;
   citasFuturas: number;
 }

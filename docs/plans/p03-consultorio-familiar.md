@@ -495,6 +495,16 @@ Estimación de captura, familia de 4 sin consultorio: hoy son 4 diálogos y unos
 - En la pantalla de admin, "Clínica de SERMED" es un select con el formato `1 · CUAUHTÉMOC`. Las que ya tienen centro aparecen deshabilitadas con "(ya asignada a …)".
 - La tabla muestra `clave · nombre`. Una equivalencia vieja con una clave que no existe en SERMED se marca "no existe en SERMED". No se corrige ningún dato: solo se ve.
 
+#### Etapa 6 — Recepción ve a qué clínica pertenece el paciente · S · ✅ hecha 2026-11-13
+
+Pedido de recepción: el aviso decía "sin consultorio" o "es de otra clínica", pero no **cuál**. Con el admin (todos los centros) no se veía nunca.
+
+- El resumen de la búsqueda trae `centroSermed`, `centroAdscripcion` y `claveClinicaSermed`.
+- Avisos: "Clínica TAXQUEÑA. No tiene consultorio familiar…"; "Cambió de clínica en SERMED: CUAUHTÉMOC (Cons. 2 · Matutino) → TAXQUEÑA. Hay que reasignarle consultorio en TAXQUEÑA"; "La clínica 7 de SERMED… no está registrada".
+- `WRONG_CLINIC` nombra los dos centros en lugar de la clave cruda, y trae `details`.
+- El aviso "pertenece a X, que no es tu centro" de la ficha ya existía (alcance por centro); no se duplicó.
+- Pendiente opcional: en la agenda, ofrecer solo consultorios y médicos de la clínica del paciente, para que `WRONG_CLINIC` no pueda pasar.
+
 #### Etapa 5 — Cierre · S
 
 - Actualizar `docs/api/modules/adscripcion.md` (familia, errores nuevos, `motivoSinOpciones`, clínicas SERMED).
