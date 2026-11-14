@@ -19,7 +19,7 @@ from django.utils import timezone
 from apps.authentication.services.permission_dependencies import evaluate_permission_requirement
 from apps.catalogos.models import CatCies
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
-from apps.padrones.models import ChronicEnrollment, ChronicProgramCie, RegistryStatus
+from apps.padrones.models import ChronicEnrollment, ChronicProgramCie, EnrollmentSource, RegistryStatus
 from apps.recepcion.contracts.visit_flow_contract import get_visit_by_id
 from apps.recepcion.services.errors import VisitDomainError
 
@@ -114,4 +114,5 @@ def enroll_from_visit(visit_id, *, item_id, notes=None, actor, permissions):
     return padron.create_enrollment(
         CHRONIC, get_patient=lambda: visit.patient, item=item, center=center,
         enrolled_on=timezone.localdate(), notes=notes, actor=actor,
+        extra={"source": EnrollmentSource.CONSULTA, "visit": visit},
     )

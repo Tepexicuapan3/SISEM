@@ -2,6 +2,7 @@
 
 export type PadronRegistry = "cronicos" | "discapacidad";
 export type PadronStatus = "activo" | "baja";
+export type PadronEnrollmentSource = "consulta" | "manual";
 
 export interface PadronItemRef {
   /** CIE-10 (texto) en cronicos o id de discapacidad. null si el CIE esta restringido. */
@@ -22,6 +23,8 @@ export interface PadronEnrollment {
   enrolledOn: string;
   enrolledBy: string | null;
   notes: string | null;
+  /** Origen del diagnostico (solo cronicos). null en inscripciones anteriores. */
+  source?: PadronEnrollmentSource | null;
   status: PadronStatus;
   discharge: {
     reasonId: number;
@@ -53,10 +56,27 @@ export interface PadronOption {
   id: string | number;
   code: string;
   description: string;
+  /** Solo cronicos: programa al que pertenece el CIE-10 (null = ninguno). */
+  program?: { code: string; name: string } | null;
 }
 
 export interface PadronOptionsResponse {
   items: PadronOption[];
+}
+
+/** Miembro vigente del expediente para elegir a quien se inscribe (`padrones/miembros`). */
+export interface PadronFamilyMember {
+  idPaciente: number | null;
+  noExp: string;
+  pkNum: number;
+  nombre: string;
+  parentesco: string | null;
+  edad: number | null;
+  fechaNac: string | null;
+}
+
+export interface PadronFamilyResponse {
+  members: PadronFamilyMember[];
 }
 
 export interface PadronEnrollRequest {

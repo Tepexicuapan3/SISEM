@@ -10,4 +10,5 @@ const EMPTY_CONTROL: ChronicControlPanel = { programs: [], vitalsCapturedAt: nul
 export const padronesHandlers = [
   http.get(getApiUrl("padrones/cronicos/visita/:visitId/aviso"), () => HttpResponse.json(EMPTY_NOTICE)),
   http.get(getApiUrl("padrones/cronicos/visita/:visitId/control"), () => HttpResponse.json(EMPTY_CONTROL)),
+  http.get(getApiUrl("padrones/miembros"), () => HttpResponse.json({ members: [] })),
 ];

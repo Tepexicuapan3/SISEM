@@ -64,9 +64,23 @@ class RegistryEnrollmentBase(models.Model):
         abstract = True
 
 
+class EnrollmentSource(models.TextChoices):
+    CONSULTA = "consulta", "Consulta médica"
+    MANUAL = "manual", "Captura en Padrones"
+
+
 class ChronicEnrollment(RegistryEnrollmentBase):
     cie = models.ForeignKey(
         "catalogos.CatCies", db_column="clave_cie", on_delete=models.PROTECT, related_name="+",
+    )
+    # De donde salio el diagnostico (docs/plans/cronicos-alta-padron.md).
+    # Vacio en las inscripciones anteriores a esta columna.
+    source = models.CharField(
+        max_length=10, db_column="origen", choices=EnrollmentSource.choices, null=True, blank=True,
+    )
+    visit = models.ForeignKey(
+        "recepcion.Visit", db_column="id_visit", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+",
     )
 
     class Meta:

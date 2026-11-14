@@ -1,5 +1,5 @@
 import apiClient from "@api/client";
-import { conIdPaciente } from "@api/paciente-ids";
+import { conIdPaciente, registrarIdsPaciente } from "@api/paciente-ids";
 import type {
   ChronicControlPanel,
   ChronicControlRecord,
@@ -9,6 +9,7 @@ import type {
   PadronDischargeRequest,
   PadronEnrollRequest,
   PadronEnrollment,
+  PadronFamilyResponse,
   PadronListParams,
   PadronListResponse,
   PadronOptionsResponse,
@@ -25,6 +26,13 @@ export const padronesAPI = {
     const response = await apiClient.get<PadronOptionsResponse>(`/padrones/${registry}/opciones`, {
       params: { search },
     });
+    return response.data;
+  },
+
+  family: async (noExp: string): Promise<PadronFamilyResponse> => {
+    const response = await apiClient.get<PadronFamilyResponse>("/padrones/miembros", { params: { noExp } });
+    // El alta manda solo idPaciente: con esto no vuelve a buscar el expediente.
+    registrarIdsPaciente(response.data.members);
     return response.data;
   },
 

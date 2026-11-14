@@ -19,7 +19,18 @@ export const padronesKeys = {
     [...padronesKeys.all, "cronicos", "visit-notice", visitId, cie] as const,
   chronicControlPanel: (visitId: number) =>
     [...padronesKeys.all, "cronicos", "visit-control", visitId] as const,
+  family: (noExp: string) => [...padronesKeys.all, "family", noExp] as const,
 };
+
+/** Miembros vigentes del expediente para elegir a quien se inscribe. Se busca al confirmar el expediente. */
+export const usePadronFamily = (noExp: string) =>
+  useQuery({
+    queryKey: padronesKeys.family(noExp),
+    queryFn: () => padronesAPI.family(noExp),
+    enabled: noExp.trim().length > 0,
+    retry: false,
+    staleTime: 60 * 1000,
+  });
 
 /** Panel de control de cronicos de la consulta (vitales de hoy contra metas). */
 export const useChronicControlPanel = (visitId: number) =>

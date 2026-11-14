@@ -23,7 +23,8 @@ from apps.authentication.services.permission_dependencies import evaluate_permis
 from apps.catalogos.models import CatCentroAtencion, CatCies, Discapacidades, MotivoBajaPadron
 from apps.consulta_medica.repositories.clinical_history_repository import PatientRepository
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
-from apps.padrones.models import ChronicEnrollment, DisabilityEnrollment, RegistryStatus
+from apps.padrones.models import ChronicEnrollment, DisabilityEnrollment, EnrollmentSource, RegistryStatus
+from apps.recepcion.contracts.patient_lookup_contract import family_members
 from apps.recepcion.services.errors import VisitDomainError
 from apps.consulta_medica.services.paciente_entrada import q_pk_registro
 from apps.consulta_medica.services.patient_registry_service import normalizar_no_exp
@@ -101,6 +102,8 @@ def to_contract(spec, enrollment, *, permissions, roles):
         "enrolledOn": enrollment.enrolled_on,
         "enrolledBy": _user_name(enrollment.enrolled_by),
         "notes": enrollment.notes,
+        # Origen del diagnostico (solo cronicos; null en inscripciones anteriores).
+        "source": getattr(enrollment, "source", None),
         "status": enrollment.status,
         "discharge": None if enrollment.status == RegistryStatus.ACTIVO else {
             "reasonId": enrollment.discharge_reason_id,
@@ -159,6 +162,9 @@ def search_options(kind, *, search, permissions, roles=None, limit=20):
     if len(term) < 2:
         return {"items": []}
     if spec.key == "cronicos":
+        # Import tardio: aviso_consulta_usecase importa este modulo.
+        from apps.padrones.uses_case.aviso_consulta_usecase import program_for_cie
+
         qs = CatCies.objects.filter(is_active=True).filter(
             Q(code__istartswith=term) | Q(description__icontains=term)
         ).order_by("code")
@@ -168,7 +174,13 @@ def search_options(kind, *, search, permissions, roles=None, limit=20):
                 code=cie.code, description=cie.description, permissions=permissions, roles=roles or [],
             )
             if not restricted:
-                items.append({"id": cie.code, "code": cie.code, "description": cie.description})
+                # El programa orienta: un CIE sin programa se puede inscribir igual
+                # (hay cronicos fuera de los programas), la pantalla lo avisa.
+                program = program_for_cie(cie.code)
+                items.append({
+                    "id": cie.code, "code": cie.code, "description": cie.description,
+                    "program": {"code": program.code, "name": program.name} if program else None,
+                })
             if len(items) >= limit:
                 break
         return {"items": items}
@@ -176,6 +188,16 @@ def search_options(kind, *, search, permissions, roles=None, limit=20):
         Q(code__istartswith=term) | Q(name__icontains=term)
     ).order_by("code")[:limit]
     return {"items": [{"id": d.pk, "code": d.code, "description": d.name} for d in qs]}
+
+
+def family_for_enrollment(no_exp, *, permissions):
+    """Titular y derechohabientes vigentes del expediente, para elegir a la
+    persona en el alta (el pkNum no se escribe a mano)."""
+    _ensure(WRITE_REQUIREMENT, permissions)
+    no_exp = (no_exp or "").strip()
+    if not no_exp:
+        raise _validation_error("noExp", "El expediente es obligatorio.")
+    return {"members": family_members(no_exp)}
 
 
 def _assignment_center_id(user):
@@ -216,15 +238,19 @@ def enroll(kind, *, no_exp, pk_num, item_id, center_id=None, enrolled_on=None, n
     return create_enrollment(
         spec, get_patient=lambda: PatientRepository.get_or_create(no_exp, pk_num or 0, created_by_id=actor.pk)[0],
         item=item, center=center, enrolled_on=enrolled_on, notes=notes, actor=actor,
+        extra={"source": EnrollmentSource.MANUAL} if spec.key == "cronicos" else None,
     )
 
 
-def create_enrollment(spec, *, get_patient, item, center, enrolled_on, notes, actor):
+def create_enrollment(spec, *, get_patient, item, center, enrolled_on, notes, actor, extra=None):
     """Crea la inscripcion activa (ya validados item, centro y fecha). Lo usan
-    el alta del padron y la inscripcion desde la consulta."""
+    el alta del padron y la inscripcion desde la consulta. `extra`: campos
+    propios del padron (origen y visita en cronicos)."""
     try:
         with transaction.atomic():
             patient = get_patient()
+            if patient.birth_date and enrolled_on < patient.birth_date:
+                raise _validation_error("enrolledOn", "La inscripción no puede ser anterior al nacimiento.")
             already = spec.model.objects.filter(
                 patient=patient, status=RegistryStatus.ACTIVO, **{spec.item_field: item},
             ).exists()
@@ -235,7 +261,7 @@ def create_enrollment(spec, *, get_patient, item, center, enrolled_on, notes, ac
             enrollment = spec.model.objects.create(
                 patient=patient, center=center,
                 enrolled_on=enrolled_on, enrolled_by=actor, notes=(notes or "").strip() or None,
-                **{spec.item_field: item},
+                **{spec.item_field: item}, **(extra or {}),
             )
     except IntegrityError as exc:  # carrera contra el unique de inscripcion activa
         raise VisitDomainError(

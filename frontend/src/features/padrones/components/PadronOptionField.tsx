@@ -48,6 +48,13 @@ export function PadronOptionField({ id, registry, value, onChange, disabled = fa
       {selected && value === String(selected.id) ? (
         <p className="text-sm text-txt-body">
           Seleccionado: <strong>{selected.code}</strong> — {selected.description}
+          {selected.program ? <> · Programa: {selected.program.name}</> : null}
+        </p>
+      ) : null}
+      {registry === "cronicos" && selected && value === String(selected.id) && !selected.program ? (
+        <p className="text-sm text-status-alert" role="status">
+          Este diagnóstico no pertenece a ningún programa de crónicos: verifica que sea el correcto.
+          Se puede inscribir igual, pero no tendrá metas de control.
         </p>
       ) : null}
       {debounced.trim().length >= 2 ? (
@@ -74,6 +81,11 @@ export function PadronOptionField({ id, registry, value, onChange, disabled = fa
                     {isSelected ? <Check className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
                     <span className="font-mono text-xs text-txt-muted">{option.code}</span>
                     <span>{option.description}</span>
+                    {option.program ? (
+                      <span className="ml-auto shrink-0 rounded-full bg-subtle px-2 py-0.5 text-xs text-txt-muted">
+                        {option.program.name}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               );

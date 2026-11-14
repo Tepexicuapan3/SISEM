@@ -12,7 +12,8 @@ const notFuture = (value: string | undefined) => !value || value <= today();
 
 export const enrollPadronSchema = z.object({
   noExp: z.string().trim().min(1, { error: "Expediente requerido" }).max(20),
-  pkNum: z.coerce.number().int().min(0).default(0),
+  // Sale de elegir a la persona entre los miembros del expediente, no se escribe.
+  pkNum: z.number({ error: "Selecciona a la persona" }).int().min(0),
   itemId: z.string().trim().min(1, { error: "Selecciona el padecimiento" }),
   enrolledOn: optionalText(10).refine(notFuture, { error: "La fecha no puede ser futura" }),
   notes: optionalText(500),

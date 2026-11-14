@@ -7,6 +7,7 @@ error_response y evento de auditoria por cada inscripcion o baja.
   POST padrones/<registry>              inscribir
   POST padrones/<registry>/<id>/baja    dar de baja la inscripcion
   GET  padrones/<registry>/opciones     CIE-10 o discapacidades para inscribir (?search=)
+  GET  padrones/miembros                miembros vigentes del expediente para elegir (?noExp=)
 <registry> = cronicos | discapacidad
 
 Desde la consulta (docs/plans/cronicos-aviso-consulta.md):
@@ -143,8 +144,29 @@ class RegistryListCreateView(APIView):
         _audit(request, user, "RegistryEnrollmentCreated", registry, enrollment, None, {
             "itemId": str(getattr(enrollment, f"{spec.item_field}_id")),
             "centerId": enrollment.center_id, "enrolledOn": str(enrollment.enrolled_on),
+            "source": payload["source"],
         })
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class RegistryMembersView(APIView):
+    """GET padrones/miembros?noExp= : titular y derechohabientes vigentes para
+    elegir a la persona en el alta (docs/plans/cronicos-alta-padron.md)."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        permissions, _ = _access(user)
+        try:
+            payload = uc.family_for_enrollment(request.query_params.get("noExp"), permissions=permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        return Response(payload)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

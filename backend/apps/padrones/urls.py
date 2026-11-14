@@ -6,6 +6,7 @@ from apps.padrones.views import (
     ChronicVisitNoticeView,
     RegistryDischargeView,
     RegistryListCreateView,
+    RegistryMembersView,
     RegistryOptionsView,
 )
 
@@ -26,6 +27,7 @@ urlpatterns = [
         ChronicVisitEnrollView.as_view(),
         name="padrones-cronicos-visit-enroll",
     ),
+    path("padrones/miembros", RegistryMembersView.as_view(), name="padrones-members"),
     path("padrones/<str:registry>", RegistryListCreateView.as_view(), name="padrones-list-create"),
     path("padrones/<str:registry>/opciones", RegistryOptionsView.as_view(), name="padrones-options"),
     path(
