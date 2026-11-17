@@ -215,7 +215,7 @@ class RecetaContextHelpersTests(TestCase):
     # RIS art. 31: en el sector publico se prescribe por denominacion generica.
     def test_drug_label_puts_generic_first(self):
         row = {"name": "Clonazepam 2mg", "generic_name": "Clonazepam", "presentation": "Tableta"}
-        self.assertEqual(_drug_label(row), {"primary": "Clonazepam", "secondary": "Clonazepam 2mg. Tableta"})
+        self.assertEqual(_drug_label(row), {"primary": "Clonazepam", "secondary": "2mg. Tableta"})
 
     def test_drug_label_without_generic_uses_name(self):
         row = {"name": "Vitamina D 800 UI", "generic_name": "", "presentation": "Tableta"}

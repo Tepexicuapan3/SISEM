@@ -199,7 +199,7 @@ nuevo**. D9 (grupo del controlado) espera a farmacia y jurídico.
 | Migración | `0068_receta_via_frecuencia_duracion`: 3 `AddField` nulos; no toca datos |
 | Aplicación | `add_prescription_item` → `_validate_administration`: 422 `VALIDATION_ERROR` con `details` por campo si falta alguno o la vía no existe |
 | Presentación | `AddPrescriptionItemSerializer` acepta `route`, `frequency`, `duration` (solo forma); el contrato del renglón agrega `route`, `routeLabel`, `frequency`, `duration` |
-| Receta | `_administration_text`: `dosis · vía · frecuencia · duración · indicaciones`; los renglones previos se imprimen como antes |
+| Receta | `_administration_text`: `dosis · vía · frecuencia · duración · indicaciones`; los renglones previos se imprimen como antes (redacción en frase desde 2026-11-17, ver §10) |
 | Frontend | `PrescriptionItemsButton`: vía (lista), frecuencia y duración obligatorias; el listado las muestra. Lista de vías en `domain/administration-routes.ts` (espejo del backend) |
 
 Evidencia: backend en rojo (`ImportError`) → 943 tests OK en `consulta_medica`,
@@ -215,3 +215,43 @@ Gap documental: no existe documentación de API de
 
 **Base de desarrollo:** hay que aplicar la `0068` (`python manage.py migrate`);
 sin ella, agregar o listar medicamentos falla porque las columnas no existen.
+
+## 10. Redacción de la indicación impresa (2026-11-17)
+
+La receta imprimía los datos pegados con " · " (`1 · Intramuscular · Cada 24
+horas · 7 días · pruebas`): estaban completos pero no se leían como una
+indicación. Solo cambia la impresión; los datos guardados y la captura no se
+tocan, y las recetas ya emitidas salen con el formato nuevo al reimprimirse.
+
+| Antes | Ahora |
+|---|---|
+| `1 · Oral · Cada 12 horas · 5 días · Cada vez que…` | `Tomar 1 tableta por vía oral cada 12 horas durante 5 días. Cada vez que…` |
+| `INSULINA GLARGINA` / `INSULINA GLARGINA 100 UI/ML…` | `INSULINA GLARGINA` / `100 UI/ML…` (el genérico no se repite) |
+| Cantidad `1` | Cantidad `1` con `pluma` debajo (envase de la presentación) |
+
+Reglas (`impresion/receta.py`):
+
+- Verbo por vía: oral → *Tomar*, sublingual → *Colocar*, inhalada → *Inhalar*,
+  las demás → *Aplicar*.
+- Dosis que es solo un número: se le agrega la unidad si el medicamento es
+  sólido (tableta, cápsula, gragea, comprimido, supositorio, óvulo, parche),
+  con plural si es más de 1. Las líquidas e inyectables quedan como las
+  escribió el médico: su unidad (ml, UI) no se deduce del nombre.
+- "Dosis única" → *en dosis única*; duración que empieza con número →
+  *durante N*; otra (*hasta nueva indicación*) va tal cual.
+- La indicación libre va como segunda oración, con mayúscula y punto.
+- Lo capturado en MAYÚSCULAS se respeta.
+- Renglones previos a D8 (sin vía, frecuencia ni duración): igual que antes.
+- Celda de indicación a 7 pt; con 5 renglones y una indicación de 140
+  caracteres la tabla mide 134 de 150 pt (medido con WeasyPrint).
+
+Límites (propuesta, siguientes pasos): la dosis de líquidos e inyectables
+sigue sin unidad si el médico no la escribe (selector de unidad en la
+captura); la vía no se valida contra el medicamento (la insulina se pudo
+capturar intramuscular), eso requiere un dato nuevo en el catálogo de
+farmacia.
+
+Evidencia: 18 tests nuevos en `tests/test_receta_redaccion.py` en rojo
+(`ImportError`) → 98 OK con `test_print_receta_nota` y
+`test_prescription_item_administration` (2 expectativas actualizadas al
+formato nuevo).

@@ -9,9 +9,10 @@
       <td class="num">{{ item.code }}</td>
       {# Generico primero (RIS art. 31) #}
       <td><span class="generic">{{ item.label.primary }}</span>{% if item.label.secondary %}<br><small>{{ item.label.secondary }}</small>{% endif %}</td>
-      <td class="qty">{{ item.quantity }}</td>
-      {# Dosis, via, frecuencia y duracion (RIS art. 30) + indicaciones #}
-      <td>{{ item.administration }}</td>
+      {# Envase de la presentacion ("plumas") cuando el catalogo lo dice #}
+      <td class="qty">{{ item.quantity }}{% if item.quantity_unit %}<br><small>{{ item.quantity_unit }}</small>{% endif %}</td>
+      {# Dosis, via, frecuencia y duracion (RIS art. 30) + indicaciones, como una frase #}
+      <td class="admin">{{ item.administration }}</td>
     </tr>
     {% endfor %}
   </table>

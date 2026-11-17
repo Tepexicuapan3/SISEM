@@ -99,10 +99,10 @@ class AddPrescriptionItemSerializerTests(SimpleTestCase):
 
 class RecetaAdministrationTextTests(SimpleTestCase):
     def test_joins_dose_route_frequency_duration_and_indications(self):
-        row = {"dose": "1 tab", "route_label": "Oral", "frequency": "Cada 8 horas",
+        row = {"dose": "1 tab", "route": "oral", "route_label": "Oral", "frequency": "Cada 8 horas",
                "duration": "5 dias", "indications": "Despues de comer"}
         self.assertEqual(
-            _administration_text(row), "1 tab · Oral · Cada 8 horas · 5 dias · Despues de comer",
+            _administration_text(row), "Tomar 1 tab por vía oral cada 8 horas durante 5 dias. Despues de comer.",
         )
 
     def test_old_item_without_administration_prints_as_before(self):

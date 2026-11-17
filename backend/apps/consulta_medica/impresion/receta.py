@@ -17,6 +17,8 @@ autorizacion pendiente o rechazada. No replica efectos del legado
 (ope_autorizacion, det_impresionrecetas).
 """
 
+import re
+import unicodedata
 from zoneinfo import ZoneInfo
 
 from apps.catalogos.services.parametro_service import get_param
@@ -100,6 +102,7 @@ def _item_row(item):
         "generic_name": med.generic_name or "",
         "presentation": med.presentation or "",
         "dose": item.dose or "",
+        "route": item.route or "",
         "route_label": item.get_route_display() if item.route else "",
         "frequency": item.frequency or "",
         "duration": item.duration or "",
@@ -109,23 +112,106 @@ def _item_row(item):
     }
     row["label"] = _drug_label(row)
     row["administration"] = _administration_text(row)
+    row["quantity_unit"] = _quantity_unit(row)
     return row
 
 
+# Verbo con el que arranca la indicacion segun la via; las demas, "Aplicar".
+_ROUTE_VERB = {"oral": "Tomar", "sublingual": "Colocar", "inhalada": "Inhalar"}
+
+# Forma farmaceutica solida: da la unidad cuando la dosis es solo un numero
+# ("1" -> "1 tableta"). Las liquidas e inyectables no: su unidad (ml, UI) no
+# se deduce del nombre.
+_SOLID_FORMS = (
+    ("TABLETA", "tableta"), ("CAPSULA", "cápsula"), ("GRAGEA", "gragea"),
+    ("COMPRIMIDO", "comprimido"), ("SUPOSITORIO", "supositorio"),
+    ("OVULO", "óvulo"), ("PARCHE", "parche"),
+)
+_BARE_DOSE = re.compile(r"^\d+(?:[.,]\d+)?$|^\d+/\d+$")
+# Envase de la presentacion: "CAJA CON 10", "PLUMA CON 3 ML".
+_CONTAINER = re.compile(r"\b([A-Z]+) CON \d")
+
+
+def _plain(text):
+    """Mayusculas sin acentos, para buscar en el nombre del catalogo."""
+    return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().upper()
+
+
+def _plural(word, count):
+    if count <= 1:
+        return word
+    return word + ("s" if word[-1] in "aeiouáéíóú" else "es")
+
+
+def _lower_first(text):
+    """"Cada 8 horas" -> "cada 8 horas"; lo capturado en mayusculas se respeta."""
+    return text if text.isupper() else text[:1].lower() + text[1:]
+
+
+def _as_sentence(text):
+    text = text.strip()
+    if not text:
+        return ""
+    text = text[:1].upper() + text[1:]
+    return text if text[-1] in ".!?" else text + "."
+
+
+def _dose_text(row):
+    """La dosis tal como la escribio el medico; si es solo un numero y el
+    medicamento es solido, se le agrega la unidad."""
+    dose = (row["dose"] or "").strip()
+    if not _BARE_DOSE.match(dose):
+        return dose
+    source = _plain(f'{row.get("name", "")} {row.get("presentation", "")}')
+    for key, unit in _SOLID_FORMS:
+        if re.search(rf"\b{key}S?\b", source):
+            amount = float(dose.replace(",", ".")) if "/" not in dose else 0
+            return f"{dose} {_plural(unit, amount)}"
+    return dose
+
+
 def _administration_text(row):
-    """Dosis, via, frecuencia, duracion (RIS art. 30) e indicaciones en un
-    renglon. Los renglones previos a D8 no tienen via/frecuencia/duracion y
-    se imprimen como antes."""
-    parts = (row["dose"], row["route_label"], row["frequency"], row["duration"], row["indications"])
-    return " · ".join(p for p in parts if p)
+    """Dosis, via, frecuencia, duracion (RIS art. 30) e indicaciones como una
+    frase que se lee de corrido: "Tomar 1 tableta por via oral cada 8 horas
+    durante 5 dias. Despues de comer." Los renglones previos a D8 no tienen
+    via/frecuencia/duracion y se imprimen como antes."""
+    route, frequency, duration = row.get("route") or "", row["frequency"] or "", row["duration"] or ""
+    if not (route or frequency or duration):
+        return " · ".join(p for p in (row["dose"], row["indications"]) if p)
+
+    parts = [_ROUTE_VERB.get(route, "Aplicar" if route else "Administrar")]
+    dose = _dose_text(row)
+    if dose:
+        parts.append(dose)
+    if row["route_label"]:
+        parts.append(f'por vía {row["route_label"].lower()}')
+    if frequency:
+        parts.append("en dosis única" if _plain(frequency) == "DOSIS UNICA" else _lower_first(frequency))
+    if duration:
+        parts.append(f"durante {duration}" if duration[:1].isdigit() else _lower_first(duration))
+    sentence = " ".join(parts) + "."
+    indications = _as_sentence(row["indications"] or "")
+    return f"{sentence} {indications}" if indications else sentence
+
+
+def _quantity_unit(row):
+    """Envase que se entrega ("caja", "2 plumas"), tomado de la presentacion;
+    vacio si el catalogo no lo dice."""
+    matches = _CONTAINER.findall(_plain(f'{row.get("name", "")} {row.get("presentation", "")}'))
+    if not matches:
+        return ""
+    return _plural(matches[-1].lower(), row["quantity"] or 0)
 
 
 def _drug_label(row):
     """Denominacion generica primero (RIS art. 31); el nombre del catalogo,
-    que trae la concentracion, y la presentacion van debajo."""
+    que trae la concentracion, y la presentacion van debajo, sin repetir el
+    generico al inicio."""
     name, generic = row["name"] or "", row["generic_name"] or ""
     if not generic or generic.casefold() == name.casefold():
         primary, rest = generic or name, ()
+    elif name.casefold().startswith(generic.casefold()):
+        primary, rest = generic, (name[len(generic):].lstrip(" .,-"),)
     else:
         primary, rest = generic, (name,)
     secondary = ". ".join(p for p in (*rest, row["presentation"]) if p)
