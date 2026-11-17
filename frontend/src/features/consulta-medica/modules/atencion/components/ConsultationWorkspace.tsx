@@ -220,7 +220,7 @@ export function ConsultationWorkspace({
             >
               {/* Padron de cronicos: aviso y sugerencia de inscripcion */}
               <ChronicConditionsNotice visitId={selectedVisit.id} cieCode={selectedCieCode} />
-              <ChronicControlPanel visitId={selectedVisit.id} />
+              <ChronicControlPanel visitId={selectedVisit.id} visitStatus={selectedVisit.status} />
 
               <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div>

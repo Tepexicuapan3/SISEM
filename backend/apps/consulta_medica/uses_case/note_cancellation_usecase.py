@@ -11,7 +11,8 @@ DENTRO de UN `transaction.atomic()`, con orden fijo de locks (todos por pk):
   1 Visit -> 2 VisitConsultation -> 3 VisitPrescription (solo ids, NO se carga
   `items`: json != jsonb) -> 4 items de receta activos -> 5 autorizaciones de
   receta pendientes -> 6 diagnosticos activos -> 7 pases activos -> 8 estudios
-  de pase -> 9 incapacidades emitidas -> 10 resultados de estudio (lectura).
+  de pase -> 9 incapacidades emitidas -> 10 citas de seguimiento vigentes sin
+  ficha (K1 de P-12) -> 11 resultados de estudio (lectura).
   Bloqueos 409: PRESCRIPTION_ITEM_DISPENSED, LEAVE_SENT_TO_RH,
   STUDY_RESULT_ACTIVE. Luego snapshot canonico -> hash -> cabecera -> cascada
   -> items de traza -> ChangeLog por entidad -> audit_hook (strict) ->
@@ -66,8 +67,15 @@ from apps.consulta_medica.services import autorizacion_motor_service as motor
 from apps.pases.repositories.referral_repository import ReferralRepository
 from apps.pases.services import autorizacion_motor_service as motor_pases
 from apps.realtime.events import publish_visit_cancelled
+from apps.recepcion.models import EstatusCita
 from apps.recepcion.repositories.visit_repository import VisitRepository
 from apps.recepcion.services.errors import VisitDomainError
+from apps.recepcion.uses_case.seguimiento_nota_cancelada_usecase import (
+    avisar_cita_con_ficha,
+    cancelar_cita_de_nota_cancelada,
+    citas_de_seguimiento_a_cancelar,
+    citas_de_seguimiento_con_ficha,
+)
 from apps.recepcion.uses_case.visit_state_machine_usecase import (
     ROLE_AUTORIZADOR_NOTA,
     transition_visit_state,
@@ -187,6 +195,7 @@ class Cascade:
     referrals: list = field(default_factory=list)
     studies: list = field(default_factory=list)
     leaves: list = field(default_factory=list)
+    follow_ups: list = field(default_factory=list)
     study_result_ids: list = field(default_factory=list)
 
     def counts(self):
@@ -197,6 +206,7 @@ class Cascade:
             "referrals": len(self.referrals),
             "referralStudies": len(self.studies),
             "medicalLeaves": len(self.leaves),
+            "followUpAppointments": len(self.follow_ups),
         }
 
 
@@ -274,7 +284,11 @@ def _gather(visit, consultation, *, lock):
             ).order_by("pk")
         )
 
-    # 10. Resultados de estudio activos (lectura; ligados a la consulta o a
+    # 10. Cita de seguimiento de la nota (vigente y sin ficha); la cancela
+    # recepcion, duena de las citas.
+    cascade.follow_ups = citas_de_seguimiento_a_cancelar(visit.folio, lock=lock)
+
+    # 11. Resultados de estudio activos (lectura; ligados a la consulta o a
     # estudios de sus pases).
     cascade.study_result_ids = sorted(
         set(
@@ -349,6 +363,10 @@ def _build_snapshot(*, visit, consultation, motivo, motivo_detalle, actor_id, de
                       "status": leave.status, "rhStatus": leave.rh_status,
                       "folio": leave.folio, "days": leave.days,
                       "startDate": leave.start_date, "endDate": leave.end_date})
+    for cita in cascade.follow_ups:
+        items.append({"type": Item.EntityType.FOLLOW_UP_APPOINTMENT, "id": cita.pk,
+                      "status": cita.estatus, "folio": cita.folio,
+                      "dateTime": cita.fecha_hora})
     items.sort(key=lambda row: (row["type"], row["id"]))
 
     return {
@@ -559,6 +577,17 @@ def cancel_consultation(
             _cancel(Item.EntityType.MEDICAL_LEAVE, leave, "cancelada",
                     lambda leave=leave: MedicalLeaveRepository.cancel(
                         leave, cancelled_by_id=actor_id))
+        for cita in cascade.follow_ups:
+            # La cita lleva `estatus`, no `status`: no pasa por `_cancel`.
+            previous_cita_status = cita.estatus
+            cancelar_cita_de_nota_cancelada(
+                cita, cancellation_id=cancellation.pk, changed_by_id=actor_id,
+            )
+            trace.append((Item.EntityType.FOLLOW_UP_APPOINTMENT, cita.pk, previous_cita_status,
+                          EstatusCita.CANCELADA, cita._meta))
+        # D4: con ficha el paciente ya esta en la unidad; la cita se deja con aviso.
+        for cita in citas_de_seguimiento_con_ficha(locked_visit.folio):
+            avisar_cita_con_ficha(cita, cancellation_id=cancellation.pk, changed_by_id=actor_id)
 
         # Visita cerrada -> cancelada por la maquina de estados (rol interno).
         previous_visit_status = locked_visit.status

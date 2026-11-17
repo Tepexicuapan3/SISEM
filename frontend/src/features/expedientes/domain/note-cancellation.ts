@@ -102,6 +102,7 @@ const CASCADE_LABELS: Array<[keyof NoteCancellationCascadeCounts, string, string
   ["referrals", "pase", "pases"],
   ["referralStudies", "estudio de pase", "estudios de pase"],
   ["medicalLeaves", "incapacidad", "incapacidades"],
+  ["followUpAppointments", "cita de seguimiento", "citas de seguimiento"],
 ];
 
 /** Lineas "N elemento(s)" de la cascada, omitiendo los que valen 0. */

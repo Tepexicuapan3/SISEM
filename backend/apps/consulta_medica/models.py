@@ -600,6 +600,7 @@ class ConsultationCancellationItem(models.Model):
         REFERRAL = "REFERRAL", "Pase"
         REFERRAL_STUDY = "REFERRAL_STUDY", "Estudio de pase"
         MEDICAL_LEAVE = "MEDICAL_LEAVE", "Incapacidad"
+        FOLLOW_UP_APPOINTMENT = "FOLLOW_UP", "Cita de seguimiento"
 
     id_item = models.BigAutoField(primary_key=True, db_column="id_cancelacion_item")
     cancellation = models.ForeignKey(

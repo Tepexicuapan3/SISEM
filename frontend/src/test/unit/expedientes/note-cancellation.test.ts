@@ -37,6 +37,11 @@ describe("describeCascade", () => {
     expect(lines).toEqual(["1 diagnostico", "2 medicamentos de receta"]);
   });
 
+  it("incluye la cita de seguimiento que se cancela con la nota", () => {
+    const lines = describeCascade({ ...preview().cascade, followUpAppointments: 1 });
+    expect(lines).toEqual(["1 cita de seguimiento"]);
+  });
+
   it("sin elementos devuelve lista vacia", () => {
     expect(describeCascade(preview().cascade)).toEqual([]);
   });

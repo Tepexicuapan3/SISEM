@@ -1,8 +1,20 @@
 # P-12 Cita de seguimiento — análisis antes de implementar
 
-Estado: **análisis, sin código** (2026-11-11, revisión 2). Proceso 1 de la lista
+Estado: **K1 implementado** (2026-11-17, rama `SISEM-15-07-2026`); el resto,
+análisis sin código (2026-11-11, revisión 2). Proceso 1 de la lista
 de crónicos (ver [cronicos-control.md](cronicos-control.md)). El plan de
 implementación sale de las decisiones de la sección 7.
+
+> **K1 (2026-11-17)**: la cascada de cancelación de nota
+> (`note_cancellation_usecase`) cancela la cita de seguimiento vigente y sin
+> ficha con el motivo "Consulta cancelada" (migración `recepcion/0040`, canal
+> SISTEMA, libera el horario) y la deja en la traza de la cancelación
+> (`tp_entidad = FOLLOW_UP`, migración `consulta_medica/0069`, solo choices).
+> Con ficha (D4, se tomó la recomendación) la cita se deja y queda el aviso en
+> su bitácora. La lógica de citas vive en recepción
+> (`seguimiento_nota_cancelada_usecase`). El preview y la respuesta agregan
+> `cascade.followUpAppointments`; el diálogo lo muestra. Pruebas:
+> `consulta_medica/tests/test_note_cancellation_follow_up.py`.
 
 > TL;DR: contra el legado, P-12 está **completo y no se toca**. Visto como
 > proceso de punta a punta le faltan 7 complementos: la cita no se cancela al
@@ -156,7 +168,7 @@ la red de seguridad.
 ## 9. Criterio de terminado (por complemento, cuando se aprueben)
 
 - [ ] Pruebas primero de cada complemento, incluida una que demuestre que **lo existente no cambió** (mismo contrato y misma respuesta sin los campos o filtros nuevos).
-- [ ] K1: cancelar una nota con cita sin ficha la cancela con motivo; con ficha, no y queda la nota en la bitácora.
+- [x] K1: cancelar una nota con cita sin ficha la cancela con motivo; con ficha, no y queda la nota en la bitácora.
 - [ ] K4: `ConsultationClosed` trae `followUp` solo cuando hubo cita.
 - [ ] K3: descartar pide motivo, queda auditado y el caso sale de la lista.
 - [ ] Documentación: este archivo, `continuar-en-trabajo.md` y la marca de P-12 en el mapa.

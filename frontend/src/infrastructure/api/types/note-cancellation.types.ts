@@ -23,6 +23,8 @@ export interface NoteCancellationCascadeCounts {
   referrals: number;
   referralStudies: number;
   medicalLeaves: number;
+  /** Cita de seguimiento vigente y sin ficha que se cancela con la nota (K1 de P-12). */
+  followUpAppointments?: number;
 }
 
 export interface NoteCancellationPreview {
