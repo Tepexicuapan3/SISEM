@@ -4,10 +4,13 @@ import { render, screen } from "@/test/utils";
 import { DisponibilidadView } from "@features/recepcion/modules/agenda/components/DisponibilidadView";
 import { buildDoctorFilterOptions } from "@features/recepcion/modules/agenda/pages/RecepcionAgendaPage.helpers";
 import type { MedicoListItem } from "@api/types/medicos.types";
+import { hoyLocal } from "@features/recepcion/modules/citas/utils/dates";
 
 // IDs DIVERGENTES a propósito: No. Médico (512) != id de usuario (7).
 const MEDICO_ID = 512;
 const USUARIO_ID = 7;
+// El slot de hoy genera ficha; el de otro día, cita. El mock clickea el que diga la prueba.
+let fechaSlot = hoyLocal();
 
 vi.mock("@features/recepcion/modules/citas/components/SlotCalendar", () => ({
   SlotCalendar: ({
@@ -19,7 +22,7 @@ vi.mock("@features/recepcion/modules/citas/components/SlotCalendar", () => ({
   }) => (
     <button
       type="button"
-      onClick={() => onSlotClick("2026-10-14", { hora: "09:00", consultorioId: 3 })}
+      onClick={() => onSlotClick(fechaSlot, { hora: "09:00", consultorioId: 3 })}
     >
       slot-medico-{medicoId}
     </button>
@@ -40,7 +43,12 @@ const medico = (over: Partial<MedicoListItem>): MedicoListItem =>
     ...over,
   }) as unknown as MedicoListItem;
 
-const renderView = (calMedicoId: number, allMedicos: MedicoListItem[], onOpen = vi.fn()) => {
+const renderView = (
+  calMedicoId: number,
+  allMedicos: MedicoListItem[],
+  onOpen = vi.fn(),
+  onAgendarCita = vi.fn(),
+) => {
   render(
     <DisponibilidadView
       centroOptions={[]}
@@ -55,13 +63,17 @@ const renderView = (calMedicoId: number, allMedicos: MedicoListItem[], onOpen = 
       disponibilidadMedicos={allMedicos}
       allMedicos={allMedicos}
       onOpenQuickCheckin={onOpen}
+      onAgendarCita={onAgendarCita}
     />,
   );
   return onOpen;
 };
 
 describe("Recepción: espacios de identidad médico vs usuario", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fechaSlot = hoyLocal();
+  });
 
   it("DisponibilidadView manda doctorId = usuarioId y la agenda usa medicoId", async () => {
     const user = userEvent.setup();
@@ -72,6 +84,25 @@ describe("Recepción: espacios de identidad médico vs usuario", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onOpen.mock.calls[0][0].doctorId).toBe(USUARIO_ID);
     expect(onOpen.mock.calls[0][0].doctorId).not.toBe(MEDICO_ID);
+  });
+
+  it("DisponibilidadView agenda cita (no ficha) en un horario de otro día, con el No. Médico", async () => {
+    fechaSlot = "2099-01-15";
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const onAgendarCita = vi.fn();
+    renderView(MEDICO_ID, [medico({})], onOpen, onAgendarCita);
+
+    await user.click(screen.getByRole("button", { name: `slot-medico-${MEDICO_ID}` }));
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onAgendarCita).toHaveBeenCalledWith({
+      medicoId: MEDICO_ID,
+      medicoNombre: "Dra. Divergente",
+      consultorioId: 3,
+      fecha: "2099-01-15",
+      hora: "09:00",
+    });
   });
 
   it("el filtro de médico usa usuarioId", () => {

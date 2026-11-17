@@ -1735,6 +1735,22 @@ En la pestaña Próximas citas, arriba, "Seguimientos por agendar" con
 "Agendar" (`agenda/components/AgendarSeguimientoDialog.tsx`: médico disponible
 del centro, fecha y horario libre).
 
+**17. Ficha solo para hoy y "Agendar cita" en Disponibilidad.** Hueco: el
+diálogo "Generar ficha" aceptaba otra fecha y `POST /visits` no la validaba;
+se creaba una visita abierta hoy, con número de ficha de hoy y sin cita, que
+bloqueaba al paciente (`VISIT_DUPLICATE_SUBMIT`). Ahora `create_visit`
+rechaza `fechaConsulta` distinta de hoy con `422 FICHA_SOLO_HOY` (no aplica a
+la ficha automática, que siempre es del día de la cita). En el frontend el
+diálogo de ficha deja la fecha fija en hoy y usa la fecha local
+(`citas/utils/dates.hoyLocal`; antes `toISOString`, que después de las 18:00
+daba la de mañana). En Disponibilidad, un horario libre de hoy abre la ficha y
+uno de otro día abre "Agendar cita" (`agenda/components/AgendarCitaDialog.tsx`:
+expediente, miembro, servicio y motivo; `POST /citas` con el No. Médico y el
+consultorio del horario; ante `409 CONSULTORIO_FAMILIAR_DIFERENTE` permite la
+excepción con motivo si hay permiso). Antes recepción solo podía crear citas
+desde "Seguimientos por agendar". El botón exige `recepcion:citas:write`. Sin
+migraciones.
+
 Bloque de citas completo. Sigue sin existir la asignación de consultorio al
 paciente (P-03).
 

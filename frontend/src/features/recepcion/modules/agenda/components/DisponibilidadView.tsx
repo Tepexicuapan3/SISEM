@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { SlotCalendar } from "@features/recepcion/modules/citas/components/SlotCalendar";
-import { addDays } from "@features/recepcion/modules/citas/utils/dates";
+import { addDays, hoyLocal } from "@features/recepcion/modules/citas/utils/dates";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@shared/ui/select";
@@ -8,6 +8,7 @@ import { ARRIVAL_TYPE } from "@api/types";
 import type { MedicoListItem } from "@api/types/medicos.types";
 import type { CheckinFormInput } from "@features/recepcion/modules/checkin/domain/checkin.schemas";
 import { DisponibilidadMedicoCard } from "./DisponibilidadMedicoCard";
+import type { SlotParaCita } from "./AgendarCitaDialog";
 import { formatWeekRange, getMonday } from "../pages/RecepcionAgendaPage.helpers";
 
 interface Props {
@@ -23,6 +24,8 @@ interface Props {
   disponibilidadMedicos:  MedicoListItem[];
   allMedicos:             MedicoListItem[];
   onOpenQuickCheckin:     (defaults?: Partial<CheckinFormInput>) => void;
+  /** Horario libre de otro día: se agenda una cita (la ficha es solo para hoy). */
+  onAgendarCita:          (slot: SlotParaCita) => void;
 }
 
 export function DisponibilidadView({
@@ -38,6 +41,7 @@ export function DisponibilidadView({
   disponibilidadMedicos,
   allMedicos,
   onOpenQuickCheckin,
+  onAgendarCita,
 }: Props) {
   const calMedico = allMedicos.find((m) => m.id === calMedicoId);
   const calMedicoUsuarioId = calMedico?.usuarioId ?? null;
@@ -143,6 +147,18 @@ export function DisponibilidadView({
               medicoNombre={calMedico?.nombreCompleto}
               weekStart={calWeekStart}
               onSlotClick={(fecha, slot) => {
+                // Otro día: cita (ese día el sistema genera la ficha). La ficha es solo para hoy.
+                if (fecha !== hoyLocal()) {
+                  if (calMedicoId == null) return;
+                  onAgendarCita({
+                    medicoId:      calMedicoId,
+                    medicoNombre:  calMedico?.nombreCompleto,
+                    consultorioId: slot.consultorioId ?? undefined,
+                    fecha,
+                    hora:          slot.hora,
+                  });
+                  return;
+                }
                 // Visit.doctorId vive en el espacio USUARIO; medicoId (No. Médico) solo para la agenda.
                 if (calMedicoUsuarioId == null) return;
                 onOpenQuickCheckin({
@@ -162,7 +178,7 @@ export function DisponibilidadView({
                 Selecciona un médico de la lista para ver su disponibilidad semanal.
               </p>
               <p className="text-xs text-txt-muted/70">
-                Los slots en verde están disponibles — haz clic para generar una ficha.
+                Los horarios en verde están libres: hoy generan una ficha; otro día agendan una cita.
               </p>
             </div>
           )}

@@ -49,6 +49,7 @@ import {
 } from "@features/recepcion/shared/domain/recepcion.services";
 import { useMedicosDisponibles } from "@features/admin/modules/medicos/hooks/useMedicos";
 import { useAgendaSemanal }       from "@features/recepcion/modules/citas/queries/useAgendaSemanal";
+import { hoyLocal }               from "@features/recepcion/modules/citas/utils/dates";
 import { useCentrosAtencionList } from "@features/admin/modules/catalogos/centros-atencion/queries/useCentrosAtencionList";
 import { useAlcanceCentros } from "@/domains/auth-access/contracts/navigation-auth";
 import { useDebounce } from "@shared/hooks/useDebounce";
@@ -181,8 +182,9 @@ export const RecepcionQuickCheckinDialog = ({
 
   // ── Estado local (no va al form) ─────────────────────────────────────────
   const [noExpSearch,  setNoExpSearch]  = useState("");
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const [fechaSlot,    setFechaSlot]    = useState(todayISO);
+  // Fecha local: toISOString da la de UTC (después de las 18:00 ya sería mañana).
+  const todayISO = hoyLocal();
+  const [fechaSlot] = useState(todayISO);
   const [centroId,          setCentroId]          = useState<number | null>(null);
   const [consultorioFiltro, setConsultorioFiltro] = useState<number | null>(null);
   const [selectedMedico,    setSelectedMedico]    = useState<MedicoDisponible | null>(null);
@@ -696,17 +698,22 @@ export const RecepcionQuickCheckinDialog = ({
             {/* Fecha y centro */}
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Fecha de consulta</Label>
+                <Label htmlFor="quick-fecha" className="text-xs">Fecha de consulta</Label>
+                {/* La ficha es solo para hoy (el backend rechaza otra fecha con
+                    FICHA_SOLO_HOY); para otro día se agenda una cita en Disponibilidad. */}
                 <Input
+                  id="quick-fecha"
                   type="date"
                   value={fechaSlot}
-                  onChange={(e) => {
-                    setFechaSlot(e.target.value);
-                    setSelectedMedico(null);
-                    form.setValue("fechaConsulta", e.target.value, { shouldValidate: false });
-                  }}
+                  min={todayISO}
+                  max={todayISO}
+                  readOnly
+                  aria-describedby="quick-fecha-hint"
                   className="h-9"
                 />
+                <p id="quick-fecha-hint" className="text-[11px] text-txt-muted">
+                  Solo hoy. Para otro día, agenda una cita en Disponibilidad.
+                </p>
               </div>
 
               {centros.length > 1 ? (

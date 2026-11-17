@@ -236,16 +236,18 @@ class FichaConGuardiaTests(_SermedSimulado, TestCase):
         self.provisional = self._registrar()
         self.familiares = [_familiar(777)]
         self.medico = crear_medico()
+        # La cita se agenda a futuro; la ficha solo se genera para hoy (FICHA_SOLO_HOY).
         self.fecha = timezone.localdate() + timedelta(days=1)
+        self.hoy = timezone.localdate()
         self.hora = time(10, 0)
         self.slot = HorarioDisponible.objects.create(
-            medico=self.medico, fecha=self.fecha, hora=self.hora, disponible=True)
+            medico=self.medico, fecha=self.hoy, hora=self.hora, disponible=True)
 
     def _ficha(self, pk_num):
         from apps.recepcion.uses_case.visit_queue_usecase import create_visit
 
         return create_visit("40041", pk_num, doctor_id=self.medico.id_usuario_id, medico_id=self.medico.id,
-                            hora_consulta=self.hora, fecha_consulta=self.fecha)
+                            hora_consulta=self.hora, fecha_consulta=self.hoy)
 
     def _mensaje_para_recepcion(self, error, esperado):
         # Recepcion no conoce claves internas ni el nombre de la base.

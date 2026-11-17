@@ -302,6 +302,20 @@ def create_visit(
     ``CitaMedica`` con ``medico_id`` real), debe pasar los dos explícitos.
     Si solo llega ``doctor_id`` (check-in manual walk-in), se traduce acá.
     """
+    # La ficha es para el paciente que está en la sala: solo hoy. Con otra
+    # fecha quedaba una visita abierta hoy sin cita que bloqueaba al paciente;
+    # para otro día se agenda una cita (POST /citas).
+    if (
+        not automatica
+        and fecha_consulta is not None
+        and fecha_consulta != timezone.localdate()
+    ):
+        raise VisitDomainError(
+            "FICHA_SOLO_HOY",
+            "La ficha solo se genera para hoy. Para otro día agenda una cita.",
+            422,
+        )
+
     if VisitRepository.exists_open_visit_for_patient(no_exp, pk_num):
         raise VisitDomainError(
             "VISIT_DUPLICATE_SUBMIT",

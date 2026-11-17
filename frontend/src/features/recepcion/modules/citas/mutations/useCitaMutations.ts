@@ -16,6 +16,18 @@ export const useUpdateEstatusCita = (id: number) => {
   });
 };
 
+/** Cita nueva desde recepción (POST /citas): refresca la agenda y las próximas citas. */
+export const useAgendarCita = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateCitaRequest) => citasAPI.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CITAS_KEYS.all });
+      qc.invalidateQueries({ queryKey: AGENDA_KEY });
+    },
+  });
+};
+
 /** Cita del seguimiento que indicó el médico: al crearse sale de la lista (CITAS_KEYS la incluye). */
 export const useAgendarSeguimiento = () => {
   const qc = useQueryClient();

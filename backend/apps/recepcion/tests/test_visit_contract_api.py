@@ -895,3 +895,44 @@ class VisitContractsApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIsNone(response.data["tipoCitaId"])
         self.assertIsNone(response.data["tipoCitaNombre"])
+
+    # La ficha es para el paciente que está en la sala: solo con la fecha de
+    # hoy. Una fecha de otro día creaba una visita abierta hoy sin cita que
+    # dejaba al paciente bloqueado (VISIT_DUPLICATE_SUBMIT); para otro día se
+    # agenda una cita (POST /citas).
+    def _post_walk_in_con_fecha(self, no_exp, fecha):
+        return self.client.post(
+            "/api/v1/visits",
+            {"noExp": no_exp, "arrivalType": "walk_in", "fechaConsulta": fecha.isoformat()},
+            format="json",
+            HTTP_X_REQUEST_ID=self.request_id,
+            **self._csrf_headers(),
+        )
+
+    def test_create_visit_con_fecha_futura_se_rechaza(self):
+        self._login_as("recepcion_user", self.recepcion_password)
+        manana = timezone.localdate() + timedelta(days=1)
+
+        response = self._post_walk_in_con_fecha("EXP7001", manana)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data["code"], "FICHA_SOLO_HOY")
+        # No queda ninguna visita abierta que bloquee al paciente.
+        hoy = self._post_walk_in_con_fecha("EXP7001", timezone.localdate())
+        self.assertEqual(hoy.status_code, status.HTTP_201_CREATED)
+
+    def test_create_visit_con_fecha_pasada_se_rechaza(self):
+        self._login_as("recepcion_user", self.recepcion_password)
+        ayer = timezone.localdate() - timedelta(days=1)
+
+        response = self._post_walk_in_con_fecha("EXP7002", ayer)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data["code"], "FICHA_SOLO_HOY")
+
+    def test_create_visit_con_fecha_de_hoy_se_crea(self):
+        self._login_as("recepcion_user", self.recepcion_password)
+
+        response = self._post_walk_in_con_fecha("EXP7003", timezone.localdate())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)

@@ -32,6 +32,7 @@ import { MotivoCancelacionFields } from "@features/recepcion/shared/components/M
 import { useVisitStatusAction } from "@features/recepcion/modules/checkin/mutations/useVisitStatusAction";
 import { useRecepcionAgendaQueue } from "@features/recepcion/modules/agenda/queries/useRecepcionAgendaQueue";
 import { RecepcionQuickCheckinDialog } from "@features/recepcion/modules/agenda/components/RecepcionQuickCheckinDialog";
+import { AgendarCitaDialog, type SlotParaCita } from "@features/recepcion/modules/agenda/components/AgendarCitaDialog";
 import { DisponibilidadView } from "@features/recepcion/modules/agenda/components/DisponibilidadView";
 import { HistorialView } from "@features/recepcion/modules/agenda/components/HistorialView";
 import { BandejaView } from "@features/recepcion/modules/agenda/components/BandejaView";
@@ -117,6 +118,10 @@ export const RecepcionAgendaPage = () => {
   // Próximas citas: mismo permiso que exige GET /citas/proximas.
   const canReadCitas = hasCapability("recepcion.citas.read", {
     allOf: ["recepcion:citas:read"],
+  });
+  // Agendar cita: mismo permiso que exige POST /citas.
+  const canWriteCitas = hasCapability("recepcion.citas.write", {
+    allOf: ["recepcion:citas:write"],
   });
   const canWriteRecepcion = hasCapability(
     "flow.recepcion.queue.write",
@@ -230,6 +235,8 @@ export const RecepcionAgendaPage = () => {
   const [quickCheckinDefaults, setQuickCheckinDefaults] = useState<
     Partial<CheckinFormInput> | undefined
   >(undefined);
+  // Horario libre de otro día elegido en Disponibilidad: va a una cita, no a ficha.
+  const [slotParaCita, setSlotParaCita] = useState<SlotParaCita | null>(null);
   const [pendingStatusAction, setPendingStatusAction] =
     useState<PendingStatusAction | null>(null);
   // Solo se usa cuando pendingStatusAction.targetStatus === CANCELADA -- el
@@ -529,6 +536,7 @@ export const RecepcionAgendaPage = () => {
           disponibilidadMedicos={disponibilidadMedicos}
           allMedicos={allMedicos}
           onOpenQuickCheckin={handleOpenQuickCheckin}
+          onAgendarCita={setSlotParaCita}
         />
       ) : null}
 
@@ -674,6 +682,14 @@ export const RecepcionAgendaPage = () => {
         canWrite={canWriteRecepcion}
         initialValues={resolvedQuickCheckinDefaults}
         activeVisits={visits}
+      />
+
+      <AgendarCitaDialog
+        slot={slotParaCita}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSlotParaCita(null);
+        }}
+        canWrite={canWriteCitas}
       />
 
       <FichaModal
