@@ -21,7 +21,18 @@ export const padronesKeys = {
     [...padronesKeys.all, "cronicos", "visit-control", visitId] as const,
   family: (noExp: string) => [...padronesKeys.all, "family", noExp] as const,
   programs: () => [...padronesKeys.all, "cronicos", "programs"] as const,
+  patient: (noExp: string, pkNum: number) => [...padronesKeys.all, "patient", noExp, pkNum] as const,
 };
+
+/** Padrones activos del paciente para la alerta del expediente. Sin permiso (403) la alerta no se muestra. */
+export const usePatientRegistries = (noExp: string, pkNum: number) =>
+  useQuery({
+    queryKey: padronesKeys.patient(noExp, pkNum),
+    queryFn: () => padronesAPI.patientRegistries(noExp, pkNum),
+    enabled: Boolean(noExp),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
 
 /** Programas de cronicos activos (selector del listado). */
 export const usePadronPrograms = (enabled = true) =>

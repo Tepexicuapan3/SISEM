@@ -43,6 +43,9 @@ import { usePatientProfile } from "@features/expedientes/queries/useClinicalHist
 import { PATIENT_SEX_LABELS } from "@features/expedientes/domain/patient-identity";
 import { usePatientBloodType } from "@features/expedientes/queries/useUnifiedHistory";
 import { bloodTypeSummary } from "@features/expedientes/domain/blood-type";
+import { PatientRegistriesAlert } from "@features/padrones/components/PatientRegistriesAlert";
+import { PatientRegistryFlags } from "@features/padrones/components/PatientRegistryFlags";
+import { usePatientRegistries } from "@features/padrones/queries/usePadrones";
 
 const SIN_DATO = "No disponible";
 
@@ -87,11 +90,15 @@ export const ExpedienteDetailPage = () => {
   // misma query key que el tab Generales (tab por defecto), asi que comparte
   // cache: no agrega requests. Email/direccion siguen sin existir en ningun
   // modelo del backend -- SIN_DATO en vez de inventar un valor.
-  // `padecimientos_cronicos`/`medicamentos_habituales` tampoco tienen fuente
-  // estructurada todavia, siguen vacios.
+  // `medicamentos_habituales` tampoco tiene fuente estructurada todavia, sigue vacio.
   const { data: ficha } = usePatientProfile(folioReal, pkNum);
   // Tipo de sangre (5.2): misma query key que el tab Generales.
   const { data: bloodType } = usePatientBloodType(folioReal, pkNum);
+  // Padrones activos del miembro elegido (docs/plans/padrones-alerta-expediente.md).
+  // Reemplaza el `padecimientos_cronicos: []` fijo que tenia esta tarjeta.
+  const { data: registries } = usePatientRegistries(folioReal, pkNum);
+  const cronicos = registries?.cronicos ?? [];
+  const discapacidad = registries?.discapacidad ?? [];
 
   const expediente = {
     folio: folioReal || SIN_DATO,
@@ -107,7 +114,6 @@ export const ExpedienteDetailPage = () => {
     direccion: SIN_DATO,
     status: selectedMember?.estatus ?? SIN_DATO,
     alergias,
-    padecimientos_cronicos: [] as string[],
     medicamentos_habituales: [] as string[],
   };
 
@@ -173,6 +179,8 @@ export const ExpedienteDetailPage = () => {
                   </Badge>
                   <Badge variant="outline">{expediente.parentesco}</Badge>
                 </div>
+                {/* Padrones: junto al nombre, lo primero que se ve */}
+                <PatientRegistryFlags noExp={folioReal} pkNum={pkNum} className="mb-3" />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
                   <div>
                     <span className="text-txt-muted">CURP:</span>{" "}
@@ -281,7 +289,8 @@ export const ExpedienteDetailPage = () => {
 
         {/* Alertas Médicas */}
         {(expediente.alergias.length > 0 ||
-          expediente.padecimientos_cronicos.length > 0) && (
+          cronicos.length > 0 ||
+          discapacidad.length > 0) && (
           <Card className="mb-6 border-status-alert/50 bg-status-alert/5">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -309,20 +318,7 @@ export const ExpedienteDetailPage = () => {
                   </div>
                 </div>
               )}
-              {expediente.padecimientos_cronicos.length > 0 && (
-                <div>
-                  <p className="text-sm font-semibold text-txt-body mb-2">
-                    🩺 Padecimientos Crónicos
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {expediente.padecimientos_cronicos.map((pad, idx) => (
-                      <Badge key={idx} variant="alert">
-                        {pad}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <PatientRegistriesAlert cronicos={cronicos} discapacidad={discapacidad} />
               {expediente.medicamentos_habituales.length > 0 && (
                 <div>
                   <p className="text-sm font-semibold text-txt-body mb-2">

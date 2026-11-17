@@ -10,6 +10,7 @@ error_response y evento de auditoria por cada inscripcion o baja.
   POST padrones/<registry>/<id>/baja    dar de baja la inscripcion
   GET  padrones/<registry>/opciones     CIE-10 o discapacidades para inscribir (?search=)
   GET  padrones/miembros                miembros vigentes del expediente para elegir (?noExp=)
+  GET  pacientes/<idPaciente>/padrones  inscripciones activas del paciente (alerta del expediente)
 <registry> = cronicos | discapacidad
 
 Desde la consulta (docs/plans/cronicos-aviso-consulta.md):
@@ -166,6 +167,22 @@ class ChronicProgramsView(APIView):
         permissions, _ = _access(user)
         try:
             payload = uc.list_programs(permissions=permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class PatientRegistriesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, id_paciente):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        permissions, roles = _access(user)
+        try:
+            payload = uc.patient_registries(id_paciente, permissions=permissions, roles=roles)
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
         return Response(payload, status=status.HTTP_200_OK)

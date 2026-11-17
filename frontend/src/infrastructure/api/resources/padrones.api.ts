@@ -1,5 +1,5 @@
 import apiClient from "@api/client";
-import { conIdPaciente, registrarIdsPaciente } from "@api/paciente-ids";
+import { conIdPaciente, registrarIdsPaciente, rutaPaciente } from "@api/paciente-ids";
 import type {
   ChronicControlPanel,
   ChronicControlRecord,
@@ -15,11 +15,22 @@ import type {
   PadronOptionsResponse,
   PadronProgramsResponse,
   PadronRegistry,
+  PatientRegistriesResponse,
 } from "@api/types/padrones.types";
+
+const SIN_PADRONES: PatientRegistriesResponse = { cronicos: [], discapacidad: [] };
 
 export const padronesAPI = {
   list: async (registry: PadronRegistry, params?: PadronListParams): Promise<PadronListResponse> => {
     const response = await apiClient.get<PadronListResponse>(`/padrones/${registry}`, { params });
+    return response.data;
+  },
+
+  /** Alerta del expediente. Sin idPaciente el miembro nunca se atendió: no está en ningún padrón. */
+  patientRegistries: async (noExp: string, pkNum: number): Promise<PatientRegistriesResponse> => {
+    const ruta = await rutaPaciente(noExp, pkNum, "padrones");
+    if (!ruta.url.startsWith("/pacientes/")) return SIN_PADRONES;
+    const response = await apiClient.get<PatientRegistriesResponse>(ruta.url);
     return response.data;
   },
 

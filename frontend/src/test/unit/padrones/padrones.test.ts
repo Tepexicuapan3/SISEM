@@ -70,4 +70,15 @@ describe("padronesAPI", () => {
     await padronesAPI.discharge("cronicos", 9, { reasonId: 2 });
     expect(mocked.post).toHaveBeenCalledWith("/padrones/cronicos/9/baja", { reasonId: 2 });
   });
+
+  it("padrones del paciente: por idPaciente; sin id no pregunta (alerta del expediente)", async () => {
+    registrarIdsPaciente([{ noExp: "40488", pkNum: 1, idPaciente: 777 }]);
+    await padronesAPI.patientRegistries("40488", 1);
+    expect(mocked.get).toHaveBeenCalledWith("/pacientes/777/padrones");
+
+    // Un miembro que nunca se atendió no tiene registro, así que no está en ningún padrón.
+    mocked.get.mockResolvedValueOnce({ data: { titular: null, dependientes: [] } });
+    expect(await padronesAPI.patientRegistries("99999", 0)).toEqual({ cronicos: [], discapacidad: [] });
+    expect(mocked.get).not.toHaveBeenCalledWith("/patients/99999/padrones", expect.anything());
+  });
 });

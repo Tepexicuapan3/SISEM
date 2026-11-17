@@ -5,6 +5,7 @@ from apps.padrones.views import (
     ChronicVisitControlView,
     ChronicVisitEnrollView,
     ChronicVisitNoticeView,
+    PatientRegistriesView,
     RegistryDischargeView,
     RegistryListCreateView,
     RegistryMembersView,
@@ -30,6 +31,8 @@ urlpatterns = [
     ),
     path("padrones/cronicos/programas", ChronicProgramsView.as_view(), name="padrones-cronicos-programs"),
     path("padrones/miembros", RegistryMembersView.as_view(), name="padrones-members"),
+    # Alerta del expediente (docs/plans/padrones-alerta-expediente.md).
+    path("pacientes/<int:id_paciente>/padrones", PatientRegistriesView.as_view(), name="padrones-patient"),
     path("padrones/<str:registry>", RegistryListCreateView.as_view(), name="padrones-list-create"),
     path("padrones/<str:registry>/opciones", RegistryOptionsView.as_view(), name="padrones-options"),
     path(

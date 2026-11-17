@@ -64,6 +64,12 @@ export interface PadronProgramsResponse {
   items: ChronicProgramRef[];
 }
 
+/** Inscripciones activas del paciente (alerta del expediente). */
+export interface PatientRegistriesResponse {
+  cronicos: PadronEnrollment[];
+  discapacidad: PadronEnrollment[];
+}
+
 export interface PadronListResponse {
   items: PadronEnrollment[];
   total: number;

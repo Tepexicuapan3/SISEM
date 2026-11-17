@@ -246,6 +246,26 @@ def list_enrollments(kind, *, permissions, roles=None, no_exp=None, pk_num=None,
     }
 
 
+PATIENT_REGISTRIES_REQUIREMENT = {
+    "anyOf": ["clinico:expedientes:read", "clinico:consultas:read", "clinico:padrones:read"],
+}
+
+
+def patient_registries(patient_id, *, permissions, roles=None):
+    """Inscripciones activas del paciente en ambos padrones, para la alerta del
+    expediente (docs/plans/padrones-alerta-expediente.md). Un id desconocido da
+    listas vacias: no confirma si el paciente existe."""
+    _ensure(PATIENT_REGISTRIES_REQUIREMENT, permissions)
+    return {
+        key: [
+            to_contract(spec, e, permissions=permissions, roles=roles or [])
+            for e in _base_queryset(spec).filter(patient_id=patient_id, status=RegistryStatus.ACTIVO)
+            .order_by("enrolled_on", "id")
+        ]
+        for key, spec in KINDS.items()
+    }
+
+
 def search_options(kind, *, search, permissions, roles=None, limit=20):
     """Opciones para inscribir, con el permiso del padron (no el de consulta
     ni el de admin de catalogos). Los CIE-10 sensibles que el usuario no puede

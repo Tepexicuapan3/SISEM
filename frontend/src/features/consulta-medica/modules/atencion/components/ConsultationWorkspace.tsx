@@ -14,6 +14,7 @@ import { PrescriptionSummary } from "@features/consulta-medica/modules/atencion/
 import { canStartConsultation } from "@features/operativo/shared/contracts/visit-flow";
 import { ChronicConditionsNotice } from "@features/padrones/components/ChronicConditionsNotice";
 import { ChronicControlPanel } from "@features/padrones/components/ChronicControlPanel";
+import { PatientRegistryFlags } from "@features/padrones/components/PatientRegistryFlags";
 import {
   VISIT_STATUS,
   type CieSearchItem,
@@ -182,6 +183,8 @@ export function ConsultationWorkspace({
                       ? " · Titular"
                       : ""}
                 </p>
+                {/* Padrones: siempre a la vista mientras se captura */}
+                <PatientRegistryFlags noExp={selectedVisit.noExp} pkNum={selectedVisit.pkNum} className="mt-2" />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-mono text-sm font-medium text-txt-muted">
