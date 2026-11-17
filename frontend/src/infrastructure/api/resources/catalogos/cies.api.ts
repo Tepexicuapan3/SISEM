@@ -10,23 +10,29 @@
  */
 
 import apiClient from "@api/client";
+import type { ListResponse, PaginationParams } from "@api/types/common.types";
 
 /* =======================
   Tipos
 ======================= */
 
+/** La clave es la PK (sin `id`); se guarda sin punto: "E119". */
 export interface CiesListItem {
   code: string;
-  description: string;
+  name: string;
   version: string;
-  is_active: boolean;
+  isActive: boolean;
 }
 
-export interface CiesListResponse {
-  count?: number;
-  next?: string | null;
-  previous?: string | null;
-  results: CiesListItem[];
+export type CiesListResponse = ListResponse<CiesListItem>;
+
+export interface CiesListParams extends PaginationParams {
+  /** Clave (con o sin punto) o parte de la descripcion; se busca en el servidor. */
+  search?: string;
+  version?: string;
+  isActive?: boolean;
+  sortBy?: "code" | "name" | "version" | "isActive";
+  sortOrder?: "asc" | "desc";
 }
 
 export interface CiesUploadRow {
@@ -71,11 +77,11 @@ const hasStatus = (error: unknown): error is ApiErrorWithStatus =>
 
 export const ciesAPI = {
   /**
-   * Listar claves CIE.
-   * @endpoint GET /api/v1/catalogos/cies/
+   * Listar claves CIE (paginado, busqueda en el servidor).
+   * @endpoint GET /api/v1/cies/
    */
-  list: async (): Promise<CiesListResponse> => {
-    const response = await apiClient.get<CiesListResponse>("/cies/");
+  getAll: async (params?: CiesListParams): Promise<CiesListResponse> => {
+    const response = await apiClient.get<CiesListResponse>("/cies/", { params });
     return response.data;
   },
 

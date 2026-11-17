@@ -1188,6 +1188,16 @@ class CatCiesSerializer(serializers.ModelSerializer):
         read_only_fields = ["code"]
 
 
+class CatCiesListSerializer(serializers.ModelSerializer):
+    # La PK es la clave (no hay `id`): mismo `name` que el resto de catalogos.
+    name = serializers.CharField(source="description")
+    isActive = serializers.BooleanField(source="is_active")
+
+    class Meta:
+        model = CatCies
+        fields = ("code", "name", "version", "isActive")
+
+
 # ---------------------------------------------------------------------------
 # CatCentroAtencionExcepcion
 # ---------------------------------------------------------------------------

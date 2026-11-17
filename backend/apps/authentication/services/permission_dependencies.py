@@ -265,6 +265,7 @@ CAPABILITY_REQUIREMENTS: Dict[str, PermissionRequirement] = {
     "admin.catalogs.tiposSanguineo.update": {"allOf": ["admin:catalogos:tipos_sanguineo:update"]},
     "admin.catalogs.tiposSanguineo.delete": {"allOf": ["admin:catalogos:tipos_sanguineo:delete"]},
     "admin.catalogs.cies.upload": {"allOf": ["admin:catalogos:cies:upload"]},
+    "admin.catalogs.cies.read": {"allOf": ["admin:catalogos:cies:read"]},
     "admin.catalogs.cie9mc.read": {"allOf": ["admin:catalogos:cie9_mc:read"]},
     "admin.catalogs.cie9mc.create": {"allOf": ["admin:catalogos:cie9_mc:create"]},
     "admin.catalogs.cie9mc.update": {"allOf": ["admin:catalogos:cie9_mc:update"]},

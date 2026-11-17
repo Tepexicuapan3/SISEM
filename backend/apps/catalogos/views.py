@@ -5,13 +5,13 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalogos.models.cies import CatCies
-from apps.catalogos.serializers import CatCiesSerializer
+from apps.catalogos.serializers import CatCiesListSerializer, CatCiesSerializer
 from apps.catalogos.services.catalog_import_service import ImportFileError
 from apps.catalogos.uses_case.catalog_import_use_case import (
     ConfirmCatalogImportUseCase, PreviewCatalogImportUseCase, TemplateUseCase,
@@ -1508,10 +1508,39 @@ class CatCiesConfirmAPIView(CatalogPermissionMixin, ErrorMixin, APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class CatCiesListCreateView(CatalogPermissionMixin, ErrorMixin, ListCreateAPIView):
+class CatCiesListCreateView(CatalogBaseListCreateView):
+    """GET con el contrato paginado de catalogos (`items`, `total`...) y
+    busqueda en el servidor: el CIE-10 oficial ronda 14 mil claves."""
     catalog = "cies"
-    queryset = CatCies.objects.all()
-    serializer_class = CatCiesSerializer
+    model = CatCies
+    list_serializer = CatCiesListSerializer
+    sort_map = MappingProxyType({
+        "code": "code", "name": "description", "version": "version", "isActive": "is_active",
+    })
+
+    def get_queryset(self):
+        qs = CatCies.objects.all()
+        version = (self.request.query_params.get("version") or "").strip()
+        return qs.filter(version=version) if version else qs
+
+    def apply_search(self, qs, search):
+        # La clave se guarda sin punto (formato DGIS): "E11.9" encuentra "E119".
+        code = search.replace(".", "").strip()
+        return qs.filter(Q(code__icontains=code) | Q(description__icontains=search))
+
+    def post(self, request):
+        # Alta individual: mismo comportamiento que tenia el ListCreateAPIView.
+        serializer = CatCiesSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self._error(
+                request,
+                code="VALIDATION_ERROR",
+                message="Datos de entrada inválidos",
+                http_status=status.HTTP_400_BAD_REQUEST,
+                details=serializer.errors,
+            )
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class CatCiesDetailView(CatalogPermissionMixin, ErrorMixin, RetrieveUpdateDestroyAPIView):

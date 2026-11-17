@@ -67,6 +67,24 @@ Tipos frontend relacionados:
 
 - `frontend/src/api/types/catalogos/areas.types.ts`
 
+## Catalogo: CIE (diagnosticos CIE-10)
+
+| Metodo | Ruta | Request | Response | Status | Permiso |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/cies/` | `CiesListParams` | `CiesListResponse` | 200 | `admin:catalogos:cies:read` |
+| POST | `/cies/upload/` | multipart `file` + `version` | vista previa por fila (no guarda) | 200 | `admin:catalogos:cies:create` |
+| POST | `/cies/confirm/` | `{ rows }` de la vista previa | `{ inserted }` | 200 | `admin:catalogos:cies:create` |
+
+- `GET /cies/` usa la estructura comun paginada; cada item es `{ code, name, version, isActive }`
+  (la PK es `code`, no hay `id`).
+- `search` busca en el servidor por clave o descripcion; la clave se guarda sin punto
+  (formato DGIS) y se encuentra escrita con o sin el: `E11.9` = `E119`.
+- Filtros extra: `version` (exacto, ej. `CIE-10`), `isActive`. `sortBy`: `code`, `name`, `version`, `isActive`.
+
+Tipos frontend relacionados:
+
+- `frontend/src/infrastructure/api/resources/catalogos/cies.api.ts`
+
 ## Errores esperados
 
 Ademas de errores globales (`401`, `403`, `500`), catalogos puede responder:

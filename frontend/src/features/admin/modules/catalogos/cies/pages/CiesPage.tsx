@@ -24,6 +24,7 @@ import {
   type CiesUploadFormRef,
 } from "@features/admin/modules/catalogos/cies/components/CiesUploadForm";
 import { CIES_PREVIEW_COLUMNS } from "@features/admin/modules/catalogos/cies/components/CiesPreviewTableColumns";
+import { CiesRegisteredSection } from "@features/admin/modules/catalogos/cies/components/CiesRegisteredSection";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -239,7 +240,7 @@ export function CiesPage() {
   return (
     <CatalogModuleLayout
       title="Catalogo CIE"
-      description="Carga masiva de claves CIE por archivo con validacion previa."
+      description="Claves CIE registradas y carga masiva por archivo con validacion previa."
       icon={<FileSpreadsheet className="size-12" />}
     >
       {!canUploadCies ? (
@@ -370,6 +371,8 @@ export function CiesPage() {
           />
         </section>
       ) : null}
+
+      <CiesRegisteredSection />
     </CatalogModuleLayout>
   );
 }
