@@ -15,6 +15,11 @@ class VisitVitalsNoExpPkNumMigrationTests(TransactionTestCase):
 
     migrate_from = [("somatometria", "0007_visitvitals_captured_by_updated_by")]
     migrate_to = [("somatometria", "0008_visitvitals_noexp_pknum_denorm")]
+    # TransactionTestCase vacia las tablas al terminar (flush); sin esto los
+    # content types se recrean con otros ids y los tests de migracion con
+    # serialized_rollback que corren despues fallan con UNIQUE
+    # django_content_type. Mismo patron que test_folio_receta.
+    serialized_rollback = True
 
     def setUp(self):
         executor = MigrationExecutor(connection)
