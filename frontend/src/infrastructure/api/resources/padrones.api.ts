@@ -6,6 +6,7 @@ import type {
   ChronicControlRegisterRequest,
   ChronicVisitEnrollRequest,
   ChronicVisitNotice,
+  PadronCorrectionRequest,
   PadronDischargeRequest,
   PadronEnrollRequest,
   PadronEnrollment,
@@ -64,6 +65,16 @@ export const padronesAPI = {
     data: PadronDischargeRequest,
   ): Promise<PadronEnrollment> => {
     const response = await apiClient.post<PadronEnrollment>(`/padrones/${registry}/${id}/baja`, data);
+    return response.data;
+  },
+
+  /** Devuelve la inscripción nueva; la original queda de baja. */
+  correct: async (
+    registry: PadronRegistry,
+    id: number,
+    data: PadronCorrectionRequest,
+  ): Promise<PadronEnrollment> => {
+    const response = await apiClient.post<PadronEnrollment>(`/padrones/${registry}/${id}/correccion`, data);
     return response.data;
   },
 

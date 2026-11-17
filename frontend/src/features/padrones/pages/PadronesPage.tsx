@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardList, Lock, Plus, XCircle } from "lucide-react";
+import { ClipboardList, Lock, PencilLine, Plus, XCircle } from "lucide-react";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Label } from "@shared/ui/label";
@@ -13,6 +13,7 @@ import { TableHeaderBar } from "@features/admin/shared/components/TableHeaderBar
 import { TableSearch } from "@features/admin/shared/components/TableSearch";
 import { AdminReadOnlyNotice } from "@features/admin/shared/components/AdminReadOnlyNotice";
 import { CatalogModuleLayout } from "@features/admin/modules/catalogos/shared/components/CatalogModuleLayout";
+import { CorrectPadronDialog } from "@features/padrones/components/CorrectPadronDialog";
 import { DischargePadronDialog } from "@features/padrones/components/DischargePadronDialog";
 import { EnrollPadronDialog } from "@features/padrones/components/EnrollPadronDialog";
 import { usePadronList, usePadronPrograms } from "@features/padrones/queries/usePadrones";
@@ -32,6 +33,9 @@ const CONTROL_OPTIONS: { value: PadronControlFilter; label: string }[] = [
   { value: "sin_control", label: "Sin control" },
 ];
 const SOURCE_LABEL = { consulta: "Consulta", manual: "Manual" } as const;
+// Lista de trabajo: lo vencido arriba (docs/plans/padrones-correccion-y-prioridad.md).
+const ORDER = { PRIORIDAD: "prioridad", RECIENTE: "reciente" } as const;
+type OrderOption = (typeof ORDER)[keyof typeof ORDER];
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return "-";
@@ -50,10 +54,12 @@ export function PadronesPage() {
   const [name, setName] = useState("");
   const [programFilter, setProgramFilter] = useState<string>(ALL);
   const [controlFilter, setControlFilter] = useState<PadronControlFilter | typeof ALL>(ALL);
+  const [order, setOrder] = useState<OrderOption>(ORDER.PRIORIDAD);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [dischargeTarget, setDischargeTarget] = useState<PadronEnrollment | null>(null);
+  const [correctTarget, setCorrectTarget] = useState<PadronEnrollment | null>(null);
 
   const debouncedNoExp = useDebounce(noExp, 400);
   const debouncedName = useDebounce(name, 400);
@@ -67,6 +73,7 @@ export function PadronesPage() {
       search: debouncedName.trim() || undefined,
       program: isChronic && programFilter !== ALL ? programFilter : undefined,
       control: isChronic && controlFilter !== ALL ? controlFilter : undefined,
+      order: isChronic && order === ORDER.PRIORIDAD ? ORDER.PRIORIDAD : undefined,
       page,
       pageSize,
     },
@@ -171,22 +178,39 @@ export function PadronesPage() {
     {
       key: "actions",
       header: "Acciones",
-      className: "w-[72px]",
+      className: "w-[96px]",
       align: "center",
       render: (row) =>
         canWrite && row.status === "activo" ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Dar de baja"
-            aria-label="Dar de baja"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDischargeTarget(row);
-            }}
-          >
-            <XCircle className="size-4 text-status-critical" />
-          </Button>
+          <div className="flex justify-center gap-1">
+            {/* Un diagnóstico restringido no se corrige: no se ve qué se capturó. */}
+            {!row.item.restricted ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Corregir"
+                aria-label="Corregir"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCorrectTarget(row);
+                }}
+              >
+                <PencilLine className="size-4" />
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Dar de baja"
+              aria-label="Dar de baja"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDischargeTarget(row);
+              }}
+            >
+              <XCircle className="size-4 text-status-critical" />
+            </Button>
+          </div>
         ) : null,
     },
   ];
@@ -292,6 +316,22 @@ export function PadronesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex flex-col gap-1">
+                  <Label>Orden</Label>
+                  <Select
+                    value={order}
+                    onValueChange={(value) => {
+                      setOrder(value as OrderOption);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-48" aria-label="Orden"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ORDER.PRIORIDAD}>Prioridad de control</SelectItem>
+                      <SelectItem value={ORDER.RECIENTE}>Inscripción reciente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </>
             ) : null}
           </div>
@@ -324,7 +364,7 @@ export function PadronesPage() {
         }}
         getRowKey={(row) => row.id.toString()}
         // Suma de los anchos de columna; con menos espacio la tabla hace scroll horizontal.
-        minWidthClassName={isChronic ? "min-w-[1240px]" : "min-w-[880px]"}
+        minWidthClassName={isChronic ? "min-w-[1264px]" : "min-w-[904px]"}
         emptyTitle="Sin inscripciones"
         emptyDescription="Cuando inscribas pacientes al padrón aparecerán aquí."
         pagination={{
@@ -348,6 +388,14 @@ export function PadronesPage() {
         }}
         registry={registry}
         enrollment={dischargeTarget}
+      />
+      <CorrectPadronDialog
+        open={correctTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCorrectTarget(null);
+        }}
+        registry={registry}
+        enrollment={correctTarget}
       />
     </CatalogModuleLayout>
   );

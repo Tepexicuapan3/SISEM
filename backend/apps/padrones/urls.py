@@ -6,6 +6,7 @@ from apps.padrones.views import (
     ChronicVisitEnrollView,
     ChronicVisitNoticeView,
     PatientRegistriesView,
+    RegistryCorrectionView,
     RegistryDischargeView,
     RegistryListCreateView,
     RegistryMembersView,
@@ -39,5 +40,10 @@ urlpatterns = [
         "padrones/<str:registry>/<int:enrollment_id>/baja",
         RegistryDischargeView.as_view(),
         name="padrones-discharge",
+    ),
+    path(
+        "padrones/<str:registry>/<int:enrollment_id>/correccion",
+        RegistryCorrectionView.as_view(),
+        name="padrones-correction",
     ),
 ]

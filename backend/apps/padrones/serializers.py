@@ -31,6 +31,14 @@ class RegisterControlSerializer(serializers.Serializer):
     notes = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
 
 
+class CorrectionSerializer(serializers.Serializer):
+    # Vacio o ausente = se conserva el valor de la inscripcion original.
+    itemId = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    enrolledOn = serializers.DateField(required=False, allow_null=True)
+    notes = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    detail = serializers.CharField(max_length=400)
+
+
 class DischargeSerializer(serializers.Serializer):
     reasonId = serializers.IntegerField(min_value=1)
     detail = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)

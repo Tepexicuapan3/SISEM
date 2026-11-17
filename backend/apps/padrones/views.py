@@ -8,6 +8,7 @@ error_response y evento de auditoria por cada inscripcion o baja.
   GET  padrones/cronicos/programas      programas de cronicos activos (selector del listado)
   POST padrones/<registry>              inscribir
   POST padrones/<registry>/<id>/baja    dar de baja la inscripcion
+  POST padrones/<registry>/<id>/correccion  corregir: baja "Registro erroneo" + alta corregida
   GET  padrones/<registry>/opciones     CIE-10 o discapacidades para inscribir (?search=)
   GET  padrones/miembros                miembros vigentes del expediente para elegir (?noExp=)
   GET  pacientes/<idPaciente>/padrones  inscripciones activas del paciente (alerta del expediente)
@@ -35,7 +36,13 @@ from apps.authentication.services.session_service import authenticate_request
 from apps.recepcion.services.errors import VisitDomainError
 
 from apps.consulta_medica.services.paciente_entrada import llave_publica
-from .serializers import DischargeSerializer, EnrollFromVisitSerializer, EnrollSerializer, RegisterControlSerializer
+from .serializers import (
+    CorrectionSerializer,
+    DischargeSerializer,
+    EnrollFromVisitSerializer,
+    EnrollSerializer,
+    RegisterControlSerializer,
+)
 from .uses_case import aviso_consulta_usecase as aviso
 from .uses_case import control_cronico_usecase as control
 from .uses_case import padron_usecase as uc
@@ -119,6 +126,7 @@ class RegistryListCreateView(APIView):
                 program=(params.get("program") or "").strip() or None,
                 control=(params.get("control") or "").strip() or None,
                 search=(params.get("search") or "").strip() or None,
+                order=(params.get("order") or "").strip() or None,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
@@ -257,6 +265,43 @@ class RegistryDischargeView(APIView):
                {"status": enrollment.status, "reasonId": enrollment.discharge_reason_id,
                 "dischargedOn": str(enrollment.discharged_on)})
         return Response(uc.to_contract(spec, enrollment, permissions=permissions, roles=roles))
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class RegistryCorrectionView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, registry, enrollment_id):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        csrf_error = _csrf_or_error(request)
+        if csrf_error:
+            return csrf_error
+        serializer = CorrectionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_response(request, serializer)
+        data = serializer.validated_data
+        permissions, roles = _access(user)
+        try:
+            original, created = uc.correct(
+                registry, enrollment_id, item_id=(data.get("itemId") or "").strip() or None,
+                enrolled_on=data.get("enrolledOn"), notes=data["notes"] if "notes" in data else uc.KEEP,
+                detail=data["detail"], actor=user, permissions=permissions, roles=roles,
+            )
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        spec = uc.get_kind(registry)
+        item_field = f"{spec.item_field}_id"
+        _audit(request, user, "RegistryEnrollmentCorrected", registry, original,
+               {"status": "activo", "itemId": str(getattr(original, item_field)),
+                "enrolledOn": str(original.enrolled_on)},
+               {"status": original.status, "reasonId": original.discharge_reason_id,
+                "newEnrollmentId": created.id, "itemId": str(getattr(created, item_field)),
+                "enrolledOn": str(created.enrolled_on)})
+        return Response(uc.to_contract(spec, created, permissions=permissions, roles=roles),
+                        status=status.HTTP_201_CREATED)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

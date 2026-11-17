@@ -25,5 +25,14 @@ export const dischargePadronSchema = z.object({
   dischargedOn: optionalText(10).refine(notFuture, { error: "La fecha no puede ser futura" }),
 });
 
+// Corregir (docs/plans/padrones-correccion-y-prioridad.md): vacío = se conserva.
+export const correctPadronSchema = z.object({
+  itemId: optionalText(20),
+  enrolledOn: optionalText(10).refine(notFuture, { error: "La fecha no puede ser futura" }),
+  notes: optionalText(500),
+  detail: z.string().trim().min(1, { error: "Indica qué se corrigió" }).max(400),
+});
+
 export type EnrollPadronFormValues = z.input<typeof enrollPadronSchema>;
+export type CorrectPadronFormValues = z.input<typeof correctPadronSchema>;
 export type DischargePadronFormValues = z.input<typeof dischargePadronSchema>;

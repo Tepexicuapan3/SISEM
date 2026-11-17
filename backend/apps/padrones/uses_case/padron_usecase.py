@@ -16,7 +16,7 @@ Reglas:
 from dataclasses import dataclass
 
 from django.db import IntegrityError, transaction
-from django.db.models import F, OuterRef, Q, Subquery
+from django.db.models import Case, F, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.db.models.lookups import StartsWith
 from django.utils import timezone
 
@@ -195,6 +195,27 @@ def _chronic_filters(qs, *, program, control):
     return qs
 
 
+PRIORITY_ORDER = "prioridad"
+
+
+def _priority_order(qs):
+    """Lista de trabajo (docs/plans/padrones-correccion-y-prioridad.md): vencido,
+    sin control, al dia, sin programa y al final las bajas; dentro de cada grupo
+    el proximo control mas antiguo primero."""
+    today = timezone.localdate()
+    rank = Case(
+        When(status=RegistryStatus.BAJA, then=Value(4)),
+        When(last_next_control_on__lt=today, then=Value(0)),
+        When(program_id__isnull=False, last_control_on__isnull=True, then=Value(1)),
+        When(program_id__isnull=False, then=Value(2)),
+        default=Value(3),
+        output_field=IntegerField(),
+    )
+    return qs.annotate(priority=rank).order_by(
+        "priority", F("last_next_control_on").asc(nulls_last=True), "-enrolled_on", "-id",
+    )
+
+
 def _name_filter(qs, search):
     for word in (search or "").split():
         qs = qs.filter(
@@ -211,15 +232,17 @@ def list_programs(*, permissions):
 
 
 def list_enrollments(kind, *, permissions, roles=None, no_exp=None, pk_num=None, center_id=None,
-                     status=None, page=1, page_size=20, program=None, control=None, search=None):
+                     status=None, page=1, page_size=20, program=None, control=None, search=None, order=None):
     _ensure(READ_REQUIREMENT, permissions)
     spec = get_kind(kind)
     qs = _base_queryset(spec)
     if spec.key == "cronicos":
         qs = _chronic_filters(qs, program=program, control=control)
-    elif program or control:
-        field = "program" if program else "control"
+    elif program or control or order:
+        field = "program" if program else "control" if control else "order"
         raise _validation_error(field, "Solo aplica al padrón de crónicos.")
+    if order and order != PRIORITY_ORDER:
+        raise _validation_error("order", "Debe ser 'prioridad'.")
     qs = _name_filter(qs, search)
     if no_exp:
         # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
@@ -236,7 +259,8 @@ def list_enrollments(kind, *, permissions, roles=None, no_exp=None, pk_num=None,
     page = max(int(page or 1), 1)
     page_size = min(max(int(page_size or 20), 1), MAX_PAGE_SIZE)
     total = qs.count()
-    rows = qs.order_by("-enrolled_on", "-id")[(page - 1) * page_size: page * page_size]
+    qs = _priority_order(qs) if order else qs.order_by("-enrolled_on", "-id")
+    rows = qs[(page - 1) * page_size: page * page_size]
     return {
         "items": [to_contract(spec, e, permissions=permissions, roles=roles or []) for e in rows],
         "total": total,
@@ -410,3 +434,75 @@ def discharge(kind, enrollment_id, *, reason_id, detail=None, discharged_on=None
             "status", "discharge_reason", "discharge_detail", "discharged_on", "discharged_by", "updated_at",
         ])
     return _base_queryset(spec).get(pk=enrollment.pk)
+
+
+CORRECTION_REASON = "Registro erróneo"
+KEEP = object()  # "no se manda": la correccion conserva el valor
+
+
+def _ensure_visible_item(spec, item, permissions, roles):
+    if spec.key != "cronicos":
+        return
+    _, _, _, restricted = redact_cie_if_restricted(
+        code=item.code, description=item.description, permissions=permissions, roles=roles,
+    )
+    if restricted:
+        raise VisitDomainError("ROLE_NOT_ALLOWED", "No tienes permiso para corregir este diagnóstico.", 403)
+
+
+def correct(kind, enrollment_id, *, item_id=None, enrolled_on=None, notes=KEEP, detail,
+            actor, permissions, roles=None):
+    """Corrige una inscripcion mal capturada (docs/plans/padrones-correccion-y-prioridad.md):
+    baja con motivo "Registro erroneo" y alta con los datos corregidos, en una
+    transaccion. La inscripcion no se edita: el historial guarda ambas.
+    Devuelve (original dada de baja, nueva)."""
+    _ensure(WRITE_REQUIREMENT, permissions)
+    spec = get_kind(kind)
+    detail = (detail or "").strip()
+    if not detail:
+        raise _validation_error("detail", "Indica qué se corrigió.")
+    reason = MotivoBajaPadron.objects.filter(name=CORRECTION_REASON, is_active=True).order_by("pk").first()
+    if reason is None:
+        raise VisitDomainError(
+            "CORRECTION_REASON_MISSING",
+            f"Falta el motivo de baja '{CORRECTION_REASON}' en el catálogo; pide al administrador que lo active.",
+            409,
+        )
+    if enrolled_on is not None:
+        _ensure_not_future("enrolledOn", enrolled_on)
+    today = timezone.localdate()
+
+    with transaction.atomic():
+        original = spec.model.objects.select_for_update().filter(pk=enrollment_id).first()
+        if original is None:
+            raise VisitDomainError("ENROLLMENT_NOT_FOUND", "Inscripción no encontrada.", 404)
+        if original.status != RegistryStatus.ACTIVO:
+            raise VisitDomainError("ENROLLMENT_ALREADY_DISCHARGED", "La inscripción ya está dada de baja.", 409)
+        current_item = getattr(original, spec.item_field)
+        _ensure_visible_item(spec, current_item, permissions, roles or [])
+
+        item = current_item
+        if item_id not in (None, "") and str(item_id) != str(current_item.pk):
+            item = spec.item_model.objects.filter(pk=item_id, is_active=True).first()
+            if item is None:
+                raise _validation_error("itemId", f"{spec.item_label} no existe o no está activo.")
+            _ensure_visible_item(spec, item, permissions, roles or [])
+        new_enrolled_on = enrolled_on or original.enrolled_on
+        new_notes = original.notes if notes is KEEP else ((notes or "").strip() or None)
+        if (item.pk, new_enrolled_on, new_notes) == (current_item.pk, original.enrolled_on, original.notes):
+            raise _validation_error("itemId", "No hay cambios que corregir.")
+
+        original.status = RegistryStatus.BAJA
+        original.discharge_reason = reason
+        original.discharged_on = today
+        original.discharged_by = actor
+        original.save(update_fields=["status", "discharge_reason", "discharged_on", "discharged_by", "updated_at"])
+
+        extra = {"source": original.source, "visit_id": original.visit_id} if spec.key == "cronicos" else None
+        created = create_enrollment(
+            spec, get_patient=lambda: original.patient, item=item, center=original.center,
+            enrolled_on=new_enrolled_on, notes=new_notes, actor=actor, extra=extra,
+        )
+        original.discharge_detail = f"Corregida por la inscripción #{created.pk}: {detail}"[:500]
+        original.save(update_fields=["discharge_detail", "updated_at"])
+    return _base_queryset(spec).get(pk=original.pk), created

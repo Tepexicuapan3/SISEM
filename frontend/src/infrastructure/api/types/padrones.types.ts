@@ -58,6 +58,8 @@ export interface PadronListParams {
   /** Solo cronicos. */
   program?: string;
   control?: PadronControlFilter;
+  /** Solo cronicos: vencido, sin control, al dia, sin programa y bajas. Sin valor = inscripcion reciente. */
+  order?: "prioridad";
 }
 
 export interface PadronProgramsResponse {
@@ -118,6 +120,14 @@ export interface PadronDischargeRequest {
   reasonId: number;
   detail?: string | null;
   dischargedOn?: string | null;
+}
+
+/** Corregir: baja "Registro erróneo" + inscripción nueva. Vacío = se conserva el valor. */
+export interface PadronCorrectionRequest {
+  itemId?: string | null;
+  enrolledOn?: string | null;
+  notes?: string | null;
+  detail: string;
 }
 
 // Aviso de cronicos dentro de la consulta (`padrones/cronicos/visita/<visitId>`).

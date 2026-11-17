@@ -3,6 +3,7 @@ import { padronesAPI } from "@api/resources/padrones.api";
 import type {
   ChronicControlRegisterRequest,
   ChronicVisitEnrollRequest,
+  PadronCorrectionRequest,
   PadronDischargeRequest,
   PadronEnrollRequest,
   PadronListParams,
@@ -119,6 +120,18 @@ export const useEnrollPadron = (registry: PadronRegistry) => {
     mutationFn: (data: PadronEnrollRequest) => padronesAPI.enroll(registry, data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [...padronesKeys.all, registry] });
+    },
+  });
+};
+
+export const useCorrectPadron = (registry: PadronRegistry) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: PadronCorrectionRequest }) =>
+      padronesAPI.correct(registry, id, data),
+    onSuccess: () => {
+      // Tambien la alerta del expediente: cambia el padecimiento activo.
+      void queryClient.invalidateQueries({ queryKey: padronesKeys.all });
     },
   });
 };
