@@ -16,14 +16,23 @@ Reglas:
 from dataclasses import dataclass
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import F, OuterRef, Q, Subquery
+from django.db.models.lookups import StartsWith
 from django.utils import timezone
 
 from apps.authentication.services.permission_dependencies import evaluate_permission_requirement
 from apps.catalogos.models import CatCentroAtencion, CatCies, Discapacidades, MotivoBajaPadron
 from apps.consulta_medica.repositories.clinical_history_repository import PatientRepository
 from apps.consulta_medica.services.diagnosis_redaction_service import redact_cie_if_restricted
-from apps.padrones.models import ChronicEnrollment, DisabilityEnrollment, EnrollmentSource, RegistryStatus
+from apps.padrones.models import (
+    ChronicControl,
+    ChronicEnrollment,
+    ChronicProgram,
+    ChronicProgramCie,
+    DisabilityEnrollment,
+    EnrollmentSource,
+    RegistryStatus,
+)
 from apps.recepcion.contracts.patient_lookup_contract import family_members
 from apps.recepcion.services.errors import VisitDomainError
 from apps.consulta_medica.services.paciente_entrada import q_pk_registro
@@ -90,14 +99,32 @@ def _item_payload(spec, enrollment, permissions, roles):
     return {"id": item.pk, "code": item.code, "description": item.name, "restricted": False}
 
 
+def _chronic_contract(enrollment, item):
+    """Programa y ultimo control (anotados por _with_program_and_last_control).
+    Un CIE redactado no muestra programa: lo delataria."""
+    code = getattr(enrollment, "program_code", None)
+    last_on = getattr(enrollment, "last_control_on", None)
+    next_on = getattr(enrollment, "last_next_control_on", None)
+    return {
+        "program": None if item["restricted"] or not code else {"code": code, "name": enrollment.program_name},
+        "lastControl": None if last_on is None else {
+            "controlOn": last_on,
+            "status": enrollment.last_control_status,
+            "nextControlOn": next_on,
+            "overdue": next_on < timezone.localdate(),
+        },
+    }
+
+
 def to_contract(spec, enrollment, *, permissions, roles):
+    item = _item_payload(spec, enrollment, permissions, roles)
     return {
         "id": enrollment.id,
         "registry": spec.key,
         "noExp": llave_publica(enrollment)[0],
         "pkNum": llave_publica(enrollment)[1],
         "patientName": _patient_name(enrollment.patient),
-        "item": _item_payload(spec, enrollment, permissions, roles),
+        "item": item,
         "center": {"id": enrollment.center_id, "name": enrollment.center.name},
         "enrolledOn": enrollment.enrolled_on,
         "enrolledBy": _user_name(enrollment.enrolled_by),
@@ -105,6 +132,7 @@ def to_contract(spec, enrollment, *, permissions, roles):
         # Origen del diagnostico (solo cronicos; null en inscripciones anteriores).
         "source": getattr(enrollment, "source", None),
         "status": enrollment.status,
+        **(_chronic_contract(enrollment, item) if spec.key == "cronicos" else {}),
         "discharge": None if enrollment.status == RegistryStatus.ACTIVO else {
             "reasonId": enrollment.discharge_reason_id,
             "reason": getattr(enrollment.discharge_reason, "name", None),
@@ -116,17 +144,83 @@ def to_contract(spec, enrollment, *, permissions, roles):
 
 
 def _base_queryset(spec):
-    return spec.model.objects.select_related(
+    qs = spec.model.objects.select_related(
         "patient", "center", spec.item_field, "enrolled_by__detalle",
         "discharge_reason", "discharged_by__detalle",
     )
+    return _with_program_and_last_control(qs) if spec.key == "cronicos" else qs
+
+
+CONTROL_FILTERS = ("vencido", "al_dia", "sin_control")
+
+
+def _with_program_and_last_control(qs):
+    """Programa del CIE (prefijo mas largo, como program_for_cie) y ultimo
+    control del paciente en ese programa (docs/plans/cronicos-gestion-padron.md)."""
+    program = (
+        ChronicProgramCie.objects.filter(StartsWith(OuterRef("cie_id"), F("cie_prefix")), program__is_active=True)
+        .order_by("-cie_prefix")[:1]
+    )
+    last = ChronicControl.objects.filter(
+        patient_id=OuterRef("patient_id"), program_id=OuterRef("program_id"),
+    ).order_by("-control_on", "-id")
+    return qs.annotate(
+        program_id=Subquery(program.values("program_id")),
+        program_code=Subquery(program.values("program__code")),
+        program_name=Subquery(program.values("program__name")),
+    ).annotate(
+        last_control_on=Subquery(last.values("control_on")[:1]),
+        last_control_status=Subquery(last.values("status")[:1]),
+        last_next_control_on=Subquery(last.values("next_control_on")[:1]),
+    )
+
+
+def _chronic_filters(qs, *, program, control):
+    if program:
+        program_id = ChronicProgram.objects.filter(code=program.strip().upper(), is_active=True).values_list(
+            "pk", flat=True,
+        ).first()
+        if program_id is None:
+            raise _validation_error("program", "El programa no existe o no está activo.")
+        qs = qs.filter(program_id=program_id)
+    if control:
+        if control not in CONTROL_FILTERS:
+            raise _validation_error("control", "Debe ser 'vencido', 'al_dia' o 'sin_control'.")
+        today = timezone.localdate()
+        qs = {
+            "vencido": lambda: qs.filter(last_next_control_on__lt=today),
+            "al_dia": lambda: qs.filter(last_next_control_on__gte=today),
+            "sin_control": lambda: qs.filter(program_id__isnull=False, last_control_on__isnull=True),
+        }[control]()
+    return qs
+
+
+def _name_filter(qs, search):
+    for word in (search or "").split():
+        qs = qs.filter(
+            Q(patient__first_name__icontains=word) | Q(patient__paternal_surname__icontains=word)
+            | Q(patient__maternal_surname__icontains=word)
+        )
+    return qs
+
+
+def list_programs(*, permissions):
+    _ensure(READ_REQUIREMENT, permissions)
+    programs = ChronicProgram.objects.filter(is_active=True).order_by("name")
+    return {"items": [{"code": p.code, "name": p.name} for p in programs]}
 
 
 def list_enrollments(kind, *, permissions, roles=None, no_exp=None, pk_num=None, center_id=None,
-                     status=None, page=1, page_size=20):
+                     status=None, page=1, page_size=20, program=None, control=None, search=None):
     _ensure(READ_REQUIREMENT, permissions)
     spec = get_kind(kind)
     qs = _base_queryset(spec)
+    if spec.key == "cronicos":
+        qs = _chronic_filters(qs, program=program, control=control)
+    elif program or control:
+        field = "program" if program else "control"
+        raise _validation_error(field, "Solo aplica al padrón de crónicos.")
+    qs = _name_filter(qs, search)
     if no_exp:
         # Plan contraer la llave vieja: el expediente se busca en cns_paciente.
         qs = qs.filter(patient__no_exp=normalizar_no_exp(no_exp))

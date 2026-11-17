@@ -3,6 +3,8 @@
 export type PadronRegistry = "cronicos" | "discapacidad";
 export type PadronStatus = "activo" | "baja";
 export type PadronEnrollmentSource = "consulta" | "manual";
+/** Situacion del ultimo control del programa (filtro del listado de cronicos). */
+export type PadronControlFilter = "vencido" | "al_dia" | "sin_control";
 
 export interface PadronItemRef {
   /** CIE-10 (texto) en cronicos o id de discapacidad. null si el CIE esta restringido. */
@@ -25,6 +27,15 @@ export interface PadronEnrollment {
   notes: string | null;
   /** Origen del diagnostico (solo cronicos). null en inscripciones anteriores. */
   source?: PadronEnrollmentSource | null;
+  /** Solo cronicos: programa del CIE (null = ninguno o CIE restringido). */
+  program?: ChronicProgramRef | null;
+  /** Solo cronicos: ultimo control del paciente en ese programa. */
+  lastControl?: {
+    controlOn: string;
+    status: ChronicControlStatus;
+    nextControlOn: string;
+    overdue: boolean;
+  } | null;
   status: PadronStatus;
   discharge: {
     reasonId: number;
@@ -42,6 +53,15 @@ export interface PadronListParams {
   status?: PadronStatus;
   page?: number;
   pageSize?: number;
+  /** Nombre o apellidos (todas las palabras). */
+  search?: string;
+  /** Solo cronicos. */
+  program?: string;
+  control?: PadronControlFilter;
+}
+
+export interface PadronProgramsResponse {
+  items: ChronicProgramRef[];
 }
 
 export interface PadronListResponse {
@@ -173,6 +193,8 @@ export interface ChronicControlPanel {
   programs: ChronicControlProgramPanel[];
   vitalsCapturedAt: string | null;
   canRegister: boolean;
+  /** false: la consulta no esta en curso y el registro daria 409. */
+  visitInConsultation?: boolean;
 }
 
 export interface ChronicControlRegisterRequest {

@@ -78,6 +78,16 @@ describe("ChronicControlPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // docs/plans/cronicos-gestion-padron.md (A1): sin consulta en curso el POST da 409.
+  it("con la consulta sin iniciar no ofrece capturar el control", () => {
+    mockHooks({ programs: [diabetes()], vitalsCapturedAt: null, canRegister: true, visitInConsultation: false });
+    render(<ChronicControlPanel visitId={3} />);
+
+    expect(screen.getByText("Control de Diabetes mellitus")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Registrar control" })).not.toBeInTheDocument();
+    expect(screen.getByText("Inicia la consulta para registrar el control.")).toBeInTheDocument();
+  });
+
   it("muestra los valores de hoy contra la meta con semaforo y el estado", () => {
     mockHooks({ programs: [diabetes()], vitalsCapturedAt: "2026-11-11T10:00:00", canRegister: true });
     render(<ChronicControlPanel visitId={3} />);

@@ -3,7 +3,9 @@ API de padrones clinicos (P-04). Mismo esqueleto que ambulancias:
 autenticacion por sesion, CSRF en escrituras, errores de dominio con
 error_response y evento de auditoria por cada inscripcion o baja.
 
-  GET  padrones/<registry>              lista (filtros noExp, pkNum, centerId, status)
+  GET  padrones/<registry>              lista (filtros noExp, pkNum, centerId, status, search;
+                                        en cronicos tambien program y control)
+  GET  padrones/cronicos/programas      programas de cronicos activos (selector del listado)
   POST padrones/<registry>              inscribir
   POST padrones/<registry>/<id>/baja    dar de baja la inscripcion
   GET  padrones/<registry>/opciones     CIE-10 o discapacidades para inscribir (?search=)
@@ -113,6 +115,9 @@ class RegistryListCreateView(APIView):
                 status=params.get("status") or None,
                 page=_parse_int(params.get("page")) or 1,
                 page_size=_parse_int(params.get("pageSize")) or 20,
+                program=(params.get("program") or "").strip() or None,
+                control=(params.get("control") or "").strip() or None,
+                search=(params.get("search") or "").strip() or None,
             )
         except VisitDomainError as exc:
             return _domain_error_response(request, exc)
@@ -147,6 +152,23 @@ class RegistryListCreateView(APIView):
             "source": payload["source"],
         })
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ChronicProgramsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        user, error = _auth_or_error(request)
+        if error:
+            return error
+        permissions, _ = _access(user)
+        try:
+            payload = uc.list_programs(permissions=permissions)
+        except VisitDomainError as exc:
+            return _domain_error_response(request, exc)
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

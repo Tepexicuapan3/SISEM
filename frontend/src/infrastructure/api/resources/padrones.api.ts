@@ -13,12 +13,18 @@ import type {
   PadronListParams,
   PadronListResponse,
   PadronOptionsResponse,
+  PadronProgramsResponse,
   PadronRegistry,
 } from "@api/types/padrones.types";
 
 export const padronesAPI = {
   list: async (registry: PadronRegistry, params?: PadronListParams): Promise<PadronListResponse> => {
     const response = await apiClient.get<PadronListResponse>(`/padrones/${registry}`, { params });
+    return response.data;
+  },
+
+  chronicPrograms: async (): Promise<PadronProgramsResponse> => {
+    const response = await apiClient.get<PadronProgramsResponse>("/padrones/cronicos/programas");
     return response.data;
   },
 

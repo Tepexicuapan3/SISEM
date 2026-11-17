@@ -20,7 +20,17 @@ export const padronesKeys = {
   chronicControlPanel: (visitId: number) =>
     [...padronesKeys.all, "cronicos", "visit-control", visitId] as const,
   family: (noExp: string) => [...padronesKeys.all, "family", noExp] as const,
+  programs: () => [...padronesKeys.all, "cronicos", "programs"] as const,
 };
+
+/** Programas de cronicos activos (selector del listado). */
+export const usePadronPrograms = (enabled = true) =>
+  useQuery({
+    queryKey: padronesKeys.programs(),
+    queryFn: () => padronesAPI.chronicPrograms(),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
 
 /** Miembros vigentes del expediente para elegir a quien se inscribe. Se busca al confirmar el expediente. */
 export const usePadronFamily = (noExp: string) =>
@@ -32,10 +42,13 @@ export const usePadronFamily = (noExp: string) =>
     staleTime: 60 * 1000,
   });
 
-/** Panel de control de cronicos de la consulta (vitales de hoy contra metas). */
-export const useChronicControlPanel = (visitId: number) =>
+/**
+ * Panel de control de cronicos de la consulta (vitales de hoy contra metas).
+ * `visitStatus` en la llave: al iniciar la consulta el panel se vuelve a pedir.
+ */
+export const useChronicControlPanel = (visitId: number, visitStatus?: string) =>
   useQuery({
-    queryKey: padronesKeys.chronicControlPanel(visitId),
+    queryKey: [...padronesKeys.chronicControlPanel(visitId), visitStatus ?? null],
     queryFn: () => padronesAPI.chronicControlPanel(visitId),
     retry: false,
   });

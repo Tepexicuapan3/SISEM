@@ -65,16 +65,17 @@ interface CardProps {
   visitId: number;
   entry: ChronicControlProgramPanel;
   canRegister: boolean;
+  inConsultation: boolean;
 }
 
-function ProgramControlCard({ visitId, entry, canRegister }: CardProps) {
+function ProgramControlCard({ visitId, entry, canRegister, inConsultation }: CardProps) {
   const register = useRegisterChronicControl(visitId);
   const [manualValues, setManualValues] = useState<Record<string, string>>({});
   const [adherence, setAdherence] = useState<ChronicAdherence | "">("");
   const [notes, setNotes] = useState("");
 
   const { program, registered, last } = entry;
-  const editable = canRegister && !registered;
+  const editable = canRegister && !registered && inConsultation;
   const rows = registered ? registered.measurements : entry.parameters;
   const status = registered ? registered.status : entry.status;
 
@@ -198,6 +199,8 @@ function ProgramControlCard({ visitId, entry, canRegister }: CardProps) {
             Registrar control
           </Button>
         </div>
+      ) : canRegister && !registered ? (
+        <p className="text-xs text-txt-muted">Inicia la consulta para registrar el control.</p>
       ) : null}
     </section>
   );
@@ -208,8 +211,8 @@ function ProgramControlCard({ visitId, entry, canRegister }: CardProps) {
  * programa en que esta inscrito el paciente. El semaforo lo calcula el
  * backend. Ver docs/plans/cronicos-control.md.
  */
-export function ChronicControlPanel({ visitId }: { visitId: number }) {
-  const panelQuery = useChronicControlPanel(visitId);
+export function ChronicControlPanel({ visitId, visitStatus }: { visitId: number; visitStatus?: string }) {
+  const panelQuery = useChronicControlPanel(visitId, visitStatus);
   const panel = panelQuery.data;
   if (panelQuery.isError || !panel || panel.programs.length === 0) {
     return null;
@@ -222,6 +225,8 @@ export function ChronicControlPanel({ visitId }: { visitId: number }) {
           visitId={visitId}
           entry={entry}
           canRegister={panel.canRegister}
+          // Sin el campo (respuesta anterior) se comporta como antes.
+          inConsultation={panel.visitInConsultation !== false}
         />
       ))}
     </div>

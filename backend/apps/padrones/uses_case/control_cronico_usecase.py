@@ -195,6 +195,8 @@ def get_control_panel(visit_id, *, permissions, roles=None):
         "programs": entries,
         "vitalsCapturedAt": vitals["captured_at"] if vitals else None,
         "canRegister": evaluate_permission_requirement(CONTROL_REQUIREMENT, permissions or [])["granted"],
+        # El registro exige la consulta en curso: la pantalla no ofrece capturar antes.
+        "visitInConsultation": visit.status == "en_consulta",
     }
 
 

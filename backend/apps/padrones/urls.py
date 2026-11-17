@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.padrones.views import (
+    ChronicProgramsView,
     ChronicVisitControlView,
     ChronicVisitEnrollView,
     ChronicVisitNoticeView,
@@ -27,6 +28,7 @@ urlpatterns = [
         ChronicVisitEnrollView.as_view(),
         name="padrones-cronicos-visit-enroll",
     ),
+    path("padrones/cronicos/programas", ChronicProgramsView.as_view(), name="padrones-cronicos-programs"),
     path("padrones/miembros", RegistryMembersView.as_view(), name="padrones-members"),
     path("padrones/<str:registry>", RegistryListCreateView.as_view(), name="padrones-list-create"),
     path("padrones/<str:registry>/opciones", RegistryOptionsView.as_view(), name="padrones-options"),

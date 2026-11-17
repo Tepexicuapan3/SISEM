@@ -15,13 +15,23 @@ import { AdminReadOnlyNotice } from "@features/admin/shared/components/AdminRead
 import { CatalogModuleLayout } from "@features/admin/modules/catalogos/shared/components/CatalogModuleLayout";
 import { DischargePadronDialog } from "@features/padrones/components/DischargePadronDialog";
 import { EnrollPadronDialog } from "@features/padrones/components/EnrollPadronDialog";
-import { usePadronList } from "@features/padrones/queries/usePadrones";
+import { usePadronList, usePadronPrograms } from "@features/padrones/queries/usePadrones";
 import { getPadronesErrorMessage } from "@features/padrones/utils/padrones.feedback";
 import { usePermissionDependencies } from "@/domains/auth-access/hooks/usePermissionDependencies";
-import type { PadronEnrollment, PadronRegistry, PadronStatus } from "@api/types/padrones.types";
+import type {
+  PadronControlFilter, PadronEnrollment, PadronRegistry, PadronStatus,
+} from "@api/types/padrones.types";
 
 const STATUS_FILTER = { ALL: "all", ACTIVO: "activo", BAJA: "baja" } as const;
 type StatusFilter = (typeof STATUS_FILTER)[keyof typeof STATUS_FILTER];
+// Filtros de cronicos (docs/plans/cronicos-gestion-padron.md); ALL = sin filtro.
+const ALL = "all";
+const CONTROL_OPTIONS: { value: PadronControlFilter; label: string }[] = [
+  { value: "vencido", label: "Vencido" },
+  { value: "al_dia", label: "Al día" },
+  { value: "sin_control", label: "Sin control" },
+];
+const SOURCE_LABEL = { consulta: "Consulta", manual: "Manual" } as const;
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return "-";
@@ -37,22 +47,71 @@ export function PadronesPage() {
   const [registry, setRegistry] = useState<PadronRegistry>("cronicos");
   const [noExp, setNoExp] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(STATUS_FILTER.ACTIVO);
+  const [name, setName] = useState("");
+  const [programFilter, setProgramFilter] = useState<string>(ALL);
+  const [controlFilter, setControlFilter] = useState<PadronControlFilter | typeof ALL>(ALL);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [dischargeTarget, setDischargeTarget] = useState<PadronEnrollment | null>(null);
 
   const debouncedNoExp = useDebounce(noExp, 400);
+  const debouncedName = useDebounce(name, 400);
+  const isChronic = registry === "cronicos";
+  const programs = usePadronPrograms(canRead && isChronic);
   const { data, isLoading, error, refetch } = usePadronList(
     registry,
     {
       noExp: debouncedNoExp.trim() || undefined,
       status: statusFilter === STATUS_FILTER.ALL ? undefined : (statusFilter as PadronStatus),
+      search: debouncedName.trim() || undefined,
+      program: isChronic && programFilter !== ALL ? programFilter : undefined,
+      control: isChronic && controlFilter !== ALL ? controlFilter : undefined,
       page,
       pageSize,
     },
     { enabled: canRead },
   );
+  const hasFilters = Boolean(debouncedNoExp.trim()) || Boolean(debouncedName.trim())
+    || statusFilter !== STATUS_FILTER.ALL || (isChronic && (programFilter !== ALL || controlFilter !== ALL));
+
+  const chronicColumns: DataTableColumn<PadronEnrollment>[] = [
+    {
+      key: "program",
+      header: "Programa",
+      className: "w-[160px]",
+      render: (row) =>
+        row.item.restricted ? (
+          <span className="text-txt-muted">—</span>
+        ) : row.program ? (
+          row.program.name
+        ) : (
+          <span className="text-txt-muted">Sin programa</span>
+        ),
+    },
+    {
+      key: "control",
+      header: "Control",
+      className: "w-[170px]",
+      render: (row) => {
+        if (!row.lastControl) {
+          return row.program ? <Badge variant="outline">Sin control</Badge> : <span className="text-txt-muted">—</span>;
+        }
+        return (
+          <div className="space-y-0.5">
+            {row.lastControl.overdue ? <Badge variant="alert">Vencido</Badge> : <Badge variant="secondary">Al día</Badge>}
+            <p className="text-xs text-txt-muted">Próximo: {formatDate(row.lastControl.nextControlOn)}</p>
+          </div>
+        );
+      },
+    },
+    {
+      key: "source",
+      header: "Origen",
+      render: (row) =>
+        row.source ? SOURCE_LABEL[row.source] : <span className="text-txt-muted">—</span>,
+    },
+  ];
 
   const columns: DataTableColumn<PadronEnrollment>[] = [
     {
@@ -84,6 +143,7 @@ export function PadronesPage() {
           </span>
         ),
     },
+    ...(isChronic ? chronicColumns : []),
     { key: "center", header: "Centro", className: "w-[180px]", render: (row) => row.center.name },
     { key: "enrolledOn", header: "Inscripción", render: (row) => formatDate(row.enrolledOn) },
     {
@@ -160,6 +220,14 @@ export function PadronesPage() {
               }}
               placeholder="Buscar por expediente"
             />
+            <TableSearch
+              value={name}
+              onChange={(value) => {
+                setName(value);
+                setPage(1);
+              }}
+              placeholder="Buscar por nombre"
+            />
             <div className="flex flex-col gap-1">
               <Label>Estado</Label>
               <Select
@@ -177,6 +245,46 @@ export function PadronesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {isChronic ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <Label>Programa</Label>
+                  <Select
+                    value={programFilter}
+                    onValueChange={(value) => {
+                      setProgramFilter(value);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-48" aria-label="Programa"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todos</SelectItem>
+                      {(programs.data?.items ?? []).map((program) => (
+                        <SelectItem key={program.code} value={program.code}>{program.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label>Control</Label>
+                  <Select
+                    value={controlFilter}
+                    onValueChange={(value) => {
+                      setControlFilter(value as PadronControlFilter | typeof ALL);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-36" aria-label="Control"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todos</SelectItem>
+                      {CONTROL_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : null}
           </div>
         }
         actions={
@@ -197,10 +305,13 @@ export function PadronesPage() {
         errorTitle="No se pudo cargar el padrón"
         errorDescription={error ? getPadronesErrorMessage(error, "Intenta nuevamente.") : undefined}
         onRetry={() => void refetch()}
-        hasFilters={Boolean(debouncedNoExp.trim()) || statusFilter !== STATUS_FILTER.ALL}
+        hasFilters={hasFilters}
         onClearFilters={() => {
           setNoExp("");
+          setName("");
           setStatusFilter(STATUS_FILTER.ALL);
+          setProgramFilter(ALL);
+          setControlFilter(ALL);
         }}
         getRowKey={(row) => row.id.toString()}
         emptyTitle="Sin inscripciones"

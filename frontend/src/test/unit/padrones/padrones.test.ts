@@ -21,7 +21,9 @@ describe("padrones schemas", () => {
   });
 
   it("acepta fecha vacía o de hoy y rechaza futura", () => {
-    const base = { noExp: "123", itemId: "E11" };
+    // La persona se elige (docs/plans/cronicos-alta-padron.md): sin pkNum no hay alta.
+    const base = { noExp: "123", pkNum: 0, itemId: "E11" };
+    expect(enrollPadronSchema.safeParse({ noExp: "123", itemId: "E11" }).success).toBe(false);
     expect(enrollPadronSchema.safeParse({ ...base, enrolledOn: "" }).success).toBe(true);
     expect(enrollPadronSchema.safeParse({ ...base, enrolledOn: todayLocalISO() }).success).toBe(true);
     expect(enrollPadronSchema.safeParse({ ...base, enrolledOn: "2999-01-01" }).success).toBe(false);
