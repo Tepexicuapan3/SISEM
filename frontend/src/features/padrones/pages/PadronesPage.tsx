@@ -79,7 +79,8 @@ export function PadronesPage() {
     {
       key: "program",
       header: "Programa",
-      className: "w-[160px]",
+      className: "w-[140px]",
+      truncate: false,
       render: (row) =>
         row.item.restricted ? (
           <span className="text-txt-muted">—</span>
@@ -92,7 +93,7 @@ export function PadronesPage() {
     {
       key: "control",
       header: "Control",
-      className: "w-[170px]",
+      className: "w-[130px]",
       render: (row) => {
         if (!row.lastControl) {
           return row.program ? <Badge variant="outline">Sin control</Badge> : <span className="text-txt-muted">—</span>;
@@ -108,6 +109,7 @@ export function PadronesPage() {
     {
       key: "source",
       header: "Origen",
+      className: "w-[90px]",
       render: (row) =>
         row.source ? SOURCE_LABEL[row.source] : <span className="text-txt-muted">—</span>,
     },
@@ -117,7 +119,8 @@ export function PadronesPage() {
     {
       key: "patient",
       header: "Paciente",
-      className: "w-[240px]",
+      className: "w-[220px]",
+      truncate: false,
       render: (row) => (
         <div className="min-w-0">
           <p className="font-medium text-txt-body">{row.patientName ?? "Sin nombre registrado"}</p>
@@ -130,7 +133,8 @@ export function PadronesPage() {
     {
       key: "item",
       header: registry === "cronicos" ? "Padecimiento" : "Discapacidad",
-      className: "w-[280px]",
+      className: "w-[240px]",
+      truncate: false,
       render: (row) =>
         row.item.restricted ? (
           <span className="inline-flex items-center gap-1 italic text-txt-muted">
@@ -138,17 +142,20 @@ export function PadronesPage() {
             {row.item.description}
           </span>
         ) : (
-          <span>
-            <span className="font-mono text-xs text-txt-muted">{row.item.code}</span> {row.item.description}
-          </span>
+          <div className="min-w-0">
+            <p className="font-mono text-xs text-txt-muted">{row.item.code}</p>
+            <p>{row.item.description}</p>
+          </div>
         ),
     },
     ...(isChronic ? chronicColumns : []),
-    { key: "center", header: "Centro", className: "w-[180px]", render: (row) => row.center.name },
-    { key: "enrolledOn", header: "Inscripción", render: (row) => formatDate(row.enrolledOn) },
+    { key: "center", header: "Centro", className: "w-[140px]", truncate: false, render: (row) => row.center.name },
+    { key: "enrolledOn", header: "Inscripción", className: "w-[104px]", render: (row) => formatDate(row.enrolledOn) },
     {
       key: "status",
       header: "Estado",
+      className: "w-[104px]",
+      truncate: false,
       render: (row) =>
         row.status === "activo" ? (
           <Badge variant="secondary">Activo</Badge>
@@ -163,7 +170,8 @@ export function PadronesPage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Acciones",
+      className: "w-[72px]",
       align: "center",
       render: (row) =>
         canWrite && row.status === "activo" ? (
@@ -171,6 +179,7 @@ export function PadronesPage() {
             variant="ghost"
             size="icon"
             title="Dar de baja"
+            aria-label="Dar de baja"
             onClick={(e) => {
               e.stopPropagation();
               setDischargeTarget(row);
@@ -314,6 +323,8 @@ export function PadronesPage() {
           setControlFilter(ALL);
         }}
         getRowKey={(row) => row.id.toString()}
+        // Suma de los anchos de columna; con menos espacio la tabla hace scroll horizontal.
+        minWidthClassName={isChronic ? "min-w-[1240px]" : "min-w-[880px]"}
         emptyTitle="Sin inscripciones"
         emptyDescription="Cuando inscribas pacientes al padrón aparecerán aquí."
         pagination={{
